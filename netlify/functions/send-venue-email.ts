@@ -207,12 +207,13 @@ function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Reci
 <body>
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
-  <div class="email-header" style="background:#000000;padding:28px 32px;">
+  <div style="padding:28px 32px 0 32px;">
     <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
       <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
       <div style="font-size:9px;color:#555555;text-transform:uppercase;letter-spacing:2px;margin-top:3px;">Brand Growth &amp; Management</div>
     </div>
+    <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
 
   <div class="email-body" style="padding:28px 32px;">
