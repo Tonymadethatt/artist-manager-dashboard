@@ -104,10 +104,16 @@ export interface DealTerms {
   notes?: string
 }
 
+export type TemplateSectionKind = 'header' | 'body' | 'footer'
+
 export interface TemplateSection {
   id: string
   label: string
   content: string
+  /** Layout region for PDF/HTML. Omit on legacy templates (all sections treated as body). */
+  section_kind?: TemplateSectionKind
+  /** Optional logo URL for header sections (https only); used instead of the default site logo when set. */
+  header_logo_url?: string | null
 }
 
 export interface Venue {

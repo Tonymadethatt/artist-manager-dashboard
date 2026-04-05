@@ -27,7 +27,12 @@ export async function htmlDocumentToPdfBlob(html: string): Promise<Blob> {
       margin: [10, 10, 10, 10] as [number, number, number, number],
       filename: 'agreement.pdf',
       image: { type: 'jpeg' as const, quality: 0.92 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      },
       jsPDF: { unit: 'mm' as const, format: 'letter' as const, orientation: 'portrait' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
     }

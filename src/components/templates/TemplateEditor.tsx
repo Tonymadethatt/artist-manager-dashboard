@@ -1,9 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Trash2, GripVertical, ArrowLeft, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -11,8 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Template, TemplateSection, TemplateType } from '@/types'
+import type { Template, TemplateSection, TemplateSectionKind, TemplateType } from '@/types'
 import { nanoid } from '@/lib/nanoid'
+import { catalogKeysUnion, extractVariableNames } from '@/lib/agreement'
+import { VariableSlashTextarea } from './VariableSlashTextarea'
+
+const DEFAULT_SECTIONS = (): TemplateSection[] => [
+  { id: nanoid(), label: 'Header', content: '', section_kind: 'header', header_logo_url: null },
+  { id: nanoid(), label: 'Introduction', content: '', section_kind: 'body' },
+  { id: nanoid(), label: 'Footer', content: '', section_kind: 'footer' },
+]
 
 interface TemplateEditorProps {
   template: Template | null
@@ -24,26 +31,35 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
   const [name, setName] = useState(template?.name ?? '')
   const [type, setType] = useState<TemplateType>(template?.type ?? 'agreement')
   const [sections, setSections] = useState<TemplateSection[]>(
-    template?.sections ?? [{ id: nanoid(), label: 'Introduction', content: '' }]
+    template?.sections?.length ? template.sections : DEFAULT_SECTIONS()
   )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const slashKeys = useMemo(() => catalogKeysUnion(extractVariableNames(sections)), [sections])
+
   const addSection = () => {
-    setSections(prev => [...prev, { id: nanoid(), label: '', content: '' }])
+    setSections(prev => [...prev, { id: nanoid(), label: '', content: '', section_kind: 'body' }])
   }
 
   const removeSection = (id: string) => {
     setSections(prev => prev.filter(s => s.id !== id))
   }
 
-  const updateSection = (id: string, key: keyof TemplateSection, value: string) => {
-    setSections(prev => prev.map(s => s.id === id ? { ...s, [key]: value } : s))
+  const updateSection = (id: string, patch: Partial<TemplateSection>) => {
+    setSections(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)))
   }
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Template name is required.'); return }
     if (sections.some(s => !s.label.trim())) { setError('All sections need a label.'); return }
+    for (const s of sections) {
+      const u = s.header_logo_url?.trim()
+      if (u && !/^https:\/\//i.test(u)) {
+        setError('Header logo URL must start with https://')
+        return
+      }
+    }
     setSaving(true)
     await onSave({ name: name.trim(), type, sections })
     setSaving(false)
@@ -51,7 +67,6 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
   return (
     <div className="max-w-2xl space-y-5">
-      {/* Back button */}
       <button
         onClick={onCancel}
         className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
@@ -60,7 +75,6 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         Back to templates
       </button>
 
-      {/* Name + type */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
         <div className="space-y-1">
           <Label htmlFor="tpl-name">Template name *</Label>
@@ -84,19 +98,16 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         </div>
       </div>
 
-      {/* Variable hint */}
       <div className="flex items-start gap-2 bg-neutral-900 border border-neutral-800 rounded px-3 py-2.5 text-xs text-neutral-500">
         <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-neutral-600" />
         <span>
-          Use <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{variable_name}}'}</code> for dynamic fields.
-          Example: <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{venue_name}}'}</code>,{' '}
-          <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{event_date}}'}</code>,{' '}
-          <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{artist_pay}}'}</code>.
-          These will be filled in when generating a file. PDF export uses the same sections with print styling and your brand header.
+          Use <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{variable_name}}'}</code> or type{' '}
+          <code className="bg-neutral-800 px-1 rounded text-neutral-300">/</code> for a variable menu.
+          Header and footer sections control the top and bottom of the PDF; optional{' '}
+          <strong className="text-neutral-400">https</strong> logo URL on the header section replaces the default logo.
         </span>
       </div>
 
-      {/* Sections */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium text-neutral-300">Sections</Label>
@@ -112,35 +123,68 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
           </div>
         ) : (
           <div className="space-y-3">
-            {sections.map((section, idx) => (
-              <div key={section.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <GripVertical className="h-4 w-4 text-neutral-600 shrink-0" />
-                  <div className="flex-1">
-                    <Input
-                      value={section.label}
-                      onChange={e => updateSection(section.id, 'label', e.target.value)}
-                      placeholder={`Section ${idx + 1} label (e.g. Payment Terms)`}
-                      className="font-medium"
-                    />
+            {sections.map((section, idx) => {
+              const kind: TemplateSectionKind = section.section_kind ?? 'body'
+              return (
+                <div key={section.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <GripVertical className="h-4 w-4 text-neutral-600 shrink-0" />
+                    <div className="flex-1 min-w-[120px]">
+                      <Input
+                        value={section.label}
+                        onChange={e => updateSection(section.id, { label: e.target.value })}
+                        placeholder={`Section ${idx + 1} label`}
+                        className="font-medium"
+                      />
+                    </div>
+                    <div className="w-[130px]">
+                      <Select
+                        value={kind}
+                        onValueChange={v =>
+                          updateSection(section.id, { section_kind: v as TemplateSectionKind })
+                        }
+                      >
+                        <SelectTrigger className="h-9 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="header">Header</SelectItem>
+                          <SelectItem value="body">Body</SelectItem>
+                          <SelectItem value="footer">Footer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-400 hover:text-red-600 shrink-0"
+                      onClick={() => removeSection(section.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-400 hover:text-red-600 shrink-0"
-                    onClick={() => removeSection(section.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {kind === 'header' && (
+                    <div className="space-y-1 pl-0 sm:pl-6">
+                      <Label className="text-xs text-neutral-500">Header logo URL (optional, https)</Label>
+                      <Input
+                        value={section.header_logo_url ?? ''}
+                        onChange={e =>
+                          updateSection(section.id, { header_logo_url: e.target.value || null })
+                        }
+                        placeholder="https://…"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  )}
+                  <VariableSlashTextarea
+                    value={section.content}
+                    onChange={v => updateSection(section.id, { content: v })}
+                    variableKeys={slashKeys}
+                    placeholder="Section content… Type / to insert variables."
+                  />
                 </div>
-                <Textarea
-                  value={section.content}
-                  onChange={e => updateSection(section.id, 'content', e.target.value)}
-                  placeholder="Section content… Use {{variable}} placeholders for dynamic values."
-                  className="min-h-[120px] text-sm leading-relaxed font-mono"
-                />
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
