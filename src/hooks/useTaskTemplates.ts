@@ -180,7 +180,7 @@ export function useTaskTemplates() {
         .single()
       if (error || !t) continue
       await supabase.from('task_template_items').insert(
-        def.items.map(item => ({ template_id: t.id, ...item, recurrence: 'none' }))
+        def.items.map(item => ({ template_id: t.id, ...item, recurrence: 'none' as const }))
       )
     }
 

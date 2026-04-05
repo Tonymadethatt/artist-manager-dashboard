@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { MoreHorizontal, Pencil, Trash2, AlarmClock } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Task, TaskPriority } from '@/types'
 import { cn } from '@/lib/utils'

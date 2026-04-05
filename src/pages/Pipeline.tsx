@@ -61,7 +61,6 @@ export default function Pipeline() {
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [defaultVenueId, setDefaultVenueId] = useState<string | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
   const weekEnd = (() => {
@@ -100,14 +99,12 @@ export default function Pipeline() {
   const listGroups = useMemo(() => groupByDate(filteredTasks), [filteredTasks])
 
   const openAdd = (venueId: string | null = null) => {
-    setDefaultVenueId(venueId)
     setForm({ ...EMPTY_FORM, venue_id: venueId ?? '' })
     setEditTask(null)
     setAddOpen(true)
   }
 
   const openEdit = (t: Task) => {
-    setDefaultVenueId(null)
     setForm({
       title: t.title,
       notes: t.notes ?? '',
