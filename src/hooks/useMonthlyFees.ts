@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { MonthlyFee } from '@/types'
+import type { MonthlyFee, MonthlyFeePayment, PaymentMethod } from '@/types'
 
 function currentMonthFirst() {
   const d = new Date()
@@ -17,14 +17,15 @@ export function useMonthlyFees() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const { data, error } = await supabase
+    const { data: feesData, error: feesErr } = await supabase
       .from('monthly_fees')
       .select('*')
       .eq('user_id', user.id)
       .order('month', { ascending: false })
-    if (error) { setError(error.message); setLoading(false); return }
 
-    const list = (data ?? []) as MonthlyFee[]
+    if (feesErr) { setError(feesErr.message); setLoading(false); return }
+
+    let list = (feesData ?? []) as MonthlyFee[]
 
     // Auto-create current month entry if missing
     const thisMonth = currentMonthFirst()
@@ -35,8 +36,26 @@ export function useMonthlyFees() {
         .select()
         .single()
       if (!insertErr && created) {
-        list.unshift(created as MonthlyFee)
+        list = [created as MonthlyFee, ...list]
       }
+    }
+
+    // Fetch all payments for these fees
+    const feeIds = list.map(f => f.id)
+    if (feeIds.length > 0) {
+      const { data: paymentsData } = await supabase
+        .from('monthly_fee_payments')
+        .select('*')
+        .in('fee_id', feeIds)
+        .order('paid_date', { ascending: true })
+
+      const payments = (paymentsData ?? []) as MonthlyFeePayment[]
+      list = list.map(f => ({
+        ...f,
+        payments: payments.filter(p => p.fee_id === f.id),
+      }))
+    } else {
+      list = list.map(f => ({ ...f, payments: [] }))
     }
 
     setFees(list)
@@ -45,20 +64,74 @@ export function useMonthlyFees() {
 
   useEffect(() => { fetchFees() }, [fetchFees])
 
-  const togglePaid = async (id: string, paid: boolean) => {
-    const patch = {
-      paid,
-      paid_date: paid ? new Date().toISOString().split('T')[0] : null,
-    }
+  const addPayment = async (
+    feeId: string,
+    amount: number,
+    paidDate: string,
+    paymentMethod: PaymentMethod,
+    notes?: string
+  ) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: new Error('Not authenticated') }
+
     const { data, error } = await supabase
-      .from('monthly_fees')
-      .update(patch)
-      .eq('id', id)
+      .from('monthly_fee_payments')
+      .insert({
+        fee_id: feeId,
+        user_id: user.id,
+        amount,
+        paid_date: paidDate,
+        payment_method: paymentMethod,
+        notes: notes ?? null,
+      })
       .select()
       .single()
+
     if (error) return { error }
-    setFees(prev => prev.map(f => f.id === id ? data as MonthlyFee : f))
-    return { data: data as MonthlyFee }
+
+    const payment = data as MonthlyFeePayment
+
+    // Update local state
+    setFees(prev => prev.map(f => {
+      if (f.id !== feeId) return f
+      const updatedPayments = [...(f.payments ?? []), payment]
+      const totalPaid = updatedPayments.reduce((s, p) => s + p.amount, 0)
+      const nowFullyPaid = totalPaid >= f.amount
+      return { ...f, payments: updatedPayments, paid: nowFullyPaid }
+    }))
+
+    // Keep the monthly_fees.paid flag in sync
+    const fee = fees.find(f => f.id === feeId)
+    if (fee) {
+      const existingTotal = (fee.payments ?? []).reduce((s, p) => s + p.amount, 0)
+      const newTotal = existingTotal + amount
+      if (newTotal >= fee.amount && !fee.paid) {
+        await supabase
+          .from('monthly_fees')
+          .update({ paid: true, paid_date: paidDate })
+          .eq('id', feeId)
+      }
+    }
+
+    return { data: payment }
+  }
+
+  const deletePayment = async (paymentId: string, feeId: string) => {
+    const { error } = await supabase
+      .from('monthly_fee_payments')
+      .delete()
+      .eq('id', paymentId)
+
+    if (error) return { error }
+
+    setFees(prev => prev.map(f => {
+      if (f.id !== feeId) return f
+      const updatedPayments = (f.payments ?? []).filter(p => p.id !== paymentId)
+      const totalPaid = updatedPayments.reduce((s, p) => s + p.amount, 0)
+      return { ...f, payments: updatedPayments, paid: totalPaid >= f.amount }
+    }))
+
+    return {}
   }
 
   const updateFee = async (id: string, updates: Partial<Pick<MonthlyFee, 'amount' | 'notes'>>) => {
@@ -69,7 +142,7 @@ export function useMonthlyFees() {
       .select()
       .single()
     if (error) return { error }
-    setFees(prev => prev.map(f => f.id === id ? data as MonthlyFee : f))
+    setFees(prev => prev.map(f => f.id === id ? { ...f, ...(data as MonthlyFee) } : f))
     return { data: data as MonthlyFee }
   }
 
@@ -82,9 +155,10 @@ export function useMonthlyFees() {
       .select()
       .single()
     if (error) return { error }
-    setFees(prev => [data as MonthlyFee, ...prev].sort((a, b) => b.month.localeCompare(a.month)))
-    return { data: data as MonthlyFee }
+    const newFee = { ...(data as MonthlyFee), payments: [] }
+    setFees(prev => [newFee, ...prev].sort((a, b) => b.month.localeCompare(a.month)))
+    return { data: newFee }
   }
 
-  return { fees, loading, error, refetch: fetchFees, togglePaid, updateFee, addFee }
+  return { fees, loading, error, refetch: fetchFees, addPayment, deletePayment, updateFee, addFee }
 }

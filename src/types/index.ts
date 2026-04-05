@@ -33,6 +33,18 @@ export type TemplateType = 'agreement' | 'invoice'
 
 export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors'
 
+export type PaymentMethod = 'cash' | 'paypal' | 'zelle' | 'apple_pay' | 'venmo' | 'check' | 'other'
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  paypal: 'PayPal',
+  zelle: 'Zelle',
+  apple_pay: 'Apple Pay',
+  venmo: 'Venmo',
+  check: 'Check',
+  other: 'Other',
+}
+
 export type MetricCategory = 'brand_partnership' | 'event_attendance' | 'press_mention'
 
 export const METRIC_CATEGORY_LABELS: Record<MetricCategory, string> = {
@@ -144,6 +156,7 @@ export interface ArtistProfile {
   artist_name: string
   artist_email: string
   manager_name: string | null
+  manager_email: string | null
   from_email: string
   created_at: string
   updated_at: string
@@ -169,6 +182,18 @@ export interface MonthlyFee {
   amount: number
   paid: boolean
   paid_date: string | null
+  notes: string | null
+  created_at: string
+  payments?: MonthlyFeePayment[]
+}
+
+export interface MonthlyFeePayment {
+  id: string
+  fee_id: string
+  user_id: string
+  amount: number
+  paid_date: string
+  payment_method: PaymentMethod
   notes: string | null
   created_at: string
 }

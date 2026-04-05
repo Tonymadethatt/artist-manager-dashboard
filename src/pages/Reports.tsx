@@ -52,6 +52,10 @@ export default function Reports() {
   const [sending, setSending] = useState(false)
   const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [sendMsg, setSendMsg] = useState('')
+  const [ccMyself, setCcMyself] = useState(true)
+  const [testSending, setTestSending] = useState(false)
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [testMsg, setTestMsg] = useState('')
 
   const { venues } = useVenues()
   const { deals } = useDeals()
@@ -123,10 +127,17 @@ export default function Reports() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venues, deals, metrics, fees, tasks, startDate, endDate])
 
-  const handleSend = async () => {
+  const doSend = async (testOnly: boolean) => {
     if (!profile) return
-    setSending(true)
-    setSendStatus('idle')
+    const setS = testOnly ? setTestSending : setSending
+    const setStatus = testOnly ? setTestStatus : setSendStatus
+    const setMsg = testOnly ? setTestMsg : setSendMsg
+
+    setS(true)
+    setStatus('idle')
+
+    const cc: string[] = ccMyself && profile.manager_email ? [profile.manager_email] : []
+
     try {
       const res = await fetch('/.netlify/functions/send-report', {
         method: 'POST',
@@ -135,22 +146,28 @@ export default function Reports() {
           profile,
           report,
           dateRange: { start: startDate, end: endDate },
+          cc,
+          testOnly,
         }),
       })
       if (res.ok) {
-        setSendStatus('success')
-        setSendMsg(`Report sent to ${profile.artist_email}`)
+        setStatus('success')
+        const recipient = testOnly ? (profile.manager_email ?? 'you') : profile.artist_email
+        setMsg(`Report sent to ${recipient}`)
       } else {
         const err = await res.json().catch(() => ({}))
-        setSendStatus('error')
-        setSendMsg(err.message ?? 'Failed to send. Check Netlify function logs.')
+        setStatus('error')
+        setMsg((err as { message?: string }).message ?? 'Failed to send.')
       }
     } catch {
-      setSendStatus('error')
-      setSendMsg('Network error. Make sure the site is deployed on Netlify.')
+      setStatus('error')
+      setMsg('Network error. Make sure the site is deployed on Netlify.')
     }
-    setSending(false)
+    setS(false)
   }
+
+  const handleSend = () => doSend(false)
+  const handleTestSend = () => doSend(true)
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -260,29 +277,65 @@ export default function Reports() {
       </Section>
 
       {/* Send */}
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-neutral-200">
-            Send to {profile?.artist_name ?? 'artist'}
-          </p>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            {profile?.artist_email ?? '—'} · from {profile?.from_email ?? '—'}
-          </p>
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-neutral-200">
+              Send to {profile?.artist_name ?? 'artist'}
+            </p>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              {profile?.artist_email ?? '—'} · from {profile?.from_email ?? '—'}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {sendStatus === 'success' && (
-            <span className="text-xs text-green-400">{sendMsg}</span>
+
+        {/* CC + send options */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {profile?.manager_email && (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={ccMyself}
+                onChange={e => setCcMyself(e.target.checked)}
+                className="rounded border-neutral-700 bg-neutral-800 text-neutral-100 focus:ring-0 focus:ring-offset-0"
+              />
+              <span className="text-xs text-neutral-400">CC myself ({profile.manager_email})</span>
+            </label>
           )}
-          {sendStatus === 'error' && (
-            <span className="text-xs text-red-400 max-w-[200px] text-right">{sendMsg}</span>
-          )}
-          <Button onClick={handleSend} disabled={sending || !profile}>
-            {sending ? (
-              <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending…</>
-            ) : (
-              <><Send className="h-3.5 w-3.5" /> Send report</>
-            )}
-          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Test send */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestSend}
+              disabled={testSending || !profile || !profile.manager_email}
+              title={!profile?.manager_email ? 'Add your email in Settings first' : ''}
+            >
+              {testSending ? (
+                <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+              ) : (
+                'Send test to myself'
+              )}
+            </Button>
+            {testStatus === 'success' && <span className="text-xs text-green-400">{testMsg}</span>}
+            {testStatus === 'error' && <span className="text-xs text-red-400">{testMsg}</span>}
+          </div>
+
+          {/* Send to artist */}
+          <div className="flex items-center gap-2">
+            <Button onClick={handleSend} disabled={sending || !profile}>
+              {sending ? (
+                <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+              ) : (
+                <><Send className="h-3.5 w-3.5" /> Send to {profile?.artist_name ?? 'artist'}</>
+              )}
+            </Button>
+            {sendStatus === 'success' && <span className="text-xs text-green-400">{sendMsg}</span>}
+            {sendStatus === 'error' && <span className="text-xs text-red-400 max-w-[200px]">{sendMsg}</span>}
+          </div>
         </div>
       </div>
     </div>

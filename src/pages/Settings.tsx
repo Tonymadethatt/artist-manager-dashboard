@@ -11,6 +11,7 @@ export default function Settings() {
     artist_name: '',
     artist_email: '',
     manager_name: '',
+    manager_email: '',
     from_email: '',
   })
   const [saving, setSaving] = useState(false)
@@ -22,6 +23,7 @@ export default function Settings() {
         artist_name: profile.artist_name,
         artist_email: profile.artist_email,
         manager_name: profile.manager_name ?? '',
+        manager_email: profile.manager_email ?? '',
         from_email: profile.from_email,
       })
     }
@@ -36,6 +38,7 @@ export default function Settings() {
       artist_name: form.artist_name,
       artist_email: form.artist_email,
       manager_name: form.manager_name || null,
+      manager_email: form.manager_email || null,
       from_email: form.from_email,
     })
     setSaving(false)
@@ -97,6 +100,16 @@ export default function Settings() {
               onChange={e => setField('manager_name', e.target.value)}
               placeholder="Your name"
             />
+          </div>
+          <div className="space-y-1">
+            <Label>Your email (manager)</Label>
+            <Input
+              type="email"
+              value={form.manager_email}
+              onChange={e => setField('manager_email', e.target.value)}
+              placeholder="you@example.com"
+            />
+            <p className="text-xs text-neutral-600">Used for CC on reports and test sends. Also receives payment reminder copies.</p>
           </div>
           <div className="space-y-1">
             <Label>Send reports from</Label>

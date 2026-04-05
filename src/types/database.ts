@@ -6,6 +6,7 @@ import type {
   MetricCategory,
   TaskPriority,
   TaskRecurrence,
+  PaymentMethod,
   DealTerms,
   TemplateSection,
 } from './index'
@@ -272,6 +273,7 @@ export interface Database {
           artist_name: string
           artist_email: string
           manager_name: string | null
+          manager_email: string | null
           from_email: string
           created_at: string
           updated_at: string
@@ -281,6 +283,7 @@ export interface Database {
           artist_name?: string
           artist_email?: string
           manager_name?: string | null
+          manager_email?: string | null
           from_email?: string
           created_at?: string
           updated_at?: string
@@ -290,6 +293,7 @@ export interface Database {
           artist_name?: string
           artist_email?: string
           manager_name?: string | null
+          manager_email?: string | null
           from_email?: string
           created_at?: string
           updated_at?: string
@@ -372,6 +376,46 @@ export interface Database {
         }
         Relationships: []
       }
+      monthly_fee_payments: {
+        Row: {
+          id: string
+          fee_id: string
+          user_id: string
+          amount: number
+          paid_date: string
+          payment_method: PaymentMethod
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          fee_id: string
+          user_id: string
+          amount: number
+          paid_date?: string
+          payment_method?: PaymentMethod
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          fee_id?: string
+          user_id?: string
+          amount?: number
+          paid_date?: string
+          payment_method?: PaymentMethod
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'monthly_fee_payments_fee_id_fkey'
+            columns: ['fee_id']
+            referencedRelation: 'monthly_fees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       tasks: {
         Row: {
           id: string
@@ -441,6 +485,7 @@ export interface Database {
       metric_category: MetricCategory
       task_priority: TaskPriority
       task_recurrence: TaskRecurrence
+      payment_method: PaymentMethod
     }
     CompositeTypes: Record<string, never>
   }

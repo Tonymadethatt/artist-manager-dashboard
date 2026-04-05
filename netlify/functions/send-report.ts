@@ -4,6 +4,7 @@ interface ArtistProfile {
   artist_name: string
   artist_email: string
   manager_name: string | null
+  manager_email: string | null
   from_email: string
 }
 
@@ -163,20 +164,33 @@ const handler: Handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'RESEND_API_KEY not configured' }) }
   }
 
-  let body: { profile: ArtistProfile; report: ReportData; dateRange: { start: string; end: string } }
+  let body: {
+    profile: ArtistProfile
+    report: ReportData
+    dateRange: { start: string; end: string }
+    cc?: string[]
+    testOnly?: boolean
+  }
   try {
     body = JSON.parse(event.body ?? '{}')
   } catch {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, report, dateRange } = body
-  if (!profile?.artist_email || !profile?.from_email) {
+  const { profile, report, dateRange, cc = [], testOnly = false } = body
+  if (!profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
+  }
+  if (testOnly && !profile.manager_email) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set — add it in Settings.' }) }
   }
 
   const html = buildHtml(profile, report, dateRange)
-  const subject = `Management Report · ${dateRange.start} to ${dateRange.end}`
+  const subject = testOnly
+    ? `[TEST] Management Report · ${dateRange.start} to ${dateRange.end}`
+    : `Management Report · ${dateRange.start} to ${dateRange.end}`
+
+  const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -186,7 +200,8 @@ const handler: Handler = async (event) => {
     },
     body: JSON.stringify({
       from: profile.from_email,
-      to: [profile.artist_email],
+      to,
+      ...(cc.length > 0 && !testOnly ? { cc } : {}),
       subject,
       html,
     }),

@@ -21,8 +21,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { Deal, CommissionTier } from '@/types'
-import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES } from '@/types'
+import type { Deal, CommissionTier, PaymentMethod } from '@/types'
+import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { cn } from '@/lib/utils'
 
 const MONTHS = [
@@ -35,32 +36,60 @@ function fmtMonth(dateStr: string) {
 }
 
 function RetainerTab() {
-  const { fees, loading, togglePaid, updateFee, addFee } = useMonthlyFees()
-  const [toggling, setToggling] = useState<string | null>(null)
+  const { fees, loading, addPayment, deletePayment, updateFee, addFee } = useMonthlyFees()
+  const { profile } = useArtistProfile()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAmount, setEditAmount] = useState('')
   const [addMonth, setAddMonth] = useState('')
   const [addAmount, setAddAmount] = useState('350')
   const [addOpen, setAddOpen] = useState(false)
+  const [expandedFee, setExpandedFee] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [reminderStatus, setReminderStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
+  const [reminderMsg, setReminderMsg] = useState('')
+
+  // Payment dialog state
+  const [payOpen, setPayOpen] = useState(false)
+  const [payFeeId, setPayFeeId] = useState('')
+  const [payAmount, setPayAmount] = useState('')
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0])
+  const [payMethod, setPayMethod] = useState<PaymentMethod>('zelle')
+  const [payNotes, setPayNotes] = useState('')
+  const [payingSaving, setPayingSaving] = useState(false)
+
+  const feesWithTotals = useMemo(() => fees.map(f => {
+    const totalPaid = (f.payments ?? []).reduce((s, p) => s + p.amount, 0)
+    const balance = f.amount - totalPaid
+    return { ...f, totalPaid, balance }
+  }), [fees])
 
   const totals = useMemo(() => {
-    const owed = fees.reduce((s, f) => s + f.amount, 0)
-    const received = fees.filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
+    const owed = feesWithTotals.reduce((s, f) => s + f.amount, 0)
+    const received = feesWithTotals.reduce((s, f) => s + f.totalPaid, 0)
     return { owed, received, outstanding: owed - received }
-  }, [fees])
+  }, [feesWithTotals])
 
-  const handleToggle = async (id: string, paid: boolean) => {
-    setToggling(id)
-    await togglePaid(id, !paid)
-    setToggling(null)
+  const openPayDialog = (feeId: string, balance: number) => {
+    setPayFeeId(feeId)
+    setPayAmount(balance > 0 ? String(balance) : '')
+    setPayDate(new Date().toISOString().split('T')[0])
+    setPayMethod('zelle')
+    setPayNotes('')
+    setPayOpen(true)
+  }
+
+  const handleLogPayment = async () => {
+    const amount = parseFloat(payAmount)
+    if (isNaN(amount) || amount <= 0 || !payFeeId) return
+    setPayingSaving(true)
+    await addPayment(payFeeId, amount, payDate, payMethod, payNotes || undefined)
+    setPayingSaving(false)
+    setPayOpen(false)
   }
 
   const handleSaveAmount = async (id: string) => {
     const amount = parseFloat(editAmount)
-    if (!isNaN(amount) && amount > 0) {
-      await updateFee(id, { amount })
-    }
+    if (!isNaN(amount) && amount > 0) await updateFee(id, { amount })
     setEditingId(null)
   }
 
@@ -72,6 +101,33 @@ function RetainerTab() {
     setAddOpen(false)
     setAddMonth('')
     setAddAmount('350')
+  }
+
+  const handleSendReminder = async () => {
+    if (!profile) return
+    setReminderStatus('sending')
+    const unpaidFees = feesWithTotals
+      .filter(f => f.balance > 0)
+      .map(f => ({ month: fmtMonth(f.month), owed: f.amount, paid: f.totalPaid, balance: f.balance }))
+    try {
+      const res = await fetch('/.netlify/functions/send-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile, unpaidFees, totalOutstanding: totals.outstanding }),
+      })
+      if (res.ok) {
+        setReminderStatus('success')
+        setReminderMsg(`Reminder sent to ${profile.artist_email}`)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setReminderStatus('error')
+        setReminderMsg((err as { message?: string }).message ?? 'Send failed')
+      }
+    } catch {
+      setReminderStatus('error')
+      setReminderMsg('Network error — make sure site is deployed.')
+    }
+    setTimeout(() => setReminderStatus('idle'), 4000)
   }
 
   if (loading) return (
@@ -103,71 +159,178 @@ function RetainerTab() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-2">
+          {totals.outstanding > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSendReminder}
+                disabled={reminderStatus === 'sending'}
+              >
+                {reminderStatus === 'sending' ? 'Sending…' : 'Send payment reminder'}
+              </Button>
+              {reminderStatus === 'success' && <span className="text-xs text-green-400">{reminderMsg}</span>}
+              {reminderStatus === 'error' && <span className="text-xs text-red-400">{reminderMsg}</span>}
+            </>
+          )}
+        </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Add month
         </Button>
       </div>
 
-      <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-neutral-800 bg-neutral-950">
-              <th className="text-left px-4 py-2.5 text-xs font-medium text-neutral-500">Month</th>
-              <th className="text-right px-3 py-2.5 text-xs font-medium text-neutral-500">Amount</th>
-              <th className="text-center px-3 py-2.5 text-xs font-medium text-neutral-500">Paid</th>
-              <th className="text-left px-3 py-2.5 text-xs font-medium text-neutral-500 hidden md:table-cell">Paid date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fees.map(fee => (
-              <tr key={fee.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800/40 transition-colors">
-                <td className="px-4 py-3 font-medium text-neutral-100">{fmtMonth(fee.month)}</td>
-                <td className="px-3 py-3 text-right">
-                  {editingId === fee.id ? (
-                    <div className="flex items-center gap-2 justify-end">
+      {/* Month list */}
+      <div className="space-y-2">
+        {feesWithTotals.map(fee => {
+          const isExpanded = expandedFee === fee.id
+          const statusLabel = fee.balance <= 0 ? 'Paid in full' : fee.totalPaid > 0 ? `Partial — $${fee.balance.toFixed(2)} remaining` : 'Unpaid'
+          const statusColor = fee.balance <= 0 ? 'text-green-400' : fee.totalPaid > 0 ? 'text-amber-400' : 'text-neutral-500'
+
+          return (
+            <div key={fee.id} className="rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden">
+              {/* Month header row */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-medium text-neutral-100 text-sm">{fmtMonth(fee.month)}</span>
+                    <span className={cn('text-xs font-medium', statusColor)}>{statusLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-neutral-500">
+                    {editingId === fee.id ? (
                       <Input
                         type="number"
                         value={editAmount}
                         onChange={e => setEditAmount(e.target.value)}
-                        className="w-24 h-7 text-xs text-right"
+                        className="w-24 h-6 text-xs"
                         onBlur={() => handleSaveAmount(fee.id)}
                         onKeyDown={e => e.key === 'Enter' && handleSaveAmount(fee.id)}
                         autoFocus
                       />
-                    </div>
-                  ) : (
+                    ) : (
+                      <button
+                        className="tabular-nums hover:text-neutral-300 transition-colors"
+                        onClick={() => { setEditingId(fee.id); setEditAmount(String(fee.amount)) }}
+                        title="Click to edit amount"
+                      >
+                        Invoiced: ${fee.amount.toFixed(2)}
+                      </button>
+                    )}
+                    {fee.totalPaid > 0 && (
+                      <span className="text-green-600">Paid: ${fee.totalPaid.toFixed(2)}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {fee.balance > 0 && (
+                    <Button size="sm" variant="outline" onClick={() => openPayDialog(fee.id, fee.balance)}>
+                      <Plus className="h-3 w-3" />
+                      Log payment
+                    </Button>
+                  )}
+                  {(fee.payments ?? []).length > 0 && (
                     <button
-                      className="text-neutral-200 tabular-nums hover:text-neutral-100 transition-colors"
-                      onClick={() => { setEditingId(fee.id); setEditAmount(String(fee.amount)) }}
+                      onClick={() => setExpandedFee(isExpanded ? null : fee.id)}
+                      className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors px-2 py-1"
                     >
-                      ${fee.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      {isExpanded ? 'Hide' : `${fee.payments!.length} payment${fee.payments!.length !== 1 ? 's' : ''}`}
                     </button>
                   )}
-                </td>
-                <td className="px-3 py-3 text-center">
-                  <button
-                    onClick={() => handleToggle(fee.id, fee.paid)}
-                    disabled={toggling === fee.id}
-                    className={cn(
-                      'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors mx-auto',
-                      fee.paid
-                        ? 'bg-green-950 text-green-400 hover:bg-green-900'
-                        : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300'
-                    )}
-                  >
-                    {fee.paid ? '✓ Paid' : '○ Unpaid'}
-                  </button>
-                </td>
-                <td className="px-3 py-3 text-xs text-neutral-500 hidden md:table-cell">
-                  {fee.paid_date ?? '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </div>
+
+              {/* Payment history */}
+              {isExpanded && (fee.payments ?? []).length > 0 && (
+                <div className="border-t border-neutral-800 divide-y divide-neutral-800">
+                  {fee.payments!.map(p => (
+                    <div key={p.id} className="flex items-center gap-3 px-4 py-2 bg-neutral-950/40">
+                      <div className="flex-1 min-w-0 flex items-center gap-3 flex-wrap">
+                        <span className="text-sm font-medium text-green-400 tabular-nums">${p.amount.toFixed(2)}</span>
+                        <span className="text-xs bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded">
+                          {PAYMENT_METHOD_LABELS[p.payment_method]}
+                        </span>
+                        <span className="text-xs text-neutral-500">{p.paid_date}</span>
+                        {p.notes && <span className="text-xs text-neutral-600 truncate">{p.notes}</span>}
+                      </div>
+                      <button
+                        onClick={() => deletePayment(p.id, fee.id)}
+                        className="text-neutral-700 hover:text-red-500 transition-colors text-xs px-1"
+                        title="Remove this payment"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
+
+      {/* Log payment dialog */}
+      <Dialog open={payOpen} onOpenChange={v => !v && setPayOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Log a payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Amount ($) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={payAmount}
+                  onChange={e => setPayAmount(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Date *</Label>
+                <Input
+                  type="date"
+                  value={payDate}
+                  onChange={e => setPayDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Payment method *</Label>
+              <Select value={payMethod} onValueChange={v => setPayMethod(v as PaymentMethod)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="zelle">Zelle</SelectItem>
+                  <SelectItem value="venmo">Venmo</SelectItem>
+                  <SelectItem value="apple_pay">Apple Pay</SelectItem>
+                  <SelectItem value="paypal">PayPal</SelectItem>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Notes (optional)</Label>
+              <Input
+                value={payNotes}
+                onChange={e => setPayNotes(e.target.value)}
+                placeholder="Any additional context…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
+            <Button onClick={handleLogPayment} disabled={payingSaving || !payAmount}>
+              {payingSaving ? 'Logging…' : 'Log payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add month dialog */}
       <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
