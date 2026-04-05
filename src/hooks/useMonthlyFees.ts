@@ -160,5 +160,14 @@ export function useMonthlyFees() {
     return { data: newFee }
   }
 
-  return { fees, loading, error, refetch: fetchFees, addPayment, deletePayment, updateFee, addFee }
+  const deleteFee = async (id: string) => {
+    // Delete child payments first (safe even if FK cascade is set)
+    await supabase.from('monthly_fee_payments').delete().eq('fee_id', id)
+    const { error } = await supabase.from('monthly_fees').delete().eq('id', id)
+    if (error) return { error }
+    setFees(prev => prev.filter(f => f.id !== id))
+    return {}
+  }
+
+  return { fees, loading, error, refetch: fetchFees, addPayment, deletePayment, updateFee, addFee, deleteFee }
 }

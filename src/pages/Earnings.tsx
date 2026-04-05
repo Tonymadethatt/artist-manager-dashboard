@@ -38,7 +38,7 @@ function fmtMonth(dateStr: string) {
 }
 
 function RetainerTab() {
-  const { fees, loading, addPayment, deletePayment, updateFee, addFee } = useMonthlyFees()
+  const { fees, loading, addPayment, deletePayment, updateFee, addFee, deleteFee } = useMonthlyFees()
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
   const reminderTemplate = getTemplate('retainer_reminder')
@@ -48,6 +48,7 @@ function RetainerTab() {
   const [addAmount, setAddAmount] = useState('350')
   const [addOpen, setAddOpen] = useState(false)
   const [expandedFee, setExpandedFee] = useState<string | null>(null)
+  const [deletingFeeId, setDeletingFeeId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const [reminderMsg, setReminderMsg] = useState('')
@@ -95,6 +96,11 @@ function RetainerTab() {
     const amount = parseFloat(editAmount)
     if (!isNaN(amount) && amount > 0) await updateFee(id, { amount })
     setEditingId(null)
+  }
+
+  const handleDeleteFee = async (id: string) => {
+    await deleteFee(id)
+    setDeletingFeeId(null)
   }
 
   const handleAddMonth = async () => {
@@ -247,6 +253,31 @@ function RetainerTab() {
                       className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors px-2 py-1"
                     >
                       {isExpanded ? 'Hide' : `${fee.payments!.length} payment${fee.payments!.length !== 1 ? 's' : ''}`}
+                    </button>
+                  )}
+                  {deletingFeeId === fee.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-neutral-400">Delete month?</span>
+                      <button
+                        onClick={() => handleDeleteFee(fee.id)}
+                        className="text-xs px-2 py-0.5 rounded bg-red-900/60 text-red-400 border border-red-800/60 hover:bg-red-800/60 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setDeletingFeeId(null)}
+                        className="text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 hover:bg-neutral-700 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeletingFeeId(fee.id)}
+                      className="text-neutral-700 hover:text-red-500 transition-colors p-1"
+                      title="Delete this month"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>

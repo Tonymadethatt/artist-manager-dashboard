@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Plus, Search, SlidersHorizontal, Star } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
@@ -27,6 +27,11 @@ const VENUE_TYPE_LABELS: Record<VenueType, string> = {
   other: 'Other',
 }
 
+function fmtFollowUp(dateStr: string) {
+  const [y, m, d] = dateStr.split('-')
+  return `${parseInt(m)}/${parseInt(d)}/${y}`
+}
+
 export default function Outreach() {
   const { venues, loading, addVenue, updateVenue, deleteVenue } = useVenues()
   const { templates, applyTemplate } = useTaskTemplates()
@@ -36,6 +41,51 @@ export default function Outreach() {
   const [sortBy, setSortBy] = useState<'updated' | 'priority' | 'name' | 'follow_up'>('updated')
   const [addOpen, setAddOpen] = useState(false)
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+
+  // Inline follow-up date editing
+  const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null)
+  const [editingFollowUpValue, setEditingFollowUpValue] = useState('')
+  const followUpInputRef = useRef<HTMLInputElement>(null)
+
+  // Toast state
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast(msg)
+    toastTimer.current = setTimeout(() => setToast(null), 1500)
+  }
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+
+  const handleStatusChange = async (venue: Venue, newStatus: OutreachStatus) => {
+    await updateVenue(venue.id, { status: newStatus })
+    showToast(`${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`)
+    // Keep detail panel in sync if open
+    if (selectedVenue?.id === venue.id) {
+      setSelectedVenue(v => v ? { ...v, status: newStatus } : v)
+    }
+  }
+
+  const startEditFollowUp = (venue: Venue, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingFollowUpId(venue.id)
+    setEditingFollowUpValue(venue.follow_up_date ?? '')
+    setTimeout(() => followUpInputRef.current?.focus(), 0)
+  }
+
+  const saveFollowUp = async (venue: Venue) => {
+    const val = editingFollowUpValue || null
+    setEditingFollowUpId(null)
+    if (val !== venue.follow_up_date) {
+      await updateVenue(venue.id, { follow_up_date: val })
+      showToast('Follow-up date updated')
+      if (selectedVenue?.id === venue.id) {
+        setSelectedVenue(v => v ? { ...v, follow_up_date: val } : v)
+      }
+    }
+  }
 
   const filtered = useMemo(() => {
     let list = venues
@@ -66,6 +116,13 @@ export default function Outreach() {
 
   return (
     <div className="space-y-4">
+      {/* Top-right toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-neutral-800 border border-neutral-700 text-neutral-100 text-sm px-4 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+          {toast}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
@@ -158,6 +215,8 @@ export default function Outreach() {
               {filtered.map((venue, i) => {
                 const overdue = venue.follow_up_date && venue.follow_up_date < today && venue.status !== 'booked' && venue.status !== 'rejected' && venue.status !== 'archived'
                 const dueToday = venue.follow_up_date === today
+                const isEditingFollowUp = editingFollowUpId === venue.id
+
                 return (
                   <tr
                     key={venue.id}
@@ -179,20 +238,41 @@ export default function Outreach() {
                       <span className="text-xs text-neutral-500 capitalize">{VENUE_TYPE_LABELS[venue.venue_type]}</span>
                     </td>
                     <td className="px-3 py-3">
-                      <StatusBadge status={venue.status} />
+                      <StatusBadge
+                        status={venue.status}
+                        onStatusChange={newStatus => handleStatusChange(venue, newStatus)}
+                      />
                     </td>
-                    <td className="px-3 py-3 hidden md:table-cell">
-                      {venue.follow_up_date ? (
-                        <span className={cn(
-                          'text-xs',
-                          overdue && 'text-red-500 font-medium',
-                          dueToday && 'text-orange-400 font-medium',
-                          !overdue && !dueToday && 'text-neutral-500'
-                        )}>
-                          {overdue ? '⚠ ' : dueToday ? '→ ' : ''}{venue.follow_up_date}
-                        </span>
+                    <td className="px-3 py-3 hidden md:table-cell" onClick={e => e.stopPropagation()}>
+                      {isEditingFollowUp ? (
+                        <input
+                          ref={followUpInputRef}
+                          type="date"
+                          value={editingFollowUpValue}
+                          onChange={e => setEditingFollowUpValue(e.target.value)}
+                          onBlur={() => saveFollowUp(venue)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveFollowUp(venue)
+                            if (e.key === 'Escape') setEditingFollowUpId(null)
+                          }}
+                          className="bg-neutral-800 border border-neutral-600 rounded px-2 py-0.5 text-xs text-neutral-100 focus:outline-none focus:border-neutral-400 w-[130px]"
+                        />
                       ) : (
-                        <span className="text-neutral-600 text-xs">—</span>
+                        <button
+                          onClick={e => startEditFollowUp(venue, e)}
+                          className={cn(
+                            'text-xs transition-colors hover:underline underline-offset-2',
+                            overdue && 'text-red-500 font-medium',
+                            dueToday && 'text-orange-400 font-medium',
+                            !overdue && !dueToday && venue.follow_up_date && 'text-neutral-400',
+                            !venue.follow_up_date && 'text-neutral-600'
+                          )}
+                          title="Click to edit follow-up date"
+                        >
+                          {venue.follow_up_date
+                            ? `${overdue ? '⚠ ' : dueToday ? '→ ' : ''}${fmtFollowUp(venue.follow_up_date)}`
+                            : 'Set date'}
+                        </button>
                       )}
                     </td>
                     <td className="px-3 py-3 hidden lg:table-cell">
