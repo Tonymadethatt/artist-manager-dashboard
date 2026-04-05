@@ -180,6 +180,8 @@ export default function FileBuilder() {
     if (!selectedTemplate || !rendered.trim()) return
     setSavingPdf(true)
     try {
+      // Always rebuild HTML from current vars/template — previewHtml can be stale for one
+      // render cycle after edits while previewLoading is still false.
       const html = await buildPdfHtml()
       const blob = await htmlDocumentToPdfBlob(html)
       const u = URL.createObjectURL(blob)

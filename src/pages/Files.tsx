@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { sanitizeFilenameStem } from '@/lib/agreement'
+import { copyTextToClipboard } from '@/lib/copyToClipboard'
 import type { GeneratedFile } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,7 @@ export default function Files() {
   const [settingUrl, setSettingUrl] = useState(false)
   const [urlFeedback, setUrlFeedback] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [clipboardBanner, setClipboardBanner] = useState<string | null>(null)
 
   const handleDownload = (file: GeneratedFile) => {
     if (formatOf(file) === 'pdf' && file.pdf_public_url) {
@@ -51,10 +53,22 @@ export default function Files() {
   }
 
   const copyPdfLink = async (file: GeneratedFile) => {
-    if (!file.pdf_public_url) return
-    await navigator.clipboard.writeText(file.pdf_public_url)
-    setCopiedId(file.id)
-    window.setTimeout(() => setCopiedId(null), 2000)
+    setClipboardBanner(null)
+    if (!file.pdf_public_url) {
+      setClipboardBanner('This file has no public PDF URL yet.')
+      window.setTimeout(() => setClipboardBanner(null), 5000)
+      return
+    }
+    const ok = await copyTextToClipboard(file.pdf_public_url)
+    if (ok) {
+      setCopiedId(file.id)
+      window.setTimeout(() => setCopiedId(null), 2000)
+      return
+    }
+    const msg =
+      'Could not copy automatically. Open the PDF with Download, or copy the link from your browser address bar.'
+    setClipboardBanner(msg)
+    window.setTimeout(() => setClipboardBanner(null), 8000)
   }
 
   const handleSetDealAgreementUrl = async () => {
@@ -73,6 +87,11 @@ export default function Files() {
 
   return (
     <div className="space-y-4 max-w-3xl">
+      {clipboardBanner && (
+        <p className="text-xs text-amber-400/90 border border-amber-900/50 bg-amber-950/30 rounded-md px-3 py-2">
+          {clipboardBanner}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-sm text-neutral-500">
           {files.length} file{files.length !== 1 ? 's' : ''}

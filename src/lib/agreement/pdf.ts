@@ -1,5 +1,32 @@
 import html2pdf from 'html2pdf.js'
 
+/** Ensure images are decoded before html2canvas runs (preview loads async; 250ms is often too short). */
+function waitForImages(root: HTMLElement, timeoutMs: number): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'))
+  if (imgs.length === 0) return Promise.resolve()
+
+  const perImg = (img: HTMLImageElement) =>
+    new Promise<void>(resolve => {
+      const done = () => resolve()
+      if (img.complete && img.naturalWidth > 0) {
+        done()
+        return
+      }
+      img.addEventListener('load', done, { once: true })
+      img.addEventListener('error', done, { once: true })
+      if (typeof img.decode === 'function') {
+        img.decode().then(done).catch(done)
+      }
+    })
+
+  return Promise.race([
+    Promise.all(imgs.map(perImg)).then(() => undefined),
+    new Promise<void>(resolve => {
+      window.setTimeout(resolve, timeoutMs)
+    }),
+  ])
+}
+
 /**
  * Render full HTML document string to PDF blob via html2pdf (html2canvas + jsPDF).
  * Uses a hidden iframe so styles apply consistently.
@@ -16,13 +43,22 @@ export async function htmlDocumentToPdfBlob(html: string): Promise<Blob> {
       const done = () => resolve()
       iframe.onload = done
       iframe.onerror = () => reject(new Error('iframe failed'))
-      window.setTimeout(done, 250)
+      window.setTimeout(done, 400)
     })
 
     const doc = iframe.contentDocument
     const body = doc?.body
     if (!body) throw new Error('PDF iframe has no body')
 
+    await doc.fonts?.ready?.catch(() => undefined)
+    await waitForImages(body, 8000)
+
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+
+    // Capture `body` (full document content + inherited styles). Sub-root (.doc) +
+    // custom windowWidth ~720px vs iframe 816px skewed html2canvas vs the preview iframe.
     const opt = {
       margin: [10, 10, 10, 10] as [number, number, number, number],
       filename: 'agreement.pdf',
