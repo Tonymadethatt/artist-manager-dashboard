@@ -21,6 +21,12 @@ function fmtMoney(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
+function fmtDateDisplay(iso: string) {
+  const [y, m, d] = iso.split('-')
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
+}
+
 function StatRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1.5 border-b border-neutral-800 last:border-0">
@@ -209,7 +215,7 @@ export default function Reports() {
           </div>
         )}
         {preset !== 'custom' && (
-          <p className="text-xs text-neutral-500">{startDate} → {endDate}</p>
+          <p className="text-xs text-neutral-500">{fmtDateDisplay(startDate)} → {fmtDateDisplay(endDate)}</p>
         )}
       </div>
 

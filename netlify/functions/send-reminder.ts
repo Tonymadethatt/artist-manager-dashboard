@@ -20,71 +20,103 @@ function money(n: number) {
 }
 
 function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number): string {
-  const managerName = profile.manager_name || 'Your manager'
+  const managerName = profile.manager_name || 'Management'
+  const monthCount = unpaidFees.length
+  const hasPartials = unpaidFees.some(f => f.paid > 0)
 
-  const feeRows = unpaidFees.map(f => `
-    <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#333;">${f.month}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#555;text-align:right;">${money(f.owed)}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#16a34a;text-align:right;">${f.paid > 0 ? money(f.paid) : '—'}</td>
-      <td style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;font-weight:600;color:#c2410c;text-align:right;">${money(f.balance)}</td>
-    </tr>
-  `).join('')
+  // Value recap opener — qualitative, relationship-first, no specific numbers
+  const recapLine = monthCount === 1
+    ? `We've been heads down on the management side — outreach is active, conversations are moving, and I'm continuing to push the brand forward.`
+    : `We've been heads down on the management side across the last ${monthCount} months — outreach is active, we've got live conversations with venues, and I'm continuing to push the brand forward.`
+
+  const feeRows = unpaidFees.map(f => {
+    const isPartial = f.paid > 0
+    return `<tr>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#222;font-weight:500;">${f.month}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#777;text-align:right;">${money(f.owed)}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:${isPartial ? '#16a34a' : '#bbb'};text-align:right;">${isPartial ? money(f.paid) : '—'}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;font-weight:700;color:#111;text-align:right;">${money(f.balance)}</td>
+    </tr>`
+  }).join('')
+
+  const partialNote = hasPartials
+    ? `<p style="font-size:13px;color:#aaa;margin-top:10px;line-height:1.6;">Partial payments already received are reflected above — thank you for those.</p>`
+    : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Payment Reminder</title>
+<title>Management Note</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ebebeb; color: #111; -webkit-font-smoothing: antialiased; }
+  @media only screen and (max-width: 600px) {
+    .wrapper { margin: 0 !important; border-radius: 0 !important; border-left: none !important; border-right: none !important; }
+    .email-body { padding: 22px 18px !important; }
+    .email-header { padding: 24px 18px !important; }
+    .email-footer { padding: 16px 18px !important; }
+    .fee-table { font-size: 12px !important; }
+    .hide-mobile { display: none !important; }
+  }
+</style>
 </head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f5f5f5;color:#111;">
-<div style="max-width:560px;margin:32px auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e5e5e5;">
+<body>
+<div class="wrapper" style="max-width:600px;margin:24px auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #d8d8d8;">
 
-  <div style="background:#111;color:#fff;padding:24px 28px;">
-    <div style="font-size:18px;font-weight:700;">Payment Reminder</div>
-    <div style="font-size:13px;color:#aaa;margin-top:3px;">Front Office™ Monthly Retainer</div>
+  <!-- Header -->
+  <div class="email-header" style="background:#0d0d0d;padding:28px 32px;">
+    <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
+    <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
   </div>
 
-  <div style="padding:28px;">
-    <p style="font-size:15px;color:#333;line-height:1.7;margin:0 0 20px;">
-      Hey ${profile.artist_name},
-    </p>
-    <p style="font-size:14px;color:#555;line-height:1.7;margin:0 0 24px;">
-      Just a quick heads-up — there's an outstanding balance on your monthly management retainer. Here's where things stand:
-    </p>
+  <!-- Body -->
+  <div class="email-body" style="padding:28px 32px;">
 
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-      <thead>
-        <tr>
-          <th style="text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#999;padding:0 0 8px;border-bottom:2px solid #eee;">Month</th>
-          <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#999;padding:0 0 8px;border-bottom:2px solid #eee;">Invoiced</th>
-          <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#999;padding:0 0 8px;border-bottom:2px solid #eee;">Paid</th>
-          <th style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#999;padding:0 0 8px;border-bottom:2px solid #eee;">Balance</th>
-        </tr>
-      </thead>
-      <tbody>${feeRows}</tbody>
-    </table>
+    <!-- Greeting + value recap -->
+    <p style="font-size:15px;color:#222;line-height:1.8;margin-bottom:20px;">Hey ${profile.artist_name},</p>
+    <p style="font-size:14px;color:#555;line-height:1.8;margin-bottom:20px;">${recapLine}</p>
+    <p style="font-size:14px;color:#555;line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer — there's a balance that hasn't cleared yet. Here's where things stand:</p>
 
-    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:16px 20px;margin-bottom:24px;">
-      <div style="font-size:12px;color:#9a3412;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Total outstanding</div>
-      <div style="font-size:26px;font-weight:700;color:#c2410c;">${money(totalOutstanding)}</div>
+    <!-- Fee breakdown table -->
+    <div style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+      <div style="background:#f5f5f5;padding:10px 18px;border-bottom:1px solid #e8e8e8;">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#999;">Retainer Balance</span>
+      </div>
+      <div style="padding:0 18px;">
+        <table class="fee-table" style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Month</th>
+              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Invoiced</th>
+              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Paid</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Balance</th>
+            </tr>
+          </thead>
+          <tbody>${feeRows}</tbody>
+        </table>
+      </div>
     </div>
 
-    <p style="font-size:14px;color:#555;line-height:1.7;margin:0 0 8px;">
-      Whenever you get a chance, please send that over. You can split it up however works for you — just let me know once you've sent something so I can update the records.
-    </p>
-    <p style="font-size:14px;color:#555;line-height:1.7;margin:0;">
-      Thanks for everything, as always. Let's keep the momentum going.
-    </p>
+    ${partialNote}
+
+    <!-- Total callout — neutral, not alarming -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e0e0e0;border-radius:8px;padding:18px 22px;margin:${hasPartials ? '16px' : '4px'} 0 24px;background:#f9f9f9;">
+      <div style="font-size:13px;color:#888;">Total outstanding</div>
+      <div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.5px;">${money(totalOutstanding)}</div>
+    </div>
+
+    <!-- Closing — warm, no pressure -->
+    <p style="font-size:14px;color:#555;line-height:1.8;margin-bottom:12px;">Whenever you're able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
+    <p style="font-size:14px;color:#555;line-height:1.8;">Appreciate you — let's keep this momentum going. Big things ahead.</p>
+
   </div>
 
-  <div style="background:#fafafa;border-top:1px solid #eee;padding:18px 28px;">
-    <p style="font-size:12px;color:#999;margin:0;line-height:1.6;">
-      <strong style="color:#555;">${managerName}</strong><br>
-      Front Office™ Artist Management<br>
-      ${profile.from_email}
-    </p>
+  <!-- Footer -->
+  <div class="email-footer" style="background:#f5f5f5;border-top:1px solid #e8e8e8;padding:20px 32px;">
+    <div style="font-size:13px;font-weight:700;color:#111;">${managerName}</div>
+    <div style="font-size:11px;color:#aaa;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
   </div>
 
 </div>
@@ -115,7 +147,10 @@ const handler: Handler = async (event) => {
   }
 
   const html = buildReminderHtml(profile, unpaidFees, totalOutstanding)
-  const subject = `Quick note on your management retainer — ${money(totalOutstanding)} outstanding`
+
+  // Subject is casual — doesn't scream "you owe money"
+  const firstName = profile.artist_name.split(' ')[0]
+  const subject = `Hey ${firstName} — quick note from management`
 
   const to = [profile.artist_email]
   const cc = profile.manager_email ? [profile.manager_email] : []
