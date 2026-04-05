@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
 import type { Venue, Contact, OutreachNote } from '@/types'
+
+type VenueUpdate = Database['public']['Tables']['venues']['Update']
+type ContactUpdate = Database['public']['Tables']['contacts']['Update']
 
 export function useVenues() {
   const [venues, setVenues] = useState<Venue[]>([])
@@ -15,17 +19,27 @@ export function useVenues() {
       .order('updated_at', { ascending: false })
 
     if (error) setError(error.message)
-    else setVenues(data as Venue[])
+    else setVenues((data ?? []) as Venue[])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchVenues() }, [fetchVenues])
 
-  const addVenue = async (venue: Omit<Venue, 'id' | 'created_at' | 'updated_at'> & { user_id?: string }) => {
+  const addVenue = async (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('venues')
-      .insert({ ...venue, user_id: user!.id })
+      .insert({
+        user_id: user!.id,
+        name: venue.name,
+        location: venue.location,
+        city: venue.city,
+        venue_type: venue.venue_type,
+        priority: venue.priority,
+        status: venue.status,
+        follow_up_date: venue.follow_up_date,
+        deal_terms: venue.deal_terms,
+      })
       .select()
       .single()
     if (error) return { error }
@@ -33,7 +47,7 @@ export function useVenues() {
     return { data: data as Venue }
   }
 
-  const updateVenue = async (id: string, updates: Partial<Omit<Venue, 'id' | 'created_at'>>) => {
+  const updateVenue = async (id: string, updates: Omit<VenueUpdate, 'id' | 'user_id'>) => {
     const { data, error } = await supabase
       .from('venues')
       .update(updates)
@@ -74,11 +88,18 @@ export function useVenueDetail(venueId: string | null) {
 
   useEffect(() => { fetchDetail() }, [fetchDetail])
 
-  const addContact = async (contact: Omit<Contact, 'id' | 'created_at'>) => {
+  const addContact = async (contact: Omit<Contact, 'id' | 'user_id' | 'created_at'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('contacts')
-      .insert({ ...contact, user_id: user!.id })
+      .insert({
+        user_id: user!.id,
+        venue_id: contact.venue_id,
+        name: contact.name,
+        role: contact.role,
+        email: contact.email,
+        phone: contact.phone,
+      })
       .select()
       .single()
     if (error) return { error }
@@ -86,7 +107,7 @@ export function useVenueDetail(venueId: string | null) {
     return { data: data as Contact }
   }
 
-  const updateContact = async (id: string, updates: Partial<Omit<Contact, 'id' | 'created_at'>>) => {
+  const updateContact = async (id: string, updates: Omit<ContactUpdate, 'id' | 'user_id'>) => {
     const { data, error } = await supabase
       .from('contacts')
       .update(updates)

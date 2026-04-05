@@ -31,11 +31,11 @@ const VENUE_TYPES: { value: VenueType; label: string }[] = [
 interface VenueDialogProps {
   open: boolean
   onClose: () => void
-  onSave: (venue: Omit<Venue, 'id' | 'created_at' | 'updated_at'>) => Promise<unknown>
+  onSave: (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<unknown>
   initialData?: Venue
 }
 
-const EMPTY: Omit<Venue, 'id' | 'created_at' | 'updated_at'> = {
+const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   name: '',
   location: '',
   city: '',
@@ -47,7 +47,7 @@ const EMPTY: Omit<Venue, 'id' | 'created_at' | 'updated_at'> = {
 }
 
 export function VenueDialog({ open, onClose, onSave, initialData }: VenueDialogProps) {
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState<Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

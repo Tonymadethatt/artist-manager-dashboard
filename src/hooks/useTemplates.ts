@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
 import type { Template } from '@/types'
+
+type TemplateUpdate = Database['public']['Tables']['templates']['Update']
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([])
@@ -18,11 +21,16 @@ export function useTemplates() {
 
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
 
-  const addTemplate = async (template: Omit<Template, 'id' | 'created_at' | 'updated_at'>) => {
+  const addTemplate = async (template: Omit<Template, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('templates')
-      .insert({ ...template, user_id: user!.id })
+      .insert({
+        user_id: user!.id,
+        name: template.name,
+        type: template.type,
+        sections: template.sections,
+      })
       .select()
       .single()
     if (error) return { error }
@@ -30,7 +38,7 @@ export function useTemplates() {
     return { data: data as Template }
   }
 
-  const updateTemplate = async (id: string, updates: Partial<Omit<Template, 'id' | 'created_at'>>) => {
+  const updateTemplate = async (id: string, updates: Omit<TemplateUpdate, 'id' | 'user_id'>) => {
     const { data, error } = await supabase
       .from('templates')
       .update(updates)

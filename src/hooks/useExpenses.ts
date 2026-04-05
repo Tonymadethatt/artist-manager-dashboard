@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
 import type { Expense } from '@/types'
+
+type ExpenseUpdate = Database['public']['Tables']['expenses']['Update']
 
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -21,11 +24,18 @@ export function useExpenses() {
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
 
-  const addExpense = async (expense: Omit<Expense, 'id' | 'created_at' | 'venue'>) => {
+  const addExpense = async (expense: Omit<Expense, 'id' | 'user_id' | 'created_at' | 'venue'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('expenses')
-      .insert({ ...expense, user_id: user!.id })
+      .insert({
+        user_id: user!.id,
+        amount: expense.amount,
+        category: expense.category,
+        description: expense.description,
+        date: expense.date,
+        venue_id: expense.venue_id,
+      })
       .select(`
         *,
         venue:venues(id, name)
@@ -36,7 +46,7 @@ export function useExpenses() {
     return { data: data as Expense }
   }
 
-  const updateExpense = async (id: string, updates: Partial<Omit<Expense, 'id' | 'created_at' | 'venue'>>) => {
+  const updateExpense = async (id: string, updates: Omit<ExpenseUpdate, 'id' | 'user_id'>) => {
     const { data, error } = await supabase
       .from('expenses')
       .update(updates)

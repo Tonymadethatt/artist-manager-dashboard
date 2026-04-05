@@ -58,6 +58,7 @@ export interface TemplateSection {
 
 export interface Venue {
   id: string
+  user_id: string
   name: string
   location: string | null
   city: string | null
@@ -72,6 +73,7 @@ export interface Venue {
 
 export interface Contact {
   id: string
+  user_id: string
   venue_id: string
   name: string
   role: string | null
@@ -82,6 +84,7 @@ export interface Contact {
 
 export interface OutreachNote {
   id: string
+  user_id: string
   venue_id: string
   note: string
   created_at: string
@@ -89,6 +92,7 @@ export interface OutreachNote {
 
 export interface Template {
   id: string
+  user_id: string
   name: string
   type: TemplateType
   sections: TemplateSection[]
@@ -98,6 +102,7 @@ export interface Template {
 
 export interface GeneratedFile {
   id: string
+  user_id: string
   name: string
   template_id: string | null
   venue_id: string | null
@@ -109,6 +114,7 @@ export interface GeneratedFile {
 
 export interface Expense {
   id: string
+  user_id: string
   amount: number
   category: ExpenseCategory
   description: string | null

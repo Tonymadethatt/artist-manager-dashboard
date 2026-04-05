@@ -271,7 +271,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                         await updateContact(editingContact.id, data)
                         setEditingContact(null)
                       } else {
-                        await addContact({ ...data, venue_id: venue.id, user_id: '' })
+                        await addContact({ ...data, venue_id: venue.id })
                         setAddContactOpen(false)
                       }
                     }}
@@ -399,7 +399,7 @@ function ContactForm({
   onCancel,
 }: {
   initial: Contact | null
-  onSave: (data: Omit<Contact, 'id' | 'created_at' | 'venue_id' | 'user_id'> & { user_id: string }) => Promise<void>
+  onSave: (data: Omit<Contact, 'id' | 'created_at' | 'venue_id' | 'user_id'>) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -413,7 +413,7 @@ function ContactForm({
   const handleSave = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    await onSave({ ...form, name: form.name.trim(), role: form.role || null, email: form.email || null, phone: form.phone || null, user_id: '' })
+    await onSave({ name: form.name.trim(), role: form.role || null, email: form.email || null, phone: form.phone || null })
     setSaving(false)
   }
 

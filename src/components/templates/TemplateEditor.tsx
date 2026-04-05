@@ -16,7 +16,7 @@ import { nanoid } from '@/lib/nanoid'
 
 interface TemplateEditorProps {
   template: Template | null
-  onSave: (data: Omit<Template, 'id' | 'created_at' | 'updated_at'>) => Promise<void>
+  onSave: (data: Omit<Template, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<void>
   onCancel: () => void
 }
 

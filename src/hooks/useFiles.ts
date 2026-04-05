@@ -22,11 +22,17 @@ export function useFiles() {
 
   useEffect(() => { fetchFiles() }, [fetchFiles])
 
-  const addFile = async (file: Omit<GeneratedFile, 'id' | 'created_at' | 'venue' | 'template'>) => {
+  const addFile = async (file: Omit<GeneratedFile, 'id' | 'user_id' | 'created_at' | 'venue' | 'template'>) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('generated_files')
-      .insert({ ...file, user_id: user!.id })
+      .insert({
+        user_id: user!.id,
+        name: file.name,
+        content: file.content,
+        template_id: file.template_id,
+        venue_id: file.venue_id,
+      })
       .select(`
         *,
         venue:venues(id, name),
