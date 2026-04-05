@@ -59,8 +59,8 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const navContent = (
     <nav className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-[hsl(var(--sidebar-border))]">
-        <div className="flex items-center justify-between">
+      <div className="h-12 px-4 flex items-center border-b border-[hsl(var(--sidebar-border))]">
+        <div className="flex items-center justify-between w-full">
           <span className="text-[hsl(var(--sidebar-fg))] font-bold text-sm tracking-tight">Artist Manager</span>
           <button
             onClick={onClose}
