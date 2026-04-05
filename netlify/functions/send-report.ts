@@ -191,9 +191,6 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   <div class="email-header" style="background:#0a0a0a;padding:28px 32px;">
     <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
     <div style="font-size:10px;color:#888888;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
-    <div style="margin-top:20px;padding-top:18px;border-top:1px solid #1e1e1e;">
-      <span style="font-size:12px;color:#d1d1d1;">${startFmt} to ${endFmt}</span>
-    </div>
   </div>
 
   <!-- Body -->
