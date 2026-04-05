@@ -9,10 +9,6 @@ import FileBuilder from '@/pages/FileBuilder'
 import Expenses from '@/pages/Expenses'
 import { supabaseConfigured } from '@/lib/supabase'
 
-// #region agent log
-fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b97826'},body:JSON.stringify({sessionId:'b97826',location:'App.tsx:12',message:'app init',data:{supabaseConfigured},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-// #endregion
-
 function EnvErrorScreen() {
   return (
     <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-6">
