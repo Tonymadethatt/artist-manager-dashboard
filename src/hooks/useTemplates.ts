@@ -8,14 +8,16 @@ type TemplateUpdate = Database['public']['Tables']['templates']['Update']
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchTemplates = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('templates')
       .select('*')
       .order('updated_at', { ascending: false })
-    setTemplates((data ?? []) as Template[])
+    if (error) setError(error.message)
+    else setTemplates((data ?? []) as Template[])
     setLoading(false)
   }, [])
 
@@ -57,5 +59,5 @@ export function useTemplates() {
     return {}
   }
 
-  return { templates, loading, refetch: fetchTemplates, addTemplate, updateTemplate, deleteTemplate }
+  return { templates, loading, error, refetch: fetchTemplates, addTemplate, updateTemplate, deleteTemplate }
 }

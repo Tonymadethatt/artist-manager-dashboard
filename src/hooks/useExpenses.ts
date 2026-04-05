@@ -8,17 +8,19 @@ type ExpenseUpdate = Database['public']['Tables']['expenses']['Update']
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('expenses')
       .select(`
         *,
         venue:venues(id, name)
       `)
       .order('date', { ascending: false })
-    setExpenses((data ?? []) as Expense[])
+    if (error) setError(error.message)
+    else setExpenses((data ?? []) as Expense[])
     setLoading(false)
   }, [])
 
@@ -68,5 +70,5 @@ export function useExpenses() {
     return {}
   }
 
-  return { expenses, loading, refetch: fetchExpenses, addExpense, updateExpense, deleteExpense }
+  return { expenses, loading, error, refetch: fetchExpenses, addExpense, updateExpense, deleteExpense }
 }

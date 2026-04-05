@@ -8,7 +8,10 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b97826'},body:JSON.stringify({sessionId:'b97826',location:'useAuth.ts:getSession',message:'auth session result',data:{hasSession:!!session,hasUser:!!session?.user,error:error?.message??null},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)

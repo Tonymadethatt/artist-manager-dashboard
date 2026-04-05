@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 interface Props {
   venue: Venue
   onClose: () => void
-  onUpdate: (id: string, updates: Partial<Omit<Venue, 'id' | 'created_at'>>) => Promise<{ data?: Venue; error?: unknown }>
+  onUpdate: (id: string, updates: Partial<Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>>) => Promise<{ data?: Venue; error?: unknown }>
   onDelete: (id: string) => Promise<void>
 }
 

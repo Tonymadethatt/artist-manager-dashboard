@@ -5,10 +5,11 @@ import type { GeneratedFile } from '@/types'
 export function useFiles() {
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchFiles = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('generated_files')
       .select(`
         *,
@@ -16,7 +17,8 @@ export function useFiles() {
         template:templates(id, name)
       `)
       .order('created_at', { ascending: false })
-    setFiles((data ?? []) as GeneratedFile[])
+    if (error) setError(error.message)
+    else setFiles((data ?? []) as GeneratedFile[])
     setLoading(false)
   }, [])
 
@@ -51,5 +53,5 @@ export function useFiles() {
     return {}
   }
 
-  return { files, loading, refetch: fetchFiles, addFile, deleteFile }
+  return { files, loading, error, refetch: fetchFiles, addFile, deleteFile }
 }

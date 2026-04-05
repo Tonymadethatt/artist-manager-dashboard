@@ -18,6 +18,9 @@ export function useVenues() {
       .select('*')
       .order('updated_at', { ascending: false })
 
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b97826'},body:JSON.stringify({sessionId:'b97826',location:'useVenues.ts:fetchVenues',message:'venues query result',data:{count:data?.length??null,error:error?.message??null,errorCode:error?.code??null},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
     if (error) setError(error.message)
     else setVenues((data ?? []) as Venue[])
     setLoading(false)
@@ -48,6 +51,9 @@ export function useVenues() {
   }
 
   const updateVenue = async (id: string, updates: Omit<VenueUpdate, 'id' | 'user_id'>) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b97826'},body:JSON.stringify({sessionId:'b97826',location:'useVenues.ts:updateVenue',message:'update payload keys',data:{keys:Object.keys(updates)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     const { data, error } = await supabase
       .from('venues')
       .update(updates)
