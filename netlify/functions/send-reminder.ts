@@ -106,8 +106,8 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
           <thead>
             <tr>
               <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Month</th>
-              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Invoiced</th>
-              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Paid</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Invoiced</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Paid</th>
               <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Balance</th>
             </tr>
           </thead>
