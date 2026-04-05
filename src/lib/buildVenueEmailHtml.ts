@@ -68,10 +68,14 @@ export function buildVenueEmailHtml(
   customIntro?: string | null,
   customSubject?: string | null,
 ): string {
-  const companyName = profile.company_name || profile.artist_name
+  const artistName = profile.artist_name                        // "DJ Luijay" — body paragraphs
+  const artistNameUpper = artistName.toUpperCase()             // "DJ LUIJAY" — subjects & headings
+  const companyName = profile.company_name || profile.artist_name // "DJ Luijay LLC" — footer only
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
   const firstName = recipient.name.split(' ')[0]
+  // For preview, logo is served from public/ by Vite dev server and Netlify
+  const logoUrl = '/dj-luijay-logo.png'
 
   let subject = ''
   let greeting = ''
@@ -81,9 +85,9 @@ export function buildVenueEmailHtml(
 
   switch (type) {
     case 'booking_confirmation': {
-      subject = `Booking Confirmation - ${companyName} at ${venueName}`
+      subject = `Booking Confirmation - ${artistNameUpper} at ${venueName}`
       greeting = `Hi ${firstName},`
-      intro = `We are excited to confirm the booking details for ${companyName}. Please review the summary below. A formal agreement will follow shortly.`
+      intro = `We are excited to confirm the booking details for ${artistName}. Please review the summary below. A formal agreement will follow shortly.`
       const dealRows = [
         deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
@@ -102,7 +106,7 @@ export function buildVenueEmailHtml(
     }
 
     case 'payment_receipt': {
-      subject = `Payment Received - Thank You | ${companyName}`
+      subject = `Payment Received - Thank You | ${artistNameUpper}`
       greeting = `Hi ${firstName},`
       intro = `We wanted to confirm that we have received your payment. Thank you for completing this promptly.`
       const receiptRows = [
@@ -117,7 +121,7 @@ export function buildVenueEmailHtml(
     }
 
     case 'payment_reminder': {
-      subject = `Payment Reminder - ${companyName}`
+      subject = `Payment Reminder - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
       intro = `Just a friendly reminder about the outstanding payment for the upcoming event. Please see the details below.`
       const reminderRows = [
@@ -132,9 +136,9 @@ export function buildVenueEmailHtml(
     }
 
     case 'agreement_ready': {
-      subject = `Agreement Ready for Review - ${companyName}`
+      subject = `Agreement Ready for Review - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
-      intro = `The agreement for your upcoming event with ${companyName} is ready for your review.`
+      intro = `The agreement for your upcoming event with ${artistName} is ready for your review.`
       const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${deal.agreement_url}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">The agreement document will be shared with you directly.</p>`}</div>`
       bodyCards = card('Agreement', agreementContent, '#22c55e')
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Please review and reply to this email with any questions or concerns. Once both parties have agreed to the terms, we will proceed with the booking confirmation.</p></div>`
@@ -143,9 +147,9 @@ export function buildVenueEmailHtml(
     }
 
     case 'booking_confirmed': {
-      subject = `Booking Confirmed - ${companyName} | ${venueName}`
+      subject = `Booking Confirmed - ${artistNameUpper} | ${venueName}`
       greeting = `Hi ${firstName},`
-      intro = `We are happy to confirm that the booking for ${companyName} at ${venueName} is officially confirmed.`
+      intro = `We are happy to confirm that the booking for ${artistName} at ${venueName} is officially confirmed.`
       const confirmedRows = [
         deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
@@ -164,9 +168,9 @@ export function buildVenueEmailHtml(
     }
 
     case 'follow_up': {
-      subject = `Following Up - ${companyName}`
+      subject = `Following Up - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
-      intro = `Just wanted to check in and see if you had any updates regarding the potential booking for ${companyName}${venue ? ` at ${venueName}` : ''}.`
+      intro = `Just wanted to check in and see if you had any updates regarding the potential booking for ${artistName}${venue ? ` at ${venueName}` : ''}.`
       bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">We remain very interested in working together and would love to find a date and arrangement that works for both sides. Please let us know if you have any questions or if there is anything we can provide to help move things forward.</p></div>`
       closing = `Looking forward to hearing from you.`
       break
@@ -198,8 +202,8 @@ export function buildVenueEmailHtml(
 <div style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <div style="background:#0a0a0a;padding:28px 32px;">
-    <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">${companyName}</div>
-    ${profile.tagline ? `<div style="font-size:10px;color:#888888;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">${profile.tagline}</div>` : ''}
+    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:200px;width:200px;height:auto;" />
+    <div style="font-size:9px;color:#555555;text-transform:uppercase;letter-spacing:3px;margin-top:10px;">Front Office</div>
   </div>
 
   <div style="padding:28px 32px;">
@@ -210,7 +214,7 @@ export function buildVenueEmailHtml(
   </div>
 
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${companyName}</div>
+    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${companyName.toUpperCase()}</div>
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
     <div style="font-size:11px;color:#555555;margin-top:8px;">This is an automated message. To reply, contact <a href="mailto:${replyTo}" style="color:#60a5fa;text-decoration:none;">${replyTo}</a></div>
   </div>
