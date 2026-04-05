@@ -59,12 +59,12 @@ function rows(items: Array<[string, string]>): string {
   return items.map(([label, value], i, arr) => {
     const isLast = i === arr.length - 1
     const border = isLast ? '' : 'border-bottom:1px solid #f0f0f0;'
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${border}"><span style="font-size:13px;color:#555;line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:#111;text-align:right;padding-left:16px;">${value}</span></div>`
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${border}"><span style="font-size:13px;color:#444444;line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:#111;text-align:right;padding-left:16px;">${value}</span></div>`
   }).join('')
 }
 
 function sectionCard(title: string, content: string): string {
-  return `<div style="border:1px solid #e8e8e8;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#f5f5f5;padding:9px 18px;border-bottom:1px solid #e8e8e8;"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#999;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
+  return `<div style="border:1px solid #e8e8e8;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#f5f5f5;padding:9px 18px;border-bottom:1px solid #e8e8e8;"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#333333;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
 function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }): string {
@@ -140,9 +140,9 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   // Balance callout — neutral and matter-of-fact, placed after the wins sections
   const balanceCallout = outstandingTotal > 0 ? `
 <div style="border:1px solid #dedede;border-radius:8px;padding:20px 22px;margin-bottom:14px;background:#f9f9f9;">
-  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#bbb;margin-bottom:10px;">Still in motion</div>
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#333333;margin-bottom:10px;">Still in motion</div>
   <div style="font-size:30px;font-weight:800;color:#111;letter-spacing:-1px;line-height:1;margin-bottom:8px;">${money(outstandingTotal)}</div>
-  <div style="font-size:13px;color:#888;line-height:1.65;">Outstanding management balance — commission and retainer combined. Just keeping us aligned; details are in the sections above.</div>
+  <div style="font-size:13px;color:#555555;line-height:1.65;">Outstanding management balance — commission and retainer combined. Just keeping us aligned; details are in the sections above.</div>
 </div>` : ''
 
   // Brand impact section — only rendered if there's something to show
@@ -181,9 +181,9 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   <!-- Header -->
   <div class="email-header" style="background:#0d0d0d;padding:28px 32px;">
     <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
-    <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
+    <div style="font-size:10px;color:#999999;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
     <div style="margin-top:20px;padding-top:18px;border-top:1px solid #1e1e1e;">
-      <span style="font-size:12px;color:#888;">${startFmt} &mdash; ${endFmt}</span>
+      <span style="font-size:12px;color:#cccccc;">${startFmt} &mdash; ${endFmt}</span>
     </div>
   </div>
 
@@ -196,8 +196,8 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     ${heroValue ? `<!-- Hero win -->
     <div style="text-align:center;background:#0d0d0d;border-radius:8px;padding:26px 20px;margin-bottom:22px;">
       <div class="hero-val" style="font-size:44px;font-weight:800;color:#ffffff;letter-spacing:-1.5px;line-height:1;">${heroValue}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888;margin-top:10px;">${heroLabel}</div>
-      <div style="font-size:12px;color:#555;margin-top:5px;">${heroSubtext}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#cccccc;margin-top:10px;">${heroLabel}</div>
+      <div style="font-size:12px;color:#aaaaaa;margin-top:5px;">${heroSubtext}</div>
     </div>` : ''}
 
     ${outreachSection}
@@ -207,14 +207,14 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     ${brandSection}
     ${tasksSection}
 
-    <p style="font-size:13px;color:#aaa;line-height:1.75;margin-top:10px;">That's the full picture. As always, reach out if you want to talk through anything.</p>
+    <p style="font-size:13px;color:#666666;line-height:1.75;margin-top:10px;">That's the full picture. As always, reach out if you want to talk through anything.</p>
 
   </div>
 
   <!-- Footer -->
   <div class="email-footer" style="background:#f5f5f5;border-top:1px solid #e8e8e8;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#111;">${managerName}</div>
-    <div style="font-size:11px;color:#aaa;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <div style="font-size:11px;color:#666666;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
   </div>
 
 </div>

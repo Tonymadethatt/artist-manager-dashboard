@@ -33,14 +33,14 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
     const isPartial = f.paid > 0
     return `<tr>
       <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#222;font-weight:500;">${f.month}</td>
-      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#777;text-align:right;">${money(f.owed)}</td>
-      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:${isPartial ? '#16a34a' : '#bbb'};text-align:right;">${isPartial ? money(f.paid) : '—'}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#444444;text-align:right;">${money(f.owed)}</td>
+      <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:${isPartial ? '#16a34a' : '#888888'};text-align:right;">${isPartial ? money(f.paid) : '—'}</td>
       <td style="padding:12px 0;border-bottom:1px solid #f0f0f0;font-size:13px;font-weight:700;color:#111;text-align:right;">${money(f.balance)}</td>
     </tr>`
   }).join('')
 
   const partialNote = hasPartials
-    ? `<p style="font-size:13px;color:#aaa;margin-top:10px;line-height:1.6;">Partial payments already received are reflected above — thank you for those.</p>`
+    ? `<p style="font-size:13px;color:#666666;margin-top:10px;line-height:1.6;">Partial payments already received are reflected above — thank you for those.</p>`
     : ''
 
   return `<!DOCTYPE html>
@@ -68,7 +68,7 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
   <!-- Header -->
   <div class="email-header" style="background:#0d0d0d;padding:28px 32px;">
     <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
-    <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
+    <div style="font-size:10px;color:#999999;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
   </div>
 
   <!-- Body -->
@@ -82,16 +82,16 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
     <!-- Fee breakdown table -->
     <div style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#f5f5f5;padding:10px 18px;border-bottom:1px solid #e8e8e8;">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#999;">Retainer Balance</span>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#333333;">Retainer Balance</span>
       </div>
       <div style="padding:0 18px;">
         <table class="fee-table" style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Month</th>
-              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Invoiced</th>
-              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Paid</th>
-              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#bbb;padding:10px 0 6px;border-bottom:1px solid #eee;">Balance</th>
+              <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555555;padding:10px 0 6px;border-bottom:1px solid #eee;">Month</th>
+              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555555;padding:10px 0 6px;border-bottom:1px solid #eee;">Invoiced</th>
+              <th class="hide-mobile" style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555555;padding:10px 0 6px;border-bottom:1px solid #eee;">Paid</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555555;padding:10px 0 6px;border-bottom:1px solid #eee;">Balance</th>
             </tr>
           </thead>
           <tbody>${feeRows}</tbody>
@@ -103,20 +103,20 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
 
     <!-- Total callout — neutral, not alarming -->
     <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e0e0e0;border-radius:8px;padding:18px 22px;margin:${hasPartials ? '16px' : '4px'} 0 24px;background:#f9f9f9;">
-      <div style="font-size:13px;color:#888;">Total outstanding</div>
+      <div style="font-size:13px;color:#555555;">Total outstanding</div>
       <div style="font-size:22px;font-weight:800;color:#111;letter-spacing:-0.5px;">${money(totalOutstanding)}</div>
     </div>
 
     <!-- Closing — warm, no pressure -->
-    <p style="font-size:14px;color:#555;line-height:1.8;margin-bottom:12px;">Whenever you're able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
-    <p style="font-size:14px;color:#555;line-height:1.8;">Appreciate you — let's keep this momentum going. Big things ahead.</p>
+    <p style="font-size:14px;color:#444444;line-height:1.8;margin-bottom:12px;">Whenever you're able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
+    <p style="font-size:14px;color:#444444;line-height:1.8;">Appreciate you — let's keep this momentum going. Big things ahead.</p>
 
   </div>
 
   <!-- Footer -->
   <div class="email-footer" style="background:#f5f5f5;border-top:1px solid #e8e8e8;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#111;">${managerName}</div>
-    <div style="font-size:11px;color:#aaa;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <div style="font-size:11px;color:#666666;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
   </div>
 
 </div>
