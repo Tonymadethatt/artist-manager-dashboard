@@ -18,13 +18,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
-import { useVenueEmails } from '@/hooks/useVenueEmails'
-import type { Deal, Venue, VenueEmailType } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { Deal, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 
 interface SendVenueEmailModalProps {
   open: boolean
   onClose: () => void
+  onSent?: () => void
   defaultType?: VenueEmailType
   deal?: Deal | null
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null
@@ -74,6 +75,7 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
 export function SendVenueEmailModal({
   open,
   onClose,
+  onSent,
   defaultType,
   deal,
   venue,
@@ -84,7 +86,28 @@ export function SendVenueEmailModal({
   contactId,
 }: SendVenueEmailModalProps) {
   const { profile } = useArtistProfile()
-  const { logEmail } = useVenueEmails()
+
+  const logEmail = async (params: {
+    venue_id?: string | null; deal_id?: string | null; contact_id?: string | null
+    email_type: VenueEmailType; recipient_email: string; subject: string
+    status: VenueEmailStatus; notes?: string | null
+  }) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const sentAt = params.status === 'sent' ? new Date().toISOString() : null
+    await supabase.from('venue_emails').insert({
+      user_id: user.id,
+      venue_id: params.venue_id ?? null,
+      deal_id: params.deal_id ?? null,
+      contact_id: params.contact_id ?? null,
+      email_type: params.email_type,
+      recipient_email: params.recipient_email,
+      subject: params.subject,
+      status: params.status,
+      sent_at: sentAt,
+      notes: params.notes ?? null,
+    })
+  }
 
   const [emailType, setEmailType] = useState<VenueEmailType>(defaultType ?? getDefaultType(deal))
   const [recipientEmail, setRecipientEmail] = useState(initialEmail)
@@ -168,6 +191,7 @@ export function SendVenueEmailModal({
       })
 
       setStatus('success')
+      onSent?.()
       setTimeout(() => { onClose() }, 1500)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to send')

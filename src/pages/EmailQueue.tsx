@@ -123,7 +123,7 @@ function HistoryRow({ email }: HistoryRowProps) {
 }
 
 export default function EmailQueue() {
-  const { pendingEmails, sentEmails, loading, refetch, dismissQueued } = useVenueEmails()
+  const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
   const [approveEmail, setApproveEmail] = useState<VenueEmail | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
@@ -199,7 +199,7 @@ export default function EmailQueue() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
                 <p className="text-xs font-medium text-neutral-500">
-                  {pendingEmails.length} pending email{pendingEmails.length !== 1 ? 's' : ''} — review before sending
+                  {pendingEmails.length} pending email{pendingEmails.length !== 1 ? 's' : ''} - review before sending
                 </p>
               </div>
               {pendingEmails.map(email => (
@@ -245,6 +245,9 @@ export default function EmailQueue() {
         <SendVenueEmailModal
           open={!!approveEmail}
           onClose={() => setApproveEmail(null)}
+          onSent={() => {
+            updateEmailStatus(approveEmail.id, 'sent')
+          }}
           defaultType={approveEmail.email_type as VenueEmailType}
           recipientEmail={approveEmail.recipient_email}
           venueId={approveEmail.venue_id}
