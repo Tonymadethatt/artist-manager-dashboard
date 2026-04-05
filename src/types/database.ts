@@ -667,7 +667,6 @@ export interface Database {
         }
         Relationships: []
       }
-    }
       performance_reports: {
         Row: {
           id: string
