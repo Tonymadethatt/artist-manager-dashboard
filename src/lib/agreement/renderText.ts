@@ -1,5 +1,6 @@
 import type { TemplateSection } from '@/types'
 import { mergeSectionContent, partitionAgreementSections } from './merge'
+import { isHtmlContent, stripHtmlToText } from './sanitize'
 
 /** Plain-text agreement output. */
 export function renderAgreementText(sections: TemplateSection[], vars: Record<string, string>): string {
@@ -9,16 +10,18 @@ export function renderAgreementText(sections: TemplateSection[], vars: Record<st
     headers.length > 0
       ? headers
           .map(s => {
-            const { label, body } = mergeSectionContent(s, vars)
-            return `[${label}]\n\n${body}`
+            const { body } = mergeSectionContent(s, vars)
+            return body
           })
+          .filter(Boolean)
           .join('\n\n')
       : ''
 
   const bodyPart = bodies
     .map(s => {
       const { label, body } = mergeSectionContent(s, vars)
-      return `=== ${label.toUpperCase()} ===\n\n${body}`
+      const text = isHtmlContent(body) ? stripHtmlToText(body) : body
+      return `=== ${label.toUpperCase()} ===\n\n${text}`
     })
     .join('\n\n\n')
 
@@ -26,9 +29,10 @@ export function renderAgreementText(sections: TemplateSection[], vars: Record<st
     footers.length > 0
       ? footers
           .map(s => {
-            const { label, body } = mergeSectionContent(s, vars)
-            return `[${label}]\n\n${body}`
+            const { body } = mergeSectionContent(s, vars)
+            return body
           })
+          .filter(Boolean)
           .join('\n\n')
       : ''
 

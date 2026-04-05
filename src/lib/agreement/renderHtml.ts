@@ -1,6 +1,7 @@
+import DOMPurify, { type Config as DomPurifyConfig } from 'dompurify'
 import type { TemplateSection } from '@/types'
 import { mergeSectionContent, partitionAgreementSections } from './merge'
-import { escapeAttr, escapeHtml, isSafeImageUrl } from './sanitize'
+import { escapeAttr, escapeHtml, isHtmlContent, isSafeImageUrl } from './sanitize'
 
 /** Fetch logo from site root and return a data URL for reliable html2canvas rendering. */
 export async function fetchLogoDataUrl(siteOrigin: string): Promise<string | null> {
@@ -18,6 +19,37 @@ export async function fetchLogoDataUrl(siteOrigin: string): Promise<string | nul
   } catch {
     return null
   }
+}
+
+/**
+ * Invert the RGB channels of a raster image data URL via an offscreen canvas.
+ * Used to convert a white/light logo to a dark/black version for print without
+ * using CSS `filter`, which html2canvas mis-composites and causes black canvases.
+ */
+function invertImageToDataUrl(dataUrl: string): Promise<string | null> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(null); return }
+      ctx.drawImage(img, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const d = imageData.data
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = 255 - d[i]         // R
+        d[i + 1] = 255 - d[i + 1] // G
+        d[i + 2] = 255 - d[i + 2] // B
+        // alpha unchanged — preserves transparency
+      }
+      ctx.putImageData(imageData, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(null)
+    img.src = dataUrl
+  })
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -54,8 +86,12 @@ export async function resolveAgreementLogo(
       return { logoDataUrl: null, logoSrcUrl: u, invertForPrint: false }
     }
   }
-  const dataUrl = await fetchLogoDataUrl(siteOrigin)
-  return { logoDataUrl: dataUrl, logoSrcUrl: null, invertForPrint: true }
+  const rawDataUrl = await fetchLogoDataUrl(siteOrigin)
+  if (!rawDataUrl) return { logoDataUrl: null, logoSrcUrl: null, invertForPrint: false }
+  // Pre-invert pixels via canvas so no CSS `filter` is needed in the captured HTML.
+  // html2canvas 1.4.x mishandles `filter` and causes black canvas output.
+  const inverted = await invertImageToDataUrl(rawDataUrl)
+  return { logoDataUrl: inverted ?? rawDataUrl, logoSrcUrl: null, invertForPrint: false }
 }
 
 export function getSiteOrigin(): string {
@@ -68,21 +104,52 @@ export function getSiteOrigin(): string {
 function buildLogoImg(
   logoDataUrl: string | null,
   logoSrcUrl: string | null,
-  invertForPrint: boolean
+  _invertForPrint: boolean
 ): string {
   const src =
     logoDataUrl?.trim() ||
     (logoSrcUrl?.trim() && isSafeImageUrl(logoSrcUrl) ? logoSrcUrl.trim() : '')
   if (!src) return ''
-  const cls = invertForPrint ? 'logo logo--print' : 'logo'
-  return `<img src="${escapeAttr(src)}" alt="" class="${cls}" width="100" crossorigin="anonymous" />`
+  return `<img src="${escapeAttr(src)}" alt="" class="logo" width="100" crossorigin="anonymous" />`
+}
+
+const PURIFY_CONFIG: DomPurifyConfig = {
+  ALLOWED_TAGS: [
+    'p', 'br', 'hr', 'div', 'span',
+    'strong', 'b', 'em', 'i', 'u', 's',
+    'h3', 'h4',
+    'ul', 'ol', 'li',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+    'blockquote', 'pre', 'code',
+  ],
+  ALLOWED_ATTR: ['colspan', 'rowspan'],
+}
+
+/**
+ * Merge `{{token}}` placeholders in HTML body content with HTML-escaped values.
+ * Prevents variable values from injecting markup.
+ */
+function mergeHtmlVars(content: string, vars: Record<string, string>): string {
+  let out = content
+  for (const [key, val] of Object.entries(vars)) {
+    const safe = escapeHtml(val || `[${key}]`)
+    out = out.replaceAll(`{{${key}}}`, safe)
+  }
+  return out
 }
 
 function sectionBlocksToHtml(sections: TemplateSection[], vars: Record<string, string>): string {
   return sections
     .map(s => {
-      const { label, body } = mergeSectionContent(s, vars)
-      const bodyHtml = escapeHtml(body).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
+      const label = s.label
+      const merged = mergeHtmlVars(s.content, vars)
+      let bodyHtml: string
+      if (isHtmlContent(merged)) {
+        bodyHtml = DOMPurify.sanitize(merged, PURIFY_CONFIG) as unknown as string
+      } else {
+        // Legacy plain text — safe-escape and convert newlines
+        bodyHtml = escapeHtml(merged).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
+      }
       return `<section class="sec"><h2>${escapeHtml(label)}</h2><div class="body">${bodyHtml}</div></section>`
     })
     .join('')
@@ -157,22 +224,51 @@ export function renderAgreementHtmlDocument(opts: {
   .doc { max-width: 720px; margin: 0 auto; }
   .header { border-bottom: 1px solid #e5e5e5; padding-bottom: 14px; margin-bottom: 22px; }
   .logo { display: block; max-width: 100px; height: auto; margin-bottom: 10px; }
-  .logo.logo--print { filter: invert(1) brightness(0); }
   .header-block { color: #262626; font-size: 10pt; margin-bottom: 10px; }
   .company { font-size: 14pt; font-weight: 700; letter-spacing: 0.04em; color: #0a0a0a; }
   .tag { font-size: 9pt; color: #525252; margin-top: 4px; font-weight: 500; }
   .sec { page-break-inside: avoid; margin-bottom: 16px; }
   h2 {
-    font-size: 10pt;
-    font-weight: 700;
-    margin: 20px 0 8px;
+    font-size: 11pt;
+    font-weight: 800;
+    margin: 22px 0 8px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #171717;
-    border-bottom: 1px solid #f5f5f5;
-    padding-bottom: 6px;
+    color: #111111;
+    border-bottom: 2px solid #e5e5e5;
+    padding-bottom: 5px;
+  }
+  h3 {
+    font-size: 10pt;
+    font-weight: 700;
+    margin: 14px 0 5px;
+    color: #1a1a1a;
   }
   .body { color: #262626; }
+  .body p { margin: 0 0 6px; }
+  .body ul, .body ol { margin: 6px 0 6px 20px; padding: 0; }
+  .body li { margin: 3px 0; }
+  .body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 10pt;
+  }
+  .body th, .body td {
+    border: 1px solid #d4d4d4;
+    padding: 5px 8px;
+    text-align: left;
+  }
+  .body th {
+    background: #f5f5f5;
+    font-weight: 700;
+  }
+  .body blockquote {
+    border-left: 3px solid #d4d4d4;
+    padding-left: 10px;
+    color: #525252;
+    margin: 6px 0;
+  }
   .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #f5f5f5; font-size: 8pt; color: #737373; }
   .footer-meta { margin-top: 8px; }
 </style></head><body><div class="doc">

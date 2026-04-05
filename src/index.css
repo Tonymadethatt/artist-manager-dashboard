@@ -30,3 +30,60 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* TipTap rich body editor */
+.rich-body-editor .ProseMirror {
+  outline: none;
+  min-height: 120px;
+}
+.rich-body-editor .ProseMirror p {
+  margin: 0 0 0.5em;
+}
+.rich-body-editor .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+.rich-body-editor .ProseMirror h3 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0.75em 0 0.3em;
+}
+.rich-body-editor .ProseMirror ul,
+.rich-body-editor .ProseMirror ol {
+  padding-left: 1.4em;
+  margin: 0.4em 0;
+}
+.rich-body-editor .ProseMirror li {
+  margin: 0.15em 0;
+}
+.rich-body-editor .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+  font-size: 0.75rem;
+}
+.rich-body-editor .ProseMirror th,
+.rich-body-editor .ProseMirror td {
+  border: 1px solid hsl(var(--border));
+  padding: 4px 8px;
+  text-align: left;
+}
+.rich-body-editor .ProseMirror th {
+  background: hsl(0 0% 13%);
+  font-weight: 600;
+}
+.rich-body-editor .ProseMirror .is-editor-empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  position: absolute;
+}
+.rich-body-editor .ProseMirror selectedCell:after {
+  background: rgba(200,200,255,0.1);
+}
+.rich-body-editor .ProseMirror blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 0.75em;
+  color: hsl(var(--muted-foreground));
+  margin: 0.5em 0;
+}

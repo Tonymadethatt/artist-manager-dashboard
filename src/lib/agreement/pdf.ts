@@ -68,6 +68,19 @@ export async function htmlDocumentToPdfBlob(html: string): Promise<Blob> {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        // Safety guard: after html2canvas clones the DOM for capture, force white
+        // background + dark text. Prevents dark-mode OS settings or stray CSS from
+        // causing a black capture when CSS `filter` is absent.
+        onclone: (_clonedDoc: Document, element: HTMLElement) => {
+          const root = element.ownerDocument?.documentElement
+          if (root) {
+            root.style.setProperty('background', '#ffffff', 'important')
+            root.style.setProperty('color', '#111111', 'important')
+            root.style.setProperty('color-scheme', 'light', 'important')
+          }
+          element.style.setProperty('background', '#ffffff', 'important')
+          element.style.setProperty('color', '#111111', 'important')
+        },
       },
       jsPDF: { unit: 'mm' as const, format: 'letter' as const, orientation: 'portrait' as const },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
