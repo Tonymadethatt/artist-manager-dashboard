@@ -1,12 +1,35 @@
-import { useState } from 'react'
-import { Navigate, Outlet } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 
+const PAGE_TITLES: Record<string, string> = {
+  '/':                    'Dashboard',
+  '/outreach':            'Outreach',
+  '/pipeline':            'Pipeline',
+  '/pipeline/templates':  'Task Templates',
+  '/earnings':            'Earnings',
+  '/metrics':             'Metrics',
+  '/performance-reports': 'Show Reports',
+  '/templates':           'Templates',
+  '/files':               'Files',
+  '/files/new':           'New File',
+  '/reports':             'Reports',
+  '/email-queue':         'Email Queue',
+  '/email-templates':     'Email Templates',
+  '/settings':            'Settings',
+}
+
 export function Shell() {
   const { user, loading } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    const label = PAGE_TITLES[location.pathname] ?? 'The Office'
+    document.title = `The Office — ${label}`
+  }, [location.pathname])
 
   if (loading) {
     return (
