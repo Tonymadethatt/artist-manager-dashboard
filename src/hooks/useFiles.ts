@@ -8,6 +8,9 @@ const FILE_SELECT = `
   template:templates(id, name)
 `
 
+const PDF_MIGRATION_HINT =
+  'PDF storage needs the latest database migration. In Supabase: SQL editor → run supabase/migrations/010_agreement_pdf_files.sql (or supabase db push).'
+
 export type AddTextFileInput = {
   name: string
   content: string
@@ -18,6 +21,25 @@ export type AddTextFileInput = {
 
 export type AddPdfFileInput = AddTextFileInput & {
   pdfBlob: Blob
+}
+
+/** PostgREST when a column exists in types but not on the remote DB. */
+function isMissingColumnError(err: { message?: string } | null | undefined): boolean {
+  const m = err?.message ?? ''
+  return m.includes('schema cache') || m.includes('Could not find') || m.includes('column')
+}
+
+function normalizeGeneratedRow(
+  row: Record<string, unknown>,
+  fallbackDealId: string | null | undefined
+): GeneratedFile {
+  return {
+    ...(row as unknown as GeneratedFile),
+    deal_id: (row.deal_id as string | null | undefined) ?? fallbackDealId ?? null,
+    output_format: (row.output_format as GeneratedFileOutputFormat | undefined) ?? 'text',
+    pdf_storage_path: (row.pdf_storage_path as string | null | undefined) ?? null,
+    pdf_public_url: (row.pdf_public_url as string | null | undefined) ?? null,
+  }
 }
 
 export function useFiles() {
@@ -43,25 +65,41 @@ export function useFiles() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
 
-    const { data, error } = await supabase
-      .from('generated_files')
-      .insert({
-        user_id: user.id,
-        name: file.name,
-        content: file.content,
-        template_id: file.template_id,
-        venue_id: file.venue_id,
-        deal_id: file.deal_id ?? null,
-        output_format: 'text' satisfies GeneratedFileOutputFormat,
-        pdf_storage_path: null,
-        pdf_public_url: null,
-      })
-      .select(FILE_SELECT)
-      .single()
+    const base = {
+      user_id: user.id,
+      name: file.name,
+      content: file.content,
+      template_id: file.template_id,
+      venue_id: file.venue_id,
+    }
+
+    const full = {
+      ...base,
+      deal_id: file.deal_id ?? null,
+      output_format: 'text' as const,
+      pdf_storage_path: null,
+      pdf_public_url: null,
+    }
+
+    let { data, error } = await supabase.from('generated_files').insert(full).select(FILE_SELECT).single()
+
+    if (error && isMissingColumnError(error)) {
+      const { deal_id: _d, ...withoutDeal } = full
+      const retry = await supabase.from('generated_files').insert(withoutDeal).select(FILE_SELECT).single()
+      data = retry.data
+      error = retry.error
+    }
+
+    if (error && isMissingColumnError(error)) {
+      const retry = await supabase.from('generated_files').insert(base).select(FILE_SELECT).single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) return { error }
-    setFiles(prev => [data as GeneratedFile, ...prev])
-    return { data: data as GeneratedFile }
+    const row = normalizeGeneratedRow(data as Record<string, unknown>, file.deal_id ?? null)
+    setFiles(prev => [row, ...prev])
+    return { data: row }
   }
 
   /**
@@ -72,21 +110,42 @@ export function useFiles() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
 
-    const { data: inserted, error: insErr } = await supabase
+    const base = {
+      user_id: user.id,
+      name: file.name,
+      content: file.content,
+      template_id: file.template_id,
+      venue_id: file.venue_id,
+    }
+
+    const full = {
+      ...base,
+      deal_id: file.deal_id ?? null,
+      output_format: 'pdf' as const,
+      pdf_storage_path: null,
+      pdf_public_url: null,
+    }
+
+    let { data: inserted, error: insErr } = await supabase
       .from('generated_files')
-      .insert({
-        user_id: user.id,
-        name: file.name,
-        content: file.content,
-        template_id: file.template_id,
-        venue_id: file.venue_id,
-        deal_id: file.deal_id ?? null,
-        output_format: 'pdf' satisfies GeneratedFileOutputFormat,
-        pdf_storage_path: null,
-        pdf_public_url: null,
-      })
+      .insert(full)
       .select('id')
       .single()
+
+    if (insErr && isMissingColumnError(insErr)) {
+      const { deal_id: _d, ...withoutDeal } = full
+      const retry = await supabase.from('generated_files').insert(withoutDeal).select('id').single()
+      inserted = retry.data
+      insErr = retry.error
+    }
+
+    if (insErr && isMissingColumnError(insErr)) {
+      return {
+        error: new Error(
+          `${PDF_MIGRATION_HINT} (${insErr.message})`
+        ),
+      }
+    }
 
     if (insErr || !inserted) return { error: insErr ?? new Error('Insert failed') }
 
@@ -115,11 +174,19 @@ export function useFiles() {
     if (updErr || !final) {
       await supabase.storage.from('agreement-pdfs').remove([path])
       await supabase.from('generated_files').delete().eq('id', fileId)
-      return { error: updErr ?? new Error('Update failed') }
+      const msg = updErr?.message ?? 'Update failed'
+      return {
+        error: new Error(
+          isMissingColumnError(updErr)
+            ? `${PDF_MIGRATION_HINT} (${msg})`
+            : msg
+        ),
+      }
     }
 
-    setFiles(prev => [final as GeneratedFile, ...prev])
-    return { data: final as GeneratedFile }
+    const row = normalizeGeneratedRow(final as Record<string, unknown>, file.deal_id ?? null)
+    setFiles(prev => [row, ...prev])
+    return { data: row }
   }
 
   const deleteFile = async (id: string) => {
