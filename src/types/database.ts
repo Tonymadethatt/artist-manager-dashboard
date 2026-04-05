@@ -172,7 +172,11 @@ export interface Database {
           name: string
           template_id: string | null
           venue_id: string | null
+          deal_id: string | null
           content: string
+          output_format: 'text' | 'pdf'
+          pdf_storage_path: string | null
+          pdf_public_url: string | null
           created_at: string
         }
         Insert: {
@@ -181,7 +185,11 @@ export interface Database {
           name: string
           template_id?: string | null
           venue_id?: string | null
+          deal_id?: string | null
           content: string
+          output_format?: 'text' | 'pdf'
+          pdf_storage_path?: string | null
+          pdf_public_url?: string | null
           created_at?: string
         }
         Update: {
@@ -190,7 +198,11 @@ export interface Database {
           name?: string
           template_id?: string | null
           venue_id?: string | null
+          deal_id?: string | null
           content?: string
+          output_format?: 'text' | 'pdf'
+          pdf_storage_path?: string | null
+          pdf_public_url?: string | null
           created_at?: string
         }
         Relationships: [
@@ -204,6 +216,12 @@ export interface Database {
             foreignKeyName: 'generated_files_venue_id_fkey'
             columns: ['venue_id']
             referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'generated_files_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
             referencedColumns: ['id']
           },
         ]

@@ -23,7 +23,7 @@ Personal dashboard for managing artist outreach, contracts, files, and expenses.
 - **Overview** — stats, follow-ups due, recent activity
 - **Outreach** — venue tracker with full status pipeline, contacts, notes, deal terms
 - **Templates** — build reusable document templates with `{{variable}}` placeholders
-- **Files** — generate `.txt` files from templates, save and download
+- **Files** — generate text or branded PDFs from templates, save to Files (PDFs stored in Supabase Storage with a public link for `agreement_url`)
 - **Expenses** — log costs by category, link to venues, running total
 
 ## Deployment (Vercel)

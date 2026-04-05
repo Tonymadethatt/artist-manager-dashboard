@@ -168,13 +168,19 @@ export interface Template {
   updated_at: string
 }
 
+export type GeneratedFileOutputFormat = 'text' | 'pdf'
+
 export interface GeneratedFile {
   id: string
   user_id: string
   name: string
   template_id: string | null
   venue_id: string | null
+  deal_id: string | null
   content: string
+  output_format: GeneratedFileOutputFormat
+  pdf_storage_path: string | null
+  pdf_public_url: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   template?: Pick<Template, 'id' | 'name'> | null

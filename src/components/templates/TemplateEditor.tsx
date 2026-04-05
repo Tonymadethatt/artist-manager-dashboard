@@ -92,7 +92,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
           Example: <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{venue_name}}'}</code>,{' '}
           <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{event_date}}'}</code>,{' '}
           <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{artist_pay}}'}</code>.
-          These will be filled in when generating a file.
+          These will be filled in when generating a file. PDF export uses the same sections with print styling and your brand header.
         </span>
       </div>
 

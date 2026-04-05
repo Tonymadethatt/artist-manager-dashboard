@@ -1,25 +1,74 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Download, Trash2, Eye, X, Files as FilesIcon } from 'lucide-react'
+import { Plus, Download, Trash2, Eye, X, Files as FilesIcon, Link2, Copy, Check } from 'lucide-react'
 import { useFiles } from '@/hooks/useFiles'
+import { useDeals } from '@/hooks/useDeals'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { sanitizeFilenameStem } from '@/lib/agreement'
 import type { GeneratedFile } from '@/types'
+import { cn } from '@/lib/utils'
+
+function formatOf(f: GeneratedFile): 'text' | 'pdf' {
+  return f.output_format === 'pdf' ? 'pdf' : 'text'
+}
 
 export default function Files() {
   const navigate = useNavigate()
   const { files, loading, deleteFile } = useFiles()
+  const { deals, updateDeal } = useDeals()
   const [preview, setPreview] = useState<GeneratedFile | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<GeneratedFile | null>(null)
+  const [dealForUrl, setDealForUrl] = useState<string>('')
+  const [settingUrl, setSettingUrl] = useState(false)
+  const [urlFeedback, setUrlFeedback] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const handleDownload = (file: GeneratedFile) => {
+    if (formatOf(file) === 'pdf' && file.pdf_public_url) {
+      const a = document.createElement('a')
+      a.href = file.pdf_public_url
+      a.download = `${sanitizeFilenameStem(file.name)}.pdf`
+      a.target = '_blank'
+      a.rel = 'noreferrer'
+      a.click()
+      return
+    }
     const blob = new Blob([file.content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${file.name.replace(/[^a-zA-Z0-9\s-_]/g, '').trim()}.txt`
+    a.download = `${sanitizeFilenameStem(file.name)}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const copyPdfLink = async (file: GeneratedFile) => {
+    if (!file.pdf_public_url) return
+    await navigator.clipboard.writeText(file.pdf_public_url)
+    setCopiedId(file.id)
+    window.setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  const handleSetDealAgreementUrl = async () => {
+    if (!preview || formatOf(preview) !== 'pdf' || !preview.pdf_public_url || !dealForUrl) return
+    setSettingUrl(true)
+    setUrlFeedback(null)
+    const res = await updateDeal(dealForUrl, { agreement_url: preview.pdf_public_url })
+    setSettingUrl(false)
+    if (res.error) {
+      setUrlFeedback('Could not update deal.')
+      return
+    }
+    setUrlFeedback('Deal agreement URL updated.')
+    window.setTimeout(() => setUrlFeedback(null), 3000)
   }
 
   return (
@@ -53,57 +102,81 @@ export default function Files() {
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-950">
                 <th className="text-left px-4 py-2.5 font-medium text-neutral-500 text-xs">Name</th>
+                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Type</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Venue</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">Template</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs">Date</th>
-                <th className="px-3 py-2.5 w-24" />
+                <th className="px-3 py-2.5 w-28" />
               </tr>
             </thead>
             <tbody>
-              {files.map(file => (
-                <tr key={file.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-neutral-100">{file.name}</span>
-                  </td>
-                  <td className="px-3 py-3 hidden sm:table-cell">
-                    {file.venue ? (
-                      <span className="text-xs text-neutral-400">{file.venue.name}</span>
-                    ) : (
-                      <span className="text-neutral-600 text-xs">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 hidden md:table-cell">
-                    {file.template ? (
-                      <Badge variant="secondary" className="text-xs">{file.template.name}</Badge>
-                    ) : (
-                      <span className="text-neutral-600 text-xs">—</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className="text-xs text-neutral-500">
-                      {new Date(file.created_at).toLocaleDateString()}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreview(file)}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(file)}>
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-red-500 hover:text-red-400"
-                        onClick={() => setConfirmDelete(file)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {files.map(file => {
+                const fmt = formatOf(file)
+                return (
+                  <tr key={file.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-medium text-neutral-100">{file.name}</span>
+                    </td>
+                    <td className="px-3 py-3 hidden sm:table-cell">
+                      <Badge variant={fmt === 'pdf' ? 'blue' : 'secondary'} className="text-xs">
+                        {fmt === 'pdf' ? 'PDF' : 'Text'}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-3 hidden sm:table-cell">
+                      {file.venue ? (
+                        <span className="text-xs text-neutral-400">{file.venue.name}</span>
+                      ) : (
+                        <span className="text-neutral-600 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 hidden md:table-cell">
+                      {file.template ? (
+                        <Badge variant="secondary" className="text-xs">{file.template.name}</Badge>
+                      ) : (
+                        <span className="text-neutral-600 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="text-xs text-neutral-500">
+                        {new Date(file.created_at).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1 justify-end flex-wrap">
+                        {fmt === 'pdf' && file.pdf_public_url && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Copy PDF link"
+                            onClick={() => copyPdfLink(file)}
+                          >
+                            {copiedId === file.id ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreview(file)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(file)}>
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-red-500 hover:text-red-400"
+                          onClick={() => setConfirmDelete(file)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -111,26 +184,78 @@ export default function Files() {
 
       {preview && (
         <>
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setPreview(null)} />
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => { setPreview(null); setDealForUrl(''); setUrlFeedback(null) }} />
           <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-neutral-900 border-l border-neutral-800 flex flex-col shadow-xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
               <div>
                 <h2 className="font-semibold text-sm text-neutral-100">{preview.name}</h2>
                 <p className="text-xs text-neutral-500 mt-0.5">{new Date(preview.created_at).toLocaleString()}</p>
+                <Badge variant={formatOf(preview) === 'pdf' ? 'blue' : 'secondary'} className="text-[10px] mt-2">
+                  {formatOf(preview) === 'pdf' ? 'PDF' : 'Text'}
+                </Badge>
               </div>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" onClick={() => handleDownload(preview)}>
                   <Download className="h-3.5 w-3.5" />
                   Download
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setPreview(null)}>
+                <Button variant="ghost" size="icon" onClick={() => { setPreview(null); setDealForUrl(''); setUrlFeedback(null) }}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
             </div>
-            <pre className="flex-1 overflow-y-auto p-5 text-xs font-mono text-neutral-300 whitespace-pre-wrap leading-relaxed">
-              {preview.content}
-            </pre>
+
+            {formatOf(preview) === 'pdf' && preview.pdf_public_url && (
+              <div className="px-5 py-3 border-b border-neutral-800 space-y-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => copyPdfLink(preview)}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Copy public PDF link
+                </Button>
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs text-neutral-500">Set as agreement URL on a deal</p>
+                  <div className="flex gap-2 flex-col sm:flex-row sm:items-center">
+                    <Select value={dealForUrl || '__none__'} onValueChange={v => setDealForUrl(v === '__none__' ? '' : v)}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select deal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Choose deal…</SelectItem>
+                        {deals.map(d => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.description}{d.venue ? ` — ${d.venue.name}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      disabled={!dealForUrl || settingUrl}
+                      onClick={handleSetDealAgreementUrl}
+                    >
+                      {settingUrl ? 'Saving…' : 'Apply'}
+                    </Button>
+                  </div>
+                  {urlFeedback && <p className="text-xs text-emerald-400">{urlFeedback}</p>}
+                </div>
+              </div>
+            )}
+
+            {formatOf(preview) === 'pdf' && preview.pdf_public_url ? (
+              <iframe
+                title="PDF preview"
+                src={preview.pdf_public_url}
+                className={cn('flex-1 w-full min-h-[50vh] border-0 bg-neutral-950')}
+              />
+            ) : (
+              <pre className="flex-1 overflow-y-auto p-5 text-xs font-mono text-neutral-300 whitespace-pre-wrap leading-relaxed">
+                {preview.content}
+              </pre>
+            )}
           </div>
         </>
       )}
@@ -151,6 +276,7 @@ export default function Files() {
                 onClick={async () => {
                   await deleteFile(confirmDelete.id)
                   setConfirmDelete(null)
+                  if (preview?.id === confirmDelete.id) setPreview(null)
                 }}
               >
                 Delete
