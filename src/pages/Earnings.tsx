@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -29,6 +29,37 @@ import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
 
+const PAGE_SIZE = 10
+
+function Paginator({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+  if (totalPages <= 1) return null
+  const start = (page - 1) * PAGE_SIZE + 1
+  const end = Math.min(page * PAGE_SIZE, total)
+  return (
+    <div className="flex items-center justify-between px-1 pt-1">
+      <span className="text-xs text-neutral-500">{start}-{end} of {total}</span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPage(page - 1)}
+          disabled={page === 1}
+          className="flex items-center justify-center h-7 w-7 rounded border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-xs text-neutral-500 px-1 tabular-nums">{page} / {totalPages}</span>
+        <button
+          onClick={() => onPage(page + 1)}
+          disabled={page === totalPages}
+          className="flex items-center justify-center h-7 w-7 rounded border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
@@ -43,6 +74,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
   const reminderTemplate = getTemplate('retainer_reminder')
+  const [retainerPage, setRetainerPage] = useState(1)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAmount, setEditAmount] = useState('')
   const [addMonth, setAddMonth] = useState('')
@@ -181,7 +213,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
 
       {/* Month list */}
       <div className="space-y-2">
-        {feesWithTotals.map(fee => {
+        {feesWithTotals.slice((retainerPage - 1) * PAGE_SIZE, retainerPage * PAGE_SIZE).map(fee => {
           const isExpanded = expandedFee === fee.id
           const statusLabel = fee.balance <= 0 ? 'Paid in full' : fee.totalPaid > 0 ? `Partial — $${fee.balance.toFixed(2)} remaining` : 'Unpaid'
           const statusColor = fee.balance <= 0 ? 'text-green-400' : fee.totalPaid > 0 ? 'text-amber-400' : 'text-neutral-500'
@@ -291,6 +323,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
           )
         })}
       </div>
+      <Paginator page={retainerPage} total={feesWithTotals.length} onPage={p => { setRetainerPage(p); setExpandedFee(null) }} />
 
       {/* Log payment dialog */}
       <Dialog open={payOpen} onOpenChange={v => !v && setPayOpen(false)}>
@@ -447,6 +480,7 @@ export default function Earnings() {
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
   const { fees } = useMonthlyFees()
+  const [dealsPage, setDealsPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
@@ -545,6 +579,7 @@ export default function Earnings() {
     }
     setSaving(false)
     setAddOpen(false)
+    if (!editDeal) setDealsPage(1)
   }
 
   const handleToggleArtist = async (deal: Deal) => {
@@ -689,7 +724,7 @@ export default function Earnings() {
               </tr>
             </thead>
             <tbody>
-              {deals.map(deal => (
+              {deals.slice((dealsPage - 1) * PAGE_SIZE, dealsPage * PAGE_SIZE).map(deal => (
                 <tr key={deal.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800/50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-medium text-neutral-100 leading-tight">{deal.description}</div>
@@ -810,6 +845,7 @@ export default function Earnings() {
             )}
           </table>
         </div>
+        <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
       )}
 
       {/* Add / Edit dialog */}
