@@ -87,7 +87,7 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
 }
 
 export default function PerformanceReports() {
-  const { reports, loading, refetch, createReport, resendReport } = usePerformanceReports()
+  const { reports, loading, refetch, resendReport } = usePerformanceReports()
   const { profile } = useArtistProfile()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
