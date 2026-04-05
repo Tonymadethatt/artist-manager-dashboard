@@ -289,6 +289,10 @@ export type VenueEmailType =
   | 'booking_confirmed'
   | 'follow_up'
 
+export type ArtistEmailType = 'management_report' | 'retainer_reminder'
+
+export type AnyEmailType = VenueEmailType | ArtistEmailType
+
 export type VenueEmailStatus = 'pending' | 'sent' | 'failed'
 
 export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
@@ -300,10 +304,15 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   follow_up: 'Follow-Up',
 }
 
+export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
+  management_report: 'Management Report',
+  retainer_reminder: 'Retainer Reminder',
+}
+
 export interface EmailTemplate {
   id: string
   user_id: string
-  email_type: VenueEmailType
+  email_type: AnyEmailType
   custom_subject: string | null
   custom_intro: string | null
   created_at: string

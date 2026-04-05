@@ -6,6 +6,7 @@ import { useMetrics } from '@/hooks/useMetrics'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
 import { useTasks } from '@/hooks/useTasks'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -69,6 +70,10 @@ export default function Reports() {
   const { fees } = useMonthlyFees()
   const { tasks } = useTasks()
   const { profile } = useArtistProfile()
+  const { getTemplate } = useEmailTemplates()
+
+  const reportTemplate = getTemplate('management_report')
+  const reminderTemplate = getTemplate('retainer_reminder')
 
   const setPresetRange = (p: Preset) => {
     setPreset(p)
@@ -154,6 +159,8 @@ export default function Reports() {
           dateRange: { start: startDate, end: endDate },
           cc,
           testOnly,
+          custom_subject: reportTemplate?.custom_subject ?? null,
+          custom_intro: reportTemplate?.custom_intro ?? null,
         }),
       })
       if (res.ok) {

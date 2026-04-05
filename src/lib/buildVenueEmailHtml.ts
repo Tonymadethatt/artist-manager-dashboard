@@ -181,10 +181,23 @@ export function buildVenueEmailHtml(
   if (customIntro) intro = customIntro
   if (customSubject) subject = customSubject
 
+  // Smart reply button
+  const replyMap: Record<PreviewEmailType, { label: string; bodyText: string }> = {
+    follow_up:            { label: 'Reply to This Email',       bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
+    booking_confirmation: { label: 'Reply to Booking',          bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
+    agreement_ready:      { label: 'Reply About the Agreement', bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
+    payment_reminder:     { label: 'Confirm Payment',           bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
+    booking_confirmed:    { label: 'Reply to Confirmation',     bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
+    payment_receipt:      { label: 'Reply to Receipt',          bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
+  }
+  const { label: replyLabel, bodyText: replyBody } = replyMap[type]
+  const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`
+
+  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const footerLinks = [
     profile.website ? `<a href="${profile.website}" style="color:#888888;text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
-    profile.social_handle ? `<span style="color:#888888;font-size:11px;">${profile.social_handle}</span>` : '',
-    profile.phone ? `<span style="color:#888888;font-size:11px;">${profile.phone}</span>` : '',
+    handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${logoUrl.replace('dj-luijay-logo.png', 'icons/icon-ig.png')}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${handle}</span></a>` : '',
+    profile.phone ? `<span style="font-size:11px;color:#888888;">${profile.phone}</span>` : '',
   ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')
 
   return `<!DOCTYPE html>
@@ -220,7 +233,7 @@ export function buildVenueEmailHtml(
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${companyName.toUpperCase()}</div>
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
-    <div style="font-size:11px;color:#555555;margin-top:8px;">This is an automated message. To reply, contact <a href="mailto:${replyTo}" style="color:#60a5fa;text-decoration:none;">${replyTo}</a></div>
+    <a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${replyLabel}</a>
   </div>
 
 </div>

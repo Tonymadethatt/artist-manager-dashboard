@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { EmailTemplate, VenueEmailType } from '@/types'
+import type { EmailTemplate, AnyEmailType } from '@/types'
 
 export function useEmailTemplates() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
@@ -19,7 +19,7 @@ export function useEmailTemplates() {
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
 
   const upsertTemplate = async (
-    email_type: VenueEmailType,
+    email_type: AnyEmailType,
     updates: { custom_subject?: string | null; custom_intro?: string | null }
   ) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -44,11 +44,11 @@ export function useEmailTemplates() {
     return { data: tmpl }
   }
 
-  const resetTemplate = async (email_type: VenueEmailType) => {
+  const resetTemplate = async (email_type: AnyEmailType) => {
     return upsertTemplate(email_type, { custom_subject: null, custom_intro: null })
   }
 
-  const getTemplate = (email_type: VenueEmailType): EmailTemplate | undefined => {
+  const getTemplate = (email_type: AnyEmailType): EmailTemplate | undefined => {
     return templates.find(t => t.email_type === email_type)
   }
 

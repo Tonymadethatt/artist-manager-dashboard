@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { VenueEmailType } from '@/types'
-import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import type { VenueEmailType, ArtistEmailType, AnyEmailType } from '@/types'
+import { VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import {
   buildVenueEmailHtml,
   PREVIEW_MOCK_PROFILE,
@@ -17,27 +17,33 @@ import {
   PREVIEW_MOCK_DEAL,
   type PreviewEmailType,
 } from '@/lib/buildVenueEmailHtml'
+import {
+  buildManagementReportHtml,
+  buildRetainerReminderHtml,
+} from '@/lib/buildArtistEmailHtml'
 import { cn } from '@/lib/utils'
 
-const EMAIL_TYPE_DESCRIPTIONS: Record<VenueEmailType, string> = {
+// ── Client email metadata ──────────────────────────────────────────────────
+
+const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
   booking_confirmation: 'Sent when a deal is created. Confirms booking details.',
-  booking_confirmed: 'Final confirmed notice with event details and next steps.',
-  agreement_ready: 'Notifies venue the agreement is ready, includes the link.',
-  payment_reminder: 'Friendly reminder about an outstanding payment.',
-  payment_receipt: 'Confirms payment has been received.',
-  follow_up: 'Check-in to venues that haven\'t responded.',
+  booking_confirmed:    'Final confirmed notice with event details and next steps.',
+  agreement_ready:      'Notifies venue the agreement is ready, includes the link.',
+  payment_reminder:     'Friendly reminder about an outstanding payment.',
+  payment_receipt:      'Confirms payment has been received.',
+  follow_up:            "Check-in to venues that haven't responded.",
 }
 
-const DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
+const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
   booking_confirmation: 'Booking Confirmation - {artist} at {venue}',
-  booking_confirmed: 'Booking Confirmed - {artist} | {venue}',
-  agreement_ready: 'Agreement Ready for Review - {artist}',
-  payment_reminder: 'Payment Reminder - {artist}',
-  payment_receipt: 'Payment Received - Thank You | {artist}',
-  follow_up: 'Following Up - {artist}',
+  booking_confirmed:    'Booking Confirmed - {artist} | {venue}',
+  agreement_ready:      'Agreement Ready for Review - {artist}',
+  payment_reminder:     'Payment Reminder - {artist}',
+  payment_receipt:      'Payment Received - Thank You | {artist}',
+  follow_up:            'Following Up - {artist}',
 }
 
-const EMAIL_TYPE_ORDER: VenueEmailType[] = [
+const CLIENT_ORDER: VenueEmailType[] = [
   'follow_up',
   'booking_confirmation',
   'agreement_ready',
@@ -46,17 +52,51 @@ const EMAIL_TYPE_ORDER: VenueEmailType[] = [
   'payment_receipt',
 ]
 
+// ── Artist email metadata ──────────────────────────────────────────────────
+
+const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
+  management_report: 'Weekly or custom-range report sent to DJ Luijay. Shows outreach, deals, retainer, and impact.',
+  retainer_reminder: 'Gentle nudge email about outstanding management retainer balance.',
+}
+
+const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
+  management_report: 'Management Update - {start} to {end}',
+  retainer_reminder: 'Hey DJ, quick note from management',
+}
+
+const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder']
+
+// ── Component ─────────────────────────────────────────────────────────────
+
+type Group = 'client' | 'artist'
+
 export default function EmailTemplates() {
   const { loading, upsertTemplate, resetTemplate, getTemplate } = useEmailTemplates()
-  const [selectedType, setSelectedType] = useState<VenueEmailType>('follow_up')
+  const [activeGroup, setActiveGroup] = useState<Group>('client')
+  const [selectedType, setSelectedType] = useState<AnyEmailType>('follow_up')
   const [editSubject, setEditSubject] = useState('')
   const [editIntro, setEditIntro] = useState('')
   const [saving, setSaving] = useState(false)
-  const [resetConfirm, setResetConfirm] = useState<VenueEmailType | null>(null)
+  const [resetConfirm, setResetConfirm] = useState<AnyEmailType | null>(null)
   const [saved, setSaved] = useState(false)
+
+  // When switching groups, reset selected type to first item of that group
+  const handleGroupSwitch = (g: Group) => {
+    setActiveGroup(g)
+    setSelectedType(g === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
+    setSaved(false)
+  }
 
   const savedTmpl = getTemplate(selectedType)
   const hasCustom = !!(savedTmpl?.custom_subject || savedTmpl?.custom_intro)
+
+  const defaultSubject = activeGroup === 'client'
+    ? CLIENT_DEFAULT_SUBJECTS[selectedType as VenueEmailType]
+    : ARTIST_DEFAULT_SUBJECTS[selectedType as ArtistEmailType]
+
+  const typeLabel = activeGroup === 'client'
+    ? VENUE_EMAIL_TYPE_LABELS[selectedType as VenueEmailType]
+    : ARTIST_EMAIL_TYPE_LABELS[selectedType as ArtistEmailType]
 
   // Sync edit fields when selected type changes
   useEffect(() => {
@@ -67,7 +107,7 @@ export default function EmailTemplates() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedType])
 
-  // Also sync when saved template changes (after save/reset)
+  // Sync when saved template changes (after save/reset)
   useEffect(() => {
     setEditSubject(savedTmpl?.custom_subject ?? '')
     setEditIntro(savedTmpl?.custom_intro ?? '')
@@ -76,6 +116,13 @@ export default function EmailTemplates() {
 
   // Live preview HTML — rebuilds on any edit input change
   const previewHtml = useMemo(() => {
+    if (activeGroup === 'artist') {
+      const intro = editIntro.trim() || null
+      const subj = editSubject.trim() || null
+      return selectedType === 'management_report'
+        ? buildManagementReportHtml(intro, subj)
+        : buildRetainerReminderHtml(intro, subj)
+    }
     return buildVenueEmailHtml(
       selectedType as PreviewEmailType,
       PREVIEW_MOCK_PROFILE,
@@ -85,7 +132,7 @@ export default function EmailTemplates() {
       editIntro.trim() || null,
       editSubject.trim() || null,
     )
-  }, [selectedType, editSubject, editIntro])
+  }, [activeGroup, selectedType, editSubject, editIntro])
 
   const isDirty = (
     (editSubject.trim() || null) !== (savedTmpl?.custom_subject ?? null) ||
@@ -103,7 +150,7 @@ export default function EmailTemplates() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleReset = async (emailType: VenueEmailType) => {
+  const handleReset = async (emailType: AnyEmailType) => {
     await resetTemplate(emailType)
     setResetConfirm(null)
   }
@@ -129,12 +176,38 @@ export default function EmailTemplates() {
       {/* Two-column layout */}
       <div className="flex gap-5 flex-1 min-h-0">
 
-        {/* Left: email type selector */}
-        <div className="w-[240px] shrink-0 flex flex-col gap-1.5 overflow-y-auto">
-          {EMAIL_TYPE_ORDER.map(emailType => {
+        {/* Left: group toggle + email type list */}
+        <div className="w-[240px] shrink-0 flex flex-col gap-2 overflow-y-auto">
+
+          {/* Group toggle */}
+          <div className="flex rounded-lg border border-neutral-800 overflow-hidden shrink-0 mb-1">
+            {(['client', 'artist'] as Group[]).map(g => (
+              <button
+                key={g}
+                onClick={() => handleGroupSwitch(g)}
+                className={cn(
+                  'flex-1 py-1.5 text-xs font-medium transition-colors',
+                  activeGroup === g
+                    ? 'bg-neutral-700 text-white'
+                    : 'bg-neutral-900 text-neutral-500 hover:text-neutral-300'
+                )}
+              >
+                {g === 'client' ? 'Client Emails' : 'Artist Emails'}
+              </button>
+            ))}
+          </div>
+
+          {/* Email type cards */}
+          {(activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER).map(emailType => {
             const tmpl = getTemplate(emailType)
             const isCustom = !!(tmpl?.custom_subject || tmpl?.custom_intro)
             const isSelected = selectedType === emailType
+            const label = activeGroup === 'client'
+              ? VENUE_EMAIL_TYPE_LABELS[emailType as VenueEmailType]
+              : ARTIST_EMAIL_TYPE_LABELS[emailType as ArtistEmailType]
+            const description = activeGroup === 'client'
+              ? CLIENT_DESCRIPTIONS[emailType as VenueEmailType]
+              : ARTIST_DESCRIPTIONS[emailType as ArtistEmailType]
 
             return (
               <button
@@ -152,7 +225,7 @@ export default function EmailTemplates() {
                     'text-sm font-medium truncate',
                     isSelected ? 'text-white' : 'text-neutral-300'
                   )}>
-                    {VENUE_EMAIL_TYPE_LABELS[emailType]}
+                    {label}
                   </span>
                   {isCustom && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-400 border border-blue-800/60 font-medium shrink-0">
@@ -161,7 +234,7 @@ export default function EmailTemplates() {
                   )}
                 </div>
                 <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug line-clamp-2">
-                  {EMAIL_TYPE_DESCRIPTIONS[emailType]}
+                  {description}
                 </p>
               </button>
             )
@@ -176,15 +249,17 @@ export default function EmailTemplates() {
             <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
               <Monitor className="h-3.5 w-3.5 text-neutral-500" />
               <span className="text-xs font-medium text-neutral-400">
-                Preview - {VENUE_EMAIL_TYPE_LABELS[selectedType]}
+                Preview - {typeLabel}
               </span>
               <span className="text-[10px] text-neutral-600 ml-auto">
-                Mock data: Alex Johnson / Skyline Bar &amp; Lounge
+                {activeGroup === 'client'
+                  ? 'Mock data: Alex Johnson / Skyline Bar & Lounge'
+                  : 'Mock data: DJ Luijay / sample report period'}
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
               <iframe
-                key={selectedType}
+                key={`${activeGroup}-${selectedType}`}
                 srcDoc={previewHtml}
                 title={`Email preview - ${selectedType}`}
                 className="w-full h-full border-0"
@@ -227,7 +302,7 @@ export default function EmailTemplates() {
                 <Input
                   value={editSubject}
                   onChange={e => setEditSubject(e.target.value)}
-                  placeholder={DEFAULT_SUBJECTS[selectedType]}
+                  placeholder={defaultSubject}
                   className="text-sm"
                 />
                 <p className="text-[10px] text-neutral-600">
@@ -262,7 +337,11 @@ export default function EmailTemplates() {
           <p className="text-sm text-neutral-400">
             Your custom subject and intro for{' '}
             <span className="text-neutral-200">
-              {resetConfirm ? VENUE_EMAIL_TYPE_LABELS[resetConfirm] : ''}
+              {resetConfirm
+                ? (activeGroup === 'client'
+                    ? VENUE_EMAIL_TYPE_LABELS[resetConfirm as VenueEmailType]
+                    : ARTIST_EMAIL_TYPE_LABELS[resetConfirm as ArtistEmailType])
+                : ''}
             </span>{' '}
             will be cleared.
           </p>

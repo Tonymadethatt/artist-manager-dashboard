@@ -6,6 +6,11 @@ interface ArtistProfile {
   manager_name: string | null
   manager_email: string | null
   from_email: string
+  company_name: string | null
+  website: string | null
+  social_handle: string | null
+  phone: string | null
+  reply_to_email: string | null
 }
 
 interface UnpaidFee {
@@ -19,8 +24,12 @@ function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
-function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number): string {
+function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, customSubject?: string | null, customIntro?: string | null): string {
   const managerName = profile.manager_name || 'Management'
+  const siteUrl = process.env.URL || ''
+  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const igIconUrl = `${siteUrl}/icons/icon-ig.png`
+  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const monthCount = unpaidFees.length
   const hasPartials = unpaidFees.some(f => f.paid > 0)
 
@@ -69,9 +78,13 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <!-- Header -->
-  <div class="email-header" style="background:#0a0a0a;padding:28px 32px;">
-    <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
-    <div style="font-size:10px;color:#888888;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
+  <div style="padding:28px 32px 0 32px;">
+    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
+    <div style="margin-top:10px;">
+      <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+    </div>
+    <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
 
   <!-- Body -->
@@ -79,7 +92,7 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
 
     <!-- Greeting and value recap -->
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:20px;">Hey ${profile.artist_name},</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${recapLine}</p>
+    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${customIntro ? customIntro : recapLine}</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer. There is a balance that has not cleared yet. Here is where things stand:</p>
 
     <!-- Fee breakdown table -->
@@ -121,6 +134,11 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
     <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${(profile.website || handle || profile.phone) ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${[
+      profile.website ? `<a href="${profile.website}" style="color:#888888;text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
+      handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${handle}</span></a>` : '',
+      profile.phone ? `<span style="font-size:11px;color:#888888;">${profile.phone}</span>` : '',
+    ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')}</div>` : ''}
   </div>
 
 </div>
@@ -138,23 +156,23 @@ const handler: Handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'RESEND_API_KEY not configured' }) }
   }
 
-  let body: { profile: ArtistProfile; unpaidFees: UnpaidFee[]; totalOutstanding: number }
+  let body: { profile: ArtistProfile; unpaidFees: UnpaidFee[]; totalOutstanding: number; custom_subject?: string | null; custom_intro?: string | null }
   try {
     body = JSON.parse(event.body ?? '{}')
   } catch {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, unpaidFees, totalOutstanding } = body
+  const { profile, unpaidFees, totalOutstanding, custom_subject, custom_intro } = body
   if (!profile?.artist_email || !profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
 
-  const html = buildReminderHtml(profile, unpaidFees, totalOutstanding)
+  const html = buildReminderHtml(profile, unpaidFees, totalOutstanding, custom_subject, custom_intro)
 
   // Subject is casual, does not signal urgency or debt
   const firstName = profile.artist_name.split(' ')[0]
-  const subject = `Hey ${firstName}, quick note from management`
+  const subject = custom_subject || `Hey ${firstName}, quick note from management`
 
   const to = [profile.artist_email]
   const cc = profile.manager_email ? [profile.manager_email] : []

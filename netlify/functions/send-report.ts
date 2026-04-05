@@ -6,6 +6,11 @@ interface ArtistProfile {
   manager_name: string | null
   manager_email: string | null
   from_email: string
+  company_name: string | null
+  website: string | null
+  social_handle: string | null
+  phone: string | null
+  reply_to_email: string | null
 }
 
 interface ReportData {
@@ -69,8 +74,12 @@ function sectionCard(title: string, content: string, accentColor: string = '#60a
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
-function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }): string {
+function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }, customSubject?: string | null, customIntro?: string | null): string {
   const managerName = profile.manager_name || 'Management'
+  const siteUrl = process.env.URL || ''
+  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const igIconUrl = `${siteUrl}/icons/icon-ig.png`
+  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const { outreach, deals, retainer, metrics, tasks } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = fmtDate(dateRange.start)
@@ -188,16 +197,20 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <!-- Header -->
-  <div class="email-header" style="background:#0a0a0a;padding:28px 32px;">
-    <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
-    <div style="font-size:10px;color:#888888;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
+  <div style="padding:28px 32px 0 32px;">
+    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
+    <div style="margin-top:10px;">
+      <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+    </div>
+    <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
 
   <!-- Body -->
   <div class="email-body" style="padding:28px 32px;">
 
     <!-- Greeting -->
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${summaryLine} Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${customIntro ? customIntro : `${summaryLine} Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.`}</p>
 
     ${heroValue ? `<!-- Hero win -->
     <div style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:26px 20px;margin-bottom:22px;">
@@ -221,6 +234,11 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
     <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${(profile.website || handle || profile.phone) ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${[
+      profile.website ? `<a href="${profile.website}" style="color:#888888;text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
+      handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${handle}</span></a>` : '',
+      profile.phone ? `<span style="font-size:11px;color:#888888;">${profile.phone}</span>` : '',
+    ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')}</div>` : ''}
   </div>
 
 </div>
@@ -244,6 +262,8 @@ const handler: Handler = async (event) => {
     dateRange: { start: string; end: string }
     cc?: string[]
     testOnly?: boolean
+    custom_subject?: string | null
+    custom_intro?: string | null
   }
   try {
     body = JSON.parse(event.body ?? '{}')
@@ -251,7 +271,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, report, dateRange, cc = [], testOnly = false } = body
+  const { profile, report, dateRange, cc = [], testOnly = false, custom_subject, custom_intro } = body
   if (!profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
@@ -259,12 +279,13 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set. Add it in Settings.' }) }
   }
 
-  const html = buildHtml(profile, report, dateRange)
+  const html = buildHtml(profile, report, dateRange, custom_subject, custom_intro)
   const startFmt = fmtDate(dateRange.start)
   const endFmt = fmtDate(dateRange.end)
-  const subject = testOnly
+  const defaultSubject = testOnly
     ? `[TEST] Management Update - ${startFmt} to ${endFmt}`
     : `Management Update - ${startFmt} to ${endFmt}`
+  const subject = custom_subject || defaultSubject
 
   const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
 

@@ -25,6 +25,7 @@ import {
 import type { Deal, CommissionTier, PaymentMethod } from '@/types'
 import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
 
 const MONTHS = [
@@ -39,6 +40,8 @@ function fmtMonth(dateStr: string) {
 function RetainerTab() {
   const { fees, loading, addPayment, deletePayment, updateFee, addFee } = useMonthlyFees()
   const { profile } = useArtistProfile()
+  const { getTemplate } = useEmailTemplates()
+  const reminderTemplate = getTemplate('retainer_reminder')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editAmount, setEditAmount] = useState('')
   const [addMonth, setAddMonth] = useState('')
@@ -114,7 +117,13 @@ function RetainerTab() {
       const res = await fetch('/.netlify/functions/send-reminder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile, unpaidFees, totalOutstanding: totals.outstanding }),
+        body: JSON.stringify({
+          profile,
+          unpaidFees,
+          totalOutstanding: totals.outstanding,
+          custom_subject: reminderTemplate?.custom_subject ?? null,
+          custom_intro: reminderTemplate?.custom_intro ?? null,
+        }),
       })
       if (res.ok) {
         setReminderStatus('success')
