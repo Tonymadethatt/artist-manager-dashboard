@@ -7,6 +7,8 @@ import type {
   TaskPriority,
   TaskRecurrence,
   PaymentMethod,
+  VenueEmailType,
+  VenueEmailStatus,
   DealTerms,
   TemplateSection,
 } from './index'
@@ -218,6 +220,8 @@ export interface Database {
           artist_paid_date: string | null
           manager_paid: boolean
           manager_paid_date: string | null
+          payment_due_date: string | null
+          agreement_url: string | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -236,6 +240,8 @@ export interface Database {
           artist_paid_date?: string | null
           manager_paid?: boolean
           manager_paid_date?: string | null
+          payment_due_date?: string | null
+          agreement_url?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -254,6 +260,8 @@ export interface Database {
           artist_paid_date?: string | null
           manager_paid?: boolean
           manager_paid_date?: string | null
+          payment_due_date?: string | null
+          agreement_url?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -275,6 +283,12 @@ export interface Database {
           manager_name: string | null
           manager_email: string | null
           from_email: string
+          company_name: string | null
+          website: string | null
+          phone: string | null
+          social_handle: string | null
+          tagline: string | null
+          reply_to_email: string | null
           created_at: string
           updated_at: string
         }
@@ -285,6 +299,12 @@ export interface Database {
           manager_name?: string | null
           manager_email?: string | null
           from_email?: string
+          company_name?: string | null
+          website?: string | null
+          phone?: string | null
+          social_handle?: string | null
+          tagline?: string | null
+          reply_to_email?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -295,10 +315,74 @@ export interface Database {
           manager_name?: string | null
           manager_email?: string | null
           from_email?: string
+          company_name?: string | null
+          website?: string | null
+          phone?: string | null
+          social_handle?: string | null
+          tagline?: string | null
+          reply_to_email?: string | null
           created_at?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      venue_emails: {
+        Row: {
+          id: string
+          user_id: string
+          venue_id: string | null
+          deal_id: string | null
+          contact_id: string | null
+          email_type: VenueEmailType
+          recipient_email: string
+          subject: string
+          status: VenueEmailStatus
+          sent_at: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          venue_id?: string | null
+          deal_id?: string | null
+          contact_id?: string | null
+          email_type: VenueEmailType
+          recipient_email: string
+          subject: string
+          status?: VenueEmailStatus
+          sent_at?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          venue_id?: string | null
+          deal_id?: string | null
+          contact_id?: string | null
+          email_type?: VenueEmailType
+          recipient_email?: string
+          subject?: string
+          status?: VenueEmailStatus
+          sent_at?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'venue_emails_venue_id_fkey'
+            columns: ['venue_id']
+            referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'venue_emails_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
       }
       metrics: {
         Row: {

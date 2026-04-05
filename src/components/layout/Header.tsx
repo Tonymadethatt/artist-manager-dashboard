@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/files': 'Files',
   '/reports': 'Reports',
   '/settings': 'Settings',
+  '/email-queue': 'Email Queue',
 }
 
 interface HeaderProps {

@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   X,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
       { to: '/templates', label: 'Templates', icon: FileText, end: false },
       { to: '/files', label: 'Files', icon: Files, end: false },
       { to: '/reports', label: 'Reports', icon: SendHorizonal, end: false },
+      { to: '/email-queue', label: 'Email Queue', icon: Mail, end: false },
     ],
   },
   {

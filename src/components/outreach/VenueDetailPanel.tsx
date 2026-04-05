@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   X, Pencil, Trash2, Plus, Star, Send, Phone, Mail, User,
-  ChevronDown, DollarSign, Calendar, Clock
+  ChevronDown, DollarSign, Calendar, Clock, MailCheck, MailPlus
 } from 'lucide-react'
 import { useVenueDetail } from '@/hooks/useVenues'
+import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { StatusBadge } from './StatusBadge'
 import { VenueDialog } from './VenueDialog'
+import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,6 +33,7 @@ interface Props {
 
 export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) {
   const { contacts, notes, loading, addContact, updateContact, deleteContact, addNote } = useVenueDetail(venue.id)
+  const { queueEmail } = useVenueEmails()
   const [editOpen, setEditOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
@@ -41,7 +44,30 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const [dealTerms, setDealTerms] = useState<DealTerms>(venue.deal_terms ?? {})
   const [savingDeal, setSavingDeal] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [sendEmailOpen, setSendEmailOpen] = useState(false)
+  const [sendEmailType, setSendEmailType] = useState<'booking_confirmed' | 'follow_up'>('booking_confirmed')
+  const [queuedFollowUp, setQueuedFollowUp] = useState(false)
+  const [queuingFollowUp, setQueuingFollowUp] = useState(false)
   const noteRef = useRef<HTMLTextAreaElement>(null)
+
+  const primaryContact = contacts.find(c => c.email) ?? null
+  const today = new Date().toISOString().split('T')[0]
+  const followUpPast = !!venue.follow_up_date && venue.follow_up_date <= today
+  const isOpenStatus = venue.status === 'reached_out' || venue.status === 'in_discussion'
+
+  const handleQueueFollowUp = async () => {
+    if (!primaryContact?.email) return
+    setQueuingFollowUp(true)
+    await queueEmail({
+      venue_id: venue.id,
+      email_type: 'follow_up',
+      recipient_email: primaryContact.email,
+      subject: `Following Up - ${venue.name}`,
+      notes: `Queued from outreach panel for ${venue.name}`,
+    })
+    setQueuingFollowUp(false)
+    setQueuedFollowUp(true)
+  }
 
   useEffect(() => {
     setDealTerms(venue.deal_terms ?? {})
@@ -163,6 +189,42 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
               </div>
             </div>
           </div>
+
+          {/* Email action buttons */}
+          {(venue.status === 'booked' || (followUpPast && isOpenStatus)) && (
+            <div className="px-5 py-3 border-b border-neutral-800 flex flex-wrap gap-2">
+              {venue.status === 'booked' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setSendEmailType('booking_confirmed'); setSendEmailOpen(true) }}
+                  className="gap-1.5"
+                >
+                  <MailCheck className="h-3.5 w-3.5" />
+                  Send booking confirmed email
+                </Button>
+              )}
+              {followUpPast && isOpenStatus && !queuedFollowUp && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleQueueFollowUp}
+                  disabled={queuingFollowUp || !primaryContact?.email}
+                  className="gap-1.5"
+                  title={!primaryContact?.email ? 'Add a contact email first to queue a follow-up' : undefined}
+                >
+                  <MailPlus className="h-3.5 w-3.5" />
+                  {queuingFollowUp ? 'Queuing…' : 'Queue follow-up email'}
+                </Button>
+              )}
+              {queuedFollowUp && (
+                <span className="text-xs text-green-400 self-center">Follow-up queued in Email Queue.</span>
+              )}
+              {followUpPast && isOpenStatus && !primaryContact?.email && (
+                <span className="text-xs text-neutral-600 self-center">Add a contact email to enable follow-up queuing.</span>
+              )}
+            </div>
+          )}
 
           {/* Deal terms (expandable) */}
           <div className="border-b border-neutral-800">
@@ -358,6 +420,17 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
           </div>
         </div>
       )}
+
+      <SendVenueEmailModal
+        open={sendEmailOpen}
+        onClose={() => setSendEmailOpen(false)}
+        defaultType={sendEmailType}
+        venue={{ id: venue.id, name: venue.name, city: venue.city ?? null, location: venue.location ?? null }}
+        venueId={venue.id}
+        recipientEmail={primaryContact?.email ?? ''}
+        recipientName={primaryContact?.name ?? ''}
+        contactId={primaryContact?.id ?? null}
+      />
     </>
   )
 }

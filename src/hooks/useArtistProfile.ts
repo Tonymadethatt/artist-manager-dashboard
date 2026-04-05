@@ -8,6 +8,12 @@ const DEFAULTS: Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'> = {
   manager_name: null,
   manager_email: null,
   from_email: 'management@djluijay.live',
+  company_name: null,
+  website: null,
+  phone: null,
+  social_handle: null,
+  tagline: null,
+  reply_to_email: null,
 }
 
 export function useArtistProfile() {

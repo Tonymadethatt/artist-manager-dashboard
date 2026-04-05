@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase } from 'lucide-react'
+import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase, Mail } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
+import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -380,6 +381,8 @@ const EMPTY_FORM = {
   event_date: '',
   gross_amount: '',
   commission_tier: 'new_doors' as CommissionTier,
+  payment_due_date: '',
+  agreement_url: '',
   notes: '',
 }
 
@@ -428,6 +431,7 @@ export default function Earnings() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [sendEmailDeal, setSendEmailDeal] = useState<Deal | null>(null)
 
   const stats = useMemo(() => {
     const earned = deals
@@ -460,6 +464,8 @@ export default function Earnings() {
       event_date: deal.event_date ?? '',
       gross_amount: String(deal.gross_amount),
       commission_tier: deal.commission_tier,
+      payment_due_date: deal.payment_due_date ?? '',
+      agreement_url: deal.agreement_url ?? '',
       notes: deal.notes ?? '',
     })
     setEditDeal(deal)
@@ -479,6 +485,8 @@ export default function Earnings() {
       event_date: form.event_date || null,
       gross_amount: gross,
       commission_tier: form.commission_tier,
+      payment_due_date: form.payment_due_date || null,
+      agreement_url: form.agreement_url || null,
       notes: form.notes || null,
     }
     if (editDeal) {
@@ -668,6 +676,15 @@ export default function Earnings() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-neutral-400 hover:text-neutral-100"
+                        title="Send email to venue contact"
+                        onClick={() => setSendEmailDeal(deal)}
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(deal)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -779,6 +796,26 @@ export default function Earnings() {
               </Select>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Payment due date</Label>
+                <Input
+                  type="date"
+                  value={form.payment_due_date}
+                  onChange={e => setField('payment_due_date', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Agreement URL</Label>
+                <Input
+                  type="url"
+                  value={form.agreement_url}
+                  onChange={e => setField('agreement_url', e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
             <div className="space-y-1">
               <Label>Notes</Label>
               <Input
@@ -826,6 +863,15 @@ export default function Earnings() {
           </div>
         </div>
       )}
+
+      <SendVenueEmailModal
+        open={!!sendEmailDeal}
+        onClose={() => setSendEmailDeal(null)}
+        deal={sendEmailDeal}
+        venue={sendEmailDeal?.venue ? { id: sendEmailDeal.venue.id, name: sendEmailDeal.venue.name, city: null, location: null } : null}
+        dealId={sendEmailDeal?.id ?? null}
+        venueId={sendEmailDeal?.venue_id ?? null}
+      />
       </>}
     </div>
   )

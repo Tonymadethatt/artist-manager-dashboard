@@ -158,6 +158,12 @@ export interface ArtistProfile {
   manager_name: string | null
   manager_email: string | null
   from_email: string
+  company_name: string | null
+  website: string | null
+  phone: string | null
+  social_handle: string | null
+  tagline: string | null
+  reply_to_email: string | null
   created_at: string
   updated_at: string
 }
@@ -229,8 +235,46 @@ export interface Deal {
   artist_paid_date: string | null
   manager_paid: boolean
   manager_paid_date: string | null
+  payment_due_date: string | null
+  agreement_url: string | null
   notes: string | null
   created_at: string
   updated_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
+}
+
+export type VenueEmailType =
+  | 'booking_confirmation'
+  | 'payment_receipt'
+  | 'payment_reminder'
+  | 'agreement_ready'
+  | 'booking_confirmed'
+  | 'follow_up'
+
+export type VenueEmailStatus = 'pending' | 'sent' | 'failed'
+
+export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
+  booking_confirmation: 'Booking Confirmation',
+  payment_receipt: 'Payment Receipt',
+  payment_reminder: 'Payment Reminder',
+  agreement_ready: 'Agreement Ready',
+  booking_confirmed: 'Booking Confirmed',
+  follow_up: 'Follow-Up',
+}
+
+export interface VenueEmail {
+  id: string
+  user_id: string
+  venue_id: string | null
+  deal_id: string | null
+  contact_id: string | null
+  email_type: VenueEmailType
+  recipient_email: string
+  subject: string
+  status: VenueEmailStatus
+  sent_at: string | null
+  notes: string | null
+  created_at: string
+  venue?: Pick<Venue, 'id' | 'name'> | null
+  deal?: Pick<Deal, 'id' | 'description'> | null
 }

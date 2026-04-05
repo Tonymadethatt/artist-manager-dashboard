@@ -11,6 +11,7 @@ import Metrics from '@/pages/Metrics'
 import Tasks from '@/pages/Tasks'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
+import EmailQueue from '@/pages/EmailQueue'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/files/new" element={<FileBuilder />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/email-queue" element={<EmailQueue />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
