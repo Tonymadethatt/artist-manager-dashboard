@@ -1,11 +1,96 @@
-import { useState, useEffect, type ReactNode } from 'react'
-import { Save } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import type { ArtistProfile } from '@/types'
+
+type FormState = {
+  artist_name: string
+  artist_email: string
+  manager_name: string
+  manager_email: string
+  from_email: string
+  company_name: string
+  website: string
+  phone: string
+  social_handle: string
+  tagline: string
+  reply_to_email: string
+}
+
+type FormKey = keyof FormState
+
+const EMPTY_FORM: FormState = {
+  artist_name: '',
+  artist_email: '',
+  manager_name: '',
+  manager_email: '',
+  from_email: '',
+  company_name: '',
+  website: '',
+  phone: '',
+  social_handle: '',
+  tagline: '',
+  reply_to_email: '',
+}
+
+function formFromProfile(p: ArtistProfile): FormState {
+  return {
+    artist_name: p.artist_name,
+    artist_email: p.artist_email,
+    manager_name: p.manager_name ?? '',
+    manager_email: p.manager_email ?? '',
+    from_email: p.from_email,
+    company_name: p.company_name ?? '',
+    website: p.website ?? '',
+    phone: p.phone ?? '',
+    social_handle: p.social_handle ?? '',
+    tagline: p.tagline ?? '',
+    reply_to_email: p.reply_to_email ?? '',
+  }
+}
+
+/** Single-field payload matching `updateProfile` / DB shape. */
+function buildPartial(key: FormKey, f: FormState): Partial<Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'>> {
+  const t = (s: string) => s.trim()
+  switch (key) {
+    case 'artist_name':
+      return { artist_name: t(f.artist_name) }
+    case 'artist_email':
+      return { artist_email: t(f.artist_email) }
+    case 'from_email':
+      return { from_email: t(f.from_email) }
+    case 'manager_name':
+      return { manager_name: t(f.manager_name) || null }
+    case 'manager_email':
+      return { manager_email: t(f.manager_email) || null }
+    case 'company_name':
+      return { company_name: t(f.company_name) || null }
+    case 'website':
+      return { website: t(f.website) || null }
+    case 'phone':
+      return { phone: t(f.phone) || null }
+    case 'social_handle':
+      return { social_handle: t(f.social_handle) || null }
+    case 'tagline':
+      return { tagline: t(f.tagline) || null }
+    case 'reply_to_email':
+      return { reply_to_email: t(f.reply_to_email) || null }
+  }
+}
+
+function norm(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  return String(v).trim()
+}
+
+function fieldMatchesProfile(key: FormKey, f: FormState, p: ArtistProfile): boolean {
+  const partial = buildPartial(key, f)
+  const k = Object.keys(partial)[0] as keyof typeof partial
+  return norm(partial[k]) === norm(p[k as keyof ArtistProfile])
+}
 
 function SectionCard({
   title,
@@ -36,62 +121,51 @@ function SectionCard({
 
 export default function Settings() {
   const { profile, loading, updateProfile } = useArtistProfile()
-  const [form, setForm] = useState({
-    artist_name: '',
-    artist_email: '',
-    manager_name: '',
-    manager_email: '',
-    from_email: '',
-    company_name: '',
-    website: '',
-    phone: '',
-    social_handle: '',
-    tagline: '',
-    reply_to_email: '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const lastHydratedUserId = useRef<string | null>(null)
+  const savingRef = useRef(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+
+  const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+  }, [])
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+  }, [])
 
   useEffect(() => {
-    if (profile) {
-      setForm({
-        artist_name: profile.artist_name,
-        artist_email: profile.artist_email,
-        manager_name: profile.manager_name ?? '',
-        manager_email: profile.manager_email ?? '',
-        from_email: profile.from_email,
-        company_name: profile.company_name ?? '',
-        website: profile.website ?? '',
-        phone: profile.phone ?? '',
-        social_handle: profile.social_handle ?? '',
-        tagline: profile.tagline ?? '',
-        reply_to_email: profile.reply_to_email ?? '',
-      })
+    if (!profile) {
+      lastHydratedUserId.current = null
+      return
     }
+    if (lastHydratedUserId.current === profile.user_id) return
+    setForm(formFromProfile(profile))
+    lastHydratedUserId.current = profile.user_id
   }, [profile])
 
-  const setField = (key: keyof typeof form, value: string) =>
+  const setField = (key: FormKey, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
-  const handleSave = async () => {
-    setSaving(true)
-    await updateProfile({
-      artist_name: form.artist_name,
-      artist_email: form.artist_email,
-      manager_name: form.manager_name || null,
-      manager_email: form.manager_email || null,
-      from_email: form.from_email,
-      company_name: form.company_name || null,
-      website: form.website || null,
-      phone: form.phone || null,
-      social_handle: form.social_handle || null,
-      tagline: form.tagline || null,
-      reply_to_email: form.reply_to_email || null,
-    })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }
+  const handleFieldBlur = useCallback(
+    async (key: FormKey) => {
+      if (!profile || savingRef.current) return
+      if (fieldMatchesProfile(key, form, profile)) return
+      savingRef.current = true
+      const partial = buildPartial(key, form)
+      const result = await updateProfile(partial)
+      savingRef.current = false
+      if (result && 'error' in result && result.error) {
+        showToast(result.error.message || 'Could not save. Try again.', 'err')
+        return
+      }
+      showToast('Saved', 'ok')
+    },
+    [profile, form, updateProfile, showToast]
+  )
 
   if (loading) {
     return (
@@ -104,11 +178,26 @@ export default function Settings() {
   const fieldGrid = 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 md:gap-y-4'
   const fieldFull = 'sm:col-span-2'
   const hint = 'text-xs text-neutral-600 leading-snug'
+  const blur = (key: FormKey) => () => void handleFieldBlur(key)
 
   return (
     <div className="max-w-5xl mx-auto">
+      {toast && (
+        <div
+          className={cn(
+            'fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border',
+            toast.type === 'ok'
+              ? 'bg-neutral-900 border-emerald-500/30 text-emerald-400'
+              : 'bg-neutral-900 border-red-500/30 text-red-400'
+          )}
+          role="status"
+        >
+          {toast.msg}
+        </div>
+      )}
+
       <p className="text-xs text-neutral-500 mb-5 md:mb-6 max-w-2xl leading-relaxed">
-        Artist details, outbound email identity, and report defaults. Changes apply across the dashboard and emails.
+        Artist details, outbound email identity, and report defaults. Each field saves when you leave it (click outside or tab away).
       </p>
 
       <div className="grid grid-cols-1 gap-y-6 md:gap-y-8 lg:grid-cols-2 lg:gap-x-10 lg:gap-y-8 lg:items-start">
@@ -123,6 +212,7 @@ export default function Settings() {
               <Input
                 value={form.artist_name}
                 onChange={e => setField('artist_name', e.target.value)}
+                onBlur={blur('artist_name')}
                 placeholder="DJ Luijay"
               />
             </div>
@@ -132,6 +222,7 @@ export default function Settings() {
                 type="email"
                 value={form.artist_email}
                 onChange={e => setField('artist_email', e.target.value)}
+                onBlur={blur('artist_email')}
                 placeholder="artist@example.com"
               />
             </div>
@@ -152,6 +243,7 @@ export default function Settings() {
               <Input
                 value={form.company_name}
                 onChange={e => setField('company_name', e.target.value)}
+                onBlur={blur('company_name')}
                 placeholder="DJ Luijay LLC"
               />
               <p className={hint}>Sender name in venue emails. Defaults to artist name if blank.</p>
@@ -162,6 +254,7 @@ export default function Settings() {
                 type="email"
                 value={form.reply_to_email}
                 onChange={e => setField('reply_to_email', e.target.value)}
+                onBlur={blur('reply_to_email')}
                 placeholder="management@djluijay.live"
               />
               <p className={hint}>Real inbox for replies — not the automated send address.</p>
@@ -171,6 +264,7 @@ export default function Settings() {
               <Input
                 value={form.website}
                 onChange={e => setField('website', e.target.value)}
+                onBlur={blur('website')}
                 placeholder="https://djluijay.com"
               />
             </div>
@@ -179,6 +273,7 @@ export default function Settings() {
               <Input
                 value={form.phone}
                 onChange={e => setField('phone', e.target.value)}
+                onBlur={blur('phone')}
                 placeholder="+1 (555) 000-0000"
               />
             </div>
@@ -187,6 +282,7 @@ export default function Settings() {
               <Input
                 value={form.social_handle}
                 onChange={e => setField('social_handle', e.target.value)}
+                onBlur={blur('social_handle')}
                 placeholder="@djluijay"
               />
             </div>
@@ -195,6 +291,7 @@ export default function Settings() {
               <Textarea
                 value={form.tagline}
                 onChange={e => setField('tagline', e.target.value)}
+                onBlur={blur('tagline')}
                 placeholder="DJ and Producer"
                 rows={2}
                 className="resize-none min-h-[4.5rem]"
@@ -215,6 +312,7 @@ export default function Settings() {
               <Input
                 value={form.manager_name}
                 onChange={e => setField('manager_name', e.target.value)}
+                onBlur={blur('manager_name')}
                 placeholder="Your name"
               />
             </div>
@@ -224,6 +322,7 @@ export default function Settings() {
                 type="email"
                 value={form.manager_email}
                 onChange={e => setField('manager_email', e.target.value)}
+                onBlur={blur('manager_email')}
                 placeholder="you@example.com"
               />
             </div>
@@ -234,6 +333,7 @@ export default function Settings() {
                 type="email"
                 value={form.from_email}
                 onChange={e => setField('from_email', e.target.value)}
+                onBlur={blur('from_email')}
                 placeholder="management@updates.djluijay.live"
               />
               <p className={hint}>
@@ -242,14 +342,6 @@ export default function Settings() {
             </div>
           </div>
         </SectionCard>
-      </div>
-
-      <div className="mt-8 lg:mt-10 flex flex-col sm:flex-row sm:items-center gap-3 pt-6 border-t border-neutral-800/90">
-        <Button onClick={handleSave} disabled={saving} className="sm:w-auto w-full sm:min-w-[140px]">
-          <Save className="h-3.5 w-3.5" />
-          {saving ? 'Saving...' : 'Save settings'}
-        </Button>
-        {saved && <span className="text-xs text-green-400">Saved.</span>}
       </div>
     </div>
   )
