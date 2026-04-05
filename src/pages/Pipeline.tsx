@@ -312,17 +312,15 @@ export default function Pipeline() {
 
         <div className="flex-1" />
 
-        {viewMode === 'list' && (
-          <label className="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showCompleted}
-              onChange={e => setShowCompleted(e.target.checked)}
-              className="accent-neutral-400"
-            />
-            Show completed
-          </label>
-        )}
+        <label className="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showCompleted}
+            onChange={e => setShowCompleted(e.target.checked)}
+            className="accent-neutral-400"
+          />
+          Show completed
+        </label>
 
         {/* View toggle */}
         <div className="flex items-center gap-0.5 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">

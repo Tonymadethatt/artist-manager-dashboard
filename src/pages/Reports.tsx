@@ -107,11 +107,15 @@ export default function Reports() {
     const allOutstanding = deals.filter(d => d.artist_paid && !d.manager_paid)
       .reduce((s, d) => s + d.commission_amount, 0)
 
-    // Monthly retainer
+    // Monthly retainer — use actual payment sums, not the boolean paid flag,
+    // so partial payments are correctly reflected
     const feeTotal = fees.reduce((s, f) => s + f.amount, 0)
-    const feePaid = fees.filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
+    const feePaid = fees.reduce((s, f) => s + (f.payments ?? []).reduce((p, pay) => p + pay.amount, 0), 0)
     const feeOutstanding = feeTotal - feePaid
-    const unpaidMonths = fees.filter(f => !f.paid).length
+    const unpaidMonths = fees.filter(f => {
+      const paid = (f.payments ?? []).reduce((ps, p) => ps + p.amount, 0)
+      return paid < f.amount
+    }).length
 
     // Metrics
     const periodMetrics = metrics.filter(m => inRange(m.date))

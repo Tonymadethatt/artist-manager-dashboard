@@ -124,6 +124,21 @@ export function useMonthlyFees() {
 
     if (error) return { error }
 
+    // Recalculate paid status after deletion and sync to DB if changed
+    const fee = fees.find(f => f.id === feeId)
+    if (fee) {
+      const updatedPayments = (fee.payments ?? []).filter(p => p.id !== paymentId)
+      const newTotal = updatedPayments.reduce((s, p) => s + p.amount, 0)
+      const nowPaid = newTotal >= fee.amount
+      if (fee.paid && !nowPaid) {
+        // Payment deletion brought total below threshold — un-mark as paid in DB
+        await supabase
+          .from('monthly_fees')
+          .update({ paid: false, paid_date: null })
+          .eq('id', feeId)
+      }
+    }
+
     setFees(prev => prev.map(f => {
       if (f.id !== feeId) return f
       const updatedPayments = (f.payments ?? []).filter(p => p.id !== paymentId)
