@@ -73,7 +73,6 @@ export default function Reports() {
   const { getTemplate } = useEmailTemplates()
 
   const reportTemplate = getTemplate('management_report')
-  const reminderTemplate = getTemplate('retainer_reminder')
 
   const setPresetRange = (p: Preset) => {
     setPreset(p)
