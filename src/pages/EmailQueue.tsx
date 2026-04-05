@@ -3,7 +3,6 @@ import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw } from 'lucid
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import type { VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
