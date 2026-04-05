@@ -617,17 +617,19 @@ export default function Earnings() {
 
       {/* ── Overview ─────────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        {/* Combined outstanding callout — only when money is owed */}
         {combinedOutstanding > 0 && (
-          <div className="flex items-center justify-between bg-orange-950/50 border border-orange-800/60 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-orange-400 shrink-0" />
-              <span className="text-sm font-medium text-orange-300">Total outstanding</span>
-              <span className="text-xs text-orange-500">
-                across commission{retainerStats.outstanding > 0 ? ' and retainer' : ''}
+          <div className="flex flex-wrap items-baseline justify-end gap-x-2 gap-y-0.5 text-xs leading-tight">
+            <span className="inline-flex items-center gap-1.5 text-neutral-500">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-orange-400" aria-hidden />
+              <span>
+                Combined outstanding
+                <span className="hidden sm:inline text-neutral-600">
+                  {' '}
+                  · commission{retainerStats.outstanding > 0 ? ' + retainer' : ''}
+                </span>
               </span>
-            </div>
-            <span className="text-lg font-bold text-orange-400 tabular-nums">{fmtMoney(combinedOutstanding)}</span>
+            </span>
+            <span className="font-semibold tabular-nums text-orange-400">{fmtMoney(combinedOutstanding)}</span>
           </div>
         )}
 
