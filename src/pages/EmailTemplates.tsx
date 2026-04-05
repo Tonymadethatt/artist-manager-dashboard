@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Pencil, RotateCcw, Check } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { RotateCcw, Save, Monitor } from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,14 +9,23 @@ import {
 } from '@/components/ui/dialog'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import {
+  buildVenueEmailHtml,
+  PREVIEW_MOCK_PROFILE,
+  PREVIEW_MOCK_RECIPIENT,
+  PREVIEW_MOCK_VENUE,
+  PREVIEW_MOCK_DEAL,
+  type PreviewEmailType,
+} from '@/lib/buildVenueEmailHtml'
+import { cn } from '@/lib/utils'
 
 const EMAIL_TYPE_DESCRIPTIONS: Record<VenueEmailType, string> = {
-  booking_confirmation: 'Sent when a deal is created. Confirms the booking details and mentions that a formal agreement will follow.',
-  booking_confirmed: 'Sent when a booking is fully confirmed. Final notice with event details and what comes next.',
-  agreement_ready: 'Sent when the agreement is ready. Includes a link to the document for the venue to review.',
-  payment_reminder: 'Sent when payment is approaching or overdue. A friendly reminder about the outstanding amount.',
-  payment_receipt: 'Sent when payment is received. Confirms the payment and thanks the venue.',
-  follow_up: 'Sent as a check-in to venues that have not responded. Keeps the conversation going.',
+  booking_confirmation: 'Sent when a deal is created. Confirms booking details.',
+  booking_confirmed: 'Final confirmed notice with event details and next steps.',
+  agreement_ready: 'Notifies venue the agreement is ready, includes the link.',
+  payment_reminder: 'Friendly reminder about an outstanding payment.',
+  payment_receipt: 'Confirms payment has been received.',
+  follow_up: 'Check-in to venues that haven\'t responded.',
 }
 
 const DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
@@ -37,36 +46,61 @@ const EMAIL_TYPE_ORDER: VenueEmailType[] = [
   'payment_receipt',
 ]
 
-interface EditDialogState {
-  emailType: VenueEmailType
-  subject: string
-  intro: string
-}
-
 export default function EmailTemplates() {
   const { loading, upsertTemplate, resetTemplate, getTemplate } = useEmailTemplates()
-  const [editState, setEditState] = useState<EditDialogState | null>(null)
+  const [selectedType, setSelectedType] = useState<VenueEmailType>('follow_up')
+  const [editSubject, setEditSubject] = useState('')
+  const [editIntro, setEditIntro] = useState('')
   const [saving, setSaving] = useState(false)
   const [resetConfirm, setResetConfirm] = useState<VenueEmailType | null>(null)
+  const [saved, setSaved] = useState(false)
 
-  const openEdit = (emailType: VenueEmailType) => {
-    const tmpl = getTemplate(emailType)
-    setEditState({
-      emailType,
-      subject: tmpl?.custom_subject ?? '',
-      intro: tmpl?.custom_intro ?? '',
-    })
-  }
+  const savedTmpl = getTemplate(selectedType)
+  const hasCustom = !!(savedTmpl?.custom_subject || savedTmpl?.custom_intro)
+
+  // Sync edit fields when selected type changes
+  useEffect(() => {
+    const tmpl = getTemplate(selectedType)
+    setEditSubject(tmpl?.custom_subject ?? '')
+    setEditIntro(tmpl?.custom_intro ?? '')
+    setSaved(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedType])
+
+  // Also sync when saved template changes (after save/reset)
+  useEffect(() => {
+    setEditSubject(savedTmpl?.custom_subject ?? '')
+    setEditIntro(savedTmpl?.custom_intro ?? '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedTmpl?.custom_subject, savedTmpl?.custom_intro])
+
+  // Live preview HTML — rebuilds on any edit input change
+  const previewHtml = useMemo(() => {
+    return buildVenueEmailHtml(
+      selectedType as PreviewEmailType,
+      PREVIEW_MOCK_PROFILE,
+      PREVIEW_MOCK_RECIPIENT,
+      PREVIEW_MOCK_DEAL,
+      PREVIEW_MOCK_VENUE,
+      editIntro.trim() || null,
+      editSubject.trim() || null,
+    )
+  }, [selectedType, editSubject, editIntro])
+
+  const isDirty = (
+    (editSubject.trim() || null) !== (savedTmpl?.custom_subject ?? null) ||
+    (editIntro.trim() || null) !== (savedTmpl?.custom_intro ?? null)
+  )
 
   const handleSave = async () => {
-    if (!editState) return
     setSaving(true)
-    await upsertTemplate(editState.emailType, {
-      custom_subject: editState.subject.trim() || null,
-      custom_intro: editState.intro.trim() || null,
+    await upsertTemplate(selectedType, {
+      custom_subject: editSubject.trim() || null,
+      custom_intro: editIntro.trim() || null,
     })
     setSaving(false)
-    setEditState(null)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
   const handleReset = async (emailType: VenueEmailType) => {
@@ -83,131 +117,141 @@ export default function EmailTemplates() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6">
+    <div className="flex flex-col h-full">
+      {/* Page header */}
+      <div className="mb-5 shrink-0">
         <h1 className="text-base font-semibold text-white">Email Templates</h1>
-        <p className="text-xs text-neutral-500 mt-1">
-          Customize the subject line and opening paragraph for each email type. Leave blank to use the default copy.
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Customize the subject and opening paragraph for each email type. The preview updates live.
         </p>
       </div>
 
-      <div className="space-y-3">
-        {EMAIL_TYPE_ORDER.map(emailType => {
-          const tmpl = getTemplate(emailType)
-          const hasCustom = !!(tmpl?.custom_subject || tmpl?.custom_intro)
+      {/* Two-column layout */}
+      <div className="flex gap-5 flex-1 min-h-0">
 
-          return (
-            <div
-              key={emailType}
-              className="bg-neutral-900 border border-neutral-800 rounded-lg p-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-neutral-200">
-                      {VENUE_EMAIL_TYPE_LABELS[emailType]}
+        {/* Left: email type selector */}
+        <div className="w-[240px] shrink-0 flex flex-col gap-1.5 overflow-y-auto">
+          {EMAIL_TYPE_ORDER.map(emailType => {
+            const tmpl = getTemplate(emailType)
+            const isCustom = !!(tmpl?.custom_subject || tmpl?.custom_intro)
+            const isSelected = selectedType === emailType
+
+            return (
+              <button
+                key={emailType}
+                onClick={() => setSelectedType(emailType)}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 rounded-lg border transition-all',
+                  isSelected
+                    ? 'bg-neutral-800 border-neutral-600'
+                    : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'text-sm font-medium truncate',
+                    isSelected ? 'text-white' : 'text-neutral-300'
+                  )}>
+                    {VENUE_EMAIL_TYPE_LABELS[emailType]}
+                  </span>
+                  {isCustom && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-400 border border-blue-800/60 font-medium shrink-0">
+                      Custom
                     </span>
-                    {hasCustom && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-400 border border-blue-800 font-medium">
-                        Custom
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    {EMAIL_TYPE_DESCRIPTIONS[emailType]}
-                  </p>
-                  {tmpl?.custom_subject && (
-                    <p className="text-xs text-neutral-400 mt-2 font-mono truncate">
-                      Subject: {tmpl.custom_subject}
-                    </p>
-                  )}
-                  {tmpl?.custom_intro && (
-                    <p className="text-xs text-neutral-600 mt-1 truncate italic">
-                      Intro: {tmpl.custom_intro}
-                    </p>
-                  )}
-                  {!hasCustom && (
-                    <p className="text-[11px] text-neutral-600 mt-2">
-                      Using default: <span className="italic">{DEFAULT_SUBJECTS[emailType]}</span>
-                    </p>
                   )}
                 </div>
+                <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug line-clamp-2">
+                  {EMAIL_TYPE_DESCRIPTIONS[emailType]}
+                </p>
+              </button>
+            )
+          })}
+        </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {hasCustom && (
-                    <button
-                      onClick={() => setResetConfirm(emailType)}
-                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border border-neutral-700 text-neutral-500 hover:text-neutral-300 hover:border-neutral-500 transition-colors"
-                      title="Reset to default"
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                      Reset
-                    </button>
-                  )}
+        {/* Right: preview + edit */}
+        <div className="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
+
+          {/* Preview frame */}
+          <div className="flex-1 min-h-0 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col">
+            <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+              <Monitor className="h-3.5 w-3.5 text-neutral-500" />
+              <span className="text-xs font-medium text-neutral-400">
+                Preview - {VENUE_EMAIL_TYPE_LABELS[selectedType]}
+              </span>
+              <span className="text-[10px] text-neutral-600 ml-auto">
+                Mock data: Alex Johnson / Skyline Bar &amp; Lounge
+              </span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <iframe
+                key={selectedType}
+                srcDoc={previewHtml}
+                title={`Email preview - ${selectedType}`}
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin"
+              />
+            </div>
+          </div>
+
+          {/* Edit form */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+                Customize
+              </span>
+              <div className="flex items-center gap-2">
+                {hasCustom && (
                   <button
-                    onClick={() => openEdit(emailType)}
-                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-500 transition-colors"
+                    onClick={() => setResetConfirm(selectedType)}
+                    className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-500 hover:text-neutral-300 hover:border-neutral-500 transition-colors"
                   >
-                    <Pencil className="h-3 w-3" />
-                    Edit
+                    <RotateCcw className="h-3 w-3" />
+                    Reset to default
                   </button>
-                </div>
+                )}
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving || !isDirty}
+                  className="h-7 text-xs gap-1.5"
+                >
+                  <Save className="h-3 w-3" />
+                  {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
+                </Button>
               </div>
             </div>
-          )
-        })}
-      </div>
 
-      {/* Edit dialog */}
-      <Dialog open={!!editState} onOpenChange={v => !v && setEditState(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              Edit - {editState ? VENUE_EMAIL_TYPE_LABELS[editState.emailType] : ''}
-            </DialogTitle>
-          </DialogHeader>
-
-          {editState && (
-            <div className="space-y-4 py-1">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Subject line</Label>
+                <Label className="text-xs">Subject line</Label>
                 <Input
-                  value={editState.subject}
-                  onChange={e => setEditState(s => s ? { ...s, subject: e.target.value } : null)}
-                  placeholder={DEFAULT_SUBJECTS[editState.emailType]}
+                  value={editSubject}
+                  onChange={e => setEditSubject(e.target.value)}
+                  placeholder={DEFAULT_SUBJECTS[selectedType]}
+                  className="text-sm"
                 />
-                <p className="text-[11px] text-neutral-600">
+                <p className="text-[10px] text-neutral-600">
                   Leave blank to use the default subject.
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label>Opening paragraph</Label>
+                <Label className="text-xs">Opening paragraph</Label>
                 <textarea
-                  value={editState.intro}
-                  onChange={e => setEditState(s => s ? { ...s, intro: e.target.value } : null)}
-                  placeholder="Write a custom intro paragraph that appears at the top of the email body..."
-                  rows={5}
-                  className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-500 resize-none"
+                  value={editIntro}
+                  onChange={e => setEditIntro(e.target.value)}
+                  placeholder="Write a custom intro that appears at the top of the email..."
+                  rows={3}
+                  className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-500 resize-none"
                 />
-                <p className="text-[11px] text-neutral-600">
-                  Leave blank to use the default intro. The type-specific details (deal info, agreement link, etc.) always appear below.
+                <p className="text-[10px] text-neutral-600">
+                  The type-specific content always renders below this.
                 </p>
               </div>
             </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditState(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              <Check className="h-3.5 w-3.5" />
-              {saving ? 'Saving...' : 'Save template'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </div>
 
       {/* Reset confirmation dialog */}
       <Dialog open={!!resetConfirm} onOpenChange={v => !v && setResetConfirm(null)}>
@@ -217,8 +261,10 @@ export default function EmailTemplates() {
           </DialogHeader>
           <p className="text-sm text-neutral-400">
             Your custom subject and intro for{' '}
-            <span className="text-neutral-200">{resetConfirm ? VENUE_EMAIL_TYPE_LABELS[resetConfirm] : ''}</span>{' '}
-            will be cleared. The default copy will be used instead.
+            <span className="text-neutral-200">
+              {resetConfirm ? VENUE_EMAIL_TYPE_LABELS[resetConfirm] : ''}
+            </span>{' '}
+            will be cleared.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetConfirm(null)}>Cancel</Button>
