@@ -126,8 +126,22 @@ export interface OutreachNote {
   user_id: string
   venue_id: string
   note: string
+  category: string | null
   created_at: string
 }
+
+export const ACTIVITY_CATEGORY_LABELS: Record<string, string> = {
+  call: 'Phone call',
+  email_sent: 'Email sent',
+  email_received: 'Email received',
+  contract_sent: 'Contract sent',
+  meeting: 'Meeting',
+  voicemail: 'Left voicemail',
+  no_response: 'No response',
+  other: 'Other',
+}
+
+export const ACTIVITY_CATEGORIES = Object.keys(ACTIVITY_CATEGORY_LABELS) as string[]
 
 export interface Template {
   id: string

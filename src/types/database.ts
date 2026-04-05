@@ -107,6 +107,7 @@ export interface Database {
           user_id: string
           venue_id: string
           note: string
+          category: string | null
           created_at: string
         }
         Insert: {
@@ -114,6 +115,7 @@ export interface Database {
           user_id: string
           venue_id: string
           note: string
+          category?: string | null
           created_at?: string
         }
         Update: {
@@ -121,6 +123,7 @@ export interface Database {
           user_id?: string
           venue_id?: string
           note?: string
+          category?: string | null
           created_at?: string
         }
         Relationships: [

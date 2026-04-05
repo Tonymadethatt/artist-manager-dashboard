@@ -24,10 +24,13 @@ interface VenueWorkCardProps {
   onEdit: (task: Task) => void
   onDelete: (id: string) => void
   onAddTask: (venueId: string | null) => void
+  selected?: boolean
+  onSelect?: () => void
 }
 
 export function VenueWorkCard({
-  venue, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask
+  venue, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask,
+  selected = false, onSelect,
 }: VenueWorkCardProps) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -50,13 +53,17 @@ export function VenueWorkCard({
 
   return (
     <div className={cn(
-      'flex flex-col bg-neutral-900 border rounded-lg min-w-[260px] w-[280px] shrink-0',
-      hasOverdue ? 'border-red-800' : 'border-neutral-800'
+      'flex flex-col bg-neutral-900 border rounded-lg min-w-[260px] w-[280px] shrink-0 transition-all',
+      hasOverdue ? 'border-red-800' : 'border-neutral-800',
+      selected && 'ring-2 ring-white/25 border-neutral-600',
     )}>
       {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
-        onClick={() => setCollapsed(v => !v)}
+        onClick={() => {
+          if (onSelect && venue) onSelect()
+          else setCollapsed(v => !v)
+        }}
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium text-sm text-white truncate">

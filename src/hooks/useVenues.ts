@@ -126,11 +126,11 @@ export function useVenueDetail(venueId: string | null) {
     return {}
   }
 
-  const addNote = async (venueId: string, note: string) => {
+  const addNote = async (venueId: string, note: string, category?: string | null) => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('outreach_notes')
-      .insert({ venue_id: venueId, note, user_id: user!.id })
+      .insert({ venue_id: venueId, note, user_id: user!.id, category: category ?? null })
       .select()
       .single()
     if (error) return { error }

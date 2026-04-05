@@ -1,11 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Plus, LayoutGrid, List, Settings2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTasks } from '@/hooks/useTasks'
-import { useVenues } from '@/hooks/useVenues'
+import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
+import { useVenueEmails } from '@/hooks/useVenueEmails'
+import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { VenueWorkCard } from '@/components/pipeline/VenueWorkCard'
+import { VenueProgressPanel, type ProgressUpdate } from '@/components/pipeline/VenueProgressPanel'
 import { TaskItem } from '@/components/pipeline/TaskItem'
+import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,8 +19,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { Task, TaskPriority, TaskRecurrence } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS } from '@/types'
+import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail } from '@/types'
+import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'board' | 'list'
@@ -48,19 +52,124 @@ function groupByDate(tasks: Task[]) {
   return groups
 }
 
+// Inner component: handles per-venue hooks so useVenueDetail is called with the right id
+function VenueProgressPanelConnected({
+  venue,
+  tasks,
+  deals,
+  allEmails,
+  onClose,
+  onCompleteTask,
+  onUpdateVenue,
+  onQueueEmail,
+  onOpenSendModal,
+  onApplyTemplate,
+}: {
+  venue: Venue
+  tasks: Task[]
+  deals: ReturnType<typeof useDeals>['deals']
+  allEmails: VenueEmail[]
+  onClose: () => void
+  onCompleteTask: (id: string) => Promise<unknown>
+  onUpdateVenue: (id: string, updates: Partial<Venue>) => Promise<unknown>
+  onQueueEmail: ReturnType<typeof useVenueEmails>['queueEmail']
+  onOpenSendModal: (venue: Venue, contact: Contact, emailType: string) => void
+  onApplyTemplate: (templateId: string, venueId: string) => Promise<{ count: number }>
+}) {
+  const { contacts, addNote } = useVenueDetail(venue.id)
+  const venueDeals = deals.filter(d => d.venue_id === venue.id)
+  const venueEmails = allEmails.filter(e => e.venue_id === venue.id)
+  const venueTasks = tasks.filter(t => t.venue_id === venue.id)
+  const { templates } = useTaskTemplates()
+
+  const handleConfirm = useCallback(async (updates: ProgressUpdate) => {
+    const promises: Promise<unknown>[] = []
+
+    // 1. Status + follow-up date update
+    const venueUpdates: Partial<Venue> = {}
+    if (updates.newStatus) venueUpdates.status = updates.newStatus
+    if (updates.followUpDate !== undefined) venueUpdates.follow_up_date = updates.followUpDate
+    if (Object.keys(venueUpdates).length > 0) {
+      promises.push(onUpdateVenue(venue.id, venueUpdates))
+    }
+
+    // 2. Activity note
+    if (updates.activityCategory) {
+      const label = updates.activityCategory === 'other' && updates.activityNote
+        ? updates.activityNote
+        : (ACTIVITY_CATEGORY_LABELS[updates.activityCategory] ?? updates.activityCategory)
+      promises.push(addNote(venue.id, label, updates.activityCategory))
+    }
+
+    // 3. Complete checked tasks
+    for (const id of updates.completedTaskIds) {
+      promises.push(onCompleteTask(id))
+    }
+
+    await Promise.all(promises)
+
+    // 4. Auto-apply template if status changed
+    if (updates.newStatus) {
+      const matching = templates.filter(t => t.trigger_status === updates.newStatus)
+      for (const t of matching) {
+        await onApplyTemplate(t.id, venue.id)
+      }
+    }
+
+    // 5. Email action
+    if (updates.emailAction === 'queue' && updates.emailType) {
+      const primaryContact = contacts.find(c => c.email)
+      if (primaryContact?.email) {
+        await onQueueEmail({
+          venue_id: venue.id,
+          email_type: updates.emailType,
+          recipient_email: primaryContact.email,
+          subject: `${OUTREACH_STATUS_LABELS[updates.newStatus ?? venue.status]} - ${venue.name}`,
+          notes: `Queued from pipeline progress panel`,
+        })
+      }
+    } else if (updates.emailAction === 'send' && updates.emailType) {
+      const primaryContact = contacts.find(c => c.email)
+      if (primaryContact?.email) {
+        onOpenSendModal(venue, primaryContact, updates.emailType)
+      }
+    }
+  }, [venue, contacts, templates, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate])
+
+  return (
+    <VenueProgressPanel
+      venue={venue}
+      tasks={venueTasks}
+      contacts={contacts}
+      deals={venueDeals}
+      sentEmails={venueEmails}
+      onClose={onClose}
+      onConfirm={handleConfirm}
+    />
+  )
+}
+
 export default function Pipeline() {
   const { tasks, loading, addTask, updateTask, deleteTask, completeTask, uncompleteTask, snoozeTask } = useTasks()
-  const { venues } = useVenues()
+  const { venues, updateVenue } = useVenues()
   const { deals } = useDeals()
+  const { emails: allEmails, queueEmail } = useVenueEmails()
+  const { applyTemplate } = useTaskTemplates()
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
   const [filter, setFilter] = useState<Filter>('all')
   const [showCompleted, setShowCompleted] = useState(false)
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  // Email send modal state (triggered from progress panel)
+  const [sendEmailState, setSendEmailState] = useState<{
+    venue: Venue; contact: Contact; emailType: string
+  } | null>(null)
 
   const today = new Date().toISOString().split('T')[0]
   const weekEnd = (() => {
@@ -68,6 +177,8 @@ export default function Pipeline() {
     d.setDate(d.getDate() + 7)
     return d.toISOString().split('T')[0]
   })()
+
+  const selectedVenue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
 
   // Apply time filter
   const filteredTasks = useMemo(() => {
@@ -84,14 +195,11 @@ export default function Pipeline() {
   const boardGroups = useMemo(() => {
     const withVenue = filteredTasks.filter(t => t.venue_id)
     const noVenue = filteredTasks.filter(t => !t.venue_id)
-
-    // Only include venues that have tasks in current filter
     const venueIds = [...new Set(withVenue.map(t => t.venue_id!))]
     const venueCards = venueIds.map(vid => ({
       venue: venues.find(v => v.id === vid) ?? null,
       tasks: withVenue.filter(t => t.venue_id === vid),
     })).filter(g => g.tasks.length > 0)
-
     return { venueCards, generalTasks: noVenue }
   }, [filteredTasks, venues])
 
@@ -142,10 +250,16 @@ export default function Pipeline() {
     setAddOpen(false)
   }
 
+  const handleOpenSendModal = useCallback((venue: Venue, contact: Contact, emailType: string) => {
+    setSendEmailState({ venue, contact, emailType })
+  }, [])
+
+  const panelOpen = !!selectedVenue
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Top bar */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
+      <div className="flex items-center gap-3 mb-5 flex-wrap shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-xs text-neutral-500">{activeCnt} open</span>
           {overdueCnt > 0 && (
@@ -160,10 +274,8 @@ export default function Pipeline() {
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                'px-3 py-1 text-xs rounded-md transition-colors capitalize',
-                filter === f
-                  ? 'bg-neutral-700 text-white'
-                  : 'text-neutral-500 hover:text-neutral-300'
+                'px-3 py-1 text-xs rounded-md transition-colors',
+                filter === f ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
               )}
             >
               {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'All Open'}
@@ -173,7 +285,6 @@ export default function Pipeline() {
 
         <div className="flex-1" />
 
-        {/* Controls */}
         {viewMode === 'list' && (
           <label className="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none">
             <input
@@ -223,85 +334,114 @@ export default function Pipeline() {
         </Button>
       </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
-        </div>
-      ) : viewMode === 'board' ? (
-        /* Board view */
-        filteredTasks.length === 0 ? (
-          <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
-            <p className="font-medium text-neutral-400 text-sm mb-1">Nothing here</p>
-            <p className="text-xs text-neutral-600 mb-4">
-              {filter === 'today' ? 'No tasks for today.' : filter === 'week' ? 'No tasks this week.' : 'No open tasks.'}
-            </p>
-            <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add a task</Button>
-          </div>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 min-h-0 flex-1">
-            {boardGroups.venueCards.map(({ venue, tasks: venueTasks }) => (
-              <VenueWorkCard
-                key={venue?.id ?? 'null'}
-                venue={venue}
-                tasks={venueTasks}
-                onComplete={completeTask}
-                onUncomplete={uncompleteTask}
-                onSnooze={snoozeTask}
-                onEdit={openEdit}
-                onDelete={async (id) => { await deleteTask(id) }}
-                onAddTask={openAdd}
-              />
-            ))}
-            {/* General card — always at end */}
-            {(boardGroups.generalTasks.length > 0 || true) && (
-              <VenueWorkCard
-                venue={null}
-                tasks={boardGroups.generalTasks}
-                onComplete={completeTask}
-                onUncomplete={uncompleteTask}
-                onSnooze={snoozeTask}
-                onEdit={openEdit}
-                onDelete={async (id) => { await deleteTask(id) }}
-                onAddTask={openAdd}
-              />
-            )}
-          </div>
-        )
-      ) : (
-        /* List view */
-        filteredTasks.length === 0 ? (
-          <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
-            <p className="font-medium text-neutral-400 text-sm mb-1">No tasks</p>
-            <p className="text-xs text-neutral-600 mb-4">Add tasks to track your daily work.</p>
-            <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add first task</Button>
-          </div>
-        ) : (
-          <div className="space-y-6 max-w-2xl">
-            {listGroups.map(group => (
-              <div key={group.label}>
-                <div className={cn('text-xs font-semibold uppercase tracking-wider mb-2 px-1', group.color)}>
-                  {group.label} · {group.tasks.length}
-                </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-lg divide-y divide-neutral-800">
-                  {group.tasks.map(task => (
-                    <div key={task.id} className="px-2">
-                      <TaskItem
-                        task={task}
-                        onComplete={completeTask}
-                        onUncomplete={uncompleteTask}
-                        onSnooze={snoozeTask}
-                        onEdit={openEdit}
-                        onDelete={async (id) => { await deleteTask(id) }}
-                      />
-                    </div>
-                  ))}
-                </div>
+      {/* Main content area: board/list + optional progress panel */}
+      <div className={cn(
+        'flex gap-4 flex-1 min-h-0',
+        panelOpen ? 'flex-row' : ''
+      )}>
+        {/* Board / List */}
+        <div className={cn(
+          'flex flex-col min-h-0',
+          panelOpen ? 'flex-1 min-w-0' : 'flex-1'
+        )}>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+            </div>
+          ) : viewMode === 'board' ? (
+            filteredTasks.length === 0 && boardGroups.generalTasks.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
+                <p className="font-medium text-neutral-400 text-sm mb-1">Nothing here</p>
+                <p className="text-xs text-neutral-600 mb-4">
+                  {filter === 'today' ? 'No tasks for today.' : filter === 'week' ? 'No tasks this week.' : 'No open tasks.'}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add a task</Button>
               </div>
-            ))}
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 min-h-0 flex-1">
+                {boardGroups.venueCards.map(({ venue, tasks: venueTasks }) => (
+                  <VenueWorkCard
+                    key={venue?.id ?? 'null'}
+                    venue={venue}
+                    tasks={venueTasks}
+                    onComplete={completeTask}
+                    onUncomplete={uncompleteTask}
+                    onSnooze={snoozeTask}
+                    onEdit={openEdit}
+                    onDelete={async (id) => { await deleteTask(id) }}
+                    onAddTask={openAdd}
+                    selected={venue?.id === selectedVenueId}
+                    onSelect={venue ? () => setSelectedVenueId(
+                      selectedVenueId === venue.id ? null : venue.id
+                    ) : undefined}
+                  />
+                ))}
+                {/* General card */}
+                <VenueWorkCard
+                  venue={null}
+                  tasks={boardGroups.generalTasks}
+                  onComplete={completeTask}
+                  onUncomplete={uncompleteTask}
+                  onSnooze={snoozeTask}
+                  onEdit={openEdit}
+                  onDelete={async (id) => { await deleteTask(id) }}
+                  onAddTask={openAdd}
+                />
+              </div>
+            )
+          ) : (
+            filteredTasks.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
+                <p className="font-medium text-neutral-400 text-sm mb-1">No tasks</p>
+                <p className="text-xs text-neutral-600 mb-4">Add tasks to track your daily work.</p>
+                <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add first task</Button>
+              </div>
+            ) : (
+              <div className="space-y-6 max-w-2xl">
+                {listGroups.map(group => (
+                  <div key={group.label}>
+                    <div className={cn('text-xs font-semibold uppercase tracking-wider mb-2 px-1', group.color)}>
+                      {group.label} · {group.tasks.length}
+                    </div>
+                    <div className="bg-neutral-900 border border-neutral-800 rounded-lg divide-y divide-neutral-800">
+                      {group.tasks.map(task => (
+                        <div key={task.id} className="px-2">
+                          <TaskItem
+                            task={task}
+                            onComplete={completeTask}
+                            onUncomplete={uncompleteTask}
+                            onSnooze={snoozeTask}
+                            onEdit={openEdit}
+                            onDelete={async (id) => { await deleteTask(id) }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Progress panel — rendered when a venue card is selected */}
+        {panelOpen && selectedVenue && (
+          <div className="w-[340px] shrink-0 bg-neutral-900 border border-neutral-800 rounded-lg flex flex-col overflow-hidden">
+            <VenueProgressPanelConnected
+              venue={selectedVenue}
+              tasks={tasks}
+              deals={deals}
+              allEmails={allEmails}
+              onClose={() => setSelectedVenueId(null)}
+              onCompleteTask={completeTask}
+              onUpdateVenue={updateVenue}
+              onQueueEmail={queueEmail}
+              onOpenSendModal={handleOpenSendModal}
+              onApplyTemplate={applyTemplate}
+            />
           </div>
-        )
-      )}
+        )}
+      </div>
 
       {/* Add / Edit task dialog */}
       <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
@@ -331,11 +471,7 @@ export default function Pipeline() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Due date</Label>
-                <Input
-                  type="date"
-                  value={form.due_date}
-                  onChange={e => setField('due_date', e.target.value)}
-                />
+                <Input type="date" value={form.due_date} onChange={e => setField('due_date', e.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label>Priority</Label>
@@ -397,25 +533,30 @@ export default function Pipeline() {
       {/* Confirm delete */}
       <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete task?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-neutral-400">
-            "{confirmDelete?.title}" will be permanently deleted.
-          </p>
+          <DialogHeader><DialogTitle>Delete task?</DialogTitle></DialogHeader>
+          <p className="text-sm text-neutral-400">"{confirmDelete?.title}" will be permanently deleted.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (confirmDelete) { await deleteTask(confirmDelete.id); setConfirmDelete(null) }
-              }}
-            >
-              Delete
-            </Button>
+            <Button variant="destructive" onClick={async () => {
+              if (confirmDelete) { await deleteTask(confirmDelete.id); setConfirmDelete(null) }
+            }}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send email modal — opened from progress panel confirm */}
+      {sendEmailState && (
+        <SendVenueEmailModal
+          open={!!sendEmailState}
+          onClose={() => setSendEmailState(null)}
+          venue={sendEmailState.venue}
+          deal={deals.find(d => d.venue_id === sendEmailState.venue.id) ?? null}
+          recipientEmail={sendEmailState.contact.email ?? undefined}
+          recipientName={sendEmailState.contact.name}
+          venueId={sendEmailState.venue.id}
+          defaultType={sendEmailState.emailType as import('@/types').VenueEmailType}
+        />
+      )}
     </div>
   )
 }

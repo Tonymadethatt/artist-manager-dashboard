@@ -13,6 +13,8 @@ import PipelineTemplates from '@/pages/PipelineTemplates'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
 import EmailQueue from '@/pages/EmailQueue'
+import TermsPage from '@/pages/public/TermsPage'
+import PrivacyPage from '@/pages/public/PrivacyPage'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -41,6 +43,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
 
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
