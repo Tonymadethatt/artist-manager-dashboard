@@ -6,7 +6,7 @@ import Outreach from '@/pages/Outreach'
 import Templates from '@/pages/Templates'
 import Files from '@/pages/Files'
 import FileBuilder from '@/pages/FileBuilder'
-import Expenses from '@/pages/Expenses'
+import Earnings from '@/pages/Earnings'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -42,7 +42,7 @@ export default function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/files" element={<Files />} />
           <Route path="/files/new" element={<FileBuilder />} />
-          <Route path="/expenses" element={<Expenses />} />
+          <Route path="/earnings" element={<Earnings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

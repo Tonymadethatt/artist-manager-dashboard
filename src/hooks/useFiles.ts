@@ -26,10 +26,11 @@ export function useFiles() {
 
   const addFile = async (file: Omit<GeneratedFile, 'id' | 'user_id' | 'created_at' | 'venue' | 'template'>) => {
     const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: new Error('Not authenticated') }
     const { data, error } = await supabase
       .from('generated_files')
       .insert({
-        user_id: user!.id,
+        user_id: user.id,
         name: file.name,
         content: file.content,
         template_id: file.template_id,

@@ -92,17 +92,16 @@ export default function FileBuilder() {
     <div className="space-y-5 max-w-3xl">
       <button
         onClick={() => navigate('/files')}
-        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to files
       </button>
 
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-neutral-900">Generate file</h2>
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-4">
+        <h2 className="text-sm font-semibold text-neutral-100">Generate file</h2>
 
         <div className="grid sm:grid-cols-2 gap-3">
-          {/* Template picker */}
           <div className="space-y-1">
             <Label>Template *</Label>
             <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
@@ -117,15 +116,17 @@ export default function FileBuilder() {
             </Select>
           </div>
 
-          {/* Venue picker (optional) */}
           <div className="space-y-1">
             <Label>Venue (optional)</Label>
-            <Select value={selectedVenueId} onValueChange={setSelectedVenueId}>
+            <Select
+              value={selectedVenueId || '__none__'}
+              onValueChange={v => setSelectedVenueId(v === '__none__' ? '' : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Link to a venue" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No venue</SelectItem>
+                <SelectItem value="__none__">No venue</SelectItem>
                 {venues.map(v => (
                   <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                 ))}
@@ -134,7 +135,6 @@ export default function FileBuilder() {
           </div>
         </div>
 
-        {/* File name */}
         <div className="space-y-1">
           <Label>File name *</Label>
           <Input
@@ -145,12 +145,11 @@ export default function FileBuilder() {
         </div>
       </div>
 
-      {/* Variables */}
       {selectedTemplate && variables.length > 0 && (
-        <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-3">
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
           <div>
-            <p className="text-sm font-semibold text-neutral-900">Fill in variables</p>
-            <p className="text-xs text-neutral-400 mt-0.5">
+            <p className="text-sm font-semibold text-neutral-100">Fill in variables</p>
+            <p className="text-xs text-neutral-500 mt-0.5">
               {variables.length} variable{variables.length !== 1 ? 's' : ''} found in this template.
             </p>
           </div>
@@ -170,24 +169,31 @@ export default function FileBuilder() {
       )}
 
       {selectedTemplate && variables.length === 0 && (
-        <p className="text-xs text-neutral-400">This template has no variables — it will be generated as-is.</p>
+        <p className="text-xs text-neutral-500">This template has no variables — it will be generated as-is.</p>
       )}
 
-      {/* Preview / Output */}
       {selectedTemplate && (
-        <div className="bg-white border border-neutral-200 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-100 bg-neutral-50">
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
             <div className="flex gap-1">
               <button
                 onClick={() => setPreview('editor')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${preview === 'editor' ? 'bg-white border border-neutral-200 text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  preview === 'editor'
+                    ? 'bg-neutral-800 border border-neutral-700 text-neutral-100'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
               >
                 <Code2 className="h-3.5 w-3.5" />
                 Output
               </button>
               <button
                 onClick={() => setPreview('preview')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${preview === 'preview' ? 'bg-white border border-neutral-200 text-neutral-900' : 'text-neutral-400 hover:text-neutral-700'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  preview === 'preview'
+                    ? 'bg-neutral-800 border border-neutral-700 text-neutral-100'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
               >
                 <Eye className="h-3.5 w-3.5" />
                 Preview
@@ -211,14 +217,14 @@ export default function FileBuilder() {
           </div>
 
           {preview === 'editor' ? (
-            <pre className="p-4 text-xs font-mono text-neutral-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
-              {rendered || <span className="text-neutral-300">Fill in the variables above to see output…</span>}
+            <pre className="p-4 text-xs font-mono text-neutral-300 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
+              {rendered || <span className="text-neutral-600">Fill in the variables above to see output…</span>}
             </pre>
           ) : (
-            <div className="p-4 text-sm text-neutral-800 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
+            <div className="p-4 text-sm text-neutral-200 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto">
               {rendered.split('\n').map((line, i) => {
                 if (line.startsWith('===') && line.endsWith('===')) {
-                  return <p key={i} className="font-bold text-neutral-900 mt-4 first:mt-0 border-b border-neutral-200 pb-1 mb-2">{line.replace(/===/g, '').trim()}</p>
+                  return <p key={i} className="font-bold text-neutral-100 mt-4 first:mt-0 border-b border-neutral-800 pb-1 mb-2">{line.replace(/===/g, '').trim()}</p>
                 }
                 return <span key={i}>{line}<br /></span>
               })}

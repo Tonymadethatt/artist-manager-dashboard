@@ -64,10 +64,9 @@ export default function Outreach() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 pointer-events-none" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
           <Input
             placeholder="Search venues, cities…"
             value={search}
@@ -121,22 +120,20 @@ export default function Outreach() {
         </div>
       </div>
 
-      {/* Count */}
       <p className="text-xs text-neutral-500">
         {filtered.length} venue{filtered.length !== 1 ? 's' : ''}
         {filterStatus !== 'all' || filterType !== 'all' || search ? ' matching filters' : ''}
       </p>
 
-      {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+          <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-neutral-400 text-sm">
+        <div className="text-center py-16 text-neutral-500 text-sm">
           {venues.length === 0 ? (
             <>
-              <p className="font-medium text-neutral-600 mb-1">No venues yet</p>
+              <p className="font-medium text-neutral-400 mb-1">No venues yet</p>
               <p>Add your first venue to start tracking outreach.</p>
             </>
           ) : (
@@ -144,10 +141,10 @@ export default function Outreach() {
           )}
         </div>
       ) : (
-        <div className="rounded border border-neutral-200 overflow-hidden bg-white">
+        <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-50">
+              <tr className="border-b border-neutral-800 bg-neutral-950">
                 <th className="text-left px-4 py-2.5 font-medium text-neutral-500 text-xs">Venue</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Type</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs">Status</th>
@@ -164,14 +161,14 @@ export default function Outreach() {
                     key={venue.id}
                     onClick={() => setSelectedVenue(venue)}
                     className={cn(
-                      'border-b border-neutral-100 last:border-0 cursor-pointer hover:bg-neutral-50 transition-colors',
-                      i % 2 === 1 && 'bg-neutral-50/50'
+                      'border-b border-neutral-800 last:border-0 cursor-pointer hover:bg-neutral-800 transition-colors',
+                      i % 2 === 1 && 'bg-neutral-900/60'
                     )}
                   >
                     <td className="px-4 py-3">
-                      <div className="font-medium text-neutral-900 leading-tight">{venue.name}</div>
+                      <div className="font-medium text-neutral-100 leading-tight">{venue.name}</div>
                       {(venue.city || venue.location) && (
-                        <div className="text-xs text-neutral-400 mt-0.5">
+                        <div className="text-xs text-neutral-500 mt-0.5">
                           {[venue.city, venue.location].filter(Boolean).join(' · ')}
                         </div>
                       )}
@@ -186,14 +183,14 @@ export default function Outreach() {
                       {venue.follow_up_date ? (
                         <span className={cn(
                           'text-xs',
-                          overdue && 'text-red-600 font-medium',
-                          dueToday && 'text-orange-600 font-medium',
+                          overdue && 'text-red-500 font-medium',
+                          dueToday && 'text-orange-400 font-medium',
                           !overdue && !dueToday && 'text-neutral-500'
                         )}>
                           {overdue ? '⚠ ' : dueToday ? '→ ' : ''}{venue.follow_up_date}
                         </span>
                       ) : (
-                        <span className="text-neutral-300 text-xs">—</span>
+                        <span className="text-neutral-600 text-xs">—</span>
                       )}
                     </td>
                     <td className="px-3 py-3 hidden lg:table-cell">
@@ -203,7 +200,7 @@ export default function Outreach() {
                             key={i}
                             className={cn(
                               'h-3 w-3',
-                              i < venue.priority ? 'fill-neutral-400 text-neutral-400' : 'text-neutral-200'
+                              i < venue.priority ? 'fill-neutral-400 text-neutral-400' : 'text-neutral-700'
                             )}
                           />
                         ))}
@@ -217,14 +214,12 @@ export default function Outreach() {
         </div>
       )}
 
-      {/* Add venue dialog */}
       <VenueDialog
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSave={addVenue}
       />
 
-      {/* Venue detail panel */}
       {selectedVenue && (
         <VenueDetailPanel
           venue={selectedVenue}

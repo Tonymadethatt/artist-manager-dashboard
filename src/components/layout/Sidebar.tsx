@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/outreach', label: 'Outreach', icon: MapPin, end: false },
   { to: '/templates', label: 'Templates', icon: FileText, end: false },
   { to: '/files', label: 'Files', icon: Files, end: false },
-  { to: '/expenses', label: 'Expenses', icon: DollarSign, end: false },
+  { to: '/earnings', label: 'Earnings', icon: DollarSign, end: false },
 ]
 
 interface SidebarProps {

@@ -2,18 +2,18 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 93%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 55%;
+    --border: 0 0% 18%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 70%;
     --radius: 0.375rem;
-    --sidebar-bg: 0 0% 6%;
+    --sidebar-bg: 0 0% 4%;
     --sidebar-fg: 0 0% 90%;
     --sidebar-muted: 0 0% 40%;
-    --sidebar-border: 0 0% 15%;
+    --sidebar-border: 0 0% 13%;
     --sidebar-active: 0 0% 14%;
     --sidebar-hover: 0 0% 11%;
   }

@@ -54,14 +54,14 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       {/* Back button */}
       <button
         onClick={onCancel}
-        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to templates
       </button>
 
       {/* Name + type */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-4 space-y-3">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
         <div className="space-y-1">
           <Label htmlFor="tpl-name">Template name *</Label>
           <Input
@@ -85,13 +85,13 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       </div>
 
       {/* Variable hint */}
-      <div className="flex items-start gap-2 bg-neutral-50 border border-neutral-200 rounded px-3 py-2.5 text-xs text-neutral-500">
-        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-neutral-400" />
+      <div className="flex items-start gap-2 bg-neutral-900 border border-neutral-800 rounded px-3 py-2.5 text-xs text-neutral-500">
+        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-neutral-600" />
         <span>
-          Use <code className="bg-neutral-200 px-1 rounded text-neutral-700">{'{{variable_name}}'}</code> for dynamic fields.
-          Example: <code className="bg-neutral-200 px-1 rounded text-neutral-700">{'{{venue_name}}'}</code>,{' '}
-          <code className="bg-neutral-200 px-1 rounded text-neutral-700">{'{{event_date}}'}</code>,{' '}
-          <code className="bg-neutral-200 px-1 rounded text-neutral-700">{'{{artist_pay}}'}</code>.
+          Use <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{variable_name}}'}</code> for dynamic fields.
+          Example: <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{venue_name}}'}</code>,{' '}
+          <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{event_date}}'}</code>,{' '}
+          <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{artist_pay}}'}</code>.
           These will be filled in when generating a file.
         </span>
       </div>
@@ -99,7 +99,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       {/* Sections */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium text-neutral-800">Sections</Label>
+          <Label className="text-sm font-medium text-neutral-300">Sections</Label>
           <Button variant="outline" size="sm" onClick={addSection}>
             <Plus className="h-3.5 w-3.5" />
             Add section
@@ -107,15 +107,15 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         </div>
 
         {sections.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed border-neutral-200 rounded-lg text-xs text-neutral-400">
+          <div className="text-center py-8 border-2 border-dashed border-neutral-700 rounded-lg text-xs text-neutral-500">
             No sections yet. Add a section to start building the template.
           </div>
         ) : (
           <div className="space-y-3">
             {sections.map((section, idx) => (
-              <div key={section.id} className="bg-white border border-neutral-200 rounded-lg p-4 space-y-2.5">
+              <div key={section.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <GripVertical className="h-4 w-4 text-neutral-300 shrink-0" />
+                  <GripVertical className="h-4 w-4 text-neutral-600 shrink-0" />
                   <div className="flex-1">
                     <Input
                       value={section.label}

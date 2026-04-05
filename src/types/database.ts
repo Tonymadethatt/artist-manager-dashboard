@@ -2,7 +2,7 @@ import type {
   OutreachStatus,
   VenueType,
   TemplateType,
-  ExpenseCategory,
+  CommissionTier,
   DealTerms,
   TemplateSection,
 } from './index'
@@ -199,40 +199,64 @@ export interface Database {
           },
         ]
       }
-      expenses: {
+      deals: {
         Row: {
           id: string
           user_id: string
-          amount: number
-          category: ExpenseCategory
-          description: string | null
-          date: string
+          description: string
           venue_id: string | null
+          event_date: string | null
+          gross_amount: number
+          commission_tier: CommissionTier
+          commission_rate: number
+          commission_amount: number
+          artist_paid: boolean
+          artist_paid_date: string | null
+          manager_paid: boolean
+          manager_paid_date: string | null
+          notes: string | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          amount: number
-          category?: ExpenseCategory
-          description?: string | null
-          date?: string
+          description: string
           venue_id?: string | null
+          event_date?: string | null
+          gross_amount: number
+          commission_tier: CommissionTier
+          commission_rate: number
+          commission_amount: number
+          artist_paid?: boolean
+          artist_paid_date?: string | null
+          manager_paid?: boolean
+          manager_paid_date?: string | null
+          notes?: string | null
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          amount?: number
-          category?: ExpenseCategory
-          description?: string | null
-          date?: string
+          description?: string
           venue_id?: string | null
+          event_date?: string | null
+          gross_amount?: number
+          commission_tier?: CommissionTier
+          commission_rate?: number
+          commission_amount?: number
+          artist_paid?: boolean
+          artist_paid_date?: string | null
+          manager_paid?: boolean
+          manager_paid_date?: string | null
+          notes?: string | null
           created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'expenses_venue_id_fkey'
+            foreignKeyName: 'deals_venue_id_fkey'
             columns: ['venue_id']
             referencedRelation: 'venues'
             referencedColumns: ['id']
@@ -246,7 +270,7 @@ export interface Database {
       outreach_status: OutreachStatus
       venue_type: VenueType
       template_type: TemplateType
-      expense_category: ExpenseCategory
+      commission_tier: CommissionTier
     }
     CompositeTypes: Record<string, never>
   }

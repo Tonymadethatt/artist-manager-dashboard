@@ -84,12 +84,12 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
       />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-white border-l border-neutral-200 flex flex-col shadow-xl overflow-hidden">
+      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-neutral-900 border-l border-neutral-800 flex flex-col shadow-xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-neutral-200">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-neutral-800">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-semibold text-neutral-900 text-base truncate">{venue.name}</h2>
+              <h2 className="font-semibold text-neutral-100 text-base truncate">{venue.name}</h2>
               <StatusBadge status={venue.status} />
             </div>
             {(venue.city || venue.location) && (
@@ -118,7 +118,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
         <div className="flex-1 overflow-y-auto">
           {/* Status + Quick fields */}
-          <div className="px-5 py-4 space-y-3 border-b border-neutral-100">
+          <div className="px-5 py-4 space-y-3 border-b border-neutral-800">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Status</Label>
@@ -155,7 +155,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                     <Star
                       className={cn(
                         'h-5 w-5 transition-colors',
-                        i < venue.priority ? 'fill-neutral-700 text-neutral-700' : 'text-neutral-300 hover:text-neutral-400'
+                        i < venue.priority ? 'fill-neutral-400 text-neutral-400' : 'text-neutral-700 hover:text-neutral-500'
                       )}
                     />
                   </button>
@@ -165,9 +165,9 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
           </div>
 
           {/* Deal terms (expandable) */}
-          <div className="border-b border-neutral-100">
+          <div className="border-b border-neutral-800">
             <button
-              className="flex items-center justify-between w-full px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+              className="flex items-center justify-between w-full px-5 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-800 transition-colors"
               onClick={() => setShowDealTerms(v => !v)}
             >
               <span className="flex items-center gap-2">
@@ -234,9 +234,9 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
           </div>
 
           {/* Contacts (expandable) */}
-          <div className="border-b border-neutral-100">
+          <div className="border-b border-neutral-800">
             <button
-              className="flex items-center justify-between w-full px-5 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+              className="flex items-center justify-between w-full px-5 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-800 transition-colors"
               onClick={() => setShowContacts(v => !v)}
             >
               <span className="flex items-center gap-2">
@@ -289,7 +289,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
           {/* Notes log */}
           <div className="px-5 py-4">
-            <p className="text-sm font-medium text-neutral-700 mb-3">Activity log</p>
+            <p className="text-sm font-medium text-neutral-300 mb-3">Activity log</p>
 
             <div className="flex gap-2 mb-4">
               <Textarea
@@ -321,7 +321,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                 {notes.map(n => (
                   <div key={n.id} className="space-y-0.5">
                     <p className="text-xs text-neutral-400">{fmt(n.created_at)}</p>
-                    <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">{n.note}</p>
+                    <p className="text-sm text-neutral-300 whitespace-pre-wrap leading-relaxed">{n.note}</p>
                     <Separator className="mt-3" />
                   </div>
                 ))}
@@ -346,8 +346,8 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
       {confirmDelete && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmDelete(false)} />
-          <div className="relative bg-white rounded-lg border border-neutral-200 p-6 max-w-sm w-full shadow-xl">
-            <h3 className="font-semibold text-neutral-900 mb-2">Delete venue?</h3>
+          <div className="relative bg-neutral-900 rounded-lg border border-neutral-700 p-6 max-w-sm w-full shadow-xl">
+            <h3 className="font-semibold text-neutral-100 mb-2">Delete venue?</h3>
             <p className="text-sm text-neutral-500 mb-4">
               This will permanently delete <strong>{venue.name}</strong> and all associated contacts, notes, and linked files.
             </p>
@@ -364,18 +364,18 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
 function ContactRow({ contact, onEdit, onDelete }: { contact: Contact; onEdit: () => void; onDelete: () => void }) {
   return (
-    <div className="flex items-start justify-between gap-2 rounded border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+    <div className="flex items-start justify-between gap-2 rounded border border-neutral-800 bg-neutral-800/50 px-3 py-2.5">
       <div className="min-w-0">
-        <div className="font-medium text-sm text-neutral-800">{contact.name}</div>
-        {contact.role && <div className="text-xs text-neutral-400">{contact.role}</div>}
+        <div className="font-medium text-sm text-neutral-200">{contact.name}</div>
+        {contact.role && <div className="text-xs text-neutral-500">{contact.role}</div>}
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           {contact.email && (
-            <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-800">
+            <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300">
               <Mail className="h-3 w-3" />{contact.email}
             </a>
           )}
           {contact.phone && (
-            <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-800">
+            <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300">
               <Phone className="h-3 w-3" />{contact.phone}
             </a>
           )}
@@ -418,7 +418,7 @@ function ContactForm({
   }
 
   return (
-    <div className="rounded border border-neutral-200 p-3 space-y-2.5 bg-white">
+    <div className="rounded border border-neutral-700 p-3 space-y-2.5 bg-neutral-800/50">
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label>Name *</Label>

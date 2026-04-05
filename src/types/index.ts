@@ -31,15 +31,18 @@ export const OUTREACH_STATUS_ORDER: OutreachStatus[] = [
 
 export type TemplateType = 'agreement' | 'invoice'
 
-export type ExpenseCategory = 'travel' | 'equipment' | 'promotion' | 'accommodation' | 'food' | 'misc'
+export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors'
 
-export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  travel: 'Travel',
-  equipment: 'Equipment',
-  promotion: 'Promotion',
-  accommodation: 'Accommodation',
-  food: 'Food',
-  misc: 'Misc',
+export const COMMISSION_TIER_LABELS: Record<CommissionTier, string> = {
+  new_doors: 'New Doors',
+  kept_doors: 'Kept Doors',
+  bigger_doors: 'Bigger Doors',
+}
+
+export const COMMISSION_TIER_RATES: Record<CommissionTier, number> = {
+  new_doors: 0.20,
+  kept_doors: 0.20,
+  bigger_doors: 0.10,
 }
 
 export interface DealTerms {
@@ -112,14 +115,22 @@ export interface GeneratedFile {
   template?: Pick<Template, 'id' | 'name'> | null
 }
 
-export interface Expense {
+export interface Deal {
   id: string
   user_id: string
-  amount: number
-  category: ExpenseCategory
-  description: string | null
-  date: string
+  description: string
   venue_id: string | null
+  event_date: string | null
+  gross_amount: number
+  commission_tier: CommissionTier
+  commission_rate: number
+  commission_amount: number
+  artist_paid: boolean
+  artist_paid_date: string | null
+  manager_paid: boolean
+  manager_paid_date: string | null
+  notes: string | null
   created_at: string
+  updated_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
 }
