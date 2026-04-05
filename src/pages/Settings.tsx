@@ -111,7 +111,7 @@ export default function Settings() {
         Artist details, outbound email identity, and report defaults. Changes apply across the dashboard and emails.
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 lg:gap-x-10 lg:gap-y-8 lg:items-start">
+      <div className="grid grid-cols-1 gap-y-6 md:gap-y-8 lg:grid-cols-2 lg:gap-x-10 lg:gap-y-8 lg:items-start">
         <SectionCard
           title="Artist profile"
           description="Used throughout the dashboard and in generated reports."
