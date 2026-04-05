@@ -207,3 +207,35 @@ export function buildRetainerReminderHtml(customIntro?: string | null, _customSu
 </body>
 </html>`
 }
+
+export function buildPerformanceReportRequestHtml(): string {
+  const subject = 'Quick check-in: How did the show go at Skyline Bar & Lounge?'
+  const formUrl = '#'
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${subject}</title>
+<style>${sharedStyles}</style>
+</head>
+<body>
+<div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
+  ${sharedHeader}
+  <div class="email-body" style="padding:28px 32px;">
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey DJ Luijay,</p>
+    <p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">Skyline Bar &amp; Lounge</strong> &mdash; April 4, 2026</p>
+
+    <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:20px 22px;margin-bottom:24px;">
+      <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>
+      <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
+    </div>
+
+    <p style="font-size:13px;color:#555555;line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
+  </div>
+  ${sharedFooter}
+</div>
+</body>
+</html>`
+}

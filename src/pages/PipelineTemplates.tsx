@@ -46,7 +46,7 @@ const EMPTY_ITEM: ItemFormState = {
 
 export default function PipelineTemplates() {
   const {
-    templates, loading, seedDefaultTemplates,
+    templates, loading, seedDefaultTemplates, seedPerformanceTemplate,
     addTemplate, updateTemplate, deleteTemplate,
     addTemplateItem, updateTemplateItem, deleteTemplateItem,
   } = useTaskTemplates()
@@ -81,8 +81,10 @@ export default function PipelineTemplates() {
           // After seed, auto-select first
         })
       }
+      // Always seed the performance template (idempotent — only inserts if missing)
+      seedPerformanceTemplate()
     }
-  }, [loading, templates, seeded, seedDefaultTemplates])
+  }, [loading, templates, seeded, seedDefaultTemplates, seedPerformanceTemplate])
 
   // Auto-select first template when list loads/changes
   useEffect(() => {

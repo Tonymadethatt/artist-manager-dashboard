@@ -189,6 +189,40 @@ export function useTaskTemplates() {
     await fetchTemplates()
   }
 
+  // Idempotently seeds the Post-Performance Pack template for new AND existing users.
+  // Uses trigger_status='performed' check so it never conflicts with seedDefaultTemplates.
+  const seedPerformanceTemplate = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { count } = await supabase
+      .from('task_templates')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('trigger_status', 'performed')
+    if ((count ?? 0) > 0) return // already exists
+
+    const { data: t, error } = await supabase
+      .from('task_templates')
+      .insert({
+        user_id: user.id,
+        name: 'Post-Performance Pack',
+        description: 'Auto-tasks after a show is marked as performed.',
+        trigger_status: 'performed',
+      })
+      .select()
+      .single()
+    if (error || !t) return
+
+    await supabase.from('task_template_items').insert([
+      { template_id: t.id, title: 'Send performance report form', days_offset: 0, priority: 'high' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 0, email_type: 'performance_report_request' },
+      { template_id: t.id, title: 'Review show notes and update deal record', days_offset: 3, priority: 'medium' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 1, email_type: null },
+      { template_id: t.id, title: 'Post-show follow-up with venue', days_offset: 7, priority: 'medium' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 2, email_type: null },
+    ])
+
+    await fetchTemplates()
+  }
+
   return {
     templates,
     loading,
@@ -202,5 +236,6 @@ export function useTaskTemplates() {
     deleteTemplateItem,
     applyTemplate,
     seedDefaultTemplates,
+    seedPerformanceTemplate,
   }
 }

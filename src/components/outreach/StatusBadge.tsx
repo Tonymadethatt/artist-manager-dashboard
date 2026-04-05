@@ -16,6 +16,11 @@ const STATUS_VARIANTS: Record<OutreachStatus, BadgeProps['variant']> = {
   in_discussion: 'warning',
   agreement_sent: 'purple',
   booked: 'success',
+  performed: 'default',
+  post_follow_up: 'blue',
+  rebooking: 'warning',
+  closed_won: 'success',
+  closed_lost: 'destructive',
   rejected: 'destructive',
   archived: 'outline',
 }

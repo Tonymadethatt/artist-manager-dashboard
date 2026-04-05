@@ -6,6 +6,7 @@ import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { VenueWorkCard } from '@/components/pipeline/VenueWorkCard'
 import { VenueProgressPanel, type ProgressUpdate } from '@/components/pipeline/VenueProgressPanel'
 import { TaskItem } from '@/components/pipeline/TaskItem'
@@ -78,6 +79,7 @@ function VenueProgressPanelConnected({
   onApplyTemplate: (templateId: string, venueId: string) => Promise<{ count: number }>
 }) {
   const { contacts, addNote } = useVenueDetail(venue.id)
+  const { profile } = useArtistProfile()
   const venueDeals = deals.filter(d => d.venue_id === venue.id)
   const venueEmails = allEmails.filter(e => e.venue_id === venue.id)
   const venueTasks = tasks.filter(t => t.venue_id === venue.id)
@@ -123,6 +125,43 @@ function VenueProgressPanelConnected({
       .filter((t): t is Task => !!(t?.email_type))
 
     for (const t of emailActionTasks) {
+      // performance_report_request goes to the artist, not via venue email queue
+      if (t.email_type === 'performance_report_request') {
+        if (profile) {
+          const eventDate = venueDeals[0]?.event_date ?? venue.deal_terms?.event_date ?? null
+          try {
+            // Create the DB row first (authenticated client), then email
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              const { data: reportRow } = await supabase
+                .from('performance_reports')
+                .insert({ user_id: user.id, venue_id: venue.id, deal_id: venueDeals[0]?.id ?? null })
+                .select('token')
+                .single()
+              if (reportRow?.token) {
+                await fetch('/.netlify/functions/send-performance-form', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    token: reportRow.token,
+                    venueName: venue.name,
+                    eventDate,
+                    artistName: profile.artist_name,
+                    artistEmail: profile.artist_email,
+                    fromEmail: profile.from_email,
+                    replyToEmail: profile.reply_to_email || profile.from_email,
+                    managerName: profile.manager_name || 'Your Manager',
+                  }),
+                })
+              }
+            }
+          } catch (e) {
+            console.error('[Pipeline] Failed to send performance form:', e)
+          }
+        }
+        continue
+      }
+
       const primaryContact = contacts.find(c => c.email)
       if (!primaryContact?.email) continue
 

@@ -43,16 +43,22 @@ const PRIORITY_DOT: Record<string, string> = {
 
 const FUNNEL_STATUSES: OutreachStatus[] = [
   'not_contacted', 'reached_out', 'in_discussion', 'agreement_sent', 'booked',
+  'performed', 'post_follow_up', 'rebooking', 'closed_won',
 ]
 
 const FUNNEL_COLORS: Record<OutreachStatus, string> = {
-  not_contacted: 'bg-neutral-600',
-  reached_out:   'bg-blue-500',
-  in_discussion: 'bg-amber-400',
-  agreement_sent:'bg-purple-500',
-  booked:        'bg-green-500',
-  rejected:      'bg-red-700',
-  archived:      'bg-neutral-700',
+  not_contacted:  'bg-neutral-600',
+  reached_out:    'bg-blue-500',
+  in_discussion:  'bg-amber-400',
+  agreement_sent: 'bg-purple-500',
+  booked:         'bg-green-500',
+  performed:      'bg-white/80',
+  post_follow_up: 'bg-blue-400',
+  rebooking:      'bg-amber-400',
+  closed_won:     'bg-emerald-500',
+  closed_lost:    'bg-red-700',
+  rejected:       'bg-red-700',
+  archived:       'bg-neutral-700',
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────

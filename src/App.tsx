@@ -16,6 +16,8 @@ import EmailQueue from '@/pages/EmailQueue'
 import EmailTemplates from '@/pages/EmailTemplates'
 import TermsPage from '@/pages/public/TermsPage'
 import PrivacyPage from '@/pages/public/PrivacyPage'
+import PerformanceReportForm from '@/pages/public/PerformanceReportForm'
+import PerformanceReports from '@/pages/PerformanceReports'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -46,6 +48,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/performance-report/:token" element={<PerformanceReportForm />} />
 
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
@@ -62,6 +65,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/email-queue" element={<EmailQueue />} />
           <Route path="/email-templates" element={<EmailTemplates />} />
+          <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

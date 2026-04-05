@@ -668,6 +668,86 @@ export interface Database {
         Relationships: []
       }
     }
+      performance_reports: {
+        Row: {
+          id: string
+          user_id: string
+          venue_id: string
+          deal_id: string | null
+          token: string
+          token_used: boolean
+          event_happened: string | null
+          event_rating: number | null
+          attendance: number | null
+          artist_paid_status: string | null
+          payment_amount: number | null
+          venue_interest: string | null
+          relationship_quality: string | null
+          notes: string | null
+          media_links: string | null
+          commission_flagged: boolean
+          submitted: boolean
+          submitted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          venue_id: string
+          deal_id?: string | null
+          token?: string
+          token_used?: boolean
+          event_happened?: string | null
+          event_rating?: number | null
+          attendance?: number | null
+          artist_paid_status?: string | null
+          payment_amount?: number | null
+          venue_interest?: string | null
+          relationship_quality?: string | null
+          notes?: string | null
+          media_links?: string | null
+          commission_flagged?: boolean
+          submitted?: boolean
+          submitted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          venue_id?: string
+          deal_id?: string | null
+          token?: string
+          token_used?: boolean
+          event_happened?: string | null
+          event_rating?: number | null
+          attendance?: number | null
+          artist_paid_status?: string | null
+          payment_amount?: number | null
+          venue_interest?: string | null
+          relationship_quality?: string | null
+          notes?: string | null
+          media_links?: string | null
+          commission_flagged?: boolean
+          submitted?: boolean
+          submitted_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'performance_reports_venue_id_fkey'
+            columns: ['venue_id']
+            referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'performance_reports_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+    }
     Views: Record<string, never>
     Functions: Record<string, never>
     Enums: {

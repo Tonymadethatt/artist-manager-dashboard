@@ -20,6 +20,7 @@ import {
 import {
   buildManagementReportHtml,
   buildRetainerReminderHtml,
+  buildPerformanceReportRequestHtml,
 } from '@/lib/buildArtistEmailHtml'
 import { cn } from '@/lib/utils'
 
@@ -64,7 +65,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   retainer_reminder: 'Hey DJ, quick note from management',
 }
 
-const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder']
+const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder', 'performance_report_request']
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -119,9 +120,9 @@ export default function EmailTemplates() {
     if (activeGroup === 'artist') {
       const intro = editIntro.trim() || null
       const subj = editSubject.trim() || null
-      return selectedType === 'management_report'
-        ? buildManagementReportHtml(intro, subj)
-        : buildRetainerReminderHtml(intro, subj)
+      if (selectedType === 'management_report') return buildManagementReportHtml(intro, subj)
+      if (selectedType === 'performance_report_request') return buildPerformanceReportRequestHtml()
+      return buildRetainerReminderHtml(intro, subj)
     }
     return buildVenueEmailHtml(
       selectedType as PreviewEmailType,

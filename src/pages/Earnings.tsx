@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase, Mail } from 'lucide-react'
+import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
+import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -465,6 +466,8 @@ export default function Earnings() {
   const [activeTab, setActiveTab] = useState<'deals' | 'retainer'>('deals')
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid } = useDeals()
   const { venues } = useVenues()
+  const { profile } = useArtistProfile()
+  const { reports: perfReports, createReport } = usePerformanceReports()
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
@@ -472,6 +475,27 @@ export default function Earnings() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [sendEmailDeal, setSendEmailDeal] = useState<Deal | null>(null)
+  const [sendingFormDealId, setSendingFormDealId] = useState<string | null>(null)
+  const [formToast, setFormToast] = useState<string | null>(null)
+
+  function showFormToast(msg: string) {
+    setFormToast(msg)
+    setTimeout(() => setFormToast(null), 3000)
+  }
+
+  async function handleSendPerfForm(deal: Deal) {
+    if (!profile || !deal.venue_id) return
+    setSendingFormDealId(deal.id)
+    const venue = venues.find(v => v.id === deal.venue_id)
+    const venueName = venue?.name ?? deal.description
+    const { error } = await createReport(deal.venue_id, deal.id, profile, venueName, deal.event_date)
+    setSendingFormDealId(null)
+    if (error && !error.includes('email failed')) {
+      showFormToast(`Error: ${error}`)
+    } else {
+      showFormToast('Performance form sent to artist.')
+    }
+  }
 
   const stats = useMemo(() => {
     const earned = deals
@@ -552,6 +576,12 @@ export default function Earnings() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      {/* Performance form toast */}
+      {formToast && (
+        <div className="fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border bg-neutral-900 border-emerald-500/30 text-emerald-400">
+          {formToast}
+        </div>
+      )}
       {/* Tabs */}
       <div className="flex gap-1 border-b border-neutral-800">
         <button
@@ -666,12 +696,26 @@ export default function Earnings() {
                 <tr key={deal.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800/50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-medium text-neutral-100 leading-tight">{deal.description}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {deal.venue && (
                         <span className="text-xs text-neutral-500">{deal.venue.name}</span>
                       )}
                       {deal.event_date && (
                         <span className="text-xs text-neutral-600">{deal.event_date}</span>
+                      )}
+                      {/* Commission flagged indicator */}
+                      {perfReports.some(r => r.deal_id === deal.id && r.commission_flagged) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Commission
+                        </span>
+                      )}
+                      {/* Report received indicator */}
+                      {perfReports.some(r => r.deal_id === deal.id && r.submitted) && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          Report received
+                        </span>
                       )}
                     </div>
                   </td>
@@ -716,6 +760,19 @@ export default function Earnings() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
+                      {/* Send performance report form — only when venue is linked and no existing report for this deal */}
+                      {deal.venue_id && !perfReports.some(r => r.deal_id === deal.id) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-neutral-500 hover:text-blue-400"
+                          title="Send performance report form to artist"
+                          onClick={() => handleSendPerfForm(deal)}
+                          disabled={sendingFormDealId === deal.id}
+                        >
+                          <ClipboardList className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

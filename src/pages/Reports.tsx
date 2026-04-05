@@ -7,6 +7,7 @@ import { useMonthlyFees } from '@/hooks/useMonthlyFees'
 import { useTasks } from '@/hooks/useTasks'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
+import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,6 +72,7 @@ export default function Reports() {
   const { tasks } = useTasks()
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
+  const { reports: perfReports } = usePerformanceReports()
 
   const reportTemplate = getTemplate('management_report')
 
@@ -131,15 +133,26 @@ export default function Reports() {
       t.completed && t.completed_at && inRange(t.completed_at.split('T')[0])
     ).length
 
+    // Performance reports
+    const perfInPeriod = perfReports.filter(r => r.submitted && r.submitted_at && inRange(r.submitted_at.split('T')[0]))
+    const showsPerformed = perfInPeriod.length
+    const rebookingLeads = perfInPeriod.filter(r => r.venue_interest === 'yes').length
+    const ratedShows = perfInPeriod.filter(r => r.event_rating !== null)
+    const avgRating = ratedShows.length > 0
+      ? Math.round((ratedShows.reduce((s, r) => s + (r.event_rating ?? 0), 0) / ratedShows.length) * 10) / 10
+      : null
+    const totalReportedAttendance = perfInPeriod.reduce((s, r) => s + (r.attendance ?? 0), 0)
+
     return {
       outreach: { venuesContacted, venuesUpdated, inDiscussion, venuesBooked },
       deals: { count: periodDeals.length, totalGross, totalCommission, commissionEarned, commissionReceived, allOutstanding },
       retainer: { feeTotal, feePaid, feeOutstanding, unpaidMonths },
       metrics: { partnerships: partnerships.length, partnershipValue, attendance: attendance.length, totalAttendance, press: press.length, totalReach },
       tasks: { completedTasks },
+      performance: { showsPerformed, rebookingLeads, avgRating, totalAttendance: totalReportedAttendance },
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venues, deals, metrics, fees, tasks, startDate, endDate])
+  }, [venues, deals, metrics, fees, tasks, perfReports, startDate, endDate])
 
   const doSend = async (testOnly: boolean) => {
     if (!profile) return

@@ -6,6 +6,11 @@ export type OutreachStatus =
   | 'in_discussion'
   | 'agreement_sent'
   | 'booked'
+  | 'performed'
+  | 'post_follow_up'
+  | 'rebooking'
+  | 'closed_won'
+  | 'closed_lost'
   | 'rejected'
   | 'archived'
 
@@ -15,6 +20,11 @@ export const OUTREACH_STATUS_LABELS: Record<OutreachStatus, string> = {
   in_discussion: 'In Discussion',
   agreement_sent: 'Agreement Sent',
   booked: 'Booked',
+  performed: 'Performed',
+  post_follow_up: 'Post Follow-Up',
+  rebooking: 'Rebooking',
+  closed_won: 'Closed - Won',
+  closed_lost: 'Closed - Lost',
   rejected: 'Rejected',
   archived: 'Archived',
 }
@@ -25,6 +35,11 @@ export const OUTREACH_STATUS_ORDER: OutreachStatus[] = [
   'in_discussion',
   'agreement_sent',
   'booked',
+  'performed',
+  'post_follow_up',
+  'rebooking',
+  'closed_won',
+  'closed_lost',
   'rejected',
   'archived',
 ]
@@ -288,8 +303,9 @@ export type VenueEmailType =
   | 'agreement_ready'
   | 'booking_confirmed'
   | 'follow_up'
+  | 'rebooking_inquiry'
 
-export type ArtistEmailType = 'management_report' | 'retainer_reminder'
+export type ArtistEmailType = 'management_report' | 'retainer_reminder' | 'performance_report_request'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -302,11 +318,13 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   agreement_ready: 'Agreement Ready',
   booking_confirmed: 'Booking Confirmed',
   follow_up: 'Follow-Up',
+  rebooking_inquiry: 'Rebooking Inquiry',
 }
 
 export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   management_report: 'Management Report',
   retainer_reminder: 'Retainer Reminder',
+  performance_report_request: 'Performance Report Request',
 }
 
 export interface EmailTemplate {
@@ -317,6 +335,30 @@ export interface EmailTemplate {
   custom_intro: string | null
   created_at: string
   updated_at: string
+}
+
+export interface PerformanceReport {
+  id: string
+  user_id: string
+  venue_id: string
+  deal_id: string | null
+  token: string
+  token_used: boolean
+  event_happened: 'yes' | 'no' | 'postponed' | null
+  event_rating: number | null
+  attendance: number | null
+  artist_paid_status: 'yes' | 'no' | 'partial' | null
+  payment_amount: number | null
+  venue_interest: 'yes' | 'no' | 'unsure' | null
+  relationship_quality: 'good' | 'neutral' | 'poor' | null
+  notes: string | null
+  media_links: string | null
+  commission_flagged: boolean
+  submitted: boolean
+  submitted_at: string | null
+  created_at: string
+  venue?: Pick<Venue, 'id' | 'name'> | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date'> | null
 }
 
 export interface VenueEmail {

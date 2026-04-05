@@ -45,6 +45,12 @@ interface ReportData {
   tasks: {
     completedTasks: number
   }
+  performance?: {
+    showsPerformed: number
+    rebookingLeads: number
+    avgRating: number | null
+    totalAttendance: number
+  }
 }
 
 function money(n: number) {
@@ -80,7 +86,7 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   const logoUrl = `${siteUrl}/dj-luijay-logo.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
-  const { outreach, deals, retainer, metrics, tasks } = report
+  const { outreach, deals, retainer, metrics, tasks, performance } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = fmtDate(dateRange.start)
   const endFmt = fmtDate(dateRange.end)
@@ -175,6 +181,24 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     ? sectionCard('Work Completed', rows([['Tasks closed this period', String(tasks.completedTasks), '#22c55e']]), '#22c55e')
     : ''
 
+  // Post-show activity section — only rendered when there are submitted performance reports in range
+  let perfSection = ''
+  if (performance && performance.showsPerformed > 0) {
+    const perfRows: Array<[string, string, string]> = [
+      ['Shows performed', String(performance.showsPerformed), '#22c55e'],
+    ]
+    if (performance.avgRating !== null) {
+      perfRows.push(['Avg. rating from artist', `${performance.avgRating}/5`, '#ffffff'])
+    }
+    if (performance.totalAttendance > 0) {
+      perfRows.push(['Total reported attendance', performance.totalAttendance.toLocaleString(), '#ffffff'])
+    }
+    if (performance.rebookingLeads > 0) {
+      perfRows.push(['Venues interested in rebooking', String(performance.rebookingLeads), '#22c55e'])
+    }
+    perfSection = sectionCard('Post-Show Activity', rows(perfRows), '#22c55e')
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -219,6 +243,7 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
       <div style="font-size:12px;color:#d1d1d1;margin-top:5px;">${heroSubtext}</div>
     </div>` : ''}
 
+    ${perfSection}
     ${outreachSection}
     ${dealsSection}
     ${retainerSection}

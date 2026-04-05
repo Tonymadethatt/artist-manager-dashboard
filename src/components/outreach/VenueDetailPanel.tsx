@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   X, Pencil, Trash2, Plus, Star, Send, Phone, Mail, User,
-  ChevronDown, DollarSign, Calendar, Clock, MailCheck, MailPlus
+  ChevronDown, ChevronRight, DollarSign, Calendar, Clock, MailCheck, MailPlus,
+  ClipboardList, CheckCircle2, AlertTriangle
 } from 'lucide-react'
 import { useVenueDetail } from '@/hooks/useVenues'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
+import { usePerformanceReports } from '@/hooks/usePerformanceReports'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { StatusBadge } from './StatusBadge'
 import { VenueDialog } from './VenueDialog'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
@@ -36,6 +39,8 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const { contacts, notes, loading, addContact, updateContact, deleteContact, addNote } = useVenueDetail(venue.id)
   const { queueEmail } = useVenueEmails()
   const { templates, applyTemplate } = useTaskTemplates()
+  const { reports: perfReports, createReport } = usePerformanceReports()
+  const { profile } = useArtistProfile()
   const [editOpen, setEditOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
@@ -51,7 +56,23 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const [queuedFollowUp, setQueuedFollowUp] = useState(false)
   const [queuingFollowUp, setQueuingFollowUp] = useState(false)
   const [autoApplyMsg, setAutoApplyMsg] = useState<string | null>(null)
+  const [showPerfReports, setShowPerfReports] = useState(false)
+  const [sendingPerfForm, setSendingPerfForm] = useState(false)
+  const [perfFormMsg, setPerfFormMsg] = useState<string | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
+
+  const venueReports = perfReports.filter(r => r.venue_id === venue.id)
+  const showSendFormBtn = ['booked','performed','post_follow_up','rebooking'].includes(venue.status)
+
+  const handleSendPerfForm = async () => {
+    if (!profile) return
+    setSendingPerfForm(true)
+    const eventDate = venue.deal_terms?.event_date ?? null
+    const { error } = await createReport(venue.id, null, profile, venue.name, eventDate)
+    setSendingPerfForm(false)
+    setPerfFormMsg(error && !error.includes('email failed') ? `Error: ${error}` : 'Performance form sent to artist.')
+    setTimeout(() => setPerfFormMsg(null), 3000)
+  }
 
   const primaryContact = contacts.find(c => c.email) ?? null
   const today = new Date().toISOString().split('T')[0]
@@ -371,6 +392,60 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
               </div>
             )}
           </div>
+
+          {/* Performance Reports section */}
+          {(venueReports.length > 0 || showSendFormBtn) && (
+            <div className="px-5 py-4 border-t border-neutral-800">
+              <button
+                onClick={() => setShowPerfReports(p => !p)}
+                className="flex items-center justify-between w-full"
+              >
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="h-3.5 w-3.5 text-neutral-500" />
+                  <span className="text-sm font-medium text-neutral-300">Show Reports</span>
+                  {venueReports.length > 0 && (
+                    <span className="text-xs text-neutral-500">({venueReports.length})</span>
+                  )}
+                </div>
+                {showPerfReports ? <ChevronDown className="h-3.5 w-3.5 text-neutral-600" /> : <ChevronRight className="h-3.5 w-3.5 text-neutral-600" />}
+              </button>
+
+              {showPerfReports && (
+                <div className="mt-3 space-y-2">
+                  {perfFormMsg && (
+                    <p className="text-xs text-emerald-400 mb-2">{perfFormMsg}</p>
+                  )}
+                  {venueReports.length === 0 ? (
+                    <p className="text-xs text-neutral-500">No reports submitted yet.</p>
+                  ) : (
+                    venueReports.map(r => (
+                      <div key={r.id} className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${r.submitted ? 'border-neutral-700 bg-neutral-800/30' : 'border-neutral-800 bg-neutral-900/30'}`}>
+                        {r.submitted
+                          ? <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                          : <Clock className="h-3 w-3 text-neutral-600 shrink-0" />}
+                        <span className="text-neutral-400 flex-1">
+                          {r.submitted ? `Submitted ${r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` : 'Pending submission'}
+                        </span>
+                        {r.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" title="Commission flagged" />}
+                        {r.event_rating && <span className="text-neutral-500">{r.event_rating}/5</span>}
+                      </div>
+                    ))
+                  )}
+
+                  {showSendFormBtn && (
+                    <button
+                      onClick={handleSendPerfForm}
+                      disabled={sendingPerfForm}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-md text-neutral-300 transition-all mt-2 disabled:opacity-40"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                      {sendingPerfForm ? 'Sending...' : 'Send Report Form'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Notes log */}
           <div className="px-5 py-4">

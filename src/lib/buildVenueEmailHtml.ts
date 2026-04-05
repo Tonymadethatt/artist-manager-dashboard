@@ -8,6 +8,7 @@ export type PreviewEmailType =
   | 'agreement_ready'
   | 'booking_confirmed'
   | 'follow_up'
+  | 'rebooking_inquiry'
 
 export interface PreviewProfile {
   artist_name: string
@@ -175,6 +176,20 @@ export function buildVenueEmailHtml(
       closing = `Looking forward to hearing from you.`
       break
     }
+
+    case 'rebooking_inquiry': {
+      subject = `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `We had a great experience at ${venueName} and wanted to reach out about the possibility of booking ${artistName} again.`
+      bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Based on the positive reception from the previous event, we believe there is a strong opportunity to continue this partnership. We would love to discuss available dates and terms that work for your venue.</p></div>`
+      const rebookDetails = [
+        deal?.event_date ? row('Previous event date', fmtDate(deal.event_date), '#ffffff') : '',
+        row('Venue', venueName, '#ffffff'),
+      ].filter(Boolean).join('')
+      if (rebookDetails) bodyCards += card('Previous Event', rebookDetails, '#60a5fa')
+      closing = `Please let us know your availability and we will make it work.`
+      break
+    }
   }
 
   // Apply custom overrides
@@ -183,12 +198,13 @@ export function buildVenueEmailHtml(
 
   // Smart reply button
   const replyMap: Record<PreviewEmailType, { label: string; bodyText: string }> = {
-    follow_up:            { label: 'Reply to This Email',       bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
-    booking_confirmation: { label: 'Reply to Booking',          bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
-    agreement_ready:      { label: 'Reply About the Agreement', bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
-    payment_reminder:     { label: 'Confirm Payment',           bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
-    booking_confirmed:    { label: 'Reply to Confirmation',     bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
-    payment_receipt:      { label: 'Reply to Receipt',          bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
+    follow_up:            { label: 'Reply to This Email',          bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
+    booking_confirmation: { label: 'Reply to Booking',             bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
+    agreement_ready:      { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
+    payment_reminder:     { label: 'Confirm Payment',              bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
+    booking_confirmed:    { label: 'Reply to Confirmation',        bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
+    payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
+    rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
   }
   const { label: replyLabel, bodyText: replyBody } = replyMap[type]
   const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`

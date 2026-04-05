@@ -14,6 +14,7 @@ import {
   LogOut,
   X,
   LayoutTemplate,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -22,11 +23,12 @@ const NAV_GROUPS = [
   {
     label: 'Workspace',
     items: [
-      { to: '/',           label: 'Overview',  icon: LayoutDashboard, end: true  },
-      { to: '/outreach',   label: 'Outreach',  icon: Building2,       end: false },
-      { to: '/pipeline',   label: 'Pipeline',  icon: Workflow,        end: false },
-      { to: '/earnings',   label: 'Earnings',  icon: Banknote,        end: false },
-      { to: '/metrics',    label: 'Metrics',   icon: TrendingUp,      end: false },
+      { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true  },
+      { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false },
+      { to: '/pipeline',            label: 'Pipeline',      icon: Workflow,        end: false },
+      { to: '/earnings',            label: 'Earnings',      icon: Banknote,        end: false },
+      { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false },
+      { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false },
     ],
   },
   {
