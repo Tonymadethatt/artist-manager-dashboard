@@ -558,6 +558,76 @@ export interface Database {
           },
         ]
       }
+      task_templates: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          description: string | null
+          trigger_status: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          description?: string | null
+          trigger_status?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          description?: string | null
+          trigger_status?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      task_template_items: {
+        Row: {
+          id: string
+          template_id: string
+          title: string
+          notes: string | null
+          days_offset: number
+          priority: TaskPriority
+          recurrence: TaskRecurrence
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          template_id: string
+          title: string
+          notes?: string | null
+          days_offset?: number
+          priority?: TaskPriority
+          recurrence?: TaskRecurrence
+          sort_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          template_id?: string
+          title?: string
+          notes?: string | null
+          days_offset?: number
+          priority?: TaskPriority
+          recurrence?: TaskRecurrence
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'task_template_items_template_id_fkey'
+            columns: ['template_id']
+            referencedRelation: 'task_templates'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

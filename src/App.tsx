@@ -8,7 +8,8 @@ import Files from '@/pages/Files'
 import FileBuilder from '@/pages/FileBuilder'
 import Earnings from '@/pages/Earnings'
 import Metrics from '@/pages/Metrics'
-import Tasks from '@/pages/Tasks'
+import Pipeline from '@/pages/Pipeline'
+import PipelineTemplates from '@/pages/PipelineTemplates'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
 import EmailQueue from '@/pages/EmailQueue'
@@ -45,7 +46,9 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/outreach" element={<Outreach />} />
           <Route path="/earnings" element={<Earnings />} />
-          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/tasks" element={<Navigate to="/pipeline" replace />} />
+          <Route path="/pipeline" element={<Pipeline />} />
+          <Route path="/pipeline/templates" element={<PipelineTemplates />} />
           <Route path="/metrics" element={<Metrics />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/files" element={<Files />} />

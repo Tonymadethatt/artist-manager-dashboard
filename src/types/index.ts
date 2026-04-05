@@ -221,6 +221,28 @@ export interface Task {
   deal?: Pick<Deal, 'id' | 'description'> | null
 }
 
+export interface TaskTemplateItem {
+  id: string
+  template_id: string
+  title: string
+  notes: string | null
+  days_offset: number
+  priority: TaskPriority
+  recurrence: TaskRecurrence
+  sort_order: number
+  created_at: string
+}
+
+export interface TaskTemplate {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  trigger_status: string | null
+  created_at: string
+  items?: TaskTemplateItem[]
+}
+
 export interface Deal {
   id: string
   user_id: string

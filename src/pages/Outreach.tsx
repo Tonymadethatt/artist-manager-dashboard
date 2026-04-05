@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Search, SlidersHorizontal, Star } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
+import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { StatusBadge } from '@/components/outreach/StatusBadge'
 import { VenueDialog } from '@/components/outreach/VenueDialog'
 import { VenueDetailPanel } from '@/components/outreach/VenueDetailPanel'
@@ -28,6 +29,7 @@ const VENUE_TYPE_LABELS: Record<VenueType, string> = {
 
 export default function Outreach() {
   const { venues, loading, addVenue, updateVenue, deleteVenue } = useVenues()
+  const { templates, applyTemplate } = useTaskTemplates()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<OutreachStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<VenueType | 'all'>('all')
@@ -218,6 +220,10 @@ export default function Outreach() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         onSave={addVenue}
+        templates={templates}
+        onApplyTemplate={async (templateId, venueId) => {
+          await applyTemplate(templateId, venueId)
+        }}
       />
 
       {selectedVenue && (

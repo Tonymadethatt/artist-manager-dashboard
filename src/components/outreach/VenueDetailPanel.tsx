@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { useVenueDetail } from '@/hooks/useVenues'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
+import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { StatusBadge } from './StatusBadge'
 import { VenueDialog } from './VenueDialog'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
@@ -34,6 +35,7 @@ interface Props {
 export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) {
   const { contacts, notes, loading, addContact, updateContact, deleteContact, addNote } = useVenueDetail(venue.id)
   const { queueEmail } = useVenueEmails()
+  const { templates, applyTemplate } = useTaskTemplates()
   const [editOpen, setEditOpen] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
@@ -48,6 +50,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const [sendEmailType, setSendEmailType] = useState<'booking_confirmed' | 'follow_up'>('booking_confirmed')
   const [queuedFollowUp, setQueuedFollowUp] = useState(false)
   const [queuingFollowUp, setQueuingFollowUp] = useState(false)
+  const [autoApplyMsg, setAutoApplyMsg] = useState<string | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
   const primaryContact = contacts.find(c => c.email) ?? null
@@ -76,6 +79,19 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
   const handleStatusChange = async (status: OutreachStatus) => {
     await onUpdate(venue.id, { status })
+    // Auto-apply any template that triggers on this status
+    const matching = templates.filter(t => t.trigger_status === status)
+    if (matching.length > 0) {
+      let totalTasks = 0
+      for (const t of matching) {
+        const { count } = await applyTemplate(t.id, venue.id)
+        totalTasks += count
+      }
+      if (totalTasks > 0) {
+        setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[status]}"`)
+        setTimeout(() => setAutoApplyMsg(null), 4000)
+      }
+    }
   }
 
   const handleFollowUpChange = async (date: string) => {
@@ -167,6 +183,13 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                 />
               </div>
             </div>
+
+            {/* Auto-apply template toast */}
+            {autoApplyMsg && (
+              <div className="flex items-center gap-2 bg-green-950/60 border border-green-800 rounded px-3 py-2">
+                <span className="text-xs text-green-400">{autoApplyMsg}</span>
+              </div>
+            )}
 
             {/* Priority stars */}
             <div className="space-y-1">

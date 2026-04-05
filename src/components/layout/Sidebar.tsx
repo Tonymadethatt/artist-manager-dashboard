@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   MapPin,
@@ -6,12 +6,13 @@ import {
   Files,
   DollarSign,
   BarChart2,
-  CheckSquare,
+  Kanban,
   SendHorizonal,
   Settings,
   LogOut,
   X,
   Mail,
+  LayoutTemplate,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -22,7 +23,7 @@ const NAV_GROUPS = [
       { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
       { to: '/outreach', label: 'Outreach', icon: MapPin, end: false },
       { to: '/earnings', label: 'Earnings', icon: DollarSign, end: false },
-      { to: '/tasks', label: 'Tasks', icon: CheckSquare, end: false },
+      { to: '/pipeline', label: 'Pipeline', icon: Kanban, end: false },
       { to: '/metrics', label: 'Metrics', icon: BarChart2, end: false },
     ],
   },
@@ -48,6 +49,8 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const { signOut } = useAuth()
+  const location = useLocation()
+  const onPipelinePath = location.pathname.startsWith('/pipeline')
 
   const navContent = (
     <nav className="flex flex-col h-full">
@@ -69,23 +72,43 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi} className="space-y-0.5">
             {group.items.map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors',
-                    isActive
-                      ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-fg))]'
-                      : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-fg))]'
-                  )
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </NavLink>
+              <div key={to}>
+                <NavLink
+                  to={to}
+                  end={end}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors',
+                      (isActive || (to === '/pipeline' && onPipelinePath))
+                        ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-fg))]'
+                        : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-fg))]'
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {label}
+                </NavLink>
+                {/* Pipeline sub-item: Templates */}
+                {to === '/pipeline' && onPipelinePath && (
+                  <NavLink
+                    to="/pipeline/templates"
+                    end
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 pl-9 pr-3 py-1.5 rounded text-xs transition-colors mt-0.5',
+                        isActive
+                          ? 'text-[hsl(var(--sidebar-fg))]'
+                          : 'text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-fg))]'
+                      )
+                    }
+                  >
+                    <LayoutTemplate className="h-3.5 w-3.5 shrink-0" />
+                    Task Templates
+                  </NavLink>
+                )}
+              </div>
             ))}
             {gi < NAV_GROUPS.length - 1 && (
               <div className="h-px bg-[hsl(var(--sidebar-border))] mx-1 mt-2" />

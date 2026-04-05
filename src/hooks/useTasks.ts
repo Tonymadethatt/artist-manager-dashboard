@@ -123,5 +123,12 @@ export function useTasks() {
     return updateTask(id, { completed: false, completed_at: null })
   }
 
-  return { tasks, loading, error, refetch: fetchTasks, addTask, updateTask, deleteTask, completeTask, uncompleteTask }
+  const snoozeTask = async (id: string, days = 1) => {
+    const task = tasks.find(t => t.id === id)
+    if (!task) return { error: new Error('Task not found') }
+    const base = task.due_date ?? new Date().toISOString().split('T')[0]
+    return updateTask(id, { due_date: addDays(base, days) })
+  }
+
+  return { tasks, loading, error, refetch: fetchTasks, addTask, updateTask, deleteTask, completeTask, uncompleteTask, snoozeTask }
 }

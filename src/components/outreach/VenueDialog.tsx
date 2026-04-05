@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Venue, VenueType, OutreachStatus } from '@/types'
+import type { Venue, VenueType, OutreachStatus, TaskTemplate } from '@/types'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER } from '@/types'
 
 const VENUE_TYPES: { value: VenueType; label: string }[] = [
@@ -31,8 +31,10 @@ const VENUE_TYPES: { value: VenueType; label: string }[] = [
 interface VenueDialogProps {
   open: boolean
   onClose: () => void
-  onSave: (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<unknown>
+  onSave: (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<{ data?: Venue; error?: unknown }>
   initialData?: Venue
+  templates?: TaskTemplate[]
+  onApplyTemplate?: (templateId: string, venueId: string) => Promise<void>
 }
 
 const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
@@ -46,8 +48,9 @@ const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   deal_terms: null,
 }
 
-export function VenueDialog({ open, onClose, onSave, initialData }: VenueDialogProps) {
+export function VenueDialog({ open, onClose, onSave, initialData, templates, onApplyTemplate }: VenueDialogProps) {
   const [form, setForm] = useState<Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>>(EMPTY)
+  const [selectedTemplate, setSelectedTemplate] = useState('__none__')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,6 +66,7 @@ export function VenueDialog({ open, onClose, onSave, initialData }: VenueDialogP
         follow_up_date: initialData.follow_up_date,
         deal_terms: initialData.deal_terms,
       } : EMPTY)
+      setSelectedTemplate('__none__')
       setError(null)
     }
   }, [open, initialData])
@@ -73,12 +77,16 @@ export function VenueDialog({ open, onClose, onSave, initialData }: VenueDialogP
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Venue name is required.'); return }
     setSaving(true)
-    await onSave({
+    const result = await onSave({
       ...form,
       name: form.name.trim(),
       location: form.location || null,
       city: form.city || null,
     })
+    // Apply template if selected and we're adding (not editing)
+    if (!initialData && selectedTemplate !== '__none__' && result?.data?.id && onApplyTemplate) {
+      await onApplyTemplate(selectedTemplate, result.data.id)
+    }
     setSaving(false)
     onClose()
   }
@@ -172,6 +180,25 @@ export function VenueDialog({ open, onClose, onSave, initialData }: VenueDialogP
               />
             </div>
           </div>
+
+          {/* Template picker — only shown when adding (not editing) */}
+          {!initialData && templates && templates.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-neutral-800">
+              <Label>Apply task template</Label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}{t.items?.length ? ` (${t.items.length} tasks)` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-neutral-600">Creates tasks automatically when this venue is saved.</p>
+            </div>
+          )}
 
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
