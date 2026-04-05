@@ -187,28 +187,38 @@ function RetainerTab(_: { hideSummary?: boolean }) {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-2">
-          {totals.outstanding > 0 && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSendReminder}
-                disabled={reminderStatus === 'sending'}
-              >
-                {reminderStatus === 'sending' ? 'Sending…' : 'Send payment reminder'}
-              </Button>
-              {reminderStatus === 'success' && <span className="text-xs text-green-400">{reminderMsg}</span>}
-              {reminderStatus === 'error' && <span className="text-xs text-red-400">{reminderMsg}</span>}
-            </>
-          )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <div className="flex items-center gap-2 min-w-0 sm:flex-1">
+          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest shrink-0">
+            Monthly Retainer
+          </h2>
+          <div className="hidden sm:block flex-1 min-w-[1rem] h-px bg-neutral-800" />
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Add month
-        </Button>
+        <div className="flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between sm:justify-end sm:gap-3 sm:shrink-0">
+          <p className="text-xs text-neutral-500 tabular-nums">
+            {fees.length} month{fees.length !== 1 ? 's' : ''} tracked
+          </p>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {totals.outstanding > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSendReminder}
+                  disabled={reminderStatus === 'sending'}
+                >
+                  {reminderStatus === 'sending' ? 'Sending…' : 'Send payment reminder'}
+                </Button>
+                {reminderStatus === 'success' && <span className="text-xs text-green-400">{reminderMsg}</span>}
+                {reminderStatus === 'error' && <span className="text-xs text-red-400">{reminderMsg}</span>}
+              </>
+            )}
+            <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add month
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Month list */}
@@ -681,21 +691,23 @@ export default function Earnings() {
 
       {/* ── Commission deals ─────────────────────────────────────────────── */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Commission Deals</h2>
-          <div className="flex-1 h-px bg-neutral-800" />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex items-center gap-2 min-w-0 sm:flex-1">
+            <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest shrink-0">
+              Commission Deals
+            </h2>
+            <div className="hidden sm:block flex-1 min-w-[1rem] h-px bg-neutral-800" />
+          </div>
+          <div className="flex items-center justify-between gap-3 sm:justify-end sm:shrink-0">
+            <p className="text-xs text-neutral-500 tabular-nums">
+              {deals.length} deal{deals.length !== 1 ? 's' : ''} logged
+            </p>
+            <Button onClick={openAdd}>
+              <Plus className="h-3.5 w-3.5" />
+              Log deal
+            </Button>
+          </div>
         </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-neutral-500">
-          {deals.length} deal{deals.length !== 1 ? 's' : ''} logged
-        </p>
-        <Button onClick={openAdd}>
-          <Plus className="h-3.5 w-3.5" />
-          Log deal
-        </Button>
-      </div>
 
       {/* Table */}
       {loading ? (
@@ -1004,13 +1016,7 @@ export default function Earnings() {
       </div>
 
       {/* ── Monthly retainer ─────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Monthly Retainer</h2>
-          <div className="flex-1 h-px bg-neutral-800" />
-        </div>
-        <RetainerTab hideSummary />
-      </div>
+      <RetainerTab hideSummary />
     </div>
   )
 }
