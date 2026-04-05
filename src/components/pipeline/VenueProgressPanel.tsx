@@ -12,7 +12,6 @@ import type {
 import {
   OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER,
   ACTIVITY_CATEGORY_LABELS,
-  VENUE_EMAIL_TYPE_LABELS,
   type VenueEmailType,
 } from '@/types'
 import { getNextEmailSuggestion } from '@/lib/emailSuggestion'
