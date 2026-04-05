@@ -154,14 +154,17 @@ export default function Reports() {
         setStatus('success')
         const recipient = testOnly ? (profile.manager_email ?? 'you') : profile.artist_email
         setMsg(`Report sent to ${recipient}`)
+      } else if (res.status === 404) {
+        setStatus('error')
+        setMsg('Functions not found — this only works on the deployed Netlify site, not localhost.')
       } else {
         const err = await res.json().catch(() => ({}))
         setStatus('error')
-        setMsg((err as { message?: string }).message ?? 'Failed to send.')
+        setMsg((err as { message?: string }).message ?? 'Send failed. Check Netlify function logs.')
       }
     } catch {
       setStatus('error')
-      setMsg('Network error. Make sure the site is deployed on Netlify.')
+      setMsg('Functions only run on the deployed site — open your Netlify URL to send real emails.')
     }
     setS(false)
   }
