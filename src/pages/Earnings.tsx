@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -38,7 +38,7 @@ function fmtMonth(dateStr: string) {
   return `${MONTHS[parseInt(m) - 1]} ${y}`
 }
 
-function RetainerTab() {
+function RetainerTab({ hideSummary = false }: { hideSummary?: boolean }) {
   const { fees, loading, addPayment, deletePayment, updateFee, addFee, deleteFee } = useMonthlyFees()
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
@@ -154,28 +154,7 @@ function RetainerTab() {
   )
 
   return (
-    <div className="space-y-5">
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <p className="text-xs text-neutral-500 mb-1">Total invoiced</p>
-          <p className="text-xl font-bold text-neutral-100">${totals.owed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-        </div>
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <p className="text-xs text-neutral-500 mb-1">Received</p>
-          <p className="text-xl font-bold text-green-400">${totals.received.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
-        </div>
-        <div className={cn(
-          'rounded-lg border p-4',
-          totals.outstanding > 0 ? 'bg-orange-950 border-orange-800' : 'bg-neutral-900 border-neutral-800'
-        )}>
-          <p className="text-xs text-neutral-500 mb-1">Outstanding</p>
-          <p className={cn('text-xl font-bold', totals.outstanding > 0 ? 'text-orange-400' : 'text-neutral-100')}>
-            ${totals.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-2">
@@ -463,11 +442,11 @@ function PayToggle({
 }
 
 export default function Earnings() {
-  const [activeTab, setActiveTab] = useState<'deals' | 'retainer'>('deals')
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid } = useDeals()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
+  const { fees } = useMonthlyFees()
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
@@ -508,6 +487,12 @@ export default function Earnings() {
     const totalCommission = deals.reduce((sum, d) => sum + d.commission_amount, 0)
     return { earned, received, outstanding, totalCommission, count: deals.length }
   }, [deals])
+
+  const retainerStats = useMemo(() => {
+    const invoiced = fees.reduce((s, f) => s + f.amount, 0)
+    const received = fees.reduce((s, f) => s + (f.payments ?? []).reduce((ps, p) => ps + p.amount, 0), 0)
+    return { invoiced, received, outstanding: invoiced - received }
+  }, [fees])
 
   const previewCommission = useMemo(() => {
     const gross = parseFloat(form.gross_amount)
@@ -574,86 +559,98 @@ export default function Earnings() {
     setToggling(null)
   }
 
+  const combinedOutstanding = stats.outstanding + retainerStats.outstanding
+
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-6 max-w-5xl">
       {/* Performance form toast */}
       {formToast && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border bg-neutral-900 border-emerald-500/30 text-emerald-400">
           {formToast}
         </div>
       )}
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-neutral-800">
-        <button
-          onClick={() => setActiveTab('deals')}
-          className={cn(
-            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-            activeTab === 'deals'
-              ? 'border-neutral-300 text-neutral-100'
-              : 'border-transparent text-neutral-500 hover:text-neutral-300'
-          )}
-        >
-          Commission deals
-        </button>
-        <button
-          onClick={() => setActiveTab('retainer')}
-          className={cn(
-            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-            activeTab === 'retainer'
-              ? 'border-neutral-300 text-neutral-100'
-              : 'border-transparent text-neutral-500 hover:text-neutral-300'
-          )}
-        >
-          Monthly retainer
-        </button>
+
+      {/* ── Overview ─────────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        {/* Combined outstanding callout — only when money is owed */}
+        {combinedOutstanding > 0 && (
+          <div className="flex items-center justify-between bg-orange-950/50 border border-orange-800/60 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-orange-400 shrink-0" />
+              <span className="text-sm font-medium text-orange-300">Total outstanding</span>
+              <span className="text-xs text-orange-500">
+                across commission{retainerStats.outstanding > 0 ? ' and retainer' : ''}
+              </span>
+            </div>
+            <span className="text-lg font-bold text-orange-400 tabular-nums">{fmtMoney(combinedOutstanding)}</span>
+          </div>
+        )}
+
+        {/* Two-panel summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Commission panel */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-neutral-500">Commission</span>
+              <Briefcase className="h-3.5 w-3.5 text-neutral-700" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Earned</p>
+                <p className="text-base font-bold text-neutral-200 tabular-nums">{fmtMoney(stats.earned)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">artist paid</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Received</p>
+                <p className="text-base font-bold text-green-400 tabular-nums">{fmtMoney(stats.received)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">in your pocket</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Owed</p>
+                <p className={cn('text-base font-bold tabular-nums', stats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-500')}>
+                  {fmtMoney(stats.outstanding)}
+                </p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">{stats.count} deal{stats.count !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Retainer panel */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-neutral-500">Monthly Retainer</span>
+              <TrendingUp className="h-3.5 w-3.5 text-neutral-700" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Invoiced</p>
+                <p className="text-base font-bold text-neutral-200 tabular-nums">{fmtMoney(retainerStats.invoiced)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">total billed</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Received</p>
+                <p className="text-base font-bold text-green-400 tabular-nums">{fmtMoney(retainerStats.received)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">in your pocket</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Owed</p>
+                <p className={cn('text-base font-bold tabular-nums', retainerStats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-500')}>
+                  {fmtMoney(retainerStats.outstanding)}
+                </p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">{fees.length} month{fees.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {activeTab === 'retainer' ? <RetainerTab /> : null}
-      {activeTab !== 'deals' ? null : <>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-neutral-500 font-medium">Commission earned</span>
-            <TrendingUp className="h-4 w-4 text-neutral-600" />
-          </div>
-          <div className="text-2xl font-bold text-neutral-100">{fmtMoney(stats.earned)}</div>
-          <p className="text-xs text-neutral-500 mt-1">Artist has paid</p>
+      {/* ── Commission deals ─────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Commission Deals</h2>
+          <div className="flex-1 h-px bg-neutral-800" />
         </div>
-
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-neutral-500 font-medium">Received by you</span>
-            <DollarSign className="h-4 w-4 text-neutral-600" />
-          </div>
-          <div className="text-2xl font-bold text-green-400">{fmtMoney(stats.received)}</div>
-          <p className="text-xs text-neutral-500 mt-1">In your pocket</p>
-        </div>
-
-        <div className={cn(
-          'rounded-lg border p-4',
-          stats.outstanding > 0 ? 'bg-orange-950 border-orange-800' : 'bg-neutral-900 border-neutral-800'
-        )}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-neutral-500 font-medium">Outstanding</span>
-            <Clock className={cn('h-4 w-4', stats.outstanding > 0 ? 'text-orange-500' : 'text-neutral-600')} />
-          </div>
-          <div className={cn('text-2xl font-bold', stats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-100')}>
-            {fmtMoney(stats.outstanding)}
-          </div>
-          <p className="text-xs text-neutral-500 mt-1">Earned but unpaid</p>
-        </div>
-
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-neutral-500 font-medium">Total commission</span>
-            <Briefcase className="h-4 w-4 text-neutral-600" />
-          </div>
-          <div className="text-2xl font-bold text-neutral-100">{fmtMoney(stats.totalCommission)}</div>
-          <p className="text-xs text-neutral-500 mt-1">Across {stats.count} deal{stats.count !== 1 ? 's' : ''}</p>
-        </div>
-      </div>
+      <>
 
       {/* Toolbar */}
       <div className="flex items-center justify-between">
@@ -969,7 +966,17 @@ export default function Earnings() {
         dealId={sendEmailDeal?.id ?? null}
         venueId={sendEmailDeal?.venue_id ?? null}
       />
-      </>}
+      </>
+      </div>
+
+      {/* ── Monthly retainer ─────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Monthly Retainer</h2>
+          <div className="flex-1 h-px bg-neutral-800" />
+        </div>
+        <RetainerTab hideSummary />
+      </div>
     </div>
   )
 }
