@@ -5,18 +5,38 @@ import {
   FileText,
   Files,
   DollarSign,
+  BarChart2,
+  CheckSquare,
+  SendHorizonal,
+  Settings,
   LogOut,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/outreach', label: 'Outreach', icon: MapPin, end: false },
-  { to: '/templates', label: 'Templates', icon: FileText, end: false },
-  { to: '/files', label: 'Files', icon: Files, end: false },
-  { to: '/earnings', label: 'Earnings', icon: DollarSign, end: false },
+const NAV_GROUPS = [
+  {
+    items: [
+      { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
+      { to: '/outreach', label: 'Outreach', icon: MapPin, end: false },
+      { to: '/earnings', label: 'Earnings', icon: DollarSign, end: false },
+      { to: '/tasks', label: 'Tasks', icon: CheckSquare, end: false },
+      { to: '/metrics', label: 'Metrics', icon: BarChart2, end: false },
+    ],
+  },
+  {
+    items: [
+      { to: '/templates', label: 'Templates', icon: FileText, end: false },
+      { to: '/files', label: 'Files', icon: Files, end: false },
+      { to: '/reports', label: 'Reports', icon: SendHorizonal, end: false },
+    ],
+  },
+  {
+    items: [
+      { to: '/settings', label: 'Settings', icon: Settings, end: false },
+    ],
+  },
 ]
 
 interface SidebarProps {
@@ -42,26 +62,33 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </div>
       </div>
 
-      {/* Nav items */}
-      <div className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onClose}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors',
-                isActive
-                  ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-fg))]'
-                  : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-fg))]'
-              )
-            }
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {label}
-          </NavLink>
+      {/* Nav groups */}
+      <div className="flex-1 py-3 px-2 overflow-y-auto space-y-4">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi} className="space-y-0.5">
+            {group.items.map(({ to, label, icon: Icon, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-2 rounded text-sm transition-colors',
+                    isActive
+                      ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-fg))]'
+                      : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-[hsl(var(--sidebar-fg))]'
+                  )
+                }
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </NavLink>
+            ))}
+            {gi < NAV_GROUPS.length - 1 && (
+              <div className="h-px bg-[hsl(var(--sidebar-border))] mx-1 mt-2" />
+            )}
+          </div>
         ))}
       </div>
 

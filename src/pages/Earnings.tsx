@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Plus, Pencil, Trash2, TrendingUp, DollarSign, Clock, Briefcase } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
+import { useMonthlyFees } from '@/hooks/useMonthlyFees'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +24,186 @@ import {
 import type { Deal, CommissionTier } from '@/types'
 import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES } from '@/types'
 import { cn } from '@/lib/utils'
+
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+]
+function fmtMonth(dateStr: string) {
+  const [y, m] = dateStr.split('-')
+  return `${MONTHS[parseInt(m) - 1]} ${y}`
+}
+
+function RetainerTab() {
+  const { fees, loading, togglePaid, updateFee, addFee } = useMonthlyFees()
+  const [toggling, setToggling] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [addMonth, setAddMonth] = useState('')
+  const [addAmount, setAddAmount] = useState('350')
+  const [addOpen, setAddOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const totals = useMemo(() => {
+    const owed = fees.reduce((s, f) => s + f.amount, 0)
+    const received = fees.filter(f => f.paid).reduce((s, f) => s + f.amount, 0)
+    return { owed, received, outstanding: owed - received }
+  }, [fees])
+
+  const handleToggle = async (id: string, paid: boolean) => {
+    setToggling(id)
+    await togglePaid(id, !paid)
+    setToggling(null)
+  }
+
+  const handleSaveAmount = async (id: string) => {
+    const amount = parseFloat(editAmount)
+    if (!isNaN(amount) && amount > 0) {
+      await updateFee(id, { amount })
+    }
+    setEditingId(null)
+  }
+
+  const handleAddMonth = async () => {
+    if (!addMonth) return
+    setSaving(true)
+    await addFee(addMonth + '-01', parseFloat(addAmount) || 350)
+    setSaving(false)
+    setAddOpen(false)
+    setAddMonth('')
+    setAddAmount('350')
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+    </div>
+  )
+
+  return (
+    <div className="space-y-5">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+          <p className="text-xs text-neutral-500 mb-1">Total invoiced</p>
+          <p className="text-xl font-bold text-neutral-100">${totals.owed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+          <p className="text-xs text-neutral-500 mb-1">Received</p>
+          <p className="text-xl font-bold text-green-400">${totals.received.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className={cn(
+          'rounded-lg border p-4',
+          totals.outstanding > 0 ? 'bg-orange-950 border-orange-800' : 'bg-neutral-900 border-neutral-800'
+        )}>
+          <p className="text-xs text-neutral-500 mb-1">Outstanding</p>
+          <p className={cn('text-xl font-bold', totals.outstanding > 0 ? 'text-orange-400' : 'text-neutral-100')}>
+            ${totals.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setAddOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          Add month
+        </Button>
+      </div>
+
+      <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-800 bg-neutral-950">
+              <th className="text-left px-4 py-2.5 text-xs font-medium text-neutral-500">Month</th>
+              <th className="text-right px-3 py-2.5 text-xs font-medium text-neutral-500">Amount</th>
+              <th className="text-center px-3 py-2.5 text-xs font-medium text-neutral-500">Paid</th>
+              <th className="text-left px-3 py-2.5 text-xs font-medium text-neutral-500 hidden md:table-cell">Paid date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fees.map(fee => (
+              <tr key={fee.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800/40 transition-colors">
+                <td className="px-4 py-3 font-medium text-neutral-100">{fmtMonth(fee.month)}</td>
+                <td className="px-3 py-3 text-right">
+                  {editingId === fee.id ? (
+                    <div className="flex items-center gap-2 justify-end">
+                      <Input
+                        type="number"
+                        value={editAmount}
+                        onChange={e => setEditAmount(e.target.value)}
+                        className="w-24 h-7 text-xs text-right"
+                        onBlur={() => handleSaveAmount(fee.id)}
+                        onKeyDown={e => e.key === 'Enter' && handleSaveAmount(fee.id)}
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      className="text-neutral-200 tabular-nums hover:text-neutral-100 transition-colors"
+                      onClick={() => { setEditingId(fee.id); setEditAmount(String(fee.amount)) }}
+                    >
+                      ${fee.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </button>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <button
+                    onClick={() => handleToggle(fee.id, fee.paid)}
+                    disabled={toggling === fee.id}
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors mx-auto',
+                      fee.paid
+                        ? 'bg-green-950 text-green-400 hover:bg-green-900'
+                        : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300'
+                    )}
+                  >
+                    {fee.paid ? '✓ Paid' : '○ Unpaid'}
+                  </button>
+                </td>
+                <td className="px-3 py-3 text-xs text-neutral-500 hidden md:table-cell">
+                  {fee.paid_date ?? '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add month dialog */}
+      <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Add a month</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Month</Label>
+              <Input
+                type="month"
+                value={addMonth}
+                onChange={e => setAddMonth(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Amount ($)</Label>
+              <Input
+                type="number"
+                value={addAmount}
+                onChange={e => setAddAmount(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddMonth} disabled={saving || !addMonth}>
+              {saving ? 'Adding…' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
 
 const TIER_BADGE_VARIANT: Record<CommissionTier, 'blue' | 'purple' | 'warning'> = {
   new_doors: 'blue',
@@ -75,6 +256,7 @@ function PayToggle({
 }
 
 export default function Earnings() {
+  const [activeTab, setActiveTab] = useState<'deals' | 'retainer'>('deals')
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid } = useDeals()
   const { venues } = useVenues()
   const [addOpen, setAddOpen] = useState(false)
@@ -159,6 +341,35 @@ export default function Earnings() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-neutral-800">
+        <button
+          onClick={() => setActiveTab('deals')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'deals'
+              ? 'border-neutral-300 text-neutral-100'
+              : 'border-transparent text-neutral-500 hover:text-neutral-300'
+          )}
+        >
+          Commission deals
+        </button>
+        <button
+          onClick={() => setActiveTab('retainer')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+            activeTab === 'retainer'
+              ? 'border-neutral-300 text-neutral-100'
+              : 'border-transparent text-neutral-500 hover:text-neutral-300'
+          )}
+        >
+          Monthly retainer
+        </button>
+      </div>
+
+      {activeTab === 'retainer' ? <RetainerTab /> : null}
+      {activeTab !== 'deals' ? null : <>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
@@ -452,6 +663,7 @@ export default function Earnings() {
           </div>
         </div>
       )}
+      </>}
     </div>
   )
 }

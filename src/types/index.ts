@@ -33,6 +33,30 @@ export type TemplateType = 'agreement' | 'invoice'
 
 export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors'
 
+export type MetricCategory = 'brand_partnership' | 'event_attendance' | 'press_mention'
+
+export const METRIC_CATEGORY_LABELS: Record<MetricCategory, string> = {
+  brand_partnership: 'Brand Partnership',
+  event_attendance: 'Event Attendance',
+  press_mention: 'Press Mention',
+}
+
+export type TaskPriority = 'low' | 'medium' | 'high'
+export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly'
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+}
+
+export const TASK_RECURRENCE_LABELS: Record<TaskRecurrence, string> = {
+  none: 'Does not repeat',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+}
+
 export const COMMISSION_TIER_LABELS: Record<CommissionTier, string> = {
   new_doors: 'New Doors',
   kept_doors: 'Kept Doors',
@@ -113,6 +137,57 @@ export interface GeneratedFile {
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   template?: Pick<Template, 'id' | 'name'> | null
+}
+
+export interface ArtistProfile {
+  user_id: string
+  artist_name: string
+  artist_email: string
+  manager_name: string | null
+  from_email: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Metric {
+  id: string
+  user_id: string
+  date: string
+  category: MetricCategory
+  title: string
+  numeric_value: number | null
+  description: string | null
+  deal_id: string | null
+  created_at: string
+  deal?: Pick<Deal, 'id' | 'description'> | null
+}
+
+export interface MonthlyFee {
+  id: string
+  user_id: string
+  month: string
+  amount: number
+  paid: boolean
+  paid_date: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Task {
+  id: string
+  user_id: string
+  title: string
+  notes: string | null
+  due_date: string | null
+  completed: boolean
+  completed_at: string | null
+  priority: TaskPriority
+  recurrence: TaskRecurrence
+  venue_id: string | null
+  deal_id: string | null
+  created_at: string
+  venue?: Pick<Venue, 'id' | 'name'> | null
+  deal?: Pick<Deal, 'id' | 'description'> | null
 }
 
 export interface Deal {

@@ -4,9 +4,13 @@ import { useLocation } from 'react-router-dom'
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Overview',
   '/outreach': 'Outreach',
+  '/earnings': 'Earnings',
+  '/tasks': 'Tasks',
+  '/metrics': 'Metrics',
   '/templates': 'Templates',
   '/files': 'Files',
-  '/earnings': 'Earnings',
+  '/reports': 'Reports',
+  '/settings': 'Settings',
 }
 
 interface HeaderProps {

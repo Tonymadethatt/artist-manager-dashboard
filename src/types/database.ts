@@ -3,6 +3,9 @@ import type {
   VenueType,
   TemplateType,
   CommissionTier,
+  MetricCategory,
+  TaskPriority,
+  TaskRecurrence,
   DealTerms,
   TemplateSection,
 } from './index'
@@ -263,6 +266,170 @@ export interface Database {
           },
         ]
       }
+      artist_profile: {
+        Row: {
+          user_id: string
+          artist_name: string
+          artist_email: string
+          manager_name: string | null
+          from_email: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          artist_name?: string
+          artist_email?: string
+          manager_name?: string | null
+          from_email?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          artist_name?: string
+          artist_email?: string
+          manager_name?: string | null
+          from_email?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      metrics: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          category: MetricCategory
+          title: string
+          numeric_value: number | null
+          description: string | null
+          deal_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date?: string
+          category: MetricCategory
+          title: string
+          numeric_value?: number | null
+          description?: string | null
+          deal_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          category?: MetricCategory
+          title?: string
+          numeric_value?: number | null
+          description?: string | null
+          deal_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'metrics_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      monthly_fees: {
+        Row: {
+          id: string
+          user_id: string
+          month: string
+          amount: number
+          paid: boolean
+          paid_date: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          month: string
+          amount?: number
+          paid?: boolean
+          paid_date?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          month?: string
+          amount?: number
+          paid?: boolean
+          paid_date?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          notes: string | null
+          due_date: string | null
+          completed: boolean
+          completed_at: string | null
+          priority: TaskPriority
+          recurrence: TaskRecurrence
+          venue_id: string | null
+          deal_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          notes?: string | null
+          due_date?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          priority?: TaskPriority
+          recurrence?: TaskRecurrence
+          venue_id?: string | null
+          deal_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          notes?: string | null
+          due_date?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          priority?: TaskPriority
+          recurrence?: TaskRecurrence
+          venue_id?: string | null
+          deal_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'tasks_venue_id_fkey'
+            columns: ['venue_id']
+            referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -271,6 +438,9 @@ export interface Database {
       venue_type: VenueType
       template_type: TemplateType
       commission_tier: CommissionTier
+      metric_category: MetricCategory
+      task_priority: TaskPriority
+      task_recurrence: TaskRecurrence
     }
     CompositeTypes: Record<string, never>
   }
