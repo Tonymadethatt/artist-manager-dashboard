@@ -306,22 +306,28 @@ export default function Reports() {
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Test send */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestSend}
-              disabled={testSending || !profile || !profile.manager_email}
-              title={!profile?.manager_email ? 'Add your email in Settings first' : ''}
-            >
-              {testSending ? (
-                <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending…</>
-              ) : (
-                'Send test to myself'
-              )}
-            </Button>
-            {testStatus === 'success' && <span className="text-xs text-green-400">{testMsg}</span>}
-            {testStatus === 'error' && <span className="text-xs text-red-400">{testMsg}</span>}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTestSend}
+                disabled={testSending || !profile || !profile.manager_email}
+              >
+                {testSending ? (
+                  <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending…</>
+                ) : (
+                  'Send test to myself'
+                )}
+              </Button>
+              {testStatus === 'success' && <span className="text-xs text-green-400">{testMsg}</span>}
+              {testStatus === 'error' && <span className="text-xs text-red-400">{testMsg}</span>}
+            </div>
+            {!profile?.manager_email && (
+              <p className="text-xs text-amber-500">
+                Add your email in <a href="/settings" className="underline hover:text-amber-400">Settings</a> to enable test sends.
+              </p>
+            )}
           </div>
 
           {/* Send to artist */}
