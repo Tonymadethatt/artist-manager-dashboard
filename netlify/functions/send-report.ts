@@ -55,16 +55,18 @@ function fmtDate(iso: string) {
   return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
 }
 
-function rows(items: Array<[string, string]>): string {
-  return items.map(([label, value], i, arr) => {
+// third tuple element = value color, defaults to white
+function rows(items: Array<[string, string, string?]>): string {
+  return items.map(([label, value, valueColor = '#ffffff'], i, arr) => {
     const isLast = i === arr.length - 1
-    const border = isLast ? '' : 'border-bottom:1px solid #f0f0f0;'
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${border}"><span style="font-size:13px;color:#444444;line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:#111;text-align:right;padding-left:16px;">${value}</span></div>`
+    const border = isLast ? '' : 'border-bottom:1px solid #222222;'
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;${border}"><span style="font-size:13px;color:#888888;line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${value}</span></div>`
   }).join('')
 }
 
-function sectionCard(title: string, content: string): string {
-  return `<div style="border:1px solid #e8e8e8;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#f5f5f5;padding:9px 18px;border-bottom:1px solid #e8e8e8;"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#333333;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
+// accentColor drives the colored dot before the section title
+function sectionCard(title: string, content: string, accentColor: string = '#60a5fa'): string {
+  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
 function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }): string {
@@ -100,61 +102,68 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     heroSubtext = 'Deliverables closed this period'
   }
 
-  // Dynamic opener line based on best metric
+  // Dynamic opener line based on best metric (no em dashes)
   let summaryLine: string
   if (outreach.venuesBooked > 0) {
-    summaryLine = `${outreach.venuesBooked === 1 ? 'A booking came through' : `${outreach.venuesBooked} bookings came through`} this period — the work is paying off.`
+    summaryLine = `${outreach.venuesBooked === 1 ? 'A booking came through' : `${outreach.venuesBooked} bookings came through`} this period, the work is paying off.`
   } else if (deals.totalGross > 0) {
     summaryLine = `Revenue is moving and the pipeline is active.`
   } else if (outreach.inDiscussion > 0) {
-    summaryLine = `${outreach.inDiscussion} conversation${outreach.inDiscussion !== 1 ? 's are' : ' is'} live right now — things are in motion.`
+    summaryLine = `${outreach.inDiscussion} conversation${outreach.inDiscussion !== 1 ? 's are' : ' is'} live right now, things are in motion.`
   } else if (outreach.venuesContacted > 0) {
     summaryLine = `Outreach is active and the pipeline is growing.`
   } else {
     summaryLine = `Here's a look at where things stand.`
   }
 
-  // Outreach section
+  // Outreach section — blue accent, all count values blue
   const outreachSection = sectionCard('Outreach Activity', rows([
-    ['New venues added', String(outreach.venuesContacted)],
-    ['Venues engaged', String(outreach.venuesUpdated)],
-    ['Active discussions', String(outreach.inDiscussion)],
-    ['Bookings confirmed', String(outreach.venuesBooked)],
-  ]))
+    ['New venues added', String(outreach.venuesContacted), '#60a5fa'],
+    ['Venues engaged', String(outreach.venuesUpdated), '#60a5fa'],
+    ['Active discussions', String(outreach.inDiscussion), '#60a5fa'],
+    ['Bookings confirmed', String(outreach.venuesBooked), outreach.venuesBooked > 0 ? '#22c55e' : '#60a5fa'],
+  ]), '#60a5fa')
 
-  // Deals section
-  const dealsSection = sectionCard('Deals & Revenue', rows([
-    ['New deals logged', String(deals.count)],
-    ['Total artist revenue', money(deals.totalGross)],
-    ['Commission generated', money(deals.totalCommission)],
-    ['Commission received', money(deals.commissionReceived)],
-  ]))
+  // Deals section — green accent, commission received in green
+  const dealsSection = sectionCard('Deals and Revenue', rows([
+    ['New deals logged', String(deals.count), '#60a5fa'],
+    ['Total artist revenue', money(deals.totalGross), '#ffffff'],
+    ['Commission earned', money(deals.totalCommission), '#ffffff'],
+    ['Commission received', money(deals.commissionReceived), '#22c55e'],
+  ]), '#22c55e')
 
-  // Retainer section
+  // Retainer section — green if fully paid, red if outstanding
+  const retainerAccent = retainer.feeOutstanding > 0 ? '#ef4444' : '#22c55e'
   const retainerSection = sectionCard('Monthly Retainer', rows(
     retainer.feeOutstanding > 0
-      ? [['Total invoiced', money(retainer.feeTotal)], ['Total received', money(retainer.feePaid)]]
-      : [['Total invoiced', money(retainer.feeTotal)], ['Status', 'All settled ✓']]
-  ))
+      ? [
+          ['Total invoiced', money(retainer.feeTotal), '#60a5fa'],
+          ['Received so far', money(retainer.feePaid), retainer.feePaid > 0 ? '#22c55e' : '#888888'],
+        ]
+      : [
+          ['Total invoiced', money(retainer.feeTotal), '#60a5fa'],
+          ['Status', '&#10003; Fully paid', '#22c55e'],
+        ]
+  ), retainerAccent)
 
-  // Balance callout — neutral and matter-of-fact, placed after the wins sections
+  // Balance callout — red tint, shown only when something is owed
   const balanceCallout = outstandingTotal > 0 ? `
-<div style="border:1px solid #dedede;border-radius:8px;padding:20px 22px;margin-bottom:14px;background:#f9f9f9;">
-  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#333333;margin-bottom:10px;">Still in motion</div>
-  <div style="font-size:30px;font-weight:800;color:#111;letter-spacing:-1px;line-height:1;margin-bottom:8px;">${money(outstandingTotal)}</div>
-  <div style="font-size:13px;color:#555555;line-height:1.65;">Outstanding management balance — commission and retainer combined. Just keeping us aligned; details are in the sections above.</div>
+<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:20px 22px;margin-bottom:14px;">
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;margin-bottom:10px;">Outstanding Balance</div>
+  <div style="font-size:30px;font-weight:800;color:#ef4444;letter-spacing:-1px;line-height:1;margin-bottom:8px;">${money(outstandingTotal)}</div>
+  <div style="font-size:13px;color:#d1d1d1;line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
 </div>` : ''
 
-  // Brand impact section — only rendered if there's something to show
-  const brandRows: Array<[string, string]> = []
-  if (metrics.partnerships > 0) brandRows.push(['Brand partnerships secured', `${metrics.partnerships} · ${money(metrics.partnershipValue)} value`])
-  if (metrics.attendance > 0) brandRows.push(['Events & attendance', `${metrics.attendance} event${metrics.attendance !== 1 ? 's' : ''} · ${metrics.totalAttendance.toLocaleString()} total`])
-  if (metrics.press > 0) brandRows.push(['Press coverage', `${metrics.press} mention${metrics.press !== 1 ? 's' : ''} · ${metrics.totalReach.toLocaleString()} reach`])
-  const brandSection = brandRows.length > 0 ? sectionCard('Brand Impact', rows(brandRows)) : ''
+  // Brand impact section — only rendered if there is data
+  const brandRows: Array<[string, string, string]> = []
+  if (metrics.partnerships > 0) brandRows.push(['Brand partnerships secured', `${metrics.partnerships} - ${money(metrics.partnershipValue)} value`, '#ffffff'])
+  if (metrics.attendance > 0) brandRows.push(['Events and attendance', `${metrics.attendance} event${metrics.attendance !== 1 ? 's' : ''} - ${metrics.totalAttendance.toLocaleString()} total`, '#ffffff'])
+  if (metrics.press > 0) brandRows.push(['Press coverage', `${metrics.press} mention${metrics.press !== 1 ? 's' : ''} - ${metrics.totalReach.toLocaleString()} reach`, '#60a5fa'])
+  const brandSection = brandRows.length > 0 ? sectionCard('Brand Impact', rows(brandRows), '#60a5fa') : ''
 
-  // Tasks section
+  // Tasks section — green accent
   const tasksSection = tasks.completedTasks > 0
-    ? sectionCard('Work Completed', rows([['Tasks closed this period', String(tasks.completedTasks)]]))
+    ? sectionCard('Work Completed', rows([['Tasks closed this period', String(tasks.completedTasks), '#22c55e']]), '#22c55e')
     : ''
 
   return `<!DOCTYPE html>
@@ -165,7 +174,7 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
 <title>Management Report</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ebebeb; color: #111; -webkit-font-smoothing: antialiased; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
   @media only screen and (max-width: 600px) {
     .wrapper { margin: 0 !important; border-radius: 0 !important; border-left: none !important; border-right: none !important; }
     .email-body { padding: 22px 18px !important; }
@@ -176,14 +185,14 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
 </style>
 </head>
 <body>
-<div class="wrapper" style="max-width:600px;margin:24px auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #d8d8d8;">
+<div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <!-- Header -->
-  <div class="email-header" style="background:#0d0d0d;padding:28px 32px;">
+  <div class="email-header" style="background:#0a0a0a;padding:28px 32px;">
     <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.1;">Front Office&#8482;</div>
-    <div style="font-size:10px;color:#999999;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
+    <div style="font-size:10px;color:#888888;text-transform:uppercase;letter-spacing:2.5px;margin-top:5px;">Brand Growth &amp; Management</div>
     <div style="margin-top:20px;padding-top:18px;border-top:1px solid #1e1e1e;">
-      <span style="font-size:12px;color:#cccccc;">${startFmt} &mdash; ${endFmt}</span>
+      <span style="font-size:12px;color:#d1d1d1;">${startFmt} to ${endFmt}</span>
     </div>
   </div>
 
@@ -191,13 +200,13 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   <div class="email-body" style="padding:28px 32px;">
 
     <!-- Greeting -->
-    <p style="font-size:15px;color:#222;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${summaryLine} Here's your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${summaryLine} Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.</p>
 
     ${heroValue ? `<!-- Hero win -->
-    <div style="text-align:center;background:#0d0d0d;border-radius:8px;padding:26px 20px;margin-bottom:22px;">
-      <div class="hero-val" style="font-size:44px;font-weight:800;color:#ffffff;letter-spacing:-1.5px;line-height:1;">${heroValue}</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#cccccc;margin-top:10px;">${heroLabel}</div>
-      <div style="font-size:12px;color:#aaaaaa;margin-top:5px;">${heroSubtext}</div>
+    <div style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:26px 20px;margin-bottom:22px;">
+      <div class="hero-val" style="font-size:44px;font-weight:800;color:#22c55e;letter-spacing:-1.5px;line-height:1;">${heroValue}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888888;margin-top:10px;">${heroLabel}</div>
+      <div style="font-size:12px;color:#d1d1d1;margin-top:5px;">${heroSubtext}</div>
     </div>` : ''}
 
     ${outreachSection}
@@ -207,14 +216,14 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     ${brandSection}
     ${tasksSection}
 
-    <p style="font-size:13px;color:#666666;line-height:1.75;margin-top:10px;">That's the full picture. As always, reach out if you want to talk through anything.</p>
+    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">That is the full picture. Reach out if you want to talk through anything.</p>
 
   </div>
 
   <!-- Footer -->
-  <div class="email-footer" style="background:#f5f5f5;border-top:1px solid #e8e8e8;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#111;">${managerName}</div>
-    <div style="font-size:11px;color:#666666;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+  <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
+    <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
+    <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
   </div>
 
 </div>
@@ -250,15 +259,15 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
   if (testOnly && !profile.manager_email) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set — add it in Settings.' }) }
+    return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set. Add it in Settings.' }) }
   }
 
   const html = buildHtml(profile, report, dateRange)
   const startFmt = fmtDate(dateRange.start)
   const endFmt = fmtDate(dateRange.end)
   const subject = testOnly
-    ? `[TEST] Management Update · ${startFmt} – ${endFmt}`
-    : `Management Update · ${startFmt} – ${endFmt}`
+    ? `[TEST] Management Update - ${startFmt} to ${endFmt}`
+    : `Management Update - ${startFmt} to ${endFmt}`
 
   const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
 
