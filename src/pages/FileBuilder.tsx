@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { ArrowLeft, Download, Save, FileText, Monitor } from 'lucide-react'
+import { ArrowLeft, Download, Save, FileText, Monitor, FileOutput } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useFiles } from '@/hooks/useFiles'
@@ -16,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import {
   extractVariableNames,
   buildAgreementPrefill,
@@ -242,7 +244,7 @@ export default function FileBuilder() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto relative px-1">
+    <div className="max-w-7xl mx-auto relative px-4 sm:px-5 lg:px-6 pb-8">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border ${
@@ -259,25 +261,38 @@ export default function FileBuilder() {
       <button
         type="button"
         onClick={() => navigate('/files')}
-        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors mb-4"
+        className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors mb-5 sm:mb-6"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="h-4 w-4 shrink-0" />
         Back to files
       </button>
 
-      <div className="flex flex-col lg:flex-row gap-5 lg:gap-6 lg:items-start">
-        <div className="flex-1 min-w-0 space-y-5">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-4">
-            <h2 className="text-sm font-semibold text-neutral-100">Generate file</h2>
-            <p className="text-xs text-neutral-500">
-              Save a text copy for prompts, or generate a branded PDF stored in Files (public link for deal agreement emails).
-            </p>
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-start">
+        <div className="flex-1 min-w-0 space-y-6 w-full max-w-full">
+          <section
+            className={cn(
+              'bg-neutral-900 border border-neutral-800 rounded-lg',
+              'p-4 sm:p-5 space-y-5 sm:space-y-6'
+            )}
+            aria-labelledby="file-builder-config-heading"
+          >
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                Configuration
+              </p>
+              <h2 id="file-builder-config-heading" className="text-base font-semibold text-neutral-100">
+                Generate file
+              </h2>
+              <p className="text-xs text-neutral-500 leading-relaxed max-w-2xl">
+                Choose a template and optional links. Save plain text or a branded PDF to Files (public link for agreement emails).
+              </p>
+            </div>
 
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Template *</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-5 md:gap-y-4">
+              <div className="space-y-1.5 min-w-0">
+                <Label className="text-neutral-300">Template *</Label>
                 <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder={tplLoading ? 'Loading…' : 'Select a template'} />
                   </SelectTrigger>
                   <SelectContent>
@@ -288,13 +303,13 @@ export default function FileBuilder() {
                 </Select>
               </div>
 
-              <div className="space-y-1">
-                <Label>Venue (optional)</Label>
+              <div className="space-y-1.5 min-w-0">
+                <Label className="text-neutral-300">Venue (optional)</Label>
                 <Select
                   value={selectedVenueId || '__none__'}
                   onValueChange={v => setSelectedVenueId(v === '__none__' ? '' : v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Link to a venue" />
                   </SelectTrigger>
                   <SelectContent>
@@ -307,13 +322,13 @@ export default function FileBuilder() {
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label>Deal (optional)</Label>
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-neutral-300">Deal (optional)</Label>
               <Select
                 value={selectedDealId || '__none__'}
                 onValueChange={v => setSelectedDealId(v === '__none__' ? '' : v)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Link generated file to a deal" />
                 </SelectTrigger>
                 <SelectContent>
@@ -325,90 +340,154 @@ export default function FileBuilder() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-neutral-600">Stored on the file record for reference; use Files to paste PDF URL into a deal.</p>
+              <p className="text-[11px] text-neutral-600 leading-snug pt-0.5">
+                Stored on the file record. Use Files to copy the PDF URL into a deal when needed.
+              </p>
             </div>
 
-            <div className="space-y-1">
-              <Label>File name *</Label>
+            <Separator className="bg-neutral-800" />
+
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-neutral-300">File name *</Label>
               <Input
                 value={fileName}
                 onChange={e => { setFileName(e.target.value); setSavedText(false); setSavedPdf(false) }}
                 placeholder="e.g. Blue Room Agreement — March 2026"
+                className="w-full"
               />
             </div>
-          </div>
+          </section>
 
           {selectedTemplate && variables.length > 0 && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-neutral-100">Fill in variables</p>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  {variables.length} variable{variables.length !== 1 ? 's' : ''} in this template. Venue, deal, and contact fields pre-fill when empty.
+            <section
+              className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
+              aria-labelledby="file-builder-vars-heading"
+            >
+              <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-neutral-800/90">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
+                  Merge fields
+                </p>
+                <h3 id="file-builder-vars-heading" className="text-sm font-semibold text-neutral-100">
+                  Variables
+                </h3>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  {variables.length} token{variables.length !== 1 ? 's' : ''} in this template. Venue, deal, and contact pre-fill empty fields.
                 </p>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {variables.map(key => (
-                  <div key={key} className="space-y-1">
-                    <Label className="font-mono text-xs">{'{{'}{key}{'}}'}</Label>
-                    <Input
-                      value={vars[key] ?? ''}
-                      onChange={e => setVar(key, e.target.value)}
-                      placeholder={`Value for ${key}`}
-                    />
-                  </div>
-                ))}
+              <div className="p-4 sm:p-5 pt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                  {variables.map(key => (
+                    <div key={key} className="space-y-1.5 min-w-0">
+                      <Label className="font-mono text-[11px] text-neutral-400 truncate block">
+                        {'{{'}{key}{'}}'}
+                      </Label>
+                      <Input
+                        value={vars[key] ?? ''}
+                        onChange={e => setVar(key, e.target.value)}
+                        placeholder={`Value for ${key}`}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
           {selectedTemplate && variables.length === 0 && (
-            <p className="text-xs text-neutral-500">This template has no variables — it will be generated as-is.</p>
+            <p className="text-xs text-neutral-500 px-0.5 leading-relaxed">
+              This template has no variables — output is generated as-is.
+            </p>
           )}
 
           {selectedTemplate && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
-                <span className="text-xs font-medium text-neutral-400">Plain text output</span>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveText}
-                    disabled={!fileName.trim() || savingText || savedText}
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    {savedText ? 'Saved' : savingText ? 'Saving…' : 'Save text to files'}
-                  </Button>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleSavePdf}
-                    disabled={!fileName.trim() || !rendered.trim() || savingPdf || savedPdf}
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    {savedPdf ? 'PDF saved' : savingPdf ? 'PDF…' : 'Save PDF to files'}
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleDownloadTxt} disabled={!rendered}>
-                    <Download className="h-3.5 w-3.5" />
-                    Download .txt
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleDownloadPdfOnly} disabled={!rendered.trim() || savingPdf}>
-                    <Download className="h-3.5 w-3.5" />
-                    Download .pdf
-                  </Button>
+            <section
+              className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col"
+              aria-labelledby="file-builder-output-heading"
+            >
+              <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-neutral-800 bg-neutral-950/80">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      Merged output
+                    </p>
+                    <h3 id="file-builder-output-heading" className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
+                      <FileOutput className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+                      Plain text
+                    </h3>
+                    <p className="text-[11px] text-neutral-600 leading-relaxed max-w-md">
+                      Same merge as PDF. Save to Files or download; PDF preview updates on the right.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 w-full lg:w-auto lg:min-w-[min(100%,280px)] lg:max-w-md shrink-0">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 w-full">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-center gap-1.5 h-9 text-xs"
+                        onClick={handleSaveText}
+                        disabled={!fileName.trim() || savingText || savedText}
+                      >
+                        <Save className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{savedText ? 'Saved' : savingText ? 'Saving…' : 'Save text'}</span>
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full justify-center gap-1.5 h-9 text-xs"
+                        onClick={handleSavePdf}
+                        disabled={!fileName.trim() || !rendered.trim() || savingPdf || savedPdf}
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{savedPdf ? 'PDF saved' : savingPdf ? 'PDF…' : 'Save PDF'}</span>
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="w-full justify-center gap-1.5 h-9 text-xs"
+                        onClick={handleDownloadTxt}
+                        disabled={!rendered}
+                      >
+                        <Download className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">.txt</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="w-full justify-center gap-1.5 h-9 text-xs"
+                        onClick={handleDownloadPdfOnly}
+                        disabled={!rendered.trim() || savingPdf}
+                      >
+                        <Download className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">.pdf</span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <pre className="p-4 text-xs font-mono text-neutral-300 whitespace-pre-wrap leading-relaxed max-h-[280px] overflow-y-auto border-t border-neutral-800/80">
-                {rendered || <span className="text-neutral-600">Select a template to see output…</span>}
-              </pre>
-            </div>
+
+              <div className="p-3 sm:p-4 flex-1 min-h-0 flex flex-col">
+                <pre
+                  className={cn(
+                    'flex-1 min-h-[min(280px,40vh)] max-h-[min(400px,50vh)] sm:max-h-[360px]',
+                    'overflow-auto rounded-md border border-neutral-800/80 bg-neutral-950/70',
+                    'p-3 sm:p-4 text-xs font-mono text-neutral-300 whitespace-pre-wrap leading-relaxed'
+                  )}
+                >
+                  {rendered || <span className="text-neutral-600">Select a template to see output…</span>}
+                </pre>
+              </div>
+            </section>
           )}
         </div>
 
         {selectedTemplate && (
-          <div className="w-full lg:w-[min(440px,42vw)] shrink-0 lg:max-w-[480px]">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col h-[min(640px,70vh)] lg:sticky lg:top-4">
-              <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+          <div className="w-full lg:w-[min(100%,400px)] lg:shrink-0 lg:max-w-[440px]">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col h-[min(580px,70vh)] min-h-[360px] lg:sticky lg:top-4">
+              <div className="px-4 sm:px-5 py-3 border-b border-neutral-800 flex items-center gap-2 shrink-0 bg-neutral-950/50">
                 <Monitor className="h-3.5 w-3.5 text-neutral-500" />
                 <span className="text-xs font-medium text-neutral-400">PDF preview</span>
                 {previewLoading && (
