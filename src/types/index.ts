@@ -230,6 +230,7 @@ export interface Task {
   recurrence: TaskRecurrence
   venue_id: string | null
   deal_id: string | null
+  email_type: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   deal?: Pick<Deal, 'id' | 'description'> | null
@@ -244,6 +245,7 @@ export interface TaskTemplateItem {
   priority: TaskPriority
   recurrence: TaskRecurrence
   sort_order: number
+  email_type: string | null
   created_at: string
 }
 
@@ -296,6 +298,16 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   agreement_ready: 'Agreement Ready',
   booking_confirmed: 'Booking Confirmed',
   follow_up: 'Follow-Up',
+}
+
+export interface EmailTemplate {
+  id: string
+  user_id: string
+  email_type: VenueEmailType
+  custom_subject: string | null
+  custom_intro: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface VenueEmail {

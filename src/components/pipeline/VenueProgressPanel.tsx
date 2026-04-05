@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { X, ChevronRight, Send, Clock, CheckCheck } from 'lucide-react'
+import { X, ChevronRight, Send, Clock, CheckCheck, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +27,7 @@ export interface ProgressUpdate {
   emailAction: EmailAction | null
   emailType: VenueEmailType | null
   followUpDate: string | null
+  agreementUrl?: string | null
 }
 
 interface VenueProgressPanelProps {
@@ -72,6 +73,7 @@ export function VenueProgressPanel({
   const [activityCategory, setActivityCategory] = useState<string>('__none__')
   const [activityNote, setActivityNote] = useState('')
   const [checkedTaskIds, setCheckedTaskIds] = useState<Set<string>>(new Set())
+  const [agreementUrl, setAgreementUrl] = useState('')
   const [emailAction, setEmailAction] = useState<EmailAction | null>(null)
   const [followUpDate, setFollowUpDate] = useState<string>(venue.follow_up_date ?? '')
   const [confirming, setConfirming] = useState(false)
@@ -83,6 +85,7 @@ export function VenueProgressPanel({
     setActivityCategory('__none__')
     setActivityNote('')
     setCheckedTaskIds(new Set())
+    setAgreementUrl('')
     setEmailAction(null)
     setFollowUpDate(venue.follow_up_date ?? '')
     setDone(false)
@@ -105,6 +108,16 @@ export function VenueProgressPanel({
     () => getNextEmailSuggestion(venue, deals, contacts, sentEmails),
     [venue, deals, contacts, sentEmails]
   )
+
+  // Show agreement URL input if an agreement_ready task is checked and no deal has one yet
+  const needsAgreementUrl = useMemo(() => {
+    const hasAgreementTask = Array.from(checkedTaskIds).some(id => {
+      const t = [...todayTasks, ...overdueTasks].find(t => t.id === id)
+      return t?.email_type === 'agreement_ready'
+    })
+    const dealHasUrl = deals.some(d => d.agreement_url)
+    return hasAgreementTask && !dealHasUrl
+  }, [checkedTaskIds, todayTasks, overdueTasks, deals])
 
   const toggleTask = (id: string) => {
     setCheckedTaskIds(prev => {
@@ -130,6 +143,7 @@ export function VenueProgressPanel({
       emailAction,
       emailType: emailAction && emailAction !== 'skip' ? (suggestion?.type ?? null) : null,
       followUpDate: followUpDate || null,
+      agreementUrl: agreementUrl.trim() || null,
     })
     setConfirming(false)
     setDone(true)
@@ -240,6 +254,25 @@ export function VenueProgressPanel({
                 />
               ))}
             </div>
+
+            {/* Agreement URL prompt */}
+            {needsAgreementUrl && (
+              <div className="mt-3 p-3 bg-neutral-800/60 border border-neutral-700 rounded-lg space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                  <Mail className="h-3 w-3 shrink-0" />
+                  Agreement email needs a link
+                </div>
+                <Input
+                  value={agreementUrl}
+                  onChange={e => setAgreementUrl(e.target.value)}
+                  placeholder="https://docs.google.com/..."
+                  className="h-7 text-xs"
+                />
+                <p className="text-[10px] text-neutral-600">
+                  Paste the agreement link. It will be saved and included in the email.
+                </p>
+              </div>
+            )}
           </section>
         )}
 
@@ -363,10 +396,18 @@ function TaskCheckRow({
         onChange={() => onToggle(task.id)}
         className="mt-0.5 accent-white shrink-0"
       />
-      <div className="min-w-0">
-        <span className={cn('text-sm', checked ? 'line-through text-neutral-600' : 'text-neutral-300')}>
-          {task.title}
-        </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={cn('text-sm', checked ? 'line-through text-neutral-600' : 'text-neutral-300')}>
+            {task.title}
+          </span>
+          {task.email_type && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 shrink-0">
+              <Mail className="h-2.5 w-2.5" />
+              queues email
+            </span>
+          )}
+        </div>
         {overdue && task.due_date && (
           <span className="block text-[10px] text-red-400">Due {task.due_date}</span>
         )}

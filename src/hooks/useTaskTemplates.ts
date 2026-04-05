@@ -68,11 +68,12 @@ export function useTaskTemplates() {
   const addTemplateItem = async (templateId: string, item: {
     title: string; notes?: string | null; days_offset: number
     priority: TaskPriority; recurrence: TaskRecurrence; sort_order?: number
+    email_type?: string | null
   }) => {
     const sortOrder = item.sort_order ?? (templates.find(t => t.id === templateId)?.items?.length ?? 0)
     const { data, error } = await supabase
       .from('task_template_items')
-      .insert({ template_id: templateId, title: item.title, notes: item.notes ?? null, days_offset: item.days_offset, priority: item.priority, recurrence: item.recurrence, sort_order: sortOrder })
+      .insert({ template_id: templateId, title: item.title, notes: item.notes ?? null, days_offset: item.days_offset, priority: item.priority, recurrence: item.recurrence, sort_order: sortOrder, email_type: item.email_type ?? null })
       .select()
       .single()
     if (error) return { error: new Error(error.message) }
@@ -128,6 +129,7 @@ export function useTaskTemplates() {
       recurrence: item.recurrence,
       venue_id: venueId,
       deal_id: dealId ?? null,
+      email_type: item.email_type ?? null,
       completed: false,
     }))
 
@@ -149,16 +151,16 @@ export function useTaskTemplates() {
 
     const defaults: Array<{
       name: string; description: string; trigger_status: string | null
-      items: Array<{ title: string; days_offset: number; priority: TaskPriority; sort_order: number }>
+      items: Array<{ title: string; days_offset: number; priority: TaskPriority; sort_order: number; email_type?: string | null }>
     }> = [
       {
         name: 'New Venue Outreach',
         description: 'Standard tasks for when you first reach out to a venue.',
         trigger_status: 'reached_out',
         items: [
-          { title: 'Send intro email', days_offset: 0, priority: 'high', sort_order: 0 },
-          { title: 'Follow-up call or check-in', days_offset: 3, priority: 'medium', sort_order: 1 },
-          { title: 'Send agreement', days_offset: 7, priority: 'medium', sort_order: 2 },
+          { title: 'Send intro email', days_offset: 0, priority: 'high', sort_order: 0, email_type: 'follow_up' },
+          { title: 'Follow-up call or check-in', days_offset: 3, priority: 'medium', sort_order: 1, email_type: null },
+          { title: 'Send agreement', days_offset: 7, priority: 'medium', sort_order: 2, email_type: 'agreement_ready' },
         ],
       },
       {
@@ -166,8 +168,8 @@ export function useTaskTemplates() {
         description: 'Tasks to complete once a venue is booked.',
         trigger_status: 'booked',
         items: [
-          { title: 'Confirm booking details', days_offset: 0, priority: 'high', sort_order: 0 },
-          { title: 'Post-event check-in', days_offset: 1, priority: 'low', sort_order: 1 },
+          { title: 'Confirm booking details', days_offset: 0, priority: 'high', sort_order: 0, email_type: 'booking_confirmed' },
+          { title: 'Post-event check-in', days_offset: 1, priority: 'low', sort_order: 1, email_type: null },
         ],
       },
     ]

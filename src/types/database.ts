@@ -516,6 +516,7 @@ export interface Database {
           recurrence: TaskRecurrence
           venue_id: string | null
           deal_id: string | null
+          email_type: string | null
           created_at: string
         }
         Insert: {
@@ -530,6 +531,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           venue_id?: string | null
           deal_id?: string | null
+          email_type?: string | null
           created_at?: string
         }
         Update: {
@@ -544,6 +546,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           venue_id?: string | null
           deal_id?: string | null
+          email_type?: string | null
           created_at?: string
         }
         Relationships: [
@@ -598,6 +601,7 @@ export interface Database {
           priority: TaskPriority
           recurrence: TaskRecurrence
           sort_order: number
+          email_type: string | null
           created_at: string
         }
         Insert: {
@@ -609,6 +613,7 @@ export interface Database {
           priority?: TaskPriority
           recurrence?: TaskRecurrence
           sort_order?: number
+          email_type?: string | null
           created_at?: string
         }
         Update: {
@@ -620,6 +625,7 @@ export interface Database {
           priority?: TaskPriority
           recurrence?: TaskRecurrence
           sort_order?: number
+          email_type?: string | null
           created_at?: string
         }
         Relationships: [
@@ -630,6 +636,36 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      email_templates: {
+        Row: {
+          id: string
+          user_id: string
+          email_type: string
+          custom_subject: string | null
+          custom_intro: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email_type: string
+          custom_subject?: string | null
+          custom_intro?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email_type?: string
+          custom_subject?: string | null
+          custom_intro?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: Record<string, never>

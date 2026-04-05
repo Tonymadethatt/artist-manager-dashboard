@@ -33,6 +33,7 @@ const NAV_GROUPS = [
       { to: '/files', label: 'Files', icon: Files, end: false },
       { to: '/reports', label: 'Reports', icon: SendHorizonal, end: false },
       { to: '/email-queue', label: 'Email Queue', icon: Mail, end: false },
+      { to: '/email-templates', label: 'Email Templates', icon: LayoutTemplate, end: false },
     ],
   },
   {

@@ -13,6 +13,7 @@ import PipelineTemplates from '@/pages/PipelineTemplates'
 import Reports from '@/pages/Reports'
 import Settings from '@/pages/Settings'
 import EmailQueue from '@/pages/EmailQueue'
+import EmailTemplates from '@/pages/EmailTemplates'
 import TermsPage from '@/pages/public/TermsPage'
 import PrivacyPage from '@/pages/public/PrivacyPage'
 import { supabaseConfigured } from '@/lib/supabase'
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/email-queue" element={<EmailQueue />} />
+          <Route path="/email-templates" element={<EmailTemplates />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

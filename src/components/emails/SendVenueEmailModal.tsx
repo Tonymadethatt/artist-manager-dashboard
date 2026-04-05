@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { supabase } from '@/lib/supabase'
 import type { Deal, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
@@ -86,6 +87,7 @@ export function SendVenueEmailModal({
   contactId,
 }: SendVenueEmailModalProps) {
   const { profile } = useArtistProfile()
+  const { getTemplate } = useEmailTemplates()
 
   const logEmail = async (params: {
     venue_id?: string | null; deal_id?: string | null; contact_id?: string | null
@@ -142,6 +144,7 @@ export function SendVenueEmailModal({
     }
 
     try {
+      const tmpl = getTemplate(emailType)
       const res = await fetch('/.netlify/functions/send-venue-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,6 +161,8 @@ export function SendVenueEmailModal({
             tagline: profile.tagline,
           },
           recipient: { name: recipientName || recipientEmail, email: recipientEmail },
+          custom_subject: tmpl?.custom_subject ?? null,
+          custom_intro: tmpl?.custom_intro ?? null,
           ...(deal ? {
             deal: {
               description: deal.description,

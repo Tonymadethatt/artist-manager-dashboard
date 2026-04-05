@@ -19,8 +19,9 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS } from '@/types'
+import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail, VenueEmailType } from '@/types'
+import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'board' | 'list'
@@ -116,7 +117,33 @@ function VenueProgressPanelConnected({
       }
     }
 
-    // 5. Email action
+    // 5. Queue emails for completed tasks that have email_type
+    const emailActionTasks = updates.completedTaskIds
+      .map(id => venueTasks.find(t => t.id === id))
+      .filter((t): t is Task => !!(t?.email_type))
+
+    for (const t of emailActionTasks) {
+      const primaryContact = contacts.find(c => c.email)
+      if (!primaryContact?.email) continue
+
+      // Save agreement URL to deal before sending agreement email
+      if (t.email_type === 'agreement_ready' && updates.agreementUrl) {
+        const deal = venueDeals[0]
+        if (deal) {
+          await supabase.from('deals').update({ agreement_url: updates.agreementUrl }).eq('id', deal.id)
+        }
+      }
+
+      await onQueueEmail({
+        venue_id: venue.id,
+        email_type: t.email_type as VenueEmailType,
+        recipient_email: primaryContact.email,
+        subject: `${VENUE_EMAIL_TYPE_LABELS[t.email_type as VenueEmailType] ?? t.email_type} - ${venue.name}`,
+        notes: `Auto-queued from task: ${t.title}`,
+      })
+    }
+
+    // 6. Email action from suggested email panel
     if (updates.emailAction === 'queue' && updates.emailType) {
       const primaryContact = contacts.find(c => c.email)
       if (primaryContact?.email) {
@@ -134,7 +161,7 @@ function VenueProgressPanelConnected({
         onOpenSendModal(venue, primaryContact, updates.emailType)
       }
     }
-  }, [venue, contacts, templates, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate])
+  }, [venue, contacts, templates, venueDeals, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate])
 
   return (
     <VenueProgressPanel

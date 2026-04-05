@@ -11,8 +11,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER } from '@/types'
+import type { TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence, VenueEmailType } from '@/types'
+import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
@@ -21,12 +21,18 @@ const PRIORITY_DOT: Record<TaskPriority, string> = {
   low: 'bg-neutral-600',
 }
 
+const EMAIL_ACTION_OPTIONS: { value: string; label: string }[] = [
+  { value: '__none__', label: 'None' },
+  ...Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l })),
+]
+
 interface ItemFormState {
   title: string
   notes: string
   days_offset: string
   priority: TaskPriority
   recurrence: TaskRecurrence
+  email_type: string
 }
 
 const EMPTY_ITEM: ItemFormState = {
@@ -35,6 +41,7 @@ const EMPTY_ITEM: ItemFormState = {
   days_offset: '0',
   priority: 'medium',
   recurrence: 'none',
+  email_type: '__none__',
 }
 
 export default function PipelineTemplates() {
@@ -121,6 +128,7 @@ export default function PipelineTemplates() {
       days_offset: isNaN(offset) ? 0 : offset,
       priority: itemForm.priority,
       recurrence: itemForm.recurrence,
+      email_type: itemForm.email_type === '__none__' ? null : itemForm.email_type,
     }
     if (editingItemId) {
       await updateTemplateItem(editingItemId, selectedTemplate.id, payload)
@@ -141,6 +149,7 @@ export default function PipelineTemplates() {
       days_offset: String(item.days_offset),
       priority: item.priority,
       recurrence: item.recurrence,
+      email_type: item.email_type ?? '__none__',
     })
   }
 
@@ -341,6 +350,14 @@ export default function PipelineTemplates() {
                                 ))}
                               </SelectContent>
                             </Select>
+                            <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
+                              <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+                                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button size="sm" className="h-7 text-xs" onClick={handleSaveItem} disabled={savingItem}>
@@ -352,9 +369,14 @@ export default function PipelineTemplates() {
                       ) : (
                         <>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
                               <span className="text-sm text-neutral-200">{item.title}</span>
+                              {item.email_type && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-800/60 font-medium shrink-0">
+                                  {VENUE_EMAIL_TYPE_LABELS[item.email_type as VenueEmailType] ?? item.email_type}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 mt-0.5">
                               <span className="text-[10px] text-neutral-600">
@@ -424,6 +446,14 @@ export default function PipelineTemplates() {
                           <SelectContent>
                             {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
                               <SelectItem key={v} value={v}>{l}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
+                          <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

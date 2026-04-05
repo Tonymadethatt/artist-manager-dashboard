@@ -45,6 +45,8 @@ interface RequestBody {
   recipient: Recipient
   deal?: DealData
   venue?: VenueData
+  custom_subject?: string | null
+  custom_intro?: string | null
 }
 
 function money(n: number) {
@@ -65,7 +67,7 @@ function card(title: string, content: string, accentColor = '#60a5fa'): string {
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
 }
 
-function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Recipient, deal?: DealData, venue?: VenueData): string {
+function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Recipient, deal?: DealData, venue?: VenueData, customIntro?: string | null, customSubject?: string | null): string {
   const companyName = profile.company_name || profile.artist_name
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
@@ -171,6 +173,10 @@ function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Reci
     }
   }
 
+  // Apply custom overrides if set
+  if (customIntro) intro = customIntro
+  if (customSubject) subject = customSubject
+
   const footerLinks = [
     profile.website ? `<a href="${profile.website}" style="color:#888888;text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
     profile.social_handle ? `<span style="color:#888888;font-size:11px;">${profile.social_handle}</span>` : '',
@@ -237,12 +243,12 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { type, profile, recipient, deal, venue } = body
+  const { type, profile, recipient, deal, venue, custom_subject, custom_intro } = body
   if (!type || !profile?.from_email || !recipient?.email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: type, profile.from_email, recipient.email' }) }
   }
 
-  const html = buildHtml(type, profile, recipient, deal, venue)
+  const html = buildHtml(type, profile, recipient, deal, venue, custom_intro, custom_subject)
   const companyName = profile.company_name || profile.artist_name
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || deal?.description || 'your venue'
@@ -266,7 +272,7 @@ const handler: Handler = async (event) => {
       from: profile.from_email,
       to: [recipient.email],
       reply_to: [replyTo],
-      subject: subjectMap[type],
+      subject: custom_subject || subjectMap[type],
       html,
     }),
   })
