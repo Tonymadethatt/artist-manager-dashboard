@@ -685,7 +685,6 @@ export default function Earnings() {
           <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest">Commission Deals</h2>
           <div className="flex-1 h-px bg-neutral-800" />
         </div>
-      <>
 
       {/* Toolbar */}
       <div className="flex items-center justify-between">
@@ -845,8 +844,8 @@ export default function Earnings() {
             )}
           </table>
         </div>
-        <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
       )}
+      <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
 
       {/* Add / Edit dialog */}
       <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
@@ -1002,7 +1001,6 @@ export default function Earnings() {
         dealId={sendEmailDeal?.id ?? null}
         venueId={sendEmailDeal?.venue_id ?? null}
       />
-      </>
       </div>
 
       {/* ── Monthly retainer ─────────────────────────────────────────────── */}
