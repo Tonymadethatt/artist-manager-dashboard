@@ -33,6 +33,7 @@ const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
   payment_reminder:     'Friendly reminder about an outstanding payment.',
   payment_receipt:      'Confirms payment has been received.',
   follow_up:            "Check-in to venues that haven't responded.",
+  rebooking_inquiry:    'Sent after a positive post-show report. Asks venue about booking again.',
 }
 
 const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
@@ -42,6 +43,7 @@ const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
   payment_reminder:     'Payment Reminder - {artist}',
   payment_receipt:      'Payment Received - Thank You | {artist}',
   follow_up:            'Following Up - {artist}',
+  rebooking_inquiry:    'Interested in Booking Again - {artist}',
 }
 
 const CLIENT_ORDER: VenueEmailType[] = [
@@ -56,13 +58,15 @@ const CLIENT_ORDER: VenueEmailType[] = [
 // ── Artist email metadata ──────────────────────────────────────────────────
 
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
-  management_report: 'Weekly or custom-range report sent to DJ Luijay. Shows outreach, deals, retainer, and impact.',
-  retainer_reminder: 'Gentle nudge email about outstanding management retainer balance.',
+  management_report:          'Weekly or custom-range report sent to DJ Luijay. Shows outreach, deals, retainer, and impact.',
+  retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
+  performance_report_request: 'Sent to DJ Luijay after a show. Links to the post-show report form.',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
-  management_report: 'Management Update - {start} to {end}',
-  retainer_reminder: 'Hey DJ, quick note from management',
+  management_report:          'Management Update - {start} to {end}',
+  retainer_reminder:          'Hey DJ, quick note from management',
+  performance_report_request: 'Quick check-in: How did the show go?',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder', 'performance_report_request']

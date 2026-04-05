@@ -201,7 +201,8 @@ export default function Dashboard() {
   const funnelCounts = useMemo(() => {
     const counts: Record<OutreachStatus, number> = {
       not_contacted: 0, reached_out: 0, in_discussion: 0,
-      agreement_sent: 0, booked: 0, rejected: 0, archived: 0,
+      agreement_sent: 0, booked: 0, performed: 0, post_follow_up: 0,
+      rebooking: 0, closed_won: 0, closed_lost: 0, rejected: 0, archived: 0,
     }
     venues.forEach(v => counts[v.status]++)
     return counts

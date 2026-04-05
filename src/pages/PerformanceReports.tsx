@@ -118,19 +118,6 @@ export default function PerformanceReports() {
     }
   }
 
-  async function handleSendNew(report: PerformanceReport) {
-    if (!profile) return
-    setActionLoading(report.id)
-    const venueName = report.venue?.name ?? 'venue'
-    const eventDate = report.deal?.event_date ?? null
-    const { error } = await createReport(report.venue_id, report.deal_id, profile, venueName, eventDate)
-    setActionLoading(null)
-    if (error && !error.includes('email failed')) {
-      showToast(error, 'err')
-    } else {
-      showToast('Performance form sent to artist.', 'ok')
-    }
-  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -186,7 +173,7 @@ export default function PerformanceReports() {
                 <div className="flex items-center gap-2 min-w-0">
                   {expanded === report.id ? <ChevronDown className="h-3 w-3 text-neutral-500 shrink-0" /> : <ChevronRight className="h-3 w-3 text-neutral-600 shrink-0" />}
                   <span className="text-sm text-white font-medium truncate">{report.venue?.name ?? 'Unknown venue'}</span>
-                  {report.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" title="Commission flagged" />}
+                  {report.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" aria-label="Commission flagged" />}
                 </div>
                 <span className="text-xs text-neutral-400">{report.deal?.event_date ? formatDate(report.deal.event_date) : '-'}</span>
                 <span className="text-xs text-neutral-500">{formatDate(report.created_at)}</span>

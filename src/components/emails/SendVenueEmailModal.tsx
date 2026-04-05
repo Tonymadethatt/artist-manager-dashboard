@@ -70,6 +70,10 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
       return `Confirms to ${venue} that payment has been received. Thank you message.`
     case 'follow_up':
       return `A soft check-in to ${venue} about the potential booking. No pressure, just keeping the conversation going.`
+    case 'rebooking_inquiry':
+      return `Reaches out to ${venue} about booking again based on a positive post-show report.`
+    default:
+      return `Email to ${venue}.`
   }
 }
 
@@ -141,6 +145,7 @@ export function SendVenueEmailModal({
       agreement_ready: `Agreement Ready for Review - ${companyName}`,
       booking_confirmed: `Booking Confirmed - ${companyName} | ${venue?.name || 'your venue'}`,
       follow_up: `Following Up - ${companyName}`,
+      rebooking_inquiry: `Rebooking Inquiry - ${companyName} at ${venue?.name || 'your venue'}`,
     }
 
     try {

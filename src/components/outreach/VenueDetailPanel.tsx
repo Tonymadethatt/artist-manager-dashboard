@@ -426,7 +426,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                         <span className="text-neutral-400 flex-1">
                           {r.submitted ? `Submitted ${r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}` : 'Pending submission'}
                         </span>
-                        {r.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" title="Commission flagged" />}
+                        {r.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" aria-label="Commission flagged" />}
                         {r.event_rating && <span className="text-neutral-500">{r.event_rating}/5</span>}
                       </div>
                     ))
