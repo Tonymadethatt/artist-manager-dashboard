@@ -38,7 +38,7 @@ function fmtMonth(dateStr: string) {
   return `${MONTHS[parseInt(m) - 1]} ${y}`
 }
 
-function RetainerTab({ hideSummary = false }: { hideSummary?: boolean }) {
+function RetainerTab(_: { hideSummary?: boolean }) {
   const { fees, loading, addPayment, deletePayment, updateFee, addFee, deleteFee } = useMonthlyFees()
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
