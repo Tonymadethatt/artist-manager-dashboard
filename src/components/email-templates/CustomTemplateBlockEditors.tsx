@@ -281,7 +281,6 @@ function TableEditor(props: {
   onRemove: () => void
 }) {
   const { block, index, total, onUpdate, onMove, onRemove } = props
-  const colCount = block.headers.length
 
   const addColumn = () => {
     onUpdate({ headers: [...block.headers, ''] })
@@ -387,9 +386,6 @@ function TableEditor(props: {
               </tbody>
             </table>
           </div>
-          {colCount === 0 && (
-            <p className="text-[10px] text-neutral-600 mt-2">Add a column to start the table.</p>
-          )}
         </div>
       </div>
     </div>

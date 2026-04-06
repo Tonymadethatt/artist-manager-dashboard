@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Download, Trash2, Eye, X, Files as FilesIcon, Link2, Copy, Check } from 'lucide-react'
 import { useFiles } from '@/hooks/useFiles'
@@ -17,6 +17,9 @@ import { hasResolvablePdfLink, resolvedPdfHref } from '@/lib/files/pdfShareUrl'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
 import type { Deal, GeneratedFile } from '@/types'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+
+type TaskFileLink = { id: string; title: string; completed: boolean }
 
 function formatOf(f: GeneratedFile): 'text' | 'pdf' {
   return f.output_format === 'pdf' ? 'pdf' : 'text'
@@ -33,6 +36,30 @@ export default function Files() {
   const [urlFeedback, setUrlFeedback] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [clipboardBanner, setClipboardBanner] = useState<string | null>(null)
+  const [taskLinksByFileId, setTaskLinksByFileId] = useState<Map<string, TaskFileLink[]>>(new Map())
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('tasks')
+        .select('id, title, completed, generated_file_id')
+        .eq('user_id', user.id)
+        .not('generated_file_id', 'is', null)
+      if (cancelled || !data) return
+      const m = new Map<string, TaskFileLink[]>()
+      for (const row of data as { id: string; title: string; completed: boolean; generated_file_id: string }[]) {
+        const fid = row.generated_file_id
+        const list = m.get(fid) ?? []
+        list.push({ id: row.id, title: row.title, completed: !!row.completed })
+        m.set(fid, list)
+      }
+      setTaskLinksByFileId(m)
+    })()
+    return () => { cancelled = true }
+  }, [preview?.id])
 
   const canonicalDealsByFileId = useMemo(() => {
     const m = new Map<string, Deal>()
@@ -42,6 +69,13 @@ export default function Files() {
     }
     return m
   }, [deals])
+
+  const taskLinkSummary = (fileId: string): { open: TaskFileLink[]; done: number } => {
+    const all = taskLinksByFileId.get(fileId) ?? []
+    const open = all.filter(t => !t.completed)
+    const done = all.length - open.length
+    return { open, done: Math.max(0, done) }
+  }
 
   const handleDownload = async (file: GeneratedFile) => {
     if (formatOf(file) === 'pdf') {
@@ -172,6 +206,33 @@ export default function Files() {
                             Canonical agreement · {canon.venue?.name ?? canon.description}
                           </Badge>
                         )}
+                        {(() => {
+                          const { open, done } = taskLinkSummary(file.id)
+                          if (open.length === 0 && done === 0) return null
+                          return (
+                            <div className="flex flex-col gap-1">
+                              {open.slice(0, 2).map(t => (
+                                <Badge
+                                  key={t.id}
+                                  variant="secondary"
+                                  className="text-[10px] w-fit border-neutral-600 text-neutral-300"
+                                >
+                                  Pipeline task · {t.title}
+                                </Badge>
+                              ))}
+                              {open.length > 2 && (
+                                <span className="text-[10px] text-neutral-500">
+                                  +{open.length - 2} more open task{open.length - 2 !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                              {open.length === 0 && done > 0 && (
+                                <span className="text-[10px] text-neutral-500">
+                                  {done} completed task{done !== 1 ? 's' : ''} linked this PDF
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                     </td>
                     <td className="px-3 py-3 hidden sm:table-cell">
@@ -257,6 +318,33 @@ export default function Files() {
                       canonicalDealsByFileId.get(preview.id)?.description}
                   </Badge>
                 )}
+                {(() => {
+                  const { open, done } = taskLinkSummary(preview.id)
+                  if (open.length === 0 && done === 0) return null
+                  return (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {open.slice(0, 3).map(t => (
+                        <Badge
+                          key={t.id}
+                          variant="secondary"
+                          className="text-[10px] w-fit border-neutral-600 text-neutral-300"
+                        >
+                          Pipeline task · {t.title}
+                        </Badge>
+                      ))}
+                      {open.length > 3 && (
+                        <span className="text-[10px] text-neutral-500">
+                          +{open.length - 3} more open
+                        </span>
+                      )}
+                      {open.length === 0 && done > 0 && (
+                        <span className="text-[10px] text-neutral-500">
+                          {done} completed task{done !== 1 ? 's' : ''} linked this PDF
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" onClick={() => handleDownload(preview)}>

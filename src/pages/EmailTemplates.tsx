@@ -449,7 +449,8 @@ export default function EmailTemplates() {
             : kind === 'key_value' ? { kind: 'key_value', title: '', rows: [{ label: 'Field', value: '' }] }
               : kind === 'table' ? { kind: 'table', title: '', headers: ['Col A', 'Col B'], rows: [['', '']] }
                 : { kind: 'divider' }
-      return { ...prev, blocks: [...prev.blocks, nb] }
+      const pushed = nb.kind === 'table' ? normalizeTableBlock(nb) : nb
+      return { ...prev, blocks: [...prev.blocks, pushed] }
     })
   }
 
@@ -558,7 +559,7 @@ export default function EmailTemplates() {
 
         <div
           className={cn(
-            'flex flex-col gap-2 min-h-0 self-stretch border-r border-neutral-800/80 pr-4 min-w-0 overflow-hidden',
+            'flex flex-col gap-2 min-h-0 self-stretch border-r border-neutral-800/80 pr-4 min-w-0',
             sidebarMode === 'browse' ? 'w-[300px] shrink-0' : 'flex-[1.85] basis-0 min-w-0',
           )}
         >
@@ -878,265 +879,16 @@ export default function EmailTemplates() {
                     Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
                   </p>
                 </div>
-                <div className="border border-neutral-800 rounded-lg p-3 bg-neutral-900/50">
-                  <div className="flex items-center justify-between">
-                    <span className={EYEBROW}>Blocks</span>
-                    <span className="text-xs text-neutral-500">{customBlocksDraft.blocks.length} block(s)</span>
-                  </div>
-                  <div className="relative mt-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs w-full"
-                      onClick={() => setBlockMenuOpen(o => !o)}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add block
-                    </Button>
-                    {blockMenuOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md border border-neutral-700 bg-neutral-950 shadow-lg py-1">
-                        {(['prose', 'bullet_list', 'key_value', 'table', 'divider'] as const).map(k => (
-                          <button
-                            key={k}
-                            type="button"
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 capitalize"
-                            onClick={() => addCustomBlock(k)}
-                          >
-                            {k.replace('_', ' ')}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-3 mt-3">
-                    {customBlocksDraft.blocks.map((block, i) => (
-                      <div key={i} className="border border-neutral-800 rounded-md p-2 space-y-2 bg-neutral-950/60">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-neutral-500 uppercase">{block.kind.replace('_', ' ')}</span>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              className="p-1 rounded hover:bg-neutral-800 text-neutral-500"
-                              onClick={() => moveCustomBlock(i, -1)}
-                              aria-label="Move up"
-                            >
-                              <ChevronUp className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 rounded hover:bg-neutral-800 text-neutral-500"
-                              onClick={() => moveCustomBlock(i, 1)}
-                              aria-label="Move down"
-                            >
-                              <ChevronDown className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 rounded hover:bg-neutral-800 text-red-400/80"
-                              onClick={() => removeCustomBlock(i)}
-                              aria-label="Remove block"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                        {block.kind !== 'divider' && (
-                          <Input
-                            value={'title' in block ? block.title ?? '' : ''}
-                            onChange={e => updateCustomBlock(i, { title: e.target.value } as Partial<CustomEmailBlock>)}
-                            placeholder="Section title (optional)"
-                            className="h-8 text-xs"
-                          />
-                        )}
-                        {block.kind === 'prose' && (
-                          <textarea
-                            value={block.body}
-                            onChange={e => updateCustomBlock(i, { body: e.target.value } as Partial<CustomEmailBlock>)}
-                            rows={4}
-                            className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 resize-none"
-                          />
-                        )}
-                        {block.kind === 'bullet_list' && (
-                          <div className="space-y-1">
-                            {block.items.map((line, li) => (
-                              <div key={li} className="flex gap-1">
-                                <Input
-                                  value={line}
-                                  onChange={e => {
-                                    const items = [...block.items]
-                                    items[li] = e.target.value
-                                    updateCustomBlock(i, { items } as Partial<CustomEmailBlock>)
-                                  }}
-                                  className="h-8 text-xs flex-1"
-                                />
-                                <button
-                                  type="button"
-                                  className="shrink-0 px-2 rounded border border-neutral-800 text-neutral-500 hover:text-red-400 text-xs"
-                                  onClick={() => updateCustomBlock(i, {
-                                    items: block.items.filter((_, j) => j !== li),
-                                  } as Partial<CustomEmailBlock>)}
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-[10px]"
-                              onClick={() => updateCustomBlock(i, { items: [...block.items, ''] } as Partial<CustomEmailBlock>)}
-                            >
-                              + Item
-                            </Button>
-                          </div>
-                        )}
-                        {block.kind === 'key_value' && (
-                          <div className="space-y-2">
-                            {block.rows.map((rowkv, ri) => (
-                              <div key={ri} className="space-y-1 border border-neutral-800/80 rounded p-2">
-                                <Input
-                                  value={rowkv.label}
-                                  onChange={e => {
-                                    const rows = block.rows.map((x, j) =>
-                                      j === ri ? { ...x, label: e.target.value } : x)
-                                    updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
-                                  }}
-                                  placeholder="Label"
-                                  className="h-8 text-xs"
-                                />
-                                <Select
-                                  value={rowkv.valueKey ?? '__static__'}
-                                  onValueChange={v => {
-                                    const rows = block.rows.map((x, j) =>
-                                      j === ri
-                                        ? v === '__static__'
-                                          ? { ...x, valueKey: null, value: x.value ?? '' }
-                                          : { ...x, valueKey: v, value: null }
-                                        : x)
-                                    updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-xs bg-neutral-950 border-neutral-700">
-                                    <SelectValue placeholder="Value source" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__static__" className="text-xs">Static text</SelectItem>
-                                    {mergeKeyOptions.map(k => (
-                                      <SelectItem key={k} value={k} className="text-xs">{k}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                {!(rowkv.valueKey) && (
-                                  <Input
-                                    value={rowkv.value ?? ''}
-                                    onChange={e => {
-                                      const rows = block.rows.map((x, j) =>
-                                        j === ri ? { ...x, value: e.target.value } : x)
-                                      updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
-                                    }}
-                                    placeholder="Text (supports merge tokens)"
-                                    className="h-8 text-xs"
-                                  />
-                                )}
-                                <button
-                                  type="button"
-                                  className="text-[10px] text-red-400/80"
-                                  onClick={() => updateCustomBlock(i, {
-                                    rows: block.rows.filter((_, j) => j !== ri),
-                                  } as Partial<CustomEmailBlock>)}
-                                >
-                                  Remove row
-                                </button>
-                              </div>
-                            ))}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-[10px]"
-                              onClick={() => updateCustomBlock(i, {
-                                rows: [...block.rows, { label: 'New', value: '' }],
-                              } as Partial<CustomEmailBlock>)}
-                            >
-                              + Row
-                            </Button>
-                          </div>
-                        )}
-                        {block.kind === 'table' && (
-                          <div className="space-y-2 text-[10px] text-neutral-500">
-                            <p>Headers</p>
-                            <div className="flex flex-wrap gap-1">
-                              {block.headers.map((h, hi) => (
-                                <Input
-                                  key={hi}
-                                  value={h}
-                                  onChange={e => {
-                                    const headers = [...block.headers]
-                                    headers[hi] = e.target.value
-                                    updateCustomBlock(i, { headers } as Partial<CustomEmailBlock>)
-                                  }}
-                                  className="h-8 text-xs w-24"
-                                />
-                              ))}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 text-[10px]"
-                                onClick={() => updateCustomBlock(i, {
-                                  headers: [...block.headers, 'Column'],
-                                } as Partial<CustomEmailBlock>)}
-                              >
-                                + Col
-                              </Button>
-                            </div>
-                            <p>Rows</p>
-                            {block.rows.map((cells, ri) => (
-                              <div key={ri} className="flex flex-wrap gap-1 items-center">
-                                {cells.map((c, ci) => (
-                                  <Input
-                                    key={ci}
-                                    value={c}
-                                    onChange={e => {
-                                      const rows = block.rows.map((r, rj) =>
-                                        rj === ri
-                                          ? r.map((cell, ck) => (ck === ci ? e.target.value : cell))
-                                          : r)
-                                      updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
-                                    }}
-                                    className="h-8 text-xs w-24"
-                                  />
-                                ))}
-                                <button
-                                  type="button"
-                                  className="text-red-400/80 px-1"
-                                  onClick={() => updateCustomBlock(i, {
-                                    rows: block.rows.filter((_, j) => j !== ri),
-                                  } as Partial<CustomEmailBlock>)}
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 text-[10px]"
-                              onClick={() => updateCustomBlock(i, {
-                                rows: [...block.rows, block.headers.map(() => '')],
-                              } as Partial<CustomEmailBlock>)}
-                            >
-                              + Row
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CustomTemplateBlocksEditorSection
+                  blocks={customBlocksDraft.blocks}
+                  mergeKeyOptions={mergeKeyOptions}
+                  blockMenuOpen={blockMenuOpen}
+                  onBlockMenuOpenChange={setBlockMenuOpen}
+                  onAddBlock={addCustomBlock}
+                  onUpdateBlock={updateCustomBlock}
+                  onMoveBlock={moveCustomBlock}
+                  onRemoveBlock={removeCustomBlock}
+                />
               </div>
             </>
           ) : (
