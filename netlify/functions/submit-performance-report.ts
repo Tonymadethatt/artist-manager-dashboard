@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseServerEnv } from './supabaseServerEnv'
 
 interface SubmitBody {
   token: string
@@ -25,8 +26,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) }
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { supabaseUrl, serviceRoleKey } = getSupabaseServerEnv()
   if (!supabaseUrl || !serviceRoleKey) {
     return { statusCode: 500, body: JSON.stringify({ message: 'Server configuration error' }) }
   }

@@ -1,5 +1,6 @@
 import type { Handler, HandlerEvent } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseServerEnv } from './supabaseServerEnv'
 
 /**
  * GET /.netlify/functions/public-agreement-pdf?slug=...
@@ -71,10 +72,13 @@ const handler: Handler = async event => {
     return { statusCode: 400, body: 'Invalid slug', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { supabaseUrl, serviceRoleKey } = getSupabaseServerEnv()
   if (!supabaseUrl || !serviceRoleKey) {
-    return { statusCode: 500, body: 'Server misconfigured', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+    const body =
+      supabaseUrl && !serviceRoleKey
+        ? 'Server misconfigured: Netlify needs env SUPABASE_SERVICE_ROLE_KEY (Supabase Dashboard → Settings → API → service_role secret). VITE_SUPABASE_ANON_KEY is a different key and is not used by this function.'
+        : 'Server misconfigured: missing Supabase project URL or service role key for functions.'
+    return { statusCode: 500, body, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)

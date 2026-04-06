@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseServerEnv } from './supabaseServerEnv'
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
@@ -11,8 +12,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ valid: false }) }
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { supabaseUrl, serviceRoleKey } = getSupabaseServerEnv()
   if (!supabaseUrl || !serviceRoleKey) {
     return { statusCode: 500, body: JSON.stringify({ valid: false }) }
   }
