@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { RotateCcw, Save, Monitor } from 'lucide-react'
+import { RotateCcw, Save, Monitor, Search } from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,10 +85,36 @@ export default function EmailTemplates() {
   const [saving, setSaving] = useState(false)
   const [resetConfirm, setResetConfirm] = useState<AnyEmailType | null>(null)
   const [saved, setSaved] = useState(false)
+  const [templateSearch, setTemplateSearch] = useState('')
+
+  const filteredEmailTypes = useMemo((): AnyEmailType[] => {
+    const types = (activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER) as AnyEmailType[]
+    const q = templateSearch.trim().toLowerCase()
+    if (!q) return types
+    return types.filter(emailType => {
+      const label = activeGroup === 'client'
+        ? VENUE_EMAIL_TYPE_LABELS[emailType as VenueEmailType]
+        : ARTIST_EMAIL_TYPE_LABELS[emailType as ArtistEmailType]
+      const description = activeGroup === 'client'
+        ? CLIENT_DESCRIPTIONS[emailType as VenueEmailType]
+        : ARTIST_DESCRIPTIONS[emailType as ArtistEmailType]
+      const hay = `${label} ${description} ${emailType}`.toLowerCase()
+      return hay.includes(q)
+    })
+  }, [activeGroup, templateSearch])
+
+  // Keep selection on a visible card when the filter changes
+  useEffect(() => {
+    if (filteredEmailTypes.length === 0) return
+    if (!filteredEmailTypes.includes(selectedType)) {
+      setSelectedType(filteredEmailTypes[0])
+    }
+  }, [filteredEmailTypes, selectedType])
 
   // When switching groups, reset selected type to first item of that group
   const handleGroupSwitch = (g: Group) => {
     setActiveGroup(g)
+    setTemplateSearch('')
     setSelectedType(g === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
     setSaved(false)
   }
@@ -184,29 +210,50 @@ export default function EmailTemplates() {
       {/* Two-column layout */}
       <div className="flex gap-5 flex-1 min-h-0">
 
-        {/* Left: group toggle + email type list */}
-        <div className="w-[240px] shrink-0 flex flex-col gap-2 overflow-y-auto">
+        {/* Left: group toggle, search, scrollable template cards (no visible scrollbar) */}
+        <div className="w-[240px] shrink-0 flex flex-col gap-2 min-h-0 self-stretch">
 
-          {/* Group toggle */}
-          <div className="flex rounded-lg border border-neutral-800 overflow-hidden shrink-0 mb-1">
-            {(['client', 'artist'] as Group[]).map(g => (
-              <button
-                key={g}
-                onClick={() => handleGroupSwitch(g)}
-                className={cn(
-                  'flex-1 py-1.5 text-xs font-medium transition-colors',
-                  activeGroup === g
-                    ? 'bg-neutral-700 text-white'
-                    : 'bg-neutral-900 text-neutral-500 hover:text-neutral-300'
-                )}
-              >
-                {g === 'client' ? 'Client Emails' : 'Artist Emails'}
-              </button>
-            ))}
+          <div className="shrink-0 flex flex-col gap-2">
+            {/* Group toggle */}
+            <div className="flex rounded-lg border border-neutral-800 overflow-hidden">
+              {(['client', 'artist'] as Group[]).map(g => (
+                <button
+                  key={g}
+                  onClick={() => handleGroupSwitch(g)}
+                  className={cn(
+                    'flex-1 py-1.5 text-xs font-medium transition-colors',
+                    activeGroup === g
+                      ? 'bg-neutral-700 text-white'
+                      : 'bg-neutral-900 text-neutral-500 hover:text-neutral-300'
+                  )}
+                >
+                  {g === 'client' ? 'Client Emails' : 'Artist Emails'}
+                </button>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-600 pointer-events-none" />
+              <Input
+                value={templateSearch}
+                onChange={e => setTemplateSearch(e.target.value)}
+                placeholder="Search templates..."
+                aria-label="Search email templates"
+                className="h-8 pl-8 text-xs bg-neutral-950 border-neutral-800 placeholder:text-neutral-600"
+              />
+            </div>
           </div>
 
-          {/* Email type cards */}
-          {(activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER).map(emailType => {
+          {/* Email type cards — scrollable, scrollbar visually hidden */}
+          <div
+            className={cn(
+              'flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto overflow-x-hidden pr-0.5',
+              '[scrollbar-width:none] [-ms-overflow-style:none]',
+              '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0',
+            )}
+          >
+          {filteredEmailTypes.map(emailType => {
             const tmpl = getTemplate(emailType)
             const isCustom = !!(tmpl?.custom_subject || tmpl?.custom_intro)
             const isSelected = selectedType === emailType
@@ -247,6 +294,12 @@ export default function EmailTemplates() {
               </button>
             )
           })}
+          {filteredEmailTypes.length === 0 && (
+            <p className="text-[11px] text-neutral-600 leading-snug px-1 py-6 text-center">
+              No templates match &ldquo;{templateSearch.trim()}&rdquo;. Try another search.
+            </p>
+          )}
+          </div>
         </div>
 
         {/* Right: preview + edit */}
