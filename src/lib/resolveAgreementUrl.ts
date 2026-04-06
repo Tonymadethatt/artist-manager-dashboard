@@ -11,6 +11,21 @@
  * resolves `agreement_generated_file_id` so sends stay correct if URL was never backfilled.
  */
 
+/*
+ * Manual test vectors (computeResolvedAgreement + dealSyncPatchFromResolution), with a fixed origin where URLs resolve:
+ *
+ * 1) progressPanelUrl non-empty → progress_panel; url trimmed string; syncGeneratedFileId null;
+ *    dealSyncPatch → { agreement_url, agreement_generated_file_id: null }.
+ * 2) progress empty + pinned valid PDF → task_or_template_file; url from pinned; sync id = pinned.id;
+ *    dealSyncPatch mirrors URL + FK.
+ * 3) no progress, no pinned + dealFile valid PDF → deal_generated_file; sync id = deal file id.
+ * 4) no files + dealAgreementUrl non-empty → deal_url_string; dealSyncPatch → null (legacy external link only).
+ * 5) all inputs empty / invalid files → none; url null; no patch.
+ *
+ * Scope helpers: isGeneratedFileInScopeForTask rejects wrong venue_id/deal_id on file vs task;
+ * isGeneratedFileInScopeForDeal rejects file venue mismatch with deal.venue_id.
+ */
+
 import type { GeneratedFile } from '../types'
 import { resolvedPdfHrefFromOrigin } from './files/pdfShareUrl'
 

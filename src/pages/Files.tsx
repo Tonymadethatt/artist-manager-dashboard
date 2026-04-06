@@ -161,10 +161,18 @@ export default function Files() {
             <tbody>
               {files.map(file => {
                 const fmt = formatOf(file)
+                const canon = canonicalDealsByFileId.get(file.id)
                 return (
                   <tr key={file.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 transition-colors">
                     <td className="px-4 py-3">
-                      <span className="font-medium text-neutral-100">{file.name}</span>
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="font-medium text-neutral-100">{file.name}</span>
+                        {canon && (
+                          <Badge variant="outline" className="text-[10px] w-fit border-emerald-700/50 text-emerald-400">
+                            Canonical agreement · {canon.venue?.name ?? canon.description}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-3 hidden sm:table-cell">
                       <Badge variant={fmt === 'pdf' ? 'blue' : 'secondary'} className="text-xs">

@@ -84,3 +84,33 @@ export function parseCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc | 
 export function defaultCustomBlocksDoc(): CustomEmailBlocksDoc {
   return { version: 1, blocks: [{ kind: 'prose', title: null, body: '' }] }
 }
+
+export type CustomTableBlock = Extract<CustomEmailBlock, { kind: 'table' }>
+
+/** Ensures every row has exactly `headers.length` string cells (pads with '' or truncates). */
+export function normalizeTableBlock(block: CustomTableBlock): CustomTableBlock {
+  let headers = [...block.headers]
+  if (headers.length === 0) {
+    headers = ['Column']
+  }
+  const colCount = headers.length
+  const rows = block.rows.map(r => {
+    const cells = [...r]
+    while (cells.length < colCount) cells.push('')
+    if (cells.length > colCount) cells.splice(colCount)
+    return cells
+  })
+  return { ...block, headers, rows }
+}
+
+export function normalizeCustomEmailBlocksDoc(doc: CustomEmailBlocksDoc): CustomEmailBlocksDoc {
+  return {
+    ...doc,
+    blocks: doc.blocks.map(b => (b.kind === 'table' ? normalizeTableBlock(b) : b)),
+  }
+}
+
+/** Parse stored JSON and normalize table row/column shape for editing + preview. */
+export function loadCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc {
+  return normalizeCustomEmailBlocksDoc(parseCustomEmailBlocksDoc(raw) ?? defaultCustomBlocksDoc())
+}

@@ -41,7 +41,12 @@ import { cn } from '@/lib/utils'
 import { fetchEmailTemplateUsage } from '@/lib/emailTemplateUsage'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
 import type { CustomEmailBlock, CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
-import { defaultCustomBlocksDoc, parseCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
+import {
+  defaultCustomBlocksDoc,
+  loadCustomEmailBlocksDoc,
+  normalizeTableBlock,
+} from '@/lib/email/customEmailBlocks'
+import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 
@@ -199,7 +204,7 @@ export default function EmailTemplates() {
     } else if (sidebarMode === 'edit-custom' && selectedCustomId) {
       const row = customRows.find(r => r.id === selectedCustomId)
       if (row) {
-        const parsed = parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc()
+        const parsed = loadCustomEmailBlocksDoc(row.blocks)
         const dirty =
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
@@ -244,7 +249,7 @@ export default function EmailTemplates() {
     if (sidebarMode === 'edit-custom' && selectedCustomId) {
       const row = customRows.find(r => r.id === selectedCustomId)
       if (row) {
-        const parsed = parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc()
+        const parsed = loadCustomEmailBlocksDoc(row.blocks)
         const dirty =
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
@@ -290,7 +295,7 @@ export default function EmailTemplates() {
       const row = customRows.find(r => r.id === selectedCustomId)
       const doc = sidebarMode === 'edit-custom'
         ? customBlocksDraft
-        : (parseCustomEmailBlocksDoc(row?.blocks) ?? defaultCustomBlocksDoc())
+        : loadCustomEmailBlocksDoc(row?.blocks)
       const subj = sidebarMode === 'edit-custom'
         ? customSubjectDraft
         : (row?.subject_template ?? '')
@@ -357,7 +362,7 @@ export default function EmailTemplates() {
   )))
   const isCustomDirty = (() => {
     if (sidebarMode !== 'edit-custom' || !selectedCustomRow) return false
-    const parsed = parseCustomEmailBlocksDoc(selectedCustomRow.blocks) ?? defaultCustomBlocksDoc()
+    const parsed = loadCustomEmailBlocksDoc(selectedCustomRow.blocks)
     return customNameDraft !== selectedCustomRow.name
       || customSubjectDraft !== selectedCustomRow.subject_template
       || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
@@ -377,7 +382,7 @@ export default function EmailTemplates() {
     setSelectedCustomId(id)
     setCustomNameDraft(row.name)
     setCustomSubjectDraft(row.subject_template)
-    setCustomBlocksDraft(parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc())
+    setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
     setSidebarMode('edit-custom')
     setSaved(false)
   }
@@ -409,7 +414,11 @@ export default function EmailTemplates() {
       const blocks = [...prev.blocks]
       const cur = blocks[index]
       if (!cur) return prev
-      blocks[index] = { ...cur, ...patch } as CustomEmailBlock
+      let next = { ...cur, ...patch } as CustomEmailBlock
+      if (next.kind === 'table') {
+        next = normalizeTableBlock(next)
+      }
+      blocks[index] = next
       return { ...prev, blocks }
     })
   }
@@ -545,9 +554,14 @@ export default function EmailTemplates() {
         </Button>
       </div>
 
-      <div className="flex gap-5 flex-1 min-h-0">
+      <div className="flex gap-5 flex-1 min-h-0 min-w-0">
 
-        <div className="w-[300px] shrink-0 flex flex-col gap-2 min-h-0 self-stretch border-r border-neutral-800/80 pr-4">
+        <div
+          className={cn(
+            'flex flex-col gap-2 min-h-0 self-stretch border-r border-neutral-800/80 pr-4 min-w-0 overflow-hidden',
+            sidebarMode === 'browse' ? 'w-[300px] shrink-0' : 'flex-[1.85] basis-0 min-w-0',
+          )}
+        >
 
           {sidebarMode === 'browse' ? (
             <>
@@ -770,7 +784,7 @@ export default function EmailTemplates() {
                                   setSelectedCustomId(data.id)
                                   setCustomNameDraft(data.name)
                                   setCustomSubjectDraft(data.subject_template)
-                                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(data.blocks) ?? defaultCustomBlocksDoc())
+                                  setCustomBlocksDraft(loadCustomEmailBlocksDoc(data.blocks))
                                   setSidebarMode('edit-custom')
                                 }
                               }}
@@ -1401,8 +1415,13 @@ export default function EmailTemplates() {
           )}
         </div>
 
-        <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          <div className="flex-1 min-h-0 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col">
+        <div
+          className={cn(
+            'flex flex-col min-h-0 min-w-0',
+            sidebarMode === 'browse' ? 'flex-1' : 'flex-[0.92] basis-0 shrink-0 min-w-[280px]',
+          )}
+        >
+          <div className="flex-1 min-h-0 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col min-w-0">
             <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
               <Monitor className="h-3.5 w-3.5 text-neutral-500" />
               <span className="text-xs font-medium text-neutral-400">Preview — {typeLabel}</span>
@@ -1478,7 +1497,7 @@ export default function EmailTemplates() {
                     if (row) {
                       setCustomNameDraft(row.name)
                       setCustomSubjectDraft(row.subject_template)
-                      setCustomBlocksDraft(parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc())
+                      setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
                     }
                   } else {
                     setEditorDraft(draftFromSaved(getTemplate(selectedType)))
@@ -1639,7 +1658,7 @@ export default function EmailTemplates() {
                   setSelectedCustomId(res.data.id)
                   setCustomNameDraft(res.data.name)
                   setCustomSubjectDraft(res.data.subject_template)
-                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(res.data.blocks) ?? defaultCustomBlocksDoc())
+                  setCustomBlocksDraft(loadCustomEmailBlocksDoc(res.data.blocks))
                   setSidebarMode('edit-custom')
                 }
               }}
