@@ -53,7 +53,11 @@ export async function queueImmediateEmailsForTemplate(
       status: 'pending',
       notes: `Auto-queued from template task: ${item.title}`,
     })
-    if (!error) queued += 1
+    if (error) {
+      console.error('[queueEmailsFromTemplate] insert failed:', error.message)
+    } else {
+      queued += 1
+    }
   }
 
   return { queued }

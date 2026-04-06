@@ -44,6 +44,7 @@ const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
   'payment_reminder',
   'payment_receipt',
   'follow_up',
+  'rebooking_inquiry',
 ]
 
 function getDefaultType(deal?: Deal | null): VenueEmailType {

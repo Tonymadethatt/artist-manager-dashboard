@@ -352,14 +352,17 @@ export default function PipelineTemplates() {
                                 ))}
                               </SelectContent>
                             </Select>
-                            <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
-                              <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
-                                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-xs whitespace-nowrap text-neutral-400">Email action</Label>
+                              <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
+                                <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+                                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Button size="sm" className="h-7 text-xs" onClick={handleSaveItem} disabled={savingItem}>
@@ -451,14 +454,17 @@ export default function PipelineTemplates() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
-                          <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
-                              <SelectItem key={value} value={value}>{label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs whitespace-nowrap text-neutral-400">Email action</Label>
+                          <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
+                            <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+                                <SelectItem key={value} value={value}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <Button size="sm" className="h-7 text-xs" onClick={handleSaveItem} disabled={savingItem || !itemForm.title.trim()}>
                           {savingItem ? 'Adding...' : 'Add'}
                         </Button>

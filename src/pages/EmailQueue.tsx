@@ -1,17 +1,25 @@
-import { useState } from 'react'
-import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap } from 'lucide-react'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
-import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { Button } from '@/components/ui/button'
 import type { VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+
+// Minutes before an email auto-sends via the cron job
+const AUTO_SEND_BUFFER_MINUTES = 10
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit',
   })
+}
+
+function getMinutesUntilSend(createdAt: string): number {
+  const sendAt = new Date(createdAt).getTime() + AUTO_SEND_BUFFER_MINUTES * 60 * 1000
+  return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -49,14 +57,38 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
+function CountdownBadge({ createdAt }: { createdAt: string }) {
+  const [minsLeft, setMinsLeft] = useState(() => getMinutesUntilSend(createdAt))
+
+  useEffect(() => {
+    const id = setInterval(() => setMinsLeft(getMinutesUntilSend(createdAt)), 30000)
+    return () => clearInterval(id)
+  }, [createdAt])
+
+  if (minsLeft <= 0) return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400">
+      <Zap className="h-2.5 w-2.5" />Sending soon…
+    </span>
+  )
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500">
+      <Clock className="h-2.5 w-2.5" />Auto-sends in {minsLeft} min
+    </span>
+  )
+}
+
 interface PendingRowProps {
   email: VenueEmail
-  onApprove: (email: VenueEmail) => void
+  onSendNow: (email: VenueEmail) => void
   onDismiss: (id: string) => void
+  sending: boolean
   dismissing: boolean
 }
 
-function PendingRow({ email, onApprove, onDismiss, dismissing }: PendingRowProps) {
+function PendingRow({ email, onSendNow, onDismiss, sending, dismissing }: PendingRowProps) {
+  const recipientName = email.contact?.name || null
+
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-neutral-800 last:border-0">
       <div className="flex-1 min-w-0 space-y-1">
@@ -66,8 +98,13 @@ function PendingRow({ email, onApprove, onDismiss, dismissing }: PendingRowProps
             <span className="text-xs text-neutral-400">{email.venue.name}</span>
           )}
         </div>
-        <p className="text-sm text-neutral-300 truncate">{email.recipient_email}</p>
-        <p className="text-xs text-neutral-600">{fmtDate(email.created_at)}</p>
+        <p className="text-sm text-neutral-300 truncate">
+          {recipientName ? `${recipientName} · ` : ''}{email.recipient_email}
+        </p>
+        <div className="flex items-center gap-3">
+          <CountdownBadge createdAt={email.created_at} />
+          <span className="text-[10px] text-neutral-700">{fmtDate(email.created_at)}</span>
+        </div>
         {email.notes && <p className="text-xs text-neutral-600 italic">{email.notes}</p>}
       </div>
       <div className="flex gap-2 shrink-0 items-start pt-0.5">
@@ -75,18 +112,19 @@ function PendingRow({ email, onApprove, onDismiss, dismissing }: PendingRowProps
           size="sm"
           variant="outline"
           className="gap-1.5"
-          onClick={() => onApprove(email)}
+          onClick={() => onSendNow(email)}
+          disabled={sending || dismissing}
         >
           <Send className="h-3.5 w-3.5" />
-          Approve
+          Send now
         </Button>
         <Button
           size="sm"
           variant="ghost"
           className="h-8 w-8 p-0 text-neutral-500 hover:text-red-400"
           onClick={() => onDismiss(email.id)}
-          disabled={dismissing}
-          title="Dismiss"
+          disabled={dismissing || sending}
+          title="Cancel & remove"
         >
           <X className="h-3.5 w-3.5" />
         </Button>
@@ -95,11 +133,7 @@ function PendingRow({ email, onApprove, onDismiss, dismissing }: PendingRowProps
   )
 }
 
-interface HistoryRowProps {
-  email: VenueEmail
-}
-
-function HistoryRow({ email }: HistoryRowProps) {
+function HistoryRow({ email }: { email: VenueEmail }) {
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-neutral-800 last:border-0">
       <div className="flex-1 min-w-0 space-y-1">
@@ -110,7 +144,9 @@ function HistoryRow({ email }: HistoryRowProps) {
             <span className="text-xs text-neutral-400">{email.venue.name}</span>
           )}
         </div>
-        <p className="text-sm text-neutral-300 truncate">{email.recipient_email}</p>
+        <p className="text-sm text-neutral-300 truncate">
+          {email.contact?.name ? `${email.contact.name} · ` : ''}{email.recipient_email}
+        </p>
         <p className="text-xs text-neutral-600">
           {email.sent_at ? fmtDate(email.sent_at) : fmtDate(email.created_at)}
         </p>
@@ -124,10 +160,12 @@ function HistoryRow({ email }: HistoryRowProps) {
 
 export default function EmailQueue() {
   const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
+  const { profile } = useArtistProfile()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
-  const [approveEmail, setApproveEmail] = useState<VenueEmail | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   const handleDismiss = async (id: string) => {
     setDismissingId(id)
@@ -140,6 +178,68 @@ export default function EmailQueue() {
     await refetch()
     setRefreshing(false)
   }
+
+  const handleSendNow = useCallback(async (email: VenueEmail) => {
+    if (!profile?.from_email) {
+      setSendError('Artist profile not configured. Set up your profile first.')
+      return
+    }
+
+    setSendingId(email.id)
+    setSendError(null)
+
+    try {
+      const res = await fetch('/.netlify/functions/send-venue-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: email.email_type,
+          profile: {
+            artist_name: profile.artist_name,
+            company_name: profile.company_name,
+            from_email: profile.from_email,
+            reply_to_email: profile.reply_to_email,
+            website: profile.website,
+            phone: profile.phone,
+            social_handle: profile.social_handle,
+            tagline: profile.tagline,
+          },
+          recipient: {
+            name: email.contact?.name || email.recipient_email,
+            email: email.recipient_email,
+          },
+          ...(email.deal ? {
+            deal: {
+              description: email.deal.description,
+              gross_amount: email.deal.gross_amount,
+              event_date: email.deal.event_date,
+              payment_due_date: email.deal.payment_due_date,
+              agreement_url: email.deal.agreement_url,
+              notes: email.deal.notes,
+            }
+          } : {}),
+          ...(email.venue ? {
+            venue: {
+              name: email.venue.name,
+              city: email.venue.city ?? null,
+              location: email.venue.location ?? null,
+            }
+          } : {}),
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Send failed' }))
+        throw new Error((err as { message?: string }).message ?? 'Send failed')
+      }
+
+      await updateEmailStatus(email.id, 'sent')
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Failed to send email')
+    } finally {
+      setSendingId(null)
+    }
+  }, [profile, updateEmailStatus])
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -186,6 +286,22 @@ export default function EmailQueue() {
         </Button>
       </div>
 
+      {/* Info banner */}
+      {activeTab === 'queue' && pendingEmails.length > 0 && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-400">
+          <Zap className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
+          <span>
+            Emails auto-send {AUTO_SEND_BUFFER_MINUTES} minutes after being queued. Click <strong className="text-neutral-300">Send now</strong> to send immediately, or <strong className="text-neutral-300">✕</strong> to cancel.
+          </span>
+        </div>
+      )}
+
+      {sendError && (
+        <div className="px-3 py-2 rounded-lg bg-red-950 border border-red-800 text-xs text-red-400">
+          {sendError}
+        </div>
+      )}
+
       {/* Queue tab */}
       {activeTab === 'queue' && (
         <>
@@ -194,20 +310,21 @@ export default function EmailQueue() {
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
             </div>
           ) : pendingEmails.length === 0 ? (
-            <EmptyState message="No emails queued. Follow-up emails queued from the Outreach panel will appear here." />
+            <EmptyState message="No emails queued. Completing tasks with an email action will queue emails here." />
           ) : (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
                 <p className="text-xs font-medium text-neutral-500">
-                  {pendingEmails.length} pending email{pendingEmails.length !== 1 ? 's' : ''} - review before sending
+                  {pendingEmails.length} pending email{pendingEmails.length !== 1 ? 's' : ''}
                 </p>
               </div>
               {pendingEmails.map(email => (
                 <PendingRow
                   key={email.id}
                   email={email}
-                  onApprove={e => setApproveEmail(e)}
+                  onSendNow={handleSendNow}
                   onDismiss={handleDismiss}
+                  sending={sendingId === email.id}
                   dismissing={dismissingId === email.id}
                 />
               ))}
@@ -238,23 +355,6 @@ export default function EmailQueue() {
             </div>
           )}
         </>
-      )}
-
-      {/* Approve modal (opens SendVenueEmailModal pre-filled) */}
-      {approveEmail && (
-        <SendVenueEmailModal
-          open={!!approveEmail}
-          onClose={() => setApproveEmail(null)}
-          onSent={() => {
-            updateEmailStatus(approveEmail.id, 'sent')
-          }}
-          defaultType={approveEmail.email_type as VenueEmailType}
-          recipientEmail={approveEmail.recipient_email}
-          venueId={approveEmail.venue_id}
-          dealId={approveEmail.deal_id}
-          contactId={approveEmail.contact_id}
-          venue={approveEmail.venue ? { id: approveEmail.venue.id, name: approveEmail.venue.name, city: null, location: null } : null}
-        />
       )}
     </div>
   )

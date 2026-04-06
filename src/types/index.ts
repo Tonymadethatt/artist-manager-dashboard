@@ -401,6 +401,7 @@ export interface VenueEmail {
   sent_at: string | null
   notes: string | null
   created_at: string
-  venue?: Pick<Venue, 'id' | 'name'> | null
-  deal?: Pick<Deal, 'id' | 'description'> | null
+  venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount' | 'agreement_url' | 'notes' | 'payment_due_date' | 'artist_paid'> | null
+  contact?: Pick<Contact, 'id' | 'name' | 'email'> | null
 }

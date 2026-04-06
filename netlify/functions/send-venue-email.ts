@@ -297,6 +297,7 @@ const handler: Handler = async (event) => {
     agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
     booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
     follow_up: `Following Up - ${artistNameUpper}`,
+    rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
   }
 
   const resendRes = await fetch('https://api.resend.com/emails', {
