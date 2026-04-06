@@ -447,7 +447,7 @@ export default function EmailTemplates() {
     setCustomBlocksDraft(prev => {
       const nb: CustomEmailBlock =
         kind === 'prose' ? { kind: 'prose', title: '', body: '' }
-          : kind === 'bullet_list' ? { kind: 'bullet_list', title: '', items: [''] }
+          : kind === 'bullet_list' ? { kind: 'bullet_list', title: '', items: ['', '', ''] }
             : kind === 'key_value' ? { kind: 'key_value', title: '', rows: [{ label: 'Field', value: '' }] }
               : kind === 'table' ? { kind: 'table', title: '', headers: ['Col A', 'Col B'], rows: [['', '']] }
                 : { kind: 'divider' }

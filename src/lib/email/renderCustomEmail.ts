@@ -20,8 +20,22 @@ function nlToBr(s: string): string {
   return escapeHtmlPlain(s).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
 }
 
-function card(title: string, content: string, accentColor: string): string {
-  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${escapeHtmlPlain(title)}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
+/** Card shell; omit header row when section title is empty so recipients are not shown placeholder labels. */
+function titledContentCard(sectionTitle: string, content: string, accentColor: string): string {
+  const showHeader = sectionTitle.trim().length > 0
+  const header = showHeader
+    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;display:flex;align-items:center;gap:10px;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;flex-shrink:0;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:#b5b5b5;">${escapeHtmlPlain(sectionTitle.trim())}</span></div>`
+    : ''
+  const bodyPad = showHeader ? 'padding:6px 18px 14px;' : 'padding:14px 18px;'
+  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;">${header}<div style="${bodyPad}">${content}</div></div>`
+}
+
+function mergedSectionTitle(
+  raw: string | null | undefined,
+  ctx: CustomEmailMergeContext,
+  audience: CustomMergeAudience,
+): string {
+  return applyMergeToText((raw ?? '').trim(), ctx, audience).trim()
 }
 
 function titledBlockAccent(b: { kind: string; accentColor?: string | null }): string {
@@ -33,7 +47,47 @@ function titledBlockAccent(b: { kind: string; accentColor?: string | null }): st
   return defaultAccentForBlockKind('prose')
 }
 
-const PROSE_WRAPPER_STYLE = 'font-size:13px;color:#d1d1d1;line-height:1.7;margin:0;'
+/** Injected once in email &lt;style&gt; — TipTap prose relies on this because *{margin:0;padding:0} strips list/table defaults. */
+const EMAIL_PROSE_SCOPED_CSS = `
+  .email-prose { font-size: 13px; color: #d1d1d1; line-height: 1.65; }
+  .email-prose p { margin: 0 0 10px; }
+  .email-prose p:last-child { margin-bottom: 0; }
+  .email-prose h1, .email-prose h2, .email-prose h3 {
+    font-size: 14px; font-weight: 600; color: #eeeeee; margin: 14px 0 6px; line-height: 1.35;
+  }
+  .email-prose h1:first-child, .email-prose h2:first-child, .email-prose h3:first-child { margin-top: 0; }
+  .email-prose ul, .email-prose ol {
+    margin: 10px 0;
+    padding-left: 28px;
+    list-style-position: outside;
+  }
+  .email-prose ul { list-style-type: disc; }
+  .email-prose ol { list-style-type: decimal; }
+  .email-prose li {
+    margin: 6px 0;
+    padding-left: 2px;
+    display: list-item;
+  }
+  .email-prose table {
+    width: 100% !important;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 13px;
+    border: 1px solid #333333;
+  }
+  .email-prose th, .email-prose td {
+    border: 1px solid #383838;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .email-prose th {
+    background: #1e1e1e;
+    font-size: 11px;
+    font-weight: 600;
+    color: #a3a3a3;
+  }
+`
 
 function rowKv(label: string, value: string, valueColor = '#ffffff'): string {
   return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #222222;"><span style="font-size:13px;color:#888888;">${escapeHtmlPlain(label)}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${escapeHtmlPlain(value)}</span></div>`
@@ -48,27 +102,30 @@ function renderBlocks(
   for (const b of doc.blocks) {
     switch (b.kind) {
       case 'prose': {
-        const titleRaw = applyMergeToText(b.title?.trim() || 'Message', ctx, audience).toUpperCase()
+        const sectionTitle = mergedSectionTitle(b.title, ctx, audience)
         const merged = applyMergeToText(b.body, ctx, audience)
         const inner = mergedBodyLooksLikeHtml(merged)
-          ? `<div style="${PROSE_WRAPPER_STYLE}">${sanitizeMergedEmailHtml(merged)}</div>`
-          : `<p style="${PROSE_WRAPPER_STYLE}">${nlToBr(merged)}</p>`
-        parts.push(card(titleRaw, inner, titledBlockAccent(b)))
+          ? `<div class="email-prose">${sanitizeMergedEmailHtml(merged)}</div>`
+          : `<div class="email-prose"><p style="margin:0;">${nlToBr(merged)}</p></div>`
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
         break
       }
       case 'bullet_list': {
-        const titleRaw = applyMergeToText(b.title?.trim() || 'Details', ctx, audience).toUpperCase()
+        const sectionTitle = mergedSectionTitle(b.title, ctx, audience)
         const lis = b.items
           .map(t => applyMergeToText(t, ctx, audience))
           .filter(t => t.trim())
-          .map(t => `<li style="margin-bottom:8px;">${nlToBr(t)}</li>`)
+          .map(
+            t =>
+              `<li style="margin:0 0 10px 0;display:list-item;list-style-position:outside;padding-left:4px;">${nlToBr(t)}</li>`,
+          )
           .join('')
-        const inner = `<ul style="font-size:13px;color:#d1d1d1;line-height:1.7;padding-left:16px;margin:0;">${lis}</ul>`
-        parts.push(card(titleRaw, inner, titledBlockAccent(b)))
+        const inner = `<ul style="font-size:13px;color:#d1d1d1;line-height:1.65;margin:6px 0;padding-left:28px;list-style-type:disc;list-style-position:outside;">${lis}</ul>`
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
         break
       }
       case 'key_value': {
-        const titleRaw = applyMergeToText(b.title?.trim() || 'Summary', ctx, audience).toUpperCase()
+        const sectionTitle = mergedSectionTitle(b.title, ctx, audience)
         const rows = b.rows
           .map(r => {
             const v = r.valueKey
@@ -78,17 +135,30 @@ function renderBlocks(
             return rowKv(label, v)
           })
           .join('')
-        parts.push(card(titleRaw, rows, titledBlockAccent(b)))
+        parts.push(titledContentCard(sectionTitle, rows, titledBlockAccent(b)))
         break
       }
       case 'table': {
-        const titleRaw = applyMergeToText(b.title?.trim() || 'Table', ctx, audience).toUpperCase()
-        const th = b.headers.map(h => `<th style="text-align:left;font-size:11px;color:#888888;padding:8px 10px;border-bottom:1px solid #2a2a2a;">${escapeHtmlPlain(applyMergeToText(h, ctx, audience))}</th>`).join('')
-        const tr = b.rows
-          .map(cells => `<tr>${cells.map(c => `<td style="font-size:13px;color:#d1d1d1;padding:10px;border-bottom:1px solid #222222;">${nlToBr(applyMergeToText(c, ctx, audience))}</td>`).join('')}</tr>`)
+        const sectionTitle = mergedSectionTitle(b.title, ctx, audience)
+        const th = b.headers
+          .map(
+            h =>
+              `<th style="text-align:left;font-size:11px;font-weight:600;color:#a3a3a3;padding:9px 10px;border:1px solid #383838;background:#1e1e1e;">${escapeHtmlPlain(applyMergeToText(h, ctx, audience))}</th>`,
+          )
           .join('')
-        const inner = `<table style="width:100%;border-collapse:collapse;">${b.headers.length ? `<thead><tr>${th}</tr></thead>` : ''}<tbody>${tr}</tbody></table>`
-        parts.push(card(titleRaw, inner, titledBlockAccent(b)))
+        const tr = b.rows
+          .map(
+            cells =>
+              `<tr>${cells
+                .map(
+                  c =>
+                    `<td style="font-size:13px;color:#d1d1d1;padding:9px 10px;border:1px solid #383838;vertical-align:top;">${nlToBr(applyMergeToText(c, ctx, audience))}</td>`,
+                )
+                .join('')}</tr>`,
+          )
+          .join('')
+        const inner = `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border:1px solid #333333;margin:4px 0;">${b.headers.length ? `<thead><tr>${th}</tr></thead>` : ''}<tbody>${tr}</tbody></table>`
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
         break
       }
       case 'divider':
@@ -220,6 +290,7 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
+${EMAIL_PROSE_SCOPED_CSS}
 ${mobileStyles}
 </style>
 </head>

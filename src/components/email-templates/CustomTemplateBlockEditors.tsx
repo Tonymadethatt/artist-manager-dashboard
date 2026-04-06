@@ -24,6 +24,14 @@ const CARD_BODY = 'px-[18px] py-3'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
 
+const CUSTOM_BLOCK_ADD_OPTIONS: { kind: CustomEmailBlock['kind']; label: string }[] = [
+  { kind: 'prose', label: 'Rich text' },
+  { kind: 'bullet_list', label: 'Bulleted list' },
+  { kind: 'key_value', label: 'Key / value' },
+  { kind: 'table', label: 'Table' },
+  { kind: 'divider', label: 'Divider' },
+]
+
 function BlockChrome(props: {
   label: string
   index: number
@@ -76,7 +84,8 @@ function TitleHeaderStrip(props: {
   title: string
   onTitleChange: (v: string) => void
   mergeKeyOptions: readonly string[]
-  placeholder?: string
+  /** Shown in editor only; email omits the header row when this stays empty after merge. */
+  titlePlaceholder: string
 }) {
   const accentHex = parseAccentColorHex(props.accentColor) ?? defaultAccentForBlockKind(props.blockKind)
   return (
@@ -106,7 +115,7 @@ function TitleHeaderStrip(props: {
           value={props.title}
           onChange={props.onTitleChange}
           variableKeys={[...props.mergeKeyOptions]}
-          placeholder={props.placeholder ?? 'Section title (optional)'}
+          placeholder={props.titlePlaceholder}
           rows={2}
           minHeightClass="min-h-[36px] max-h-20 py-1.5"
           className="text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400 placeholder:text-neutral-600 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium bg-transparent border border-transparent border-b border-[#2a2a2a]/80 rounded-none shadow-none focus-visible:ring-0 px-0 resize-none"
@@ -128,7 +137,7 @@ function ProseEditor(props: {
   const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
-      <BlockChrome label="Text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
+      <BlockChrome label="Rich text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
           blockKind="prose"
@@ -137,6 +146,7 @@ function ProseEditor(props: {
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
+          titlePlaceholder="Optional heading (shown in email only if set)"
         />
         <div className={CARD_BODY}>
           <RichBodyEditor
@@ -165,7 +175,7 @@ function BulletListEditor(props: {
   const accentHex = parseAccentColorHex(block.accentColor) ?? defaultAccentForBlockKind('bullet_list')
   return (
     <div className="min-w-0">
-      <BlockChrome label="Bullet list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
+      <BlockChrome label="Bulleted list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
           blockKind="bullet_list"
@@ -174,9 +184,10 @@ function BulletListEditor(props: {
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
+          titlePlaceholder="Optional heading above bullets"
         />
         <div className={cn(CARD_BODY, 'space-y-0')}>
-          <ul className="list-none m-0 p-0 space-y-2">
+          <ul className="list-none m-0 p-0 space-y-2 pl-0.5">
             {block.items.map((line, li) => (
               <li key={li} className="flex gap-2 items-start">
                 <span
@@ -217,7 +228,7 @@ function BulletListEditor(props: {
             className="h-8 text-[11px] mt-3 text-neutral-400 hover:text-white px-0"
             onClick={() => onUpdate({ items: [...block.items, ''] })}
           >
-            + Item
+            + Add bullet
           </Button>
         </div>
       </div>
@@ -246,6 +257,7 @@ function KeyValueEditor(props: {
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
+          titlePlaceholder="Optional heading above rows"
         />
         <div className={cn(CARD_BODY, 'py-2')}>
           <div className="divide-y divide-[#222222]">
@@ -372,6 +384,7 @@ function TableEditor(props: {
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
+          titlePlaceholder="Optional heading above table"
         />
         <div className={CARD_BODY}>
           <div className="flex flex-wrap gap-1.5 mb-3">
@@ -468,7 +481,7 @@ function DividerEditor(props: {
   const { index, total, onMove, onRemove } = props
   return (
     <div className="min-w-0">
-      <BlockChrome label="Divider" index={index} total={total} onMove={onMove} onRemove={onRemove} />
+      <BlockChrome label="Divider / spacer" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className="rounded-lg border border-[#2a2a2a] bg-[#141414]/50 px-[18px] py-4">
         <div className="border-t border-[#2a2a2a]" />
       </div>
@@ -518,14 +531,14 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
         </Button>
         {blockMenuOpen && (
           <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md border border-neutral-700 bg-neutral-950 shadow-lg py-1">
-            {(['prose', 'bullet_list', 'key_value', 'table', 'divider'] as const).map(k => (
+            {CUSTOM_BLOCK_ADD_OPTIONS.map(({ kind, label }) => (
               <button
-                key={k}
+                key={kind}
                 type="button"
-                className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 capitalize"
-                onClick={() => onAddBlock(k)}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 text-neutral-200"
+                onClick={() => onAddBlock(kind)}
               >
-                {k.replace('_', ' ')}
+                {label}
               </button>
             ))}
           </div>
