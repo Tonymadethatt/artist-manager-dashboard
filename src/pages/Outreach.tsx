@@ -61,7 +61,36 @@ export default function Outreach() {
 
   const handleStatusChange = async (venue: Venue, newStatus: OutreachStatus) => {
     await updateVenue(venue.id, { status: newStatus })
-    showToast(`${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`)
+    const matching = templates.filter(t => t.trigger_status === newStatus)
+    let totalTasks = 0
+    for (const t of matching) {
+      const { count } = await applyTemplate(t.id, venue.id)
+      totalTasks += count
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' },
+      body: JSON.stringify({
+        sessionId: 'cfe38b',
+        runId: 'post-fix',
+        location: 'Outreach.tsx:handleStatusChange',
+        message: 'outreach table status: update + template apply',
+        hypothesisId: 'H1-list-path',
+        timestamp: Date.now(),
+        data: {
+          newStatus,
+          matchingTemplateCount: matching.length,
+          tasksCreated: totalTasks,
+        },
+      }),
+    }).catch(() => {})
+    // #endregion
+    showToast(
+      totalTasks > 0
+        ? `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · ${totalTasks} task${totalTasks !== 1 ? 's' : ''} from template${matching.length !== 1 ? 's' : ''}`
+        : `${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`
+    )
     // Keep detail panel in sync if open
     if (selectedVenue?.id === venue.id) {
       setSelectedVenue(v => v ? { ...v, status: newStatus } : v)
