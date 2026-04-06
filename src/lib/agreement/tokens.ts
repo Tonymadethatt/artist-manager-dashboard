@@ -1,5 +1,7 @@
 import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '@/types'
-import { COMMISSION_TIER_LABELS } from '@/types'
+import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '@/types'
+
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
 /** Variable names referenced as `{{name}}` in section bodies. */
 export function extractVariableNames(sections: TemplateSection[]): string[] {
@@ -19,9 +21,13 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     if (venue.city) out.city = venue.city
     if (venue.location) out.location = venue.location
     out.venue_type = venue.venue_type
+    out.venue_type_label = VENUE_TYPE_LABELS[venue.venue_type]
     const dt = venue.deal_terms
     if (dt?.event_date) out.event_date = String(dt.event_date)
-    if (dt?.pay != null) out.artist_pay = String(dt.pay)
+    if (dt?.pay != null) {
+      out.artist_pay = String(dt.pay)
+      if (!Number.isNaN(dt.pay)) out.artist_pay_display = usd.format(dt.pay)
+    }
     if (dt?.set_length) out.set_length = String(dt.set_length)
     if (dt?.load_in_time) out.load_in_time = String(dt.load_in_time)
     if (dt?.notes) out.notes = String(dt.notes)
@@ -42,12 +48,12 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
   return out
 }
 
-/** Prefill for File Builder: venue, profile, optional deal, optional primary contact. */
+/** Prefill for File Builder: venue, profile, optional deal, optional contact for merge fields. */
 export function buildAgreementPrefill(
   venue: Venue | null,
   profile: ArtistProfile | null,
   deal: Deal | null,
-  primaryContact: Contact | null
+  mergeContact: Contact | null
 ): Record<string, string> {
   const out = { ...buildVenueProfilePrefill(venue, profile) }
 
@@ -58,18 +64,21 @@ export function buildAgreementPrefill(
       out.event_date = deal.event_date
     }
     out.gross_amount = String(deal.gross_amount)
+    out.gross_amount_display = usd.format(deal.gross_amount)
     out.commission_rate = String(deal.commission_rate)
     out.commission_amount = String(deal.commission_amount)
     out.commission_tier = COMMISSION_TIER_LABELS[deal.commission_tier]
     if (deal.payment_due_date) out.payment_due_date = deal.payment_due_date
     if (deal.agreement_url) out.agreement_url = deal.agreement_url
+    if (deal.notes?.trim()) out.deal_notes = deal.notes.trim()
   }
 
-  if (primaryContact) {
-    out.contact_name = primaryContact.name
-    if (primaryContact.role) out.contact_role = primaryContact.role
-    if (primaryContact.email) out.contact_email = primaryContact.email
-    if (primaryContact.phone) out.contact_phone = primaryContact.phone
+  if (mergeContact) {
+    out.contact_name = mergeContact.name
+    if (mergeContact.role) out.contact_role = mergeContact.role
+    if (mergeContact.email) out.contact_email = mergeContact.email
+    if (mergeContact.phone) out.contact_phone = mergeContact.phone
+    if (mergeContact.company?.trim()) out.contact_company = mergeContact.company.trim()
   }
 
   return out

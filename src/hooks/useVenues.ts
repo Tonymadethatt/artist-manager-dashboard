@@ -99,6 +99,7 @@ export function useVenueDetail(venueId: string | null) {
         role: contact.role,
         email: contact.email,
         phone: contact.phone,
+        company: contact.company,
       })
       .select()
       .single()

@@ -1,5 +1,16 @@
 export type VenueType = 'bar' | 'club' | 'festival' | 'theater' | 'lounge' | 'other'
 
+export const VENUE_TYPE_LABELS: Record<VenueType, string> = {
+  bar: 'Bar',
+  club: 'Club',
+  festival: 'Festival',
+  theater: 'Theater',
+  lounge: 'Lounge',
+  other: 'Other',
+}
+
+export const VENUE_TYPE_ORDER: VenueType[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
+
 export type OutreachStatus =
   | 'not_contacted'
   | 'reached_out'
@@ -139,6 +150,8 @@ export interface Contact {
   role: string | null
   email: string | null
   phone: string | null
+  /** Promoter / venue company for merge fields */
+  company: string | null
   created_at: string
 }
 

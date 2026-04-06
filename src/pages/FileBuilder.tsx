@@ -50,12 +50,26 @@ export default function FileBuilder() {
   const [savedPdf, setSavedPdf] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** When multiple venue contacts: null = use primary (email-first) heuristic. */
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
 
   const { contacts } = useVenueDetail(selectedVenueId || null)
   const primaryContact = useMemo(
     () => contacts.find(c => c.email) ?? contacts[0] ?? null,
     [contacts]
   )
+
+  const mergeContact = useMemo(() => {
+    if (contacts.length === 0) return null
+    if (contacts.length === 1) return contacts[0]
+    const id = selectedContactId ?? primaryContact?.id ?? contacts[0]?.id
+    if (!id) return contacts[0] ?? null
+    return contacts.find(c => c.id === id) ?? contacts[0] ?? null
+  }, [contacts, selectedContactId, primaryContact])
+
+  useEffect(() => {
+    setSelectedContactId(null)
+  }, [selectedVenueId])
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -92,7 +106,7 @@ export default function FileBuilder() {
     if (!selectedTemplate || variables.length === 0) return
     const venue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
     const deal = selectedDealId ? deals.find(d => d.id === selectedDealId) ?? null : null
-    const pre = buildAgreementPrefill(venue, profile, deal, primaryContact)
+    const pre = buildAgreementPrefill(venue, profile, deal, mergeContact)
     setVars(prev => {
       const next = { ...prev }
       for (const key of variables) {
@@ -107,7 +121,7 @@ export default function FileBuilder() {
     profile,
     venues,
     deals,
-    primaryContact,
+    mergeContact,
     variables,
   ])
 
@@ -324,6 +338,32 @@ export default function FileBuilder() {
               </div>
             </div>
 
+            {selectedVenueId && contacts.length > 1 && (
+              <div className="space-y-1.5 min-w-0">
+                <Label className="text-neutral-300">Contact for merge fields</Label>
+                <Select
+                  value={selectedContactId ?? primaryContact?.id ?? contacts[0]?.id ?? ''}
+                  onValueChange={id => setSelectedContactId(id)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select contact" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contacts.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                        {c.company ? ` · ${c.company}` : ''}
+                        {c.role ? ` (${c.role})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-neutral-600 leading-snug">
+                  Defaults to the first contact with an email. Choose another to fill contact tokens.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-1.5 min-w-0">
               <Label className="text-neutral-300">Deal (optional)</Label>
               <Select
@@ -375,6 +415,12 @@ export default function FileBuilder() {
                 <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
                   {variables.length} token{variables.length !== 1 ? 's' : ''} in this template. Venue, deal, and contact pre-fill empty fields.
                 </p>
+                {variables.includes('company_name') && !profile?.company_name?.trim() && (
+                  <p className="text-[11px] text-amber-600/95 mt-2 leading-snug">
+                    Set <span className="font-medium text-neutral-300">Company name</span> in Settings to pre-fill{' '}
+                    <code className="text-neutral-400">{'{{company_name}}'}</code>.
+                  </p>
+                )}
               </div>
               <div className="p-4 sm:p-5 pt-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">

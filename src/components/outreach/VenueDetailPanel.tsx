@@ -539,6 +539,7 @@ function ContactRow({ contact, onEdit, onDelete }: { contact: Contact; onEdit: (
     <div className="flex items-start justify-between gap-2 rounded border border-neutral-800 bg-neutral-800/50 px-3 py-2.5">
       <div className="min-w-0">
         <div className="font-medium text-sm text-neutral-200">{contact.name}</div>
+        {contact.company && <div className="text-xs text-neutral-400">{contact.company}</div>}
         {contact.role && <div className="text-xs text-neutral-500">{contact.role}</div>}
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           {contact.email && (
@@ -567,8 +568,8 @@ function ContactRow({ contact, onEdit, onDelete }: { contact: Contact; onEdit: (
 
 function ContactForm({
   initial,
-  onSave,
   onCancel,
+  onSave,
 }: {
   initial: Contact | null
   onSave: (data: Omit<Contact, 'id' | 'created_at' | 'venue_id' | 'user_id'>) => Promise<void>
@@ -576,16 +577,33 @@ function ContactForm({
 }) {
   const [form, setForm] = useState({
     name: initial?.name ?? '',
+    company: initial?.company ?? '',
     role: initial?.role ?? '',
     email: initial?.email ?? '',
     phone: initial?.phone ?? '',
   })
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    setForm({
+      name: initial?.name ?? '',
+      company: initial?.company ?? '',
+      role: initial?.role ?? '',
+      email: initial?.email ?? '',
+      phone: initial?.phone ?? '',
+    })
+  }, [initial])
+
   const handleSave = async () => {
     if (!form.name.trim()) return
     setSaving(true)
-    await onSave({ name: form.name.trim(), role: form.role || null, email: form.email || null, phone: form.phone || null })
+    await onSave({
+      name: form.name.trim(),
+      company: form.company.trim() || null,
+      role: form.role || null,
+      email: form.email || null,
+      phone: form.phone || null,
+    })
     setSaving(false)
   }
 
@@ -597,19 +615,27 @@ function ContactForm({
           <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Jane Doe" autoFocus />
         </div>
         <div className="space-y-1">
-          <Label>Role</Label>
-          <Input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder="Booker" />
+          <Label>Company</Label>
+          <Input
+            value={form.company}
+            onChange={e => setForm(f => ({ ...f, company: e.target.value }))}
+            placeholder="Promoter / venue LLC"
+          />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
+          <Label>Role</Label>
+          <Input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder="Booker" />
+        </div>
+        <div className="space-y-1">
           <Label>Email</Label>
           <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@venue.com" />
         </div>
-        <div className="space-y-1">
-          <Label>Phone</Label>
-          <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
-        </div>
+      </div>
+      <div className="space-y-1">
+        <Label>Phone</Label>
+        <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
       </div>
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>

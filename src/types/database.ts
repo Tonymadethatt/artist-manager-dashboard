@@ -70,6 +70,7 @@ export interface Database {
           role: string | null
           email: string | null
           phone: string | null
+          company: string | null
           created_at: string
         }
         Insert: {
@@ -80,6 +81,7 @@ export interface Database {
           role?: string | null
           email?: string | null
           phone?: string | null
+          company?: string | null
           created_at?: string
         }
         Update: {
@@ -90,6 +92,7 @@ export interface Database {
           role?: string | null
           email?: string | null
           phone?: string | null
+          company?: string | null
           created_at?: string
         }
         Relationships: [
