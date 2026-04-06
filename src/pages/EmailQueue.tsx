@@ -274,13 +274,12 @@ export default function EmailQueue() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      {/* Tabs + refresh */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1 border-b border-neutral-800 flex-1">
+      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-neutral-800">
+        <div className="flex gap-1 flex-1 min-w-[12rem]">
           <button
             onClick={() => setActiveTab('queue')}
             className={cn(
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
               activeTab === 'queue'
                 ? 'border-neutral-300 text-neutral-100'
                 : 'border-transparent text-neutral-500 hover:text-neutral-300'
@@ -288,7 +287,7 @@ export default function EmailQueue() {
           >
             Queue
             {pendingEmails.length > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-neutral-700 text-neutral-200 rounded-full">
+              <span className="ml-2 inline-flex items-center justify-center min-w-[1rem] h-4 px-1 text-[10px] font-bold bg-neutral-700 text-neutral-200 rounded-full">
                 {pendingEmails.length}
               </span>
             )}
@@ -296,7 +295,7 @@ export default function EmailQueue() {
           <button
             onClick={() => setActiveTab('history')}
             className={cn(
-              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
               activeTab === 'history'
                 ? 'border-neutral-300 text-neutral-100'
                 : 'border-transparent text-neutral-500 hover:text-neutral-300'
@@ -305,56 +304,47 @@ export default function EmailQueue() {
             History
           </button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 ml-2"
-          onClick={handleRefresh}
-          disabled={refreshing || loading}
-          title="Refresh"
-        >
-          <RefreshCw className={cn('h-4 w-4', (refreshing || loading) && 'animate-spin')} />
-        </Button>
+
+        <div className="flex items-center gap-2 shrink-0 pb-1">
+          {activeTab === 'queue' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-neutral-500 whitespace-nowrap max-[420px]:hidden">
+                Auto-send
+              </span>
+              <Select
+                value={String(bufferMinutes)}
+                onValueChange={handleBufferChange}
+                disabled={bufferSaving || !profile}
+              >
+                <SelectTrigger
+                  className="w-[108px] sm:w-[118px] h-8 text-xs bg-neutral-950 border-neutral-700"
+                  aria-label="Auto-send after queued (minutes)"
+                  title="Minutes after queue before auto-send"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
+                    <SelectItem key={m} value={String(m)} className="text-xs">
+                      {m} min
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            title="Refresh"
+          >
+            <RefreshCw className={cn('h-4 w-4', (refreshing || loading) && 'animate-spin')} />
+          </Button>
+        </div>
       </div>
-
-      {/* Auto-send delay (applies per account; cron every ~1 min may add up to a minute after the delay) */}
-      {activeTab === 'queue' && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 py-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
-          <div className="space-y-0.5">
-            <p className="text-xs font-medium text-neutral-400">Auto-send delay</p>
-            <p className="text-[11px] text-neutral-600 leading-snug max-w-md">
-              Pending emails send automatically this long after they are queued (external cron, typically within about a minute after that). Shorter delays need the cron job to run often (e.g. every minute).
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Select
-              value={String(bufferMinutes)}
-              onValueChange={handleBufferChange}
-              disabled={bufferSaving || !profile}
-            >
-              <SelectTrigger className="w-[140px] h-9 text-xs bg-neutral-950 border-neutral-700">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
-                  <SelectItem key={m} value={String(m)} className="text-xs">
-                    {m} minutes{m === DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES ? ' (default)' : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'queue' && pendingEmails.length > 0 && (
-        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-400">
-          <Zap className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
-          <span>
-            Emails auto-send <strong className="text-neutral-300">{bufferMinutes} minutes</strong> after being queued. Click <strong className="text-neutral-300">Send now</strong> to send immediately, or <strong className="text-neutral-300">✕</strong> to cancel.
-          </span>
-        </div>
-      )}
 
       {sendError && (
         <div className="px-3 py-2 rounded-lg bg-red-950 border border-red-800 text-xs text-red-400">
