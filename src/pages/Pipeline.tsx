@@ -26,7 +26,7 @@ import {
   VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS,
 } from '@/types'
 import { cn } from '@/lib/utils'
-import { queueEmailAutomationForCompletedTask } from '@/lib/queueEmailOnTaskComplete'
+import type { QueueEmailOnTaskCompleteOptions } from '@/lib/queueEmailOnTaskComplete'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 
@@ -80,7 +80,7 @@ function VenueProgressPanelConnected({
   deals: ReturnType<typeof useDeals>['deals']
   allEmails: VenueEmail[]
   onClose: () => void
-  onCompleteTask: (id: string) => Promise<unknown>
+  onCompleteTask: (id: string, emailOpts?: QueueEmailOnTaskCompleteOptions) => Promise<unknown>
   onUpdateVenue: (id: string, updates: Partial<Venue>) => Promise<unknown>
   onQueueEmail: ReturnType<typeof useVenueEmails>['queueEmail']
   onOpenSendModal: (venue: Venue, contact: Contact, emailType: string) => void
@@ -112,9 +112,9 @@ function VenueProgressPanelConnected({
       promises.push(addNote(venue.id, label, updates.activityCategory))
     }
 
-    // 3. Complete checked tasks
+    // 3. Complete checked tasks (pass progress-panel agreement URL into the same queue path as board/list)
     for (const id of updates.completedTaskIds) {
-      promises.push(onCompleteTask(id))
+      promises.push(onCompleteTask(id, { agreementUrl: updates.agreementUrl }))
     }
 
     await Promise.all(promises)
@@ -127,17 +127,12 @@ function VenueProgressPanelConnected({
       }
     }
 
-    // 5. Queue emails for completed tasks that have email_type (same automation as board/list completeTask)
-    const emailActionTasks = updates.completedTaskIds
-      .map(id => venueTasks.find(t => t.id === id))
-      .filter((t): t is Task => !!(t?.email_type))
-
-    for (const t of emailActionTasks) {
-      await queueEmailAutomationForCompletedTask(t, { agreementUrl: updates.agreementUrl })
-    }
-    if (emailActionTasks.length) {
-      await refetchEmails()
-    }
+    // 5. Refresh queue if any completed task had an email action (queued inside completeTask)
+    const completedHadEmail = updates.completedTaskIds.some(id => {
+      const t = venueTasks.find(x => x.id === id)
+      return !!t?.email_type
+    })
+    if (completedHadEmail) await refetchEmails()
 
     // 6. Email action from suggested email panel
     if (updates.emailAction === 'queue' && updates.emailType) {

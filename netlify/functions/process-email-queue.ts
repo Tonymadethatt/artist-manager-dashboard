@@ -186,6 +186,7 @@ const handler: Handler = async (event) => {
 
   const results: Array<{ id: string; result: 'sent' | 'failed'; reason?: string }> = []
 
+  // Sending does not delete or archive `generated_files`; pending rows only read deal + file joins for URLs.
   for (const email of emails) {
     const profile = profileByUser.get(email.user_id) as {
       artist_name?: string

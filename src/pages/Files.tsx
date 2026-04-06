@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Download, Trash2, Eye, X, Files as FilesIcon, Link2, Copy, Check } from 'lucide-react'
 import { useFiles } from '@/hooks/useFiles'
@@ -15,7 +15,7 @@ import {
 import { sanitizeFilenameStem } from '@/lib/agreement'
 import { hasResolvablePdfLink, resolvedPdfHref } from '@/lib/files/pdfShareUrl'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
-import type { GeneratedFile } from '@/types'
+import type { Deal, GeneratedFile } from '@/types'
 import { cn } from '@/lib/utils'
 
 function formatOf(f: GeneratedFile): 'text' | 'pdf' {
@@ -33,6 +33,15 @@ export default function Files() {
   const [urlFeedback, setUrlFeedback] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [clipboardBanner, setClipboardBanner] = useState<string | null>(null)
+
+  const canonicalDealsByFileId = useMemo(() => {
+    const m = new Map<string, Deal>()
+    for (const d of deals) {
+      const fid = d.agreement_generated_file_id
+      if (fid) m.set(fid, d)
+    }
+    return m
+  }, [deals])
 
   const handleDownload = async (file: GeneratedFile) => {
     if (formatOf(file) === 'pdf') {
@@ -233,6 +242,13 @@ export default function Files() {
                 <Badge variant={formatOf(preview) === 'pdf' ? 'blue' : 'secondary'} className="text-[10px] mt-2">
                   {formatOf(preview) === 'pdf' ? 'PDF' : 'Text'}
                 </Badge>
+                {canonicalDealsByFileId.get(preview.id) && (
+                  <Badge variant="outline" className="text-[10px] mt-2 border-emerald-700/50 text-emerald-400 block w-fit">
+                    Canonical agreement ·{' '}
+                    {canonicalDealsByFileId.get(preview.id)?.venue?.name ??
+                      canonicalDealsByFileId.get(preview.id)?.description}
+                  </Badge>
+                )}
               </div>
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" onClick={() => handleDownload(preview)}>

@@ -111,6 +111,9 @@ export function useFiles() {
   /**
    * Insert row, upload PDF to Storage, update row with paths + public URL.
    * Rolls back DB row or Storage object on failure.
+   *
+   * Each save creates a **new** `generated_files` row (new slug). To “replace” an agreement for a deal,
+   * point the deal at the new row (File Builder toggle, Files panel, or Earnings) — we do not upsert storage in-place here.
    */
   const addPdfFile = async (file: AddPdfFileInput) => {
     const { data: { user } } = await supabase.auth.getUser()

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { queueEmailAutomationForCompletedTask } from '@/lib/queueEmailOnTaskComplete'
+import {
+  queueEmailAutomationForCompletedTask,
+  type QueueEmailOnTaskCompleteOptions,
+} from '@/lib/queueEmailOnTaskComplete'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
 
 function addDays(dateStr: string, n: number) {
@@ -108,7 +111,7 @@ export function useTasks() {
     return {}
   }
 
-  const completeTask = async (id: string) => {
+  const completeTask = async (id: string, emailOptions?: QueueEmailOnTaskCompleteOptions) => {
     const task = tasks.find(t => t.id === id)
     if (!task) return { error: new Error('Task not found') }
 
@@ -163,7 +166,7 @@ export function useTasks() {
       .eq('id', id)
       .single()
 
-    await queueEmailAutomationForCompletedTask((freshTask ?? task) as Task, {})
+    await queueEmailAutomationForCompletedTask((freshTask ?? task) as Task, emailOptions ?? {})
 
     return {}
   }
