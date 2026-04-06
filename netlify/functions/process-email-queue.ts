@@ -14,7 +14,7 @@
  *   URL:     https://<your-netlify-site>/.netlify/functions/process-email-queue
  *   Method:  POST
  *   Header:  X-Queue-Secret: <your PROCESS_QUEUE_SECRET value>
- *   Schedule: every 1 minute  (*/1 * * * *)
+ *   Schedule: every 1 minute (set one-minute interval in your cron provider; standard cron is five fields)
  */
 
 import type { Handler } from '@netlify/functions'
