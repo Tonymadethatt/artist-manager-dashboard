@@ -6,7 +6,6 @@ import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
-import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { VenueWorkCard } from '@/components/pipeline/VenueWorkCard'
 import { VenueProgressPanel, type ProgressUpdate } from '@/components/pipeline/VenueProgressPanel'
 import { TaskItem } from '@/components/pipeline/TaskItem'
@@ -20,11 +19,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail, VenueEmailType } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
-import { supabase } from '@/lib/supabase'
+import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail } from '@/types'
+import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
-import { hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
+import { queueEmailAutomationForCompletedTask } from '@/lib/queueEmailOnTaskComplete'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -67,6 +65,7 @@ function VenueProgressPanelConnected({
   onQueueEmail,
   onOpenSendModal,
   onApplyTemplate,
+  refetchEmails,
 }: {
   venue: Venue
   tasks: Task[]
@@ -78,9 +77,9 @@ function VenueProgressPanelConnected({
   onQueueEmail: ReturnType<typeof useVenueEmails>['queueEmail']
   onOpenSendModal: (venue: Venue, contact: Contact, emailType: string) => void
   onApplyTemplate: (templateId: string, venueId: string) => Promise<{ count: number }>
+  refetchEmails: () => void | Promise<void>
 }) {
   const { contacts, addNote } = useVenueDetail(venue.id)
-  const { profile } = useArtistProfile()
   const venueDeals = deals.filter(d => d.venue_id === venue.id)
   const venueEmails = allEmails.filter(e => e.venue_id === venue.id)
   const venueTasks = tasks.filter(t => t.venue_id === venue.id)
@@ -120,72 +119,16 @@ function VenueProgressPanelConnected({
       }
     }
 
-    // 5. Queue emails for completed tasks that have email_type
+    // 5. Queue emails for completed tasks that have email_type (same automation as board/list completeTask)
     const emailActionTasks = updates.completedTaskIds
       .map(id => venueTasks.find(t => t.id === id))
       .filter((t): t is Task => !!(t?.email_type))
 
     for (const t of emailActionTasks) {
-      // performance_report_request goes to the artist, not via venue email queue
-      if (t.email_type === 'performance_report_request') {
-        if (profile) {
-          const eventDate = venueDeals[0]?.event_date ?? venue.deal_terms?.event_date ?? null
-          try {
-            // Create the DB row first (authenticated client), then email
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-              const { data: reportRow } = await supabase
-                .from('performance_reports')
-                .insert({ user_id: user.id, venue_id: venue.id, deal_id: venueDeals[0]?.id ?? null })
-                .select('token')
-                .single()
-              if (reportRow?.token) {
-                await fetch('/.netlify/functions/send-performance-form', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    token: reportRow.token,
-                    venueName: venue.name,
-                    eventDate,
-                    artistName: profile.artist_name,
-                    artistEmail: profile.artist_email,
-                    fromEmail: profile.from_email,
-                    replyToEmail: profile.reply_to_email || profile.from_email,
-                    managerName: profile.manager_name || 'Your Manager',
-                  }),
-                })
-              }
-            }
-          } catch (e) {
-            console.error('[Pipeline] Failed to send performance form:', e)
-          }
-        }
-        continue
-      }
-
-      const primaryContact = contacts.find(c => c.email)
-      if (!primaryContact?.email) continue
-
-      // Save agreement URL to deal before sending agreement email
-      if (t.email_type === 'agreement_ready' && updates.agreementUrl) {
-        const deal = venueDeals[0]
-        if (deal) {
-          await supabase.from('deals').update({ agreement_url: updates.agreementUrl }).eq('id', deal.id)
-        }
-      }
-
-      const vType = t.email_type as VenueEmailType
-      if (await hasRecentPendingVenueEmail(venue.id, vType, 45)) {
-        continue
-      }
-
-      await onQueueEmail({
-        venue_id: venue.id,
-        email_type: vType,
-        recipient_email: primaryContact.email,
-        subject: `${VENUE_EMAIL_TYPE_LABELS[vType] ?? t.email_type} - ${venue.name}`,
-        notes: `Auto-queued from task: ${t.title}`,
-      })
+      await queueEmailAutomationForCompletedTask(t, { agreementUrl: updates.agreementUrl })
+    }
+    if (emailActionTasks.length) {
+      await refetchEmails()
     }
 
     // 6. Email action from suggested email panel
@@ -206,7 +149,7 @@ function VenueProgressPanelConnected({
         onOpenSendModal(venue, primaryContact, updates.emailType)
       }
     }
-  }, [venue, contacts, templates, venueDeals, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate])
+  }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails])
 
   return (
     <VenueProgressPanel
@@ -225,7 +168,7 @@ export default function Pipeline() {
   const { tasks, loading, addTask, updateTask, deleteTask, completeTask, uncompleteTask, snoozeTask } = useTasks()
   const { venues, updateVenue } = useVenues()
   const { deals } = useDeals()
-  const { emails: allEmails, queueEmail } = useVenueEmails()
+  const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
   const { applyTemplate } = useTaskTemplates()
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
@@ -508,6 +451,7 @@ export default function Pipeline() {
               onQueueEmail={queueEmail}
               onOpenSendModal={handleOpenSendModal}
               onApplyTemplate={applyTemplate}
+              refetchEmails={refetchEmails}
             />
           </div>
         )}

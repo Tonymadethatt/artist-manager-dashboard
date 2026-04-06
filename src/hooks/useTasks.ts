@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { queueEmailAutomationForCompletedTask } from '@/lib/queueEmailOnTaskComplete'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
 
 function addDays(dateStr: string, n: number) {
@@ -115,6 +116,8 @@ export function useTasks() {
         if (spawned) setTasks(prev => [spawned as Task, ...prev])
       }
     }
+
+    await queueEmailAutomationForCompletedTask(task, {})
 
     return {}
   }
