@@ -70,11 +70,22 @@ export function useTaskTemplates() {
     title: string; notes?: string | null; days_offset: number
     priority: TaskPriority; recurrence: TaskRecurrence; sort_order?: number
     email_type?: string | null
+    generated_file_id?: string | null
   }) => {
     const sortOrder = item.sort_order ?? (templates.find(t => t.id === templateId)?.items?.length ?? 0)
     const { data, error } = await supabase
       .from('task_template_items')
-      .insert({ template_id: templateId, title: item.title, notes: item.notes ?? null, days_offset: item.days_offset, priority: item.priority, recurrence: item.recurrence, sort_order: sortOrder, email_type: item.email_type ?? null })
+      .insert({
+        template_id: templateId,
+        title: item.title,
+        notes: item.notes ?? null,
+        days_offset: item.days_offset,
+        priority: item.priority,
+        recurrence: item.recurrence,
+        sort_order: sortOrder,
+        email_type: item.email_type ?? null,
+        generated_file_id: item.generated_file_id ?? null,
+      })
       .select()
       .single()
     if (error) return { error: new Error(error.message) }
@@ -135,6 +146,7 @@ export function useTaskTemplates() {
       venue_id: venueId,
       deal_id: dealId ?? null,
       email_type: item.email_type ?? null,
+      generated_file_id: item.generated_file_id ?? null,
       completed: false,
     }))
 

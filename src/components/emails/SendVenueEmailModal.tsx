@@ -22,7 +22,9 @@ import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue, isCustomEmailType } from '@/lib/email/customTemplateId'
 import { supabase } from '@/lib/supabase'
-import type { Deal, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
+import type { Deal, GeneratedFile, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 
 interface SendVenueEmailModalProps {
@@ -51,7 +53,7 @@ const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
 
 function getDefaultType(deal?: Deal | null): VenueEmailType {
   if (!deal) return 'follow_up'
-  if (deal.agreement_url) return 'agreement_ready'
+  if (deal.agreement_url?.trim() || deal.agreement_generated_file_id) return 'agreement_ready'
   const today = new Date().toISOString().split('T')[0]
   if (deal.payment_due_date && deal.payment_due_date < today && !deal.artist_paid) return 'payment_reminder'
   if (deal.artist_paid) return 'payment_receipt'
@@ -66,7 +68,9 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
     case 'booking_confirmed':
       return `Officially confirms the booking with ${venue}: event summary and what happens next.`
     case 'agreement_ready':
-      return `Notifies ${venue} that the agreement is ready for review${deal?.agreement_url ? ' and includes the link' : ''}.`
+      return `Notifies ${venue} that the agreement is ready for review${
+        deal?.agreement_url?.trim() || deal?.agreement_generated_file_id ? ' and includes the link' : ''
+      }.`
     case 'payment_reminder':
       return `A friendly reminder to ${venue} about the outstanding payment${deal?.payment_due_date ? ` due on ${deal.payment_due_date}` : ''}.`
     case 'payment_receipt':
@@ -129,6 +133,8 @@ export function SendVenueEmailModal({
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  /** Deal with `agreement_url` resolved from `agreement_generated_file_id` when needed (matches send payload). */
+  const [dealForPreview, setDealForPreview] = useState<Deal | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -139,6 +145,28 @@ export function SendVenueEmailModal({
       setErrorMsg('')
     }
   }, [open, defaultType, deal, initialEmail, initialName])
+
+  useEffect(() => {
+    if (!open || !deal) {
+      setDealForPreview(null)
+      return
+    }
+    setDealForPreview(deal)
+    let cancelled = false
+    ;(async () => {
+      const url = await resolveDealAgreementUrlForEmailPayload(
+        async id => {
+          const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+          return (data as GeneratedFile | null) ?? null
+        },
+        deal,
+        publicSiteOrigin()
+      )
+      if (cancelled) return
+      setDealForPreview({ ...deal, agreement_url: url ?? deal.agreement_url ?? null })
+    })()
+    return () => { cancelled = true }
+  }, [open, deal])
 
   const handleSend = async () => {
     if (!recipientEmail || !profile) return
@@ -162,6 +190,19 @@ export function SendVenueEmailModal({
         : undefined
       const tmpl = !customRow ? getTemplate(emailType as VenueEmailType) : undefined
 
+      let agreementUrl: string | null = deal?.agreement_url ?? null
+      if (deal) {
+        agreementUrl =
+          (await resolveDealAgreementUrlForEmailPayload(
+            async id => {
+              const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+              return (data as GeneratedFile | null) ?? null
+            },
+            deal,
+            publicSiteOrigin()
+          )) ?? agreementUrl
+      }
+
       const payload: Record<string, unknown> = {
         profile: {
           artist_name: profile.artist_name,
@@ -180,7 +221,7 @@ export function SendVenueEmailModal({
             gross_amount: deal.gross_amount,
             event_date: deal.event_date,
             payment_due_date: deal.payment_due_date,
-            agreement_url: deal.agreement_url,
+            agreement_url: agreementUrl,
             notes: deal.notes,
           },
         } : {}),
@@ -289,7 +330,7 @@ export function SendVenueEmailModal({
             <p className="text-xs text-neutral-500 leading-relaxed">
               {isCustomEmailType(emailType)
                 ? 'Your block-based client template. Merge tokens fill from deal and venue when you send.'
-                : getTypeDescription(emailType as VenueEmailType, deal, venue?.name)}
+                : getTypeDescription(emailType as VenueEmailType, dealForPreview ?? deal, venue?.name)}
             </p>
           </div>
 

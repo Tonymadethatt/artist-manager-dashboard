@@ -115,8 +115,10 @@ export function VenueProgressPanel({
       const t = [...todayTasks, ...overdueTasks].find(t => t.id === id)
       return t?.email_type === 'agreement_ready'
     })
-    const dealHasUrl = deals.some(d => d.agreement_url)
-    return hasAgreementTask && !dealHasUrl
+    const dealHasAgreement = deals.some(
+      d => !!(d.agreement_url?.trim()) || d.agreement_generated_file_id != null
+    )
+    return hasAgreementTask && !dealHasAgreement
   }, [checkedTaskIds, todayTasks, overdueTasks, deals])
 
   const toggleTask = (id: string) => {

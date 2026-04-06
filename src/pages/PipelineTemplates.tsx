@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   high: 'bg-red-500',
@@ -37,6 +38,7 @@ interface ItemFormState {
   priority: TaskPriority
   recurrence: TaskRecurrence
   email_type: string
+  generated_file_id: string
 }
 
 const EMPTY_ITEM: ItemFormState = {
@@ -46,6 +48,7 @@ const EMPTY_ITEM: ItemFormState = {
   priority: 'medium',
   recurrence: 'none',
   email_type: '__none__',
+  generated_file_id: '',
 }
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
@@ -230,6 +233,7 @@ export default function PipelineTemplates() {
       priority: itemForm.priority,
       recurrence: itemForm.recurrence,
       email_type: itemForm.email_type === '__none__' ? null : itemForm.email_type,
+      generated_file_id: itemForm.generated_file_id || null,
     }
     if (editingItemId) {
       await updateTemplateItem(editingItemId, selectedTemplate.id, payload)
@@ -262,6 +266,7 @@ export default function PipelineTemplates() {
       priority: item.priority,
       recurrence: item.recurrence,
       email_type: item.email_type ?? '__none__',
+      generated_file_id: item.generated_file_id ?? '',
     })
     setItemDialogOpen(true)
   }
@@ -438,6 +443,11 @@ export default function PipelineTemplates() {
                               {emailTypeLabel(item.email_type)}
                             </span>
                           )}
+                          {item.generated_file_id && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-600 font-medium shrink-0">
+                              PDF linked
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap mt-1">
                           <span className="text-[10px] text-neutral-500 tabular-nums">
@@ -523,6 +533,23 @@ export default function PipelineTemplates() {
               emailActionOptions={emailActionOptions}
               compact
             />
+            <div className="space-y-1">
+              <div className={EYEBROW}>Agreement PDF (optional)</div>
+              <AgreementPdfPicker
+                value={itemForm.generated_file_id || null}
+                onChange={id => setItemForm(f => ({ ...f, generated_file_id: id ?? '' }))}
+                venueId={null}
+                dealId={null}
+                preferScoped={false}
+              />
+              {itemForm.generated_file_id &&
+                itemForm.email_type !== 'agreement_ready' &&
+                itemForm.email_type !== '__none__' && (
+                <p className="text-[10px] text-amber-500/90">
+                  Document link applies when the email action uses deal agreement (e.g. agreement ready or custom client templates).
+                </p>
+              )}
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0 pt-1">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={closeItemDialog}>

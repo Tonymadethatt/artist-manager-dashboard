@@ -123,3 +123,30 @@ export function dealSyncPatchFromResolution(r: ResolvedAgreement): DealAgreement
   }
   return null
 }
+
+/** Resolve final agreement href for email payloads (deal FK + legacy URL only). */
+export async function resolveDealAgreementUrlForEmailPayload(
+  loadFileById: (id: string) => Promise<GeneratedFile | null>,
+  deal: {
+    agreement_url?: string | null
+    agreement_generated_file_id?: string | null
+  } | null | undefined,
+  siteOrigin: string
+): Promise<string | null> {
+  if (!deal) return null
+  let dealFile: GeneratedFile | null = null
+  if (deal.agreement_generated_file_id) {
+    dealFile = await loadFileById(deal.agreement_generated_file_id)
+  }
+  const r = computeResolvedAgreement({
+    siteOrigin,
+    progressPanelUrl: null,
+    pinnedFile: null,
+    dealFile:
+      dealFile && isValidAgreementPdfFile(dealFile, siteOrigin)
+        ? dealFile
+        : null,
+    dealAgreementUrl: deal.agreement_url ?? null,
+  })
+  return r.url
+}

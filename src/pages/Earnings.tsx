@@ -5,6 +5,7 @@ import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
+import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,6 +29,9 @@ import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } 
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
+import type { GeneratedFile } from '@/types'
 
 const PAGE_SIZE = 10
 
@@ -447,6 +451,7 @@ const EMPTY_FORM = {
   commission_tier: 'new_doors' as CommissionTier,
   payment_due_date: '',
   agreement_url: '',
+  agreement_generated_file_id: '',
   notes: '',
 }
 
@@ -560,6 +565,7 @@ export default function Earnings() {
       commission_tier: deal.commission_tier,
       payment_due_date: deal.payment_due_date ?? '',
       agreement_url: deal.agreement_url ?? '',
+      agreement_generated_file_id: deal.agreement_generated_file_id ?? '',
       notes: deal.notes ?? '',
     })
     setEditDeal(deal)
@@ -573,6 +579,19 @@ export default function Earnings() {
     const gross = parseFloat(form.gross_amount)
     if (!form.description.trim() || isNaN(gross) || gross <= 0) return
     setSaving(true)
+    let agreementUrl: string | null = form.agreement_url.trim() || null
+    const agreementFileId = form.agreement_generated_file_id.trim() || null
+    if (agreementFileId) {
+      const { data: f } = await supabase
+        .from('generated_files')
+        .select('*')
+        .eq('id', agreementFileId)
+        .maybeSingle()
+      if (f && (f as GeneratedFile).output_format === 'pdf') {
+        const href = resolvedPdfHrefFromOrigin(f as GeneratedFile, publicSiteOrigin())
+        if (href) agreementUrl = href
+      }
+    }
     const payload = {
       description: form.description.trim(),
       venue_id: form.venue_id || null,
@@ -580,7 +599,8 @@ export default function Earnings() {
       gross_amount: gross,
       commission_tier: form.commission_tier,
       payment_due_date: form.payment_due_date || null,
-      agreement_url: form.agreement_url || null,
+      agreement_url: agreementUrl,
+      agreement_generated_file_id: agreementFileId,
       notes: form.notes || null,
     }
     if (editDeal) {
@@ -949,15 +969,33 @@ export default function Earnings() {
                   onChange={e => setField('payment_due_date', e.target.value)}
                 />
               </div>
-              <div className="space-y-1">
-                <Label>Agreement URL</Label>
-                <Input
-                  type="url"
-                  value={form.agreement_url}
-                  onChange={e => setField('agreement_url', e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Agreement PDF (from Files)</Label>
+              <AgreementPdfPicker
+                value={form.agreement_generated_file_id || null}
+                onChange={id => setField('agreement_generated_file_id', id ?? '')}
+                venueId={form.venue_id || null}
+                dealId={editDeal?.id ?? null}
+                preferScoped
+              />
+              <p className="text-[10px] text-neutral-600 leading-snug">
+                Links the deal to a generated PDF; the public share URL is saved on save. Use the field below for an external link (DocuSign, Drive) instead, or clear the PDF.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Agreement URL (optional manual / external)</Label>
+              <Input
+                type="url"
+                value={form.agreement_url}
+                onChange={e => setField('agreement_url', e.target.value)}
+                placeholder="https://…"
+              />
+              <p className="text-[10px] text-neutral-600">
+                If both PDF and URL are set, the PDF share link wins on save unless you clear the PDF.
+              </p>
             </div>
 
             <div className="space-y-1">

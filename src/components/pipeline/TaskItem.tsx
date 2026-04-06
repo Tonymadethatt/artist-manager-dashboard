@@ -154,6 +154,11 @@ export function TaskItem({ task, onComplete, onUncomplete, onSnooze, onEdit, onD
             {task.recurrence !== 'none' && (
               <span className="text-[10px] text-neutral-700">repeats</span>
             )}
+            {task.agreement_file && (
+              <span className="text-[10px] text-blue-400/80 truncate max-w-[180px]" title={task.agreement_file.name}>
+                PDF: {task.agreement_file.name}
+              </span>
+            )}
           </div>
         )}
       </div>

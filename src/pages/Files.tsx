@@ -93,7 +93,10 @@ export default function Files() {
     if (!preview || formatOf(preview) !== 'pdf' || !pdfHref || !dealForUrl) return
     setSettingUrl(true)
     setUrlFeedback(null)
-    const res = await updateDeal(dealForUrl, { agreement_url: pdfHref })
+    const res = await updateDeal(dealForUrl, {
+      agreement_url: pdfHref,
+      agreement_generated_file_id: preview.id,
+    })
     setSettingUrl(false)
     if (res.error) {
       setUrlFeedback('Could not update deal.')
@@ -254,7 +257,7 @@ export default function Files() {
                   Copy public PDF link
                 </Button>
                 <div className="flex flex-col gap-2">
-                  <p className="text-xs text-neutral-500">Set as agreement URL on a deal</p>
+                  <p className="text-xs text-neutral-500">Set as canonical agreement for a deal (URL + PDF record)</p>
                   <div className="flex gap-2 flex-col sm:flex-row sm:items-center">
                     <Select value={dealForUrl || '__none__'} onValueChange={v => setDealForUrl(v === '__none__' ? '' : v)}>
                       <SelectTrigger className="flex-1">

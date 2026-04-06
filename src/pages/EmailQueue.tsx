@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import type { VenueEmail, VenueEmailType } from '@/types'
+import type { GeneratedFile, VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import {
   EMAIL_QUEUE_BUFFER_OPTIONS,
@@ -241,13 +243,26 @@ export default function EmailQueue() {
         tagline: profile.tagline,
       }
 
+      let agreementUrl: string | null = email.deal?.agreement_url ?? null
+      if (email.deal) {
+        agreementUrl =
+          (await resolveDealAgreementUrlForEmailPayload(
+            async id => {
+              const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+              return (data as GeneratedFile | null) ?? null
+            },
+            email.deal,
+            publicSiteOrigin()
+          )) ?? agreementUrl
+      }
+
       const dealPayload = email.deal ? {
         deal: {
           description: email.deal.description,
           gross_amount: email.deal.gross_amount,
           event_date: email.deal.event_date,
           payment_due_date: email.deal.payment_due_date,
-          agreement_url: email.deal.agreement_url,
+          agreement_url: agreementUrl,
           notes: email.deal.notes,
         },
       } : {}

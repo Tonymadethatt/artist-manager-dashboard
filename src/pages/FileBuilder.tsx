@@ -7,6 +7,7 @@ import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useFiles } from '@/hooks/useFiles'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useDeals } from '@/hooks/useDeals'
+import { resolvedPdfHref } from '@/lib/files/pdfShareUrl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,7 +35,7 @@ export default function FileBuilder() {
   const { templates, loading: tplLoading } = useTemplates()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
-  const { deals } = useDeals()
+  const { deals, updateDeal } = useDeals()
   const { addTextFile, addPdfFile } = useFiles()
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
@@ -52,6 +53,8 @@ export default function FileBuilder() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** When multiple venue contacts: null = use primary (email-first) heuristic. */
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
+  /** When a deal is selected, default-on: set that deal’s canonical agreement to this PDF on save. */
+  const [setAsDealAgreement, setSetAsDealAgreement] = useState(true)
 
   const { contacts } = useVenueDetail(selectedVenueId || null)
   const primaryContact = useMemo(
@@ -70,6 +73,11 @@ export default function FileBuilder() {
   useEffect(() => {
     setSelectedContactId(null)
   }, [selectedVenueId])
+
+  useEffect(() => {
+    if (!selectedDealId) setSetAsDealAgreement(false)
+    else setSetAsDealAgreement(true)
+  }, [selectedDealId])
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -238,7 +246,7 @@ export default function FileBuilder() {
     try {
       const html = await buildPdfHtml()
       const blob = await htmlDocumentToPdfBlob(html)
-      const { error } = await addPdfFile({
+      const { data: row, error } = await addPdfFile({
         name: fileName.trim(),
         content: rendered,
         template_id: selectedTemplateId || null,
@@ -249,6 +257,20 @@ export default function FileBuilder() {
       if (error) {
         showToast(error.message || 'Could not save PDF', 'err')
         return
+      }
+      if (selectedDealId && setAsDealAgreement && row) {
+        const href = resolvedPdfHref(row)
+        if (href) {
+          const { error: dealErr } = await updateDeal(selectedDealId, {
+            agreement_url: href,
+            agreement_generated_file_id: row.id,
+          })
+          if (dealErr) {
+            showToast('PDF saved; could not update deal agreement link.', 'err')
+            setSavedPdf(true)
+            return
+          }
+        }
       }
       setSavedPdf(true)
       showToast('PDF saved to Files', 'ok')
@@ -388,9 +410,23 @@ export default function FileBuilder() {
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-neutral-600 leading-snug pt-0.5">
-                Stored on the file record. Use Files to copy the PDF URL into a deal when needed.
+                Stored on the file record. Pipeline agreement emails use the deal link when set.
               </p>
             </div>
+
+            {selectedDealId && (
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-white"
+                  checked={setAsDealAgreement}
+                  onChange={e => setSetAsDealAgreement(e.target.checked)}
+                />
+                <span className="text-xs text-neutral-300 leading-snug">
+                  This is the agreement for this deal (updates deal link and PDF pointer). Turn off for reference-only PDFs.
+                </span>
+              </label>
+            )}
 
             <Separator className="bg-neutral-800" />
 

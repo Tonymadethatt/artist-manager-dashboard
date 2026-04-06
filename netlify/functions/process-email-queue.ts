@@ -20,6 +20,11 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
+import {
+  isGeneratedFileInScopeForDeal,
+  resolveDealAgreementUrlForEmailPayload,
+} from '../../src/lib/resolveAgreementUrl'
+import type { GeneratedFile } from '../../src/types'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -78,7 +83,7 @@ const handler: Handler = async (event) => {
     .select(`
       *,
       venue:venues(id, name, city, location),
-      deal:deals(id, description, event_date, gross_amount, agreement_url, notes, payment_due_date),
+      deal:deals(id, description, event_date, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date),
       contact:contacts(id, name, email)
     `)
     .eq('status', 'pending')
@@ -235,7 +240,37 @@ const handler: Handler = async (event) => {
       email: email.recipient_email,
     }
 
-    const dealPayload = email.deal ? { deal: email.deal } : {}
+    const siteOrigin = (siteUrl || '').replace(/\/$/, '')
+
+    let dealForSend: Record<string, unknown> | null = email.deal
+      ? { ...(email.deal as Record<string, unknown>) }
+      : null
+    if (dealForSend && email.deal) {
+      const d = email.deal as {
+        agreement_generated_file_id?: string | null
+        agreement_url?: string | null
+        venue_id?: string | null
+        user_id?: string
+      }
+      const resolvedUrl = await resolveDealAgreementUrlForEmailPayload(
+        async fid => {
+          const { data: gf } = await supabase
+            .from('generated_files')
+            .select('*')
+            .eq('id', fid)
+            .maybeSingle()
+          const file = gf as GeneratedFile | null
+          if (!file || file.user_id !== email.user_id) return null
+          if (!isGeneratedFileInScopeForDeal(file, email.user_id, d.venue_id)) return null
+          return file
+        },
+        d,
+        siteOrigin
+      )
+      if (resolvedUrl) dealForSend = { ...dealForSend, agreement_url: resolvedUrl }
+    }
+
+    const dealPayload = dealForSend ? { deal: dealForSend } : {}
     const venuePayload = email.venue
       ? {
         venue: {
