@@ -155,9 +155,9 @@ export function buildVenueEmailHtml(
         deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
-        row('Status', 'Confirmed', '#22c55e'),
+        row('Status', 'Confirmed', '#ffffff'),
       ].filter(Boolean).join('')
-      bodyCards = `<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(34,197,94,0.2);"><span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">Confirmed</span></div><div style="padding:2px 18px 6px;">${confirmedRows}</div></div>`
+      bodyCards = card('Booking Details', confirmedRows, '#22c55e')
       const stepsContent = [
         '<li style="margin-bottom:8px;">You will receive a formal agreement to sign if not already completed.</li>',
         '<li style="margin-bottom:8px;">Payment details will be outlined per the agreed terms.</li>',
