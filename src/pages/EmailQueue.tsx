@@ -3,12 +3,18 @@ import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap } from '
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { Button } from '@/components/ui/button'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import type { VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
-
-// Minutes before an email auto-sends via the cron job
-const AUTO_SEND_BUFFER_MINUTES = 10
+import {
+  EMAIL_QUEUE_BUFFER_OPTIONS,
+  clampEmailQueueBufferMinutes,
+  DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
+  type EmailQueueBufferMinutes,
+} from '@/lib/emailQueueBuffer'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('en-US', {
@@ -17,8 +23,8 @@ function fmtDate(iso: string) {
   })
 }
 
-function getMinutesUntilSend(createdAt: string): number {
-  const sendAt = new Date(createdAt).getTime() + AUTO_SEND_BUFFER_MINUTES * 60 * 1000
+function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
+  const sendAt = new Date(createdAt).getTime() + bufferMinutes * 60 * 1000
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
@@ -57,13 +63,15 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-function CountdownBadge({ createdAt }: { createdAt: string }) {
-  const [minsLeft, setMinsLeft] = useState(() => getMinutesUntilSend(createdAt))
+function CountdownBadge({ createdAt, bufferMinutes }: { createdAt: string; bufferMinutes: number }) {
+  const [minsLeft, setMinsLeft] = useState(() => getMinutesUntilSend(createdAt, bufferMinutes))
 
   useEffect(() => {
-    const id = setInterval(() => setMinsLeft(getMinutesUntilSend(createdAt)), 30000)
+    const tick = () => setMinsLeft(getMinutesUntilSend(createdAt, bufferMinutes))
+    const id = setInterval(tick, 30000)
+    tick()
     return () => clearInterval(id)
-  }, [createdAt])
+  }, [createdAt, bufferMinutes])
 
   if (minsLeft <= 0) return (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400">
@@ -80,13 +88,14 @@ function CountdownBadge({ createdAt }: { createdAt: string }) {
 
 interface PendingRowProps {
   email: VenueEmail
+  bufferMinutes: number
   onSendNow: (email: VenueEmail) => void
   onDismiss: (id: string) => void
   sending: boolean
   dismissing: boolean
 }
 
-function PendingRow({ email, onSendNow, onDismiss, sending, dismissing }: PendingRowProps) {
+function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, sending, dismissing }: PendingRowProps) {
   const recipientName = email.contact?.name || null
 
   return (
@@ -102,7 +111,7 @@ function PendingRow({ email, onSendNow, onDismiss, sending, dismissing }: Pendin
           {recipientName ? `${recipientName} · ` : ''}{email.recipient_email}
         </p>
         <div className="flex items-center gap-3">
-          <CountdownBadge createdAt={email.created_at} />
+          <CountdownBadge createdAt={email.created_at} bufferMinutes={bufferMinutes} />
           <span className="text-[10px] text-neutral-700">{fmtDate(email.created_at)}</span>
         </div>
         {email.notes && <p className="text-xs text-neutral-600 italic">{email.notes}</p>}
@@ -160,12 +169,34 @@ function HistoryRow({ email }: { email: VenueEmail }) {
 
 export default function EmailQueue() {
   const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
-  const { profile } = useArtistProfile()
+  const { profile, updateProfile } = useArtistProfile()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [bufferSaving, setBufferSaving] = useState(false)
+
+  const bufferMinutes = profile
+    ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
+    : DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES
+
+  const handleBufferChange = async (value: string) => {
+    const n = parseInt(value, 10) as EmailQueueBufferMinutes
+    if (!EMAIL_QUEUE_BUFFER_OPTIONS.includes(n)) return
+    setBufferSaving(true)
+    const { error } = await updateProfile({ email_queue_buffer_minutes: n })
+    if (error) {
+      const msg = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : 'Could not save delay setting'
+      setSendError(msg)
+    }
+    else setSendError(null)
+    setBufferSaving(false)
+  }
 
   const handleDismiss = async (id: string) => {
     setDismissingId(id)
@@ -286,12 +317,41 @@ export default function EmailQueue() {
         </Button>
       </div>
 
-      {/* Info banner */}
+      {/* Auto-send delay (applies per account; cron every ~1 min may add up to a minute after the delay) */}
+      {activeTab === 'queue' && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 py-2.5 rounded-lg bg-neutral-900 border border-neutral-800">
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium text-neutral-400">Auto-send delay</p>
+            <p className="text-[11px] text-neutral-600 leading-snug max-w-md">
+              Pending emails send automatically this long after they are queued (external cron, typically within about a minute after that). Shorter delays need the cron job to run often (e.g. every minute).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Select
+              value={String(bufferMinutes)}
+              onValueChange={handleBufferChange}
+              disabled={bufferSaving || !profile}
+            >
+              <SelectTrigger className="w-[140px] h-9 text-xs bg-neutral-950 border-neutral-700">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
+                  <SelectItem key={m} value={String(m)} className="text-xs">
+                    {m} minutes{m === DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES ? ' (default)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'queue' && pendingEmails.length > 0 && (
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-400">
           <Zap className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
           <span>
-            Emails auto-send {AUTO_SEND_BUFFER_MINUTES} minutes after being queued. Click <strong className="text-neutral-300">Send now</strong> to send immediately, or <strong className="text-neutral-300">✕</strong> to cancel.
+            Emails auto-send <strong className="text-neutral-300">{bufferMinutes} minutes</strong> after being queued. Click <strong className="text-neutral-300">Send now</strong> to send immediately, or <strong className="text-neutral-300">✕</strong> to cancel.
           </span>
         </div>
       )}
@@ -322,6 +382,7 @@ export default function EmailQueue() {
                 <PendingRow
                   key={email.id}
                   email={email}
+                  bufferMinutes={bufferMinutes}
                   onSendNow={handleSendNow}
                   onDismiss={handleDismiss}
                   sending={sendingId === email.id}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES } from '@/lib/emailQueueBuffer'
 import type { ArtistProfile } from '@/types'
 
 const DEFAULTS: Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'> = {
@@ -14,6 +15,7 @@ const DEFAULTS: Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'> = {
   social_handle: null,
   tagline: null,
   reply_to_email: null,
+  email_queue_buffer_minutes: DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
 }
 
 export function useArtistProfile() {

@@ -316,6 +316,7 @@ export interface Database {
           social_handle: string | null
           tagline: string | null
           reply_to_email: string | null
+          email_queue_buffer_minutes?: number
           created_at: string
           updated_at: string
         }
@@ -332,6 +333,7 @@ export interface Database {
           social_handle?: string | null
           tagline?: string | null
           reply_to_email?: string | null
+          email_queue_buffer_minutes?: number
           created_at?: string
           updated_at?: string
         }
@@ -348,6 +350,7 @@ export interface Database {
           social_handle?: string | null
           tagline?: string | null
           reply_to_email?: string | null
+          email_queue_buffer_minutes?: number
           created_at?: string
           updated_at?: string
         }

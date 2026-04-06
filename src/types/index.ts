@@ -220,6 +220,8 @@ export interface ArtistProfile {
   social_handle: string | null
   tagline: string | null
   reply_to_email: string | null
+  /** Minutes after queue before cron auto-sends; 5|10|15|20|30 (default 10 if column missing pre-migration) */
+  email_queue_buffer_minutes?: number
   created_at: string
   updated_at: string
 }

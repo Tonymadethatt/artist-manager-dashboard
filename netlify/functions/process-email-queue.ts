@@ -2,7 +2,7 @@
  * process-email-queue
  *
  * Called by an external cron job every minute.
- * Finds pending emails older than BUFFER_MINUTES and sends them automatically.
+ * Finds pending emails older than each user's email_queue_buffer_minutes (5–30; see artist_profile) and sends them automatically.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -20,7 +20,18 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
-const BUFFER_MINUTES = 10
+/** Keep in sync with src/lib/emailQueueBuffer.ts */
+const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
+const DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES = 10
+const MIN_EMAIL_QUEUE_BUFFER_MINUTES = EMAIL_QUEUE_BUFFER_OPTIONS[0]
+
+function clampEmailQueueBufferMinutes(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : parseInt(String(value), 10)
+  if ((EMAIL_QUEUE_BUFFER_OPTIONS as readonly number[]).includes(n)) return n
+  return DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES
+}
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -58,10 +69,10 @@ const handler: Handler = async (event) => {
   // Admin client — bypasses RLS
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-  // Find pending emails older than the buffer window
-  const cutoff = new Date(Date.now() - BUFFER_MINUTES * 60 * 1000).toISOString()
+  // Fetch candidates at least as old as the shortest allowed buffer; filter per-user below.
+  const cutoff = new Date(Date.now() - MIN_EMAIL_QUEUE_BUFFER_MINUTES * 60 * 1000).toISOString()
 
-  const { data: emails, error: fetchError } = await supabase
+  const { data: rawCandidates, error: fetchError } = await supabase
     .from('venue_emails')
     .select(`
       *,
@@ -72,22 +83,59 @@ const handler: Handler = async (event) => {
     .eq('status', 'pending')
     .lte('created_at', cutoff)
     .order('created_at', { ascending: true })
-    .limit(50) // process at most 50 per run to stay within function timeout
+    .limit(150)
 
   if (fetchError) {
     console.error('[process-email-queue] fetch error:', fetchError.message)
     return { statusCode: 500, body: JSON.stringify({ error: fetchError.message }) }
   }
 
-  const results: Array<{ id: string; result: 'sent' | 'failed'; reason?: string }> = []
+  const candidates = rawCandidates ?? []
+  const userIds = [...new Set(candidates.map(e => e.user_id))]
 
-  for (const email of (emails ?? [])) {
-    // Fetch artist profile for this user
-    const { data: profile } = await supabase
+  const profileByUser = new Map<string, Record<string, unknown>>()
+
+  if (userIds.length > 0) {
+    const { data: profilesRows, error: profilesError } = await supabase
       .from('artist_profile')
       .select('*')
-      .eq('user_id', email.user_id)
-      .maybeSingle()
+      .in('user_id', userIds)
+
+    if (profilesError) {
+      console.error('[process-email-queue] artist_profile error:', profilesError.message)
+      return { statusCode: 500, body: JSON.stringify({ error: profilesError.message }) }
+    }
+
+    for (const p of profilesRows ?? []) {
+      profileByUser.set(p.user_id, p as Record<string, unknown>)
+    }
+  }
+
+  const nowMs = Date.now()
+  const emails: typeof candidates = []
+  for (const e of candidates) {
+    const p = profileByUser.get(e.user_id)
+    const bufferMin = clampEmailQueueBufferMinutes(p?.email_queue_buffer_minutes as unknown)
+    const ageMs = nowMs - new Date(e.created_at).getTime()
+    if (ageMs >= bufferMin * 60 * 1000) {
+      emails.push(e)
+      if (emails.length >= 50) break
+    }
+  }
+
+  const results: Array<{ id: string; result: 'sent' | 'failed'; reason?: string }> = []
+
+  for (const email of emails) {
+    const profile = profileByUser.get(email.user_id) as {
+      artist_name?: string
+      company_name?: string | null
+      from_email?: string
+      reply_to_email?: string | null
+      website?: string | null
+      phone?: string | null
+      social_handle?: string | null
+      tagline?: string | null
+    } | undefined
 
     if (!profile?.from_email) {
       await supabase
