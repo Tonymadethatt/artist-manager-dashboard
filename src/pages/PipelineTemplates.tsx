@@ -49,13 +49,16 @@ const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral
 function TemplateItemFormFields({
   itemForm,
   setItemForm,
+  compact = false,
 }: {
   itemForm: ItemFormState
   setItemForm: Dispatch<SetStateAction<ItemFormState>>
+  compact?: boolean
 }) {
+  const gap = compact ? 'gap-3' : 'gap-x-4 gap-y-4'
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-      <div className="space-y-1.5">
+    <div className={cn('grid grid-cols-1 sm:grid-cols-2', gap)}>
+      <div className="space-y-1">
         <div className={EYEBROW}>Days after trigger</div>
         <Input
           type="number"
@@ -65,11 +68,13 @@ function TemplateItemFormFields({
           className="h-8 w-20 text-xs"
           aria-label="Due date offset in days after template runs"
         />
-        <p className="text-[10px] text-neutral-600 leading-snug">
-          0 = same day as status change or manual apply. Each step is one full calendar day from that date.
-        </p>
+        {!compact && (
+          <p className="text-[10px] text-neutral-600 leading-snug">
+            0 = same day as status change or manual apply. Each step is one full calendar day from that date.
+          </p>
+        )}
       </div>
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         <div className={EYEBROW}>Priority</div>
         <Select value={itemForm.priority} onValueChange={v => setItemForm(f => ({ ...f, priority: v as TaskPriority }))}>
           <SelectTrigger className="h-8 text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
@@ -80,24 +85,26 @@ function TemplateItemFormFields({
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-1.5 sm:col-span-2">
+      <div className={cn('space-y-1', !compact && 'sm:col-span-2')}>
         <div className={EYEBROW}>Repeats</div>
         <Select value={itemForm.recurrence} onValueChange={v => setItemForm(f => ({ ...f, recurrence: v as TaskRecurrence }))}>
-          <SelectTrigger className="h-8 max-w-xs text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn('h-8 text-xs bg-neutral-950 border-neutral-700', compact ? 'w-full' : 'max-w-xs')}><SelectValue /></SelectTrigger>
           <SelectContent>
             {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
               <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[10px] text-neutral-600 leading-snug">
-          After you complete the task on Pipeline, a new task is created with the next due date: daily +1 day, weekly +7 days, monthly +1 month from the task&apos;s due date (not from the day you checked it off).
-        </p>
+        {!compact && (
+          <p className="text-[10px] text-neutral-600 leading-snug">
+            After you complete the task on Pipeline, a new task is created with the next due date: daily +1 day, weekly +7 days, monthly +1 month from the task&apos;s due date (not from the day you checked it off).
+          </p>
+        )}
       </div>
-      <div className="space-y-1.5 sm:col-span-2">
+      <div className="sm:col-span-2 space-y-1">
         <div className={EYEBROW}>Email on complete</div>
         <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
-          <SelectTrigger className="h-8 max-w-md text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-full text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
           <SelectContent>
             {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
               <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
@@ -130,9 +137,10 @@ export default function PipelineTemplates() {
   const [editingTemplateName, setEditingTemplateName] = useState<string | null>(null)
   const [editNameVal, setEditNameVal] = useState('')
 
-  // Item form
+  // Item form (add / edit in modal)
   const [itemForm, setItemForm] = useState<ItemFormState>(EMPTY_ITEM)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [itemDialogOpen, setItemDialogOpen] = useState(false)
   const [savingItem, setSavingItem] = useState(false)
   const [confirmDeleteItem, setConfirmDeleteItem] = useState<TaskTemplateItem | null>(null)
   const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<TaskTemplate | null>(null)
@@ -199,13 +207,24 @@ export default function PipelineTemplates() {
     }
     if (editingItemId) {
       await updateTemplateItem(editingItemId, selectedTemplate.id, payload)
-      setEditingItemId(null)
     } else {
       const sortOrder = selectedTemplate.items?.length ?? 0
       await addTemplateItem(selectedTemplate.id, { ...payload, sort_order: sortOrder })
     }
     setSavingItem(false)
+    closeItemDialog()
+  }
+
+  const closeItemDialog = () => {
+    setItemDialogOpen(false)
+    setEditingItemId(null)
     setItemForm(EMPTY_ITEM)
+  }
+
+  const openNewItemDialog = () => {
+    setItemForm(EMPTY_ITEM)
+    setEditingItemId(null)
+    setItemDialogOpen(true)
   }
 
   const startEditItem = (item: TaskTemplateItem) => {
@@ -218,11 +237,7 @@ export default function PipelineTemplates() {
       recurrence: item.recurrence,
       email_type: item.email_type ?? '__none__',
     })
-  }
-
-  const cancelItemEdit = () => {
-    setEditingItemId(null)
-    setItemForm(EMPTY_ITEM)
+    setItemDialogOpen(true)
   }
 
   return (
@@ -366,121 +381,133 @@ export default function PipelineTemplates() {
                     <h3 className="text-sm font-medium text-neutral-300">Tasks in this template</h3>
                     <p className="text-[11px] text-neutral-600 mt-0.5">Each row becomes a real task on the Pipeline when this template runs.</p>
                   </div>
-                  <span className="text-xs text-neutral-600 shrink-0 tabular-nums">{selectedTemplate.items?.length ?? 0} items</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-neutral-600 tabular-nums">{selectedTemplate.items?.length ?? 0}</span>
+                    <Button size="sm" className="h-7 text-xs gap-1" onClick={openNewItemDialog}>
+                      <Plus className="h-3 w-3" />
+                      Add task
+                    </Button>
+                  </div>
                 </div>
 
-                {(!selectedTemplate.items || selectedTemplate.items.length === 0) && editingItemId === null && (
-                  <div className="py-6 text-center">
-                    <p className="text-xs text-neutral-600">No tasks yet. Add one below.</p>
+                {(!selectedTemplate.items || selectedTemplate.items.length === 0) && (
+                  <div className="py-8 text-center px-4">
+                    <p className="text-xs text-neutral-600 mb-3">No tasks in this template yet.</p>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={openNewItemDialog}>
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add first task
+                    </Button>
                   </div>
                 )}
 
                 <div className="divide-y divide-neutral-800/60">
                   {(selectedTemplate.items ?? []).map(item => (
                     <div key={item.id} className="group flex items-start gap-3 px-4 py-3">
-                      {editingItemId === item.id ? (
-                        <div className="flex-1 space-y-3 min-w-0">
-                          <div className="space-y-1.5">
-                            <div className={EYEBROW}>Task title</div>
-                            <Input
-                              value={itemForm.title}
-                              onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
-                              placeholder="Task title"
-                              className="h-8 text-sm"
-                              autoFocus
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className={EYEBROW}>Notes</div>
-                            <Input
-                              value={itemForm.notes}
-                              onChange={e => setItemForm(f => ({ ...f, notes: e.target.value }))}
-                              placeholder="Optional"
-                              className="h-8 text-sm"
-                            />
-                          </div>
-                          <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} />
-                          <div className="flex items-center gap-2 pt-1">
-                            <Button size="sm" className="h-8 text-xs" onClick={handleSaveItem} disabled={savingItem}>
-                              {savingItem ? 'Saving...' : 'Save'}
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelItemEdit}>Cancel</Button>
-                          </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} title={TASK_PRIORITY_LABELS[item.priority]} />
+                          <span className="text-sm text-neutral-200">{item.title}</span>
+                          {item.email_type && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-800/60 font-medium shrink-0">
+                              {VENUE_EMAIL_TYPE_LABELS[item.email_type as VenueEmailType] ?? item.email_type}
+                            </span>
+                          )}
                         </div>
-                      ) : (
-                        <>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} title={TASK_PRIORITY_LABELS[item.priority]} />
-                              <span className="text-sm text-neutral-200">{item.title}</span>
-                              {item.email_type && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-800/60 font-medium shrink-0">
-                                  {VENUE_EMAIL_TYPE_LABELS[item.email_type as VenueEmailType] ?? item.email_type}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap mt-1">
-                              <span className="text-[10px] text-neutral-500 tabular-nums">
-                                Due +{item.days_offset}d after apply
-                              </span>
-                              {item.recurrence !== 'none' && (
-                                <span className="text-[10px] text-neutral-600 border border-neutral-700/80 rounded px-1.5 py-0.5">
-                                  {TASK_RECURRENCE_LABELS[item.recurrence]}
-                                </span>
-                              )}
-                              {item.notes && (
-                                <span className="text-[10px] text-neutral-700 truncate max-w-full">{item.notes}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <button
-                              onClick={() => startEditItem(item)}
-                              className="p-1 rounded hover:bg-neutral-800 text-neutral-600 hover:text-neutral-300"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteItem(item)}
-                              className="p-1 rounded hover:bg-neutral-800 text-neutral-600 hover:text-red-400"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
+                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                          <span className="text-[10px] text-neutral-500 tabular-nums">
+                            Due +{item.days_offset}d after apply
+                          </span>
+                          {item.recurrence !== 'none' && (
+                            <span className="text-[10px] text-neutral-600 border border-neutral-700/80 rounded px-1.5 py-0.5">
+                              {TASK_RECURRENCE_LABELS[item.recurrence]}
+                            </span>
+                          )}
+                          {item.notes && (
+                            <span className="text-[10px] text-neutral-700 truncate max-w-full">{item.notes}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => startEditItem(item)}
+                          className="p-1 rounded hover:bg-neutral-800 text-neutral-600 hover:text-neutral-300"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteItem(item)}
+                          className="p-1 rounded hover:bg-neutral-800 text-neutral-600 hover:text-red-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-
-                {/* Add item row */}
-                {editingItemId === null && (
-                  <div className="border-t border-neutral-800 px-4 py-3 space-y-3 bg-neutral-950/40">
-                    <div className="space-y-1.5">
-                      <div className={EYEBROW}>New task</div>
-                      <Input
-                        value={itemForm.title}
-                        onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
-                        placeholder="Add a task to this template…"
-                        className="h-8 text-sm"
-                        onKeyDown={e => e.key === 'Enter' && itemForm.title.trim() && handleSaveItem()}
-                      />
-                    </div>
-                    {itemForm.title.trim() && (
-                      <>
-                        <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} />
-                        <Button size="sm" className="h-8 text-xs" onClick={handleSaveItem} disabled={savingItem || !itemForm.title.trim()}>
-                          {savingItem ? 'Adding...' : 'Add task'}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Add / edit template task — compact modal */}
+      <Dialog
+        open={itemDialogOpen}
+        onOpenChange={v => {
+          if (!v) closeItemDialog()
+        }}
+      >
+        <DialogContent className="max-w-md p-4 gap-3 max-h-[min(520px,85vh)] overflow-y-auto">
+          <DialogHeader className="space-y-0">
+            <DialogTitle className="text-base">
+              {editingItemId ? 'Edit template task' : 'New template task'}
+            </DialogTitle>
+            {selectedTemplate?.name && (
+              <p className="text-[11px] text-neutral-500 font-normal pt-1">
+                Template: {selectedTemplate.name}
+              </p>
+            )}
+          </DialogHeader>
+          <div className="space-y-2.5">
+            <div className="space-y-1">
+              <Label className="text-xs text-neutral-400">Title</Label>
+              <Input
+                value={itemForm.title}
+                onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="What should be done?"
+                className="h-8 text-sm"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && itemForm.title.trim() && handleSaveItem()}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-neutral-400">Notes</Label>
+              <Input
+                value={itemForm.notes}
+                onChange={e => setItemForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Optional"
+                className="h-8 text-sm"
+              />
+            </div>
+            <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} compact />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 pt-1">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={closeItemDialog}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleSaveItem}
+              disabled={savingItem || !itemForm.title.trim() || !selectedTemplate}
+            >
+              {savingItem ? 'Saving…' : editingItemId ? 'Save' : 'Add task'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New template dialog */}
       <Dialog open={newTemplateOpen} onOpenChange={v => !v && setNewTemplateOpen(false)}>
