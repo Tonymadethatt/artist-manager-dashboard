@@ -189,6 +189,8 @@ export interface Template {
 
 export type GeneratedFileOutputFormat = 'text' | 'pdf'
 
+export type GeneratedFileSource = 'generated' | 'upload'
+
 export interface GeneratedFile {
   id: string
   user_id: string
@@ -198,10 +200,16 @@ export interface GeneratedFile {
   deal_id: string | null
   content: string
   output_format: GeneratedFileOutputFormat
+  /** `generated` = File Builder; `upload` = user upload in Files. */
+  file_source?: GeneratedFileSource
   pdf_storage_path: string | null
   pdf_public_url: string | null
   /** Set when using first-party /agreements/{slug} links; null for legacy rows. */
   pdf_share_slug: string | null
+  /** User uploads stored in `email-assets` bucket (see upload_public_url). */
+  upload_storage_path?: string | null
+  upload_public_url?: string | null
+  upload_mime_type?: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   template?: Pick<Template, 'id' | 'name'> | null

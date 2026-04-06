@@ -11,6 +11,7 @@ import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import {
@@ -291,7 +292,7 @@ export default function EmailQueue() {
       if (cid) {
         const { data: row } = await supabase
           .from('custom_email_templates')
-          .select('subject_template, blocks, audience')
+          .select('subject_template, blocks, audience, attachment_generated_file_id')
           .eq('id', cid)
           .eq('user_id', user.id)
           .maybeSingle()
@@ -301,6 +302,17 @@ export default function EmailQueue() {
         payload.custom_venue_template = {
           subject_template: row.subject_template,
           blocks: row.blocks,
+        }
+        const aid = row.attachment_generated_file_id as string | null | undefined
+        if (aid) {
+          const { data: gf } = await supabase
+            .from('generated_files')
+            .select('*')
+            .eq('id', aid)
+            .eq('user_id', user.id)
+            .maybeSingle()
+          const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
+          if (att) payload.attachment = att
         }
       } else {
         payload.type = email.email_type

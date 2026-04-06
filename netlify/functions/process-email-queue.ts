@@ -25,6 +25,7 @@ import {
   resolveDealAgreementUrlForEmailPayload,
 } from '../../src/lib/resolveAgreementUrl'
 import type { GeneratedFile } from '../../src/types'
+import { buildEmailAttachmentPayloadFromFile } from '../../src/lib/files/templateEmailAttachmentPayload'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -163,11 +164,16 @@ const handler: Handler = async (event) => {
       .filter((x): x is string => !!x),
   )]
 
-  const customRowById = new Map<string, { subject_template: string; blocks: unknown; audience: string }>()
+  const customRowById = new Map<string, {
+    subject_template: string
+    blocks: unknown
+    audience: string
+    attachment_generated_file_id: string | null
+  }>()
   if (customIds.length > 0) {
     const { data: cRows, error: cErr } = await supabase
       .from('custom_email_templates')
-      .select('id, subject_template, blocks, audience')
+      .select('id, subject_template, blocks, audience, attachment_generated_file_id')
       .in('id', customIds)
 
     if (cErr) {
@@ -180,6 +186,7 @@ const handler: Handler = async (event) => {
         subject_template: r.subject_template as string,
         blocks: r.blocks,
         audience: r.audience as string,
+        attachment_generated_file_id: (r.attachment_generated_file_id as string | null) ?? null,
       })
     }
   }
@@ -282,6 +289,20 @@ const handler: Handler = async (event) => {
       }
       : {}
 
+    let customAttachmentPayload: { url: string; fileName: string } | undefined
+    if (customRow?.attachment_generated_file_id) {
+      const { data: gfRow } = await supabase
+        .from('generated_files')
+        .select('*')
+        .eq('id', customRow.attachment_generated_file_id)
+        .maybeSingle()
+      const gf = gfRow as GeneratedFile | null
+      if (gf && gf.user_id === email.user_id) {
+        const p = buildEmailAttachmentPayloadFromFile(gf, siteOrigin)
+        if (p) customAttachmentPayload = p
+      }
+    }
+
     const requestBody = customRow
       ? {
         profile: profilePayload,
@@ -292,6 +313,7 @@ const handler: Handler = async (event) => {
           subject_template: customRow.subject_template,
           blocks: customRow.blocks,
         },
+        ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
       }
       : {
         type: email.email_type as VenueEmailType,

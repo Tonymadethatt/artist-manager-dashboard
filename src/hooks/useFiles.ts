@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { makeAgreementPdfSlug } from '@/lib/agreement/sanitize'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
-import type { GeneratedFile, GeneratedFileOutputFormat } from '@/types'
+import type { GeneratedFile, GeneratedFileOutputFormat, GeneratedFileSource } from '@/types'
 
 const FILE_SELECT = `
   *,
@@ -25,6 +25,16 @@ export type AddPdfFileInput = AddTextFileInput & {
   pdfBlob: Blob
 }
 
+export const EMAIL_ASSET_ALLOWED_MIMES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'] as const
+export const EMAIL_ASSET_MAX_BYTES = 25 * 1024 * 1024
+
+export type AddUploadedAssetInput = {
+  file: File
+  /** Row label; defaults to file.name */
+  name?: string
+  deal_id?: string | null
+}
+
 /** PostgREST when a column exists in types but not on the remote DB. */
 function isMissingColumnError(err: { message?: string } | null | undefined): boolean {
   const m = err?.message ?? ''
@@ -35,14 +45,25 @@ function normalizeGeneratedRow(
   row: Record<string, unknown>,
   fallbackDealId: string | null | undefined
 ): GeneratedFile {
+  const src = row.file_source as GeneratedFileSource | undefined
   return {
     ...(row as unknown as GeneratedFile),
     deal_id: (row.deal_id as string | null | undefined) ?? fallbackDealId ?? null,
     output_format: (row.output_format as GeneratedFileOutputFormat | undefined) ?? 'text',
+    file_source: src ?? 'generated',
     pdf_storage_path: (row.pdf_storage_path as string | null | undefined) ?? null,
     pdf_public_url: (row.pdf_public_url as string | null | undefined) ?? null,
     pdf_share_slug: (row.pdf_share_slug as string | null | undefined) ?? null,
+    upload_storage_path: (row.upload_storage_path as string | null | undefined) ?? null,
+    upload_public_url: (row.upload_public_url as string | null | undefined) ?? null,
+    upload_mime_type: (row.upload_mime_type as string | null | undefined) ?? null,
   }
+}
+
+function safeUploadObjectName(original: string, fileId: string): string {
+  const base = original.split(/[/\\]/).pop() ?? 'file'
+  const cleaned = base.replace(/[^\w.\- ]+/g, '_').trim() || 'file'
+  return `${fileId}_${cleaned.slice(0, 100)}`
 }
 
 export function useFiles() {
@@ -216,17 +237,124 @@ export function useFiles() {
     return { data: row }
   }
 
+  /** Upload PDF/image for email attachments; stored in `email-assets` bucket. */
+  const addUploadedAsset = async (input: AddUploadedAssetInput) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: new Error('Not authenticated') }
+
+    const f = input.file
+    if (!EMAIL_ASSET_ALLOWED_MIMES.includes(f.type as (typeof EMAIL_ASSET_ALLOWED_MIMES)[number])) {
+      return { error: new Error('Allowed types: PDF, PNG, JPG, WebP.') }
+    }
+    if (f.size > EMAIL_ASSET_MAX_BYTES) {
+      return { error: new Error('File is too large (max 25 MB).') }
+    }
+
+    const label = (input.name?.trim() || f.name).trim() || 'Upload'
+
+    const insertPayload = {
+      user_id: user.id,
+      name: label,
+      content: '',
+      template_id: null as string | null,
+      venue_id: null as string | null,
+      deal_id: input.deal_id ?? null,
+      output_format: 'text' as const,
+      file_source: 'upload' as const,
+      pdf_storage_path: null as string | null,
+      pdf_public_url: null as string | null,
+      pdf_share_slug: null as string | null,
+      upload_storage_path: null as string | null,
+      upload_public_url: null as string | null,
+      upload_mime_type: f.type || null,
+    }
+
+    let { data: inserted, error: insErr } = await supabase
+      .from('generated_files')
+      .insert(insertPayload)
+      .select('id')
+      .single()
+
+    if (insErr && isMissingColumnError(insErr)) {
+      return {
+        error: new Error(
+          'Uploads require the latest DB migration (email assets). Run migrations or contact support.',
+        ),
+      }
+    }
+
+    if (insErr || !inserted) return { error: insErr ?? new Error('Insert failed') }
+
+    const fileId = inserted.id as string
+    const objectName = safeUploadObjectName(f.name, fileId)
+    const path = `${user.id}/${objectName}`
+
+    const { error: upErr } = await supabase.storage
+      .from('email-assets')
+      .upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
+
+    if (upErr) {
+      await supabase.from('generated_files').delete().eq('id', fileId)
+      return { error: upErr }
+    }
+
+    const { data: pub } = supabase.storage.from('email-assets').getPublicUrl(path)
+    const publicUrl = pub.publicUrl
+
+    const { data: final, error: updErr } = await supabase
+      .from('generated_files')
+      .update({
+        upload_storage_path: path,
+        upload_public_url: publicUrl,
+        upload_mime_type: f.type || null,
+      })
+      .eq('id', fileId)
+      .select(FILE_SELECT)
+      .single()
+
+    if (updErr || !final) {
+      await supabase.storage.from('email-assets').remove([path])
+      await supabase.from('generated_files').delete().eq('id', fileId)
+      return { error: updErr ?? new Error('Update failed') }
+    }
+
+    const row = normalizeGeneratedRow(final as Record<string, unknown>, input.deal_id ?? null)
+    setFiles(prev => [row, ...prev])
+    return { data: row }
+  }
+
   const deleteFile = async (id: string) => {
+    const { count, error: cntErr } = await supabase
+      .from('custom_email_templates')
+      .select('*', { count: 'exact', head: true })
+      .eq('attachment_generated_file_id', id)
+
+    if (cntErr) return { error: cntErr }
+    if (count != null && count > 0) {
+      return {
+        error: new Error('This file is linked to a custom email template. Remove the attachment in Email templates first.'),
+      }
+    }
+
     const { data: row, error: selErr } = await supabase
       .from('generated_files')
-      .select('pdf_storage_path')
+      .select('pdf_storage_path,upload_storage_path,file_source')
       .eq('id', id)
       .maybeSingle()
 
     if (selErr) return { error: selErr }
 
-    if (row?.pdf_storage_path) {
-      const { error: stErr } = await supabase.storage.from('agreement-pdfs').remove([row.pdf_storage_path])
+    const rec = row as {
+      pdf_storage_path?: string | null
+      upload_storage_path?: string | null
+      file_source?: string | null
+    } | null
+
+    if (rec?.upload_storage_path) {
+      const { error: stErr } = await supabase.storage.from('email-assets').remove([rec.upload_storage_path])
+      if (stErr) return { error: stErr }
+    } else if (rec?.pdf_storage_path) {
+      const { error: stErr } = await supabase.storage.from('agreement-pdfs').remove([rec.pdf_storage_path])
       if (stErr) return { error: stErr }
     }
 
@@ -243,6 +371,7 @@ export function useFiles() {
     refetch: fetchFiles,
     addTextFile,
     addPdfFile,
+    addUploadedAsset,
     deleteFile,
   }
 }

@@ -23,6 +23,7 @@ import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue, isCustomEmailType } from '@/lib/email/customTemplateId'
 import { supabase } from '@/lib/supabase'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import type { Deal, GeneratedFile, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
@@ -234,6 +235,18 @@ export function SendVenueEmailModal({
         payload.custom_venue_template = {
           subject_template: customRow.subject_template,
           blocks: customRow.blocks,
+        }
+        const { data: { user: u } } = await supabase.auth.getUser()
+        const aid = customRow.attachment_generated_file_id
+        if (u && aid) {
+          const { data: gf } = await supabase
+            .from('generated_files')
+            .select('*')
+            .eq('id', aid)
+            .eq('user_id', u.id)
+            .maybeSingle()
+          const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
+          if (att) payload.attachment = att
         }
       } else {
         payload.type = emailType

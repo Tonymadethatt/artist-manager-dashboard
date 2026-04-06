@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { useFiles } from '@/hooks/useFiles'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -40,6 +41,8 @@ import {
 import { cn } from '@/lib/utils'
 import { fetchEmailTemplateUsage } from '@/lib/emailTemplateUsage'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { isTemplateAttachmentEligibleFile, resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
 import type { CustomEmailBlock, CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import {
   defaultCustomBlocksDoc,
@@ -131,6 +134,7 @@ export default function EmailTemplates() {
     deleteRow: deleteCustomRow,
     duplicateRow: duplicateCustomRow,
   } = useCustomEmailTemplates()
+  const { files: generatedFilesForTemplates } = useFiles()
   const [activeGroup, setActiveGroup] = useState<Group>('client')
   const [selectedType, setSelectedType] = useState<AnyEmailType>('follow_up')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('browse')
@@ -147,6 +151,7 @@ export default function EmailTemplates() {
   const [customNameDraft, setCustomNameDraft] = useState('')
   const [customSubjectDraft, setCustomSubjectDraft] = useState('')
   const [customBlocksDraft, setCustomBlocksDraft] = useState<CustomEmailBlocksDoc>(defaultCustomBlocksDoc())
+  const [customAttachmentFileIdDraft, setCustomAttachmentFileIdDraft] = useState<string | null>(null)
   const [deleteBuiltinTarget, setDeleteBuiltinTarget] = useState<AnyEmailType | null>(null)
   const [deleteBuiltinUsage, setDeleteBuiltinUsage] = useState<{ pipelineTemplateItemCount: number; taskCount: number } | null>(null)
   const [duplicateOpen, setDuplicateOpen] = useState(false)
@@ -174,6 +179,11 @@ export default function EmailTemplates() {
       return hay.includes(q)
     })
   }, [activeGroup, templateSearch])
+
+  const attachmentEligibleFiles = useMemo(() => {
+    const origin = publicSiteOrigin()
+    return generatedFilesForTemplates.filter(f => isTemplateAttachmentEligibleFile(f, origin))
+  }, [generatedFilesForTemplates])
 
   const filteredCustomRows = useMemo(() => {
     const want: 'venue' | 'artist' = activeGroup === 'client' ? 'venue' : 'artist'
@@ -211,6 +221,7 @@ export default function EmailTemplates() {
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
           || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+          || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
         if (dirty) {
           setDiscardConfirm(true)
           return
@@ -227,6 +238,7 @@ export default function EmailTemplates() {
     customNameDraft,
     customSubjectDraft,
     customBlocksDraft,
+    customAttachmentFileIdDraft,
   ])
 
   const handleGroupSwitch = (g: Group) => {
@@ -256,6 +268,7 @@ export default function EmailTemplates() {
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
           || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+          || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
         if (dirty) {
           setPendingGroup(g)
           setDiscardConfirm(true)
@@ -302,6 +315,15 @@ export default function EmailTemplates() {
         ? customSubjectDraft
         : (row?.subject_template ?? '')
       const aud = row?.audience ?? (activeGroup === 'client' ? 'venue' : 'artist')
+      const attachId = sidebarMode === 'edit-custom'
+        ? customAttachmentFileIdDraft
+        : (row?.attachment_generated_file_id ?? null)
+      const siteO = publicSiteOrigin()
+      const attachFile = attachId ? generatedFilesForTemplates.find(f => f.id === attachId) : undefined
+      const attachUrl = attachFile ? resolveGeneratedFileDownloadUrl(attachFile, siteO) : null
+      const attachment = attachUrl && attachFile?.name?.trim()
+        ? { url: attachUrl, fileName: attachFile.name.trim() }
+        : undefined
       const { html } = buildCustomEmailDocument({
         audience: aud,
         subjectTemplate: subj.trim() || ' ',
@@ -313,6 +335,7 @@ export default function EmailTemplates() {
         logoBaseUrl: '',
         responsiveClasses: false,
         showReplyButton: aud === 'venue',
+        ...(attachment ? { attachment } : {}),
       })
       return html
     }
@@ -354,6 +377,8 @@ export default function EmailTemplates() {
     customRows,
     customBlocksDraft,
     customSubjectDraft,
+    customAttachmentFileIdDraft,
+    generatedFilesForTemplates,
   ])
 
   const isDirty = !layoutsEqual(editorDraft, savedLayoutNormalized)
@@ -368,6 +393,7 @@ export default function EmailTemplates() {
     return customNameDraft !== selectedCustomRow.name
       || customSubjectDraft !== selectedCustomRow.subject_template
       || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+      || (customAttachmentFileIdDraft ?? null) !== (selectedCustomRow.attachment_generated_file_id ?? null)
   })()
 
   const enterEditFor = (emailType: AnyEmailType) => {
@@ -385,6 +411,7 @@ export default function EmailTemplates() {
     setCustomNameDraft(row.name)
     setCustomSubjectDraft(row.subject_template)
     setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
+    setCustomAttachmentFileIdDraft(row.attachment_generated_file_id ?? null)
     setSidebarMode('edit-custom')
     setSaved(false)
   }
@@ -403,6 +430,7 @@ export default function EmailTemplates() {
       name: customNameDraft.trim() || 'Untitled',
       subject_template: customSubjectDraft,
       blocks: customBlocksDraft,
+      attachment_generated_file_id: customAttachmentFileIdDraft,
     })
     setSaving(false)
     setSaved(true)
@@ -788,6 +816,7 @@ export default function EmailTemplates() {
                                   setCustomNameDraft(data.name)
                                   setCustomSubjectDraft(data.subject_template)
                                   setCustomBlocksDraft(loadCustomEmailBlocksDoc(data.blocks))
+                                  setCustomAttachmentFileIdDraft(data.attachment_generated_file_id ?? null)
                                   setSidebarMode('edit-custom')
                                 }
                               }}
@@ -879,6 +908,29 @@ export default function EmailTemplates() {
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
                     Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                  </p>
+                </div>
+                <div>
+                  <p className={EYEBROW}>Attachment (optional)</p>
+                  <Select
+                    value={customAttachmentFileIdDraft ?? '__none__'}
+                    onValueChange={v => setCustomAttachmentFileIdDraft(v === '__none__' ? null : v)}
+                  >
+                    <SelectTrigger className="text-sm mt-1 h-9">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {attachmentEligibleFiles.map(f => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                          {f.file_source === 'upload' ? ' · upload' : f.output_format === 'pdf' ? ' · PDF' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-neutral-600 mt-1">
+                    Adds a download block after the template body (PDFs and uploaded files from Files with a public link).
                   </p>
                 </div>
                 <CustomBlocksEditorSection
@@ -1252,6 +1304,7 @@ export default function EmailTemplates() {
                       setCustomNameDraft(row.name)
                       setCustomSubjectDraft(row.subject_template)
                       setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
+                      setCustomAttachmentFileIdDraft(row.attachment_generated_file_id ?? null)
                     }
                   } else {
                     setEditorDraft(draftFromSaved(getTemplate(selectedType)))

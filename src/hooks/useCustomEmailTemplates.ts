@@ -12,6 +12,7 @@ export interface CustomEmailTemplateRow {
   name: string
   subject_template: string
   blocks: CustomEmailBlocksDoc | unknown
+  attachment_generated_file_id: string | null
   created_at: string
   updated_at: string
 }
@@ -37,6 +38,7 @@ export function useCustomEmailTemplates() {
     name: string
     subject_template?: string
     blocks?: CustomEmailBlocksDoc
+    attachment_generated_file_id?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -48,6 +50,7 @@ export function useCustomEmailTemplates() {
         name: input.name.trim(),
         subject_template: input.subject_template?.trim() ?? 'Update from {{profile.artist_name}}',
         blocks: (input.blocks ?? defaultCustomBlocksDoc()) as never,
+        attachment_generated_file_id: input.attachment_generated_file_id ?? null,
         updated_at: new Date().toISOString(),
       })
       .select()
@@ -63,6 +66,7 @@ export function useCustomEmailTemplates() {
     subject_template: string
     blocks: CustomEmailBlocksDoc
     audience: CustomEmailAudience
+    attachment_generated_file_id: string | null
   }>) => {
     const { data, error } = await supabase
       .from('custom_email_templates')
@@ -94,6 +98,7 @@ export function useCustomEmailTemplates() {
       name: `${src.name} (copy)`,
       subject_template: src.subject_template,
       blocks: parseBlocks(src.blocks),
+      attachment_generated_file_id: src.attachment_generated_file_id ?? null,
     })
   }
 

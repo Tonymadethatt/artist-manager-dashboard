@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
 import { normalizeEmailTemplateLayout } from '../../src/lib/emailLayout'
+import { sanitizeEmailAttachmentPayload } from '../../src/lib/email/validateAttachmentUrl'
 import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 
@@ -54,6 +55,7 @@ interface CustomVenueTemplatePayload {
 interface RequestBody {
   type?: VenueEmailType
   custom_venue_template?: CustomVenueTemplatePayload
+  attachment?: unknown
   profile: ArtistProfile
   recipient: Recipient
   deal?: DealData
@@ -100,6 +102,7 @@ const handler: Handler = async (event) => {
     custom_intro,
     layout: rawLayout,
     custom_venue_template,
+    attachment: rawAttachment,
   } = body
 
   if (!profile?.from_email || !recipient?.email) {
@@ -119,6 +122,8 @@ const handler: Handler = async (event) => {
   let subject: string
 
   if (custom_venue_template) {
+    const supabaseUrl = process.env.SUPABASE_URL || ''
+    const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
     const built = buildCustomEmailDocument({
       audience: 'venue',
       subjectTemplate: custom_venue_template.subject_template,
@@ -131,6 +136,7 @@ const handler: Handler = async (event) => {
       responsiveClasses: true,
       showReplyButton: custom_venue_template.show_reply_button !== false,
       replyButtonLabel: custom_venue_template.reply_button_label ?? null,
+      ...(attachment ? { attachment } : {}),
     })
     html = built.html
     subject = built.subject

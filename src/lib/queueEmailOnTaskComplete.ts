@@ -5,6 +5,7 @@ import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import {
   computeResolvedAgreement,
   dealSyncPatchFromResolution,
@@ -147,7 +148,7 @@ export async function queueEmailAutomationForCompletedTask(
   if (cid) {
     const { data: ctRow } = await supabase
       .from('custom_email_templates')
-      .select('id, audience, name, subject_template, blocks')
+      .select('id, audience, name, subject_template, blocks, attachment_generated_file_id')
       .eq('id', cid)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -180,6 +181,14 @@ export async function queueEmailAutomationForCompletedTask(
         }
         : undefined
 
+      let attachment: { url: string; fileName: string } | undefined
+      const attachId = ctRow.attachment_generated_file_id as string | null | undefined
+      if (attachId) {
+        const gf = await loadGeneratedFileRow(attachId)
+        const p = gf && gf.user_id === user.id ? buildEmailAttachmentPayloadFromFile(gf, siteOrigin) : null
+        if (p) attachment = p
+      }
+
       try {
         const res = await fetch(`${origin}/.netlify/functions/send-custom-artist-email`, {
           method: 'POST',
@@ -189,6 +198,7 @@ export async function queueEmailAutomationForCompletedTask(
               subject_template: ctRow.subject_template,
               blocks: ctRow.blocks,
             },
+            ...(attachment ? { attachment } : {}),
             profile: {
               artist_name: p.artist_name,
               company_name: p.company_name,

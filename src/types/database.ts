@@ -177,9 +177,13 @@ export interface Database {
           deal_id: string | null
           content: string
           output_format: 'text' | 'pdf'
+          file_source: 'generated' | 'upload'
           pdf_storage_path: string | null
           pdf_public_url: string | null
           pdf_share_slug: string | null
+          upload_storage_path: string | null
+          upload_public_url: string | null
+          upload_mime_type: string | null
           created_at: string
         }
         Insert: {
@@ -189,11 +193,15 @@ export interface Database {
           template_id?: string | null
           venue_id?: string | null
           deal_id?: string | null
-          content: string
+          content?: string
           output_format?: 'text' | 'pdf'
+          file_source?: 'generated' | 'upload'
           pdf_storage_path?: string | null
           pdf_public_url?: string | null
           pdf_share_slug?: string | null
+          upload_storage_path?: string | null
+          upload_public_url?: string | null
+          upload_mime_type?: string | null
           created_at?: string
         }
         Update: {
@@ -205,9 +213,13 @@ export interface Database {
           deal_id?: string | null
           content?: string
           output_format?: 'text' | 'pdf'
+          file_source?: 'generated' | 'upload'
           pdf_storage_path?: string | null
           pdf_public_url?: string | null
           pdf_share_slug?: string | null
+          upload_storage_path?: string | null
+          upload_public_url?: string | null
+          upload_mime_type?: string | null
           created_at?: string
         }
         Relationships: [
@@ -680,6 +692,7 @@ export interface Database {
           name: string
           subject_template: string
           blocks: unknown
+          attachment_generated_file_id: string | null
           created_at: string
           updated_at: string
         }
@@ -690,6 +703,7 @@ export interface Database {
           name: string
           subject_template?: string
           blocks?: unknown
+          attachment_generated_file_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -700,10 +714,18 @@ export interface Database {
           name?: string
           subject_template?: string
           blocks?: unknown
+          attachment_generated_file_id?: string | null
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'custom_email_templates_attachment_generated_file_id_fkey'
+            columns: ['attachment_generated_file_id']
+            referencedRelation: 'generated_files'
+            referencedColumns: ['id']
+          },
+        ]
       }
       email_templates: {
         Row: {

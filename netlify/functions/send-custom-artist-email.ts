@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions'
+import { sanitizeEmailAttachmentPayload } from '../../src/lib/email/validateAttachmentUrl'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 
 interface ArtistProfile {
@@ -37,6 +38,7 @@ interface RequestBody {
     subject_template: string
     blocks: unknown
   }
+  attachment?: unknown
   profile: ArtistProfile
   recipient: Recipient
   deal?: DealData
@@ -60,12 +62,14 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { custom_artist_template, profile, recipient, deal, venue } = body
+  const { custom_artist_template, profile, recipient, deal, venue, attachment: rawAttachment } = body
   if (!custom_artist_template || !profile?.from_email || !recipient?.email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields' }) }
   }
 
   const siteUrl = process.env.URL || ''
+  const supabaseUrl = process.env.SUPABASE_URL || ''
+  const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
   const { html, subject } = buildCustomEmailDocument({
     audience: 'artist',
     subjectTemplate: custom_artist_template.subject_template,
@@ -76,6 +80,7 @@ const handler: Handler = async (event) => {
     venue,
     logoBaseUrl: siteUrl,
     responsiveClasses: true,
+    ...(attachment ? { attachment } : {}),
   })
 
   const replyTo = profile.reply_to_email || profile.from_email
