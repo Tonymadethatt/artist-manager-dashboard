@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type { TaskTemplate } from '@/types'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 
 function isVenueEmailType(s: string): s is VenueEmailType {
   return Object.prototype.hasOwnProperty.call(VENUE_EMAIL_TYPE_LABELS, s)
@@ -38,10 +39,25 @@ export async function queueImmediateEmailsForTemplate(
     // Artist-only flows (performance form, etc.) stay on Pipeline task completion.
     if (item.email_type === 'performance_report_request') continue
 
-    if (!isVenueEmailType(item.email_type)) continue
+    const customId = parseCustomTemplateId(item.email_type)
+    if (!isVenueEmailType(item.email_type) && !customId) continue
+
+    let subject: string
+    if (customId) {
+      const { data: ct } = await supabase
+        .from('custom_email_templates')
+        .select('name, audience')
+        .eq('id', customId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (!ct || ct.audience !== 'venue') continue
+      subject = `${ct.name} - ${venueName}`
+    } else {
+      const emailType = item.email_type as VenueEmailType
+      subject = `${VENUE_EMAIL_TYPE_LABELS[emailType]} - ${venueName}`
+    }
 
     const emailType = item.email_type
-    const subject = `${VENUE_EMAIL_TYPE_LABELS[emailType]} - ${venueName}`
     const { error } = await supabase.from('venue_emails').insert({
       user_id: user.id,
       venue_id: venueId,
@@ -66,7 +82,7 @@ export async function queueImmediateEmailsForTemplate(
 /** Avoid queueing the same venue email twice when a task was auto-queued from a template and then completed in Pipeline. */
 export async function hasRecentPendingVenueEmail(
   venueId: string,
-  emailType: VenueEmailType,
+  emailType: string,
   withinMinutes: number
 ): Promise<boolean> {
   const since = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString()

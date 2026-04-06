@@ -1,8 +1,18 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import {
+  ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown, Pencil, Copy,
+} from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
+import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -28,6 +38,12 @@ import {
   normalizeEmailTemplateLayout,
 } from '@/lib/emailLayout'
 import { cn } from '@/lib/utils'
+import { fetchEmailTemplateUsage } from '@/lib/emailTemplateUsage'
+import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import type { CustomEmailBlock, CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
+import { defaultCustomBlocksDoc, parseCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
+import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
 
@@ -96,10 +112,18 @@ const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder
 
 type Group = 'client' | 'artist'
 
-type SidebarMode = 'browse' | 'edit'
+type SidebarMode = 'browse' | 'edit' | 'edit-custom'
 
 export default function EmailTemplates() {
-  const { loading, upsertTemplate, resetTemplate, getTemplate } = useEmailTemplates()
+  const { loading, upsertTemplate, resetTemplate, getTemplate, deleteTemplate } = useEmailTemplates()
+  const {
+    rows: customRows,
+    loading: customLoading,
+    insertRow: insertCustomRow,
+    updateRow: updateCustomRow,
+    deleteRow: deleteCustomRow,
+    duplicateRow: duplicateCustomRow,
+  } = useCustomEmailTemplates()
   const [activeGroup, setActiveGroup] = useState<Group>('client')
   const [selectedType, setSelectedType] = useState<AnyEmailType>('follow_up')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('browse')
@@ -112,6 +136,19 @@ export default function EmailTemplates() {
   const [pendingGroup, setPendingGroup] = useState<Group | null>(null)
   const [saved, setSaved] = useState(false)
   const [templateSearch, setTemplateSearch] = useState('')
+  const [selectedCustomId, setSelectedCustomId] = useState<string | null>(null)
+  const [customNameDraft, setCustomNameDraft] = useState('')
+  const [customSubjectDraft, setCustomSubjectDraft] = useState('')
+  const [customBlocksDraft, setCustomBlocksDraft] = useState<CustomEmailBlocksDoc>(defaultCustomBlocksDoc())
+  const [deleteBuiltinTarget, setDeleteBuiltinTarget] = useState<AnyEmailType | null>(null)
+  const [deleteBuiltinUsage, setDeleteBuiltinUsage] = useState<{ pipelineTemplateItemCount: number; taskCount: number } | null>(null)
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
+  const [duplicateSourceType, setDuplicateSourceType] = useState<AnyEmailType | null>(null)
+  const [duplicateTargetType, setDuplicateTargetType] = useState<AnyEmailType>(CLIENT_ORDER[0])
+  const [deleteCustomId, setDeleteCustomId] = useState<string | null>(null)
+  const [deleteCustomUsage, setDeleteCustomUsage] = useState<{ pipelineTemplateItemCount: number; taskCount: number } | null>(null)
+  const [newCustomOpen, setNewCustomOpen] = useState(false)
+  const [newCustomName, setNewCustomName] = useState('')
 
   const filteredEmailTypes = useMemo((): AnyEmailType[] => {
     const types = (activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER) as AnyEmailType[]
@@ -129,6 +166,16 @@ export default function EmailTemplates() {
     })
   }, [activeGroup, templateSearch])
 
+  const filteredCustomRows = useMemo(() => {
+    const want: 'venue' | 'artist' = activeGroup === 'client' ? 'venue' : 'artist'
+    const q = templateSearch.trim().toLowerCase()
+    return customRows.filter(r => {
+      if (r.audience !== want) return false
+      if (!q) return true
+      return `${r.name} ${customEmailTypeValue(r.id)}`.toLowerCase().includes(q)
+    })
+  }, [activeGroup, customRows, templateSearch])
+
   useEffect(() => {
     if (filteredEmailTypes.length === 0) return
     if (!filteredEmailTypes.includes(selectedType)) {
@@ -139,17 +186,39 @@ export default function EmailTemplates() {
   const savedTmpl = getTemplate(selectedType)
   const savedLayoutNormalized = useMemo(() => draftFromSaved(savedTmpl), [savedTmpl])
 
+  const selectedCustomRow = selectedCustomId ? customRows.find(r => r.id === selectedCustomId) : undefined
+
   const tryExitEdit = useCallback((fn: () => void) => {
-    if (sidebarMode !== 'edit') {
-      fn()
-      return
-    }
-    if (!layoutsEqual(editorDraft, savedLayoutNormalized)) {
-      setDiscardConfirm(true)
-      return
+    if (sidebarMode === 'edit') {
+      if (!layoutsEqual(editorDraft, savedLayoutNormalized)) {
+        setDiscardConfirm(true)
+        return
+      }
+    } else if (sidebarMode === 'edit-custom' && selectedCustomId) {
+      const row = customRows.find(r => r.id === selectedCustomId)
+      if (row) {
+        const parsed = parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc()
+        const dirty =
+          customNameDraft !== row.name
+          || customSubjectDraft !== row.subject_template
+          || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+        if (dirty) {
+          setDiscardConfirm(true)
+          return
+        }
+      }
     }
     fn()
-  }, [sidebarMode, editorDraft, savedLayoutNormalized])
+  }, [
+    sidebarMode,
+    editorDraft,
+    savedLayoutNormalized,
+    selectedCustomId,
+    customRows,
+    customNameDraft,
+    customSubjectDraft,
+    customBlocksDraft,
+  ])
 
   const handleGroupSwitch = (g: Group) => {
     if (g === activeGroup) return
@@ -157,6 +226,7 @@ export default function EmailTemplates() {
       setActiveGroup(g)
       setTemplateSearch('')
       setSelectedType(g === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
+      setSelectedCustomId(null)
       setSaved(false)
       setSidebarMode('browse')
       setPendingGroup(null)
@@ -169,6 +239,21 @@ export default function EmailTemplates() {
       setDiscardConfirm(true)
       return
     }
+    if (sidebarMode === 'edit-custom' && selectedCustomId) {
+      const row = customRows.find(r => r.id === selectedCustomId)
+      if (row) {
+        const parsed = parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc()
+        const dirty =
+          customNameDraft !== row.name
+          || customSubjectDraft !== row.subject_template
+          || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+        if (dirty) {
+          setPendingGroup(g)
+          setDiscardConfirm(true)
+          return
+        }
+      }
+    }
     handleGroupSwitch(g)
   }
 
@@ -176,9 +261,11 @@ export default function EmailTemplates() {
     ? CLIENT_DEFAULT_SUBJECTS[selectedType as VenueEmailType]
     : ARTIST_DEFAULT_SUBJECTS[selectedType as ArtistEmailType]
 
-  const typeLabel = activeGroup === 'client'
-    ? VENUE_EMAIL_TYPE_LABELS[selectedType as VenueEmailType]
-    : ARTIST_EMAIL_TYPE_LABELS[selectedType as ArtistEmailType]
+  const typeLabel = selectedCustomRow
+    ? selectedCustomRow.name
+    : activeGroup === 'client'
+      ? VENUE_EMAIL_TYPE_LABELS[selectedType as VenueEmailType]
+      : ARTIST_EMAIL_TYPE_LABELS[selectedType as ArtistEmailType]
 
   useEffect(() => {
     if (sidebarMode === 'browse') {
@@ -197,6 +284,30 @@ export default function EmailTemplates() {
     : draftFromSaved(getTemplate(selectedType))
 
   const previewHtml = useMemo(() => {
+    if (selectedCustomId) {
+      const row = customRows.find(r => r.id === selectedCustomId)
+      const doc = sidebarMode === 'edit-custom'
+        ? customBlocksDraft
+        : (parseCustomEmailBlocksDoc(row?.blocks) ?? defaultCustomBlocksDoc())
+      const subj = sidebarMode === 'edit-custom'
+        ? customSubjectDraft
+        : (row?.subject_template ?? '')
+      const aud = row?.audience ?? (activeGroup === 'client' ? 'venue' : 'artist')
+      const { html } = buildCustomEmailDocument({
+        audience: aud,
+        subjectTemplate: subj.trim() || ' ',
+        blocksRaw: doc,
+        profile: PREVIEW_MOCK_PROFILE,
+        recipient: PREVIEW_MOCK_RECIPIENT,
+        deal: PREVIEW_MOCK_DEAL,
+        venue: PREVIEW_MOCK_VENUE,
+        logoBaseUrl: '',
+        responsiveClasses: false,
+        showReplyButton: aud === 'venue',
+      })
+      return html
+    }
+
     const layout = normalizeEmailTemplateLayout(previewLayout) ?? previewLayout
     if (activeGroup === 'artist') {
       if (selectedType === 'management_report') {
@@ -225,7 +336,16 @@ export default function EmailTemplates() {
       layout.subject ?? null,
       layout,
     )
-  }, [activeGroup, selectedType, previewLayout, sidebarMode])
+  }, [
+    activeGroup,
+    selectedType,
+    previewLayout,
+    sidebarMode,
+    selectedCustomId,
+    customRows,
+    customBlocksDraft,
+    customSubjectDraft,
+  ])
 
   const isDirty = !layoutsEqual(editorDraft, savedLayoutNormalized)
   const hasCustom = !!(savedTmpl && layoutHasAnyCustomization(artistLayoutForSend(
@@ -233,10 +353,30 @@ export default function EmailTemplates() {
     savedTmpl.custom_subject,
     savedTmpl.custom_intro,
   )))
+  const isCustomDirty = (() => {
+    if (sidebarMode !== 'edit-custom' || !selectedCustomRow) return false
+    const parsed = parseCustomEmailBlocksDoc(selectedCustomRow.blocks) ?? defaultCustomBlocksDoc()
+    return customNameDraft !== selectedCustomRow.name
+      || customSubjectDraft !== selectedCustomRow.subject_template
+      || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+  })()
 
-  const enterEdit = () => {
-    setEditorDraft(draftFromSaved(getTemplate(selectedType)))
+  const enterEditFor = (emailType: AnyEmailType) => {
+    setSelectedCustomId(null)
+    setSelectedType(emailType)
+    setEditorDraft(draftFromSaved(getTemplate(emailType)))
     setSidebarMode('edit')
+    setSaved(false)
+  }
+
+  const enterEditCustom = (id: string) => {
+    const row = customRows.find(r => r.id === id)
+    if (!row) return
+    setSelectedCustomId(id)
+    setCustomNameDraft(row.name)
+    setCustomSubjectDraft(row.subject_template)
+    setCustomBlocksDraft(parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc())
+    setSidebarMode('edit-custom')
     setSaved(false)
   }
 
@@ -244,6 +384,61 @@ export default function EmailTemplates() {
     tryExitEdit(() => {
       setSidebarMode('browse')
       setEditorDraft(draftFromSaved(getTemplate(selectedType)))
+    })
+  }
+
+  const saveCustomTemplate = async () => {
+    if (!selectedCustomId) return
+    setSaving(true)
+    await updateCustomRow(selectedCustomId, {
+      name: customNameDraft.trim() || 'Untitled',
+      subject_template: customSubjectDraft,
+      blocks: customBlocksDraft,
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const mergeKeyOptions = (activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS) as readonly string[]
+
+  const updateCustomBlock = (index: number, patch: Partial<CustomEmailBlock>) => {
+    setCustomBlocksDraft(prev => {
+      const blocks = [...prev.blocks]
+      const cur = blocks[index]
+      if (!cur) return prev
+      blocks[index] = { ...cur, ...patch } as CustomEmailBlock
+      return { ...prev, blocks }
+    })
+  }
+
+  const removeCustomBlock = (index: number) => {
+    setCustomBlocksDraft(prev => {
+      const blocks = prev.blocks.filter((_, i) => i !== index)
+      return { ...prev, blocks }
+    })
+  }
+
+  const moveCustomBlock = (index: number, dir: -1 | 1) => {
+    setCustomBlocksDraft(prev => {
+      const blocks = [...prev.blocks]
+      const j = index + dir
+      if (j < 0 || j >= blocks.length) return prev
+      ;[blocks[index], blocks[j]] = [blocks[j], blocks[index]]
+      return { ...prev, blocks }
+    })
+  }
+
+  const addCustomBlock = (kind: CustomEmailBlock['kind']) => {
+    setBlockMenuOpen(false)
+    setCustomBlocksDraft(prev => {
+      const nb: CustomEmailBlock =
+        kind === 'prose' ? { kind: 'prose', title: '', body: '' }
+          : kind === 'bullet_list' ? { kind: 'bullet_list', title: '', items: [''] }
+            : kind === 'key_value' ? { kind: 'key_value', title: '', rows: [{ label: 'Field', value: '' }] }
+              : kind === 'table' ? { kind: 'table', title: '', headers: ['Col A', 'Col B'], rows: [['', '']] }
+                : { kind: 'divider' }
+      return { ...prev, blocks: [...prev.blocks, nb] }
     })
   }
 
@@ -316,7 +511,7 @@ export default function EmailTemplates() {
     }))
   }
 
-  if (loading) {
+  if (loading || customLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-400 rounded-full animate-spin" />
@@ -367,69 +562,565 @@ export default function EmailTemplates() {
                     className="h-8 pl-8 text-xs bg-neutral-950 border-neutral-800 placeholder:text-neutral-600"
                   />
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 text-xs w-full"
-                  disabled={!filteredEmailTypes.includes(selectedType)}
-                  onClick={enterEdit}
-                >
-                  Edit template
-                </Button>
               </div>
 
               <div
                 className={cn(
-                  'flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto overflow-x-hidden pr-0.5',
+                  'flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto overflow-x-hidden pr-0.5',
                   '[scrollbar-width:none] [-ms-overflow-style:none]',
                   '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0',
                 )}
               >
-                {filteredEmailTypes.map(emailType => {
-                  const tmpl = getTemplate(emailType)
-                  const customized = !!(tmpl && layoutHasAnyCustomization(artistLayoutForSend(
-                    tmpl.layout,
-                    tmpl.custom_subject,
-                    tmpl.custom_intro,
-                  )))
-                  const isSelected = selectedType === emailType
-                  const label = activeGroup === 'client'
-                    ? VENUE_EMAIL_TYPE_LABELS[emailType as VenueEmailType]
-                    : ARTIST_EMAIL_TYPE_LABELS[emailType as ArtistEmailType]
-                  const description = activeGroup === 'client'
-                    ? CLIENT_DESCRIPTIONS[emailType as VenueEmailType]
-                    : ARTIST_DESCRIPTIONS[emailType as ArtistEmailType]
-                  return (
-                    <button
-                      key={emailType}
+                <div>
+                  <p className={EYEBROW}>Standard</p>
+                  <div className="flex flex-col gap-2 mt-2">
+                    {filteredEmailTypes.map(emailType => {
+                      const tmpl = getTemplate(emailType)
+                      const customized = !!(tmpl && layoutHasAnyCustomization(artistLayoutForSend(
+                        tmpl.layout,
+                        tmpl.custom_subject,
+                        tmpl.custom_intro,
+                      )))
+                      const isSelected = selectedType === emailType && !selectedCustomId
+                      const label = activeGroup === 'client'
+                        ? VENUE_EMAIL_TYPE_LABELS[emailType as VenueEmailType]
+                        : ARTIST_EMAIL_TYPE_LABELS[emailType as ArtistEmailType]
+                      const description = activeGroup === 'client'
+                        ? CLIENT_DESCRIPTIONS[emailType as VenueEmailType]
+                        : ARTIST_DESCRIPTIONS[emailType as ArtistEmailType]
+                      return (
+                        <div
+                          key={emailType}
+                          className={cn(
+                            'w-full rounded-lg border transition-all',
+                            isSelected
+                              ? 'bg-neutral-800 border-neutral-600'
+                              : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80',
+                          )}
+                        >
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="w-full text-left px-3 py-2.5 cursor-pointer"
+                            onClick={() => {
+                              setSelectedCustomId(null)
+                              setSelectedType(emailType)
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setSelectedCustomId(null)
+                                setSelectedType(emailType)
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={cn('text-sm font-medium truncate', isSelected ? 'text-white' : 'text-neutral-300')}>
+                                {label}
+                              </span>
+                              {customized && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-400 border border-blue-800/60 font-medium shrink-0">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug line-clamp-2">{description}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1 px-2 pb-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] px-2"
+                              onClick={e => {
+                                e.stopPropagation()
+                                enterEditFor(emailType)
+                              }}
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                            {customized && (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[11px] px-2"
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    const order = (activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER) as AnyEmailType[]
+                                    const other = order.find(t => t !== emailType) ?? emailType
+                                    setDuplicateSourceType(emailType)
+                                    setDuplicateTargetType(other)
+                                    setDuplicateOpen(true)
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy to…
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[11px] px-2 text-red-400/90 border-red-900/50"
+                                  onClick={async e => {
+                                    e.stopPropagation()
+                                    const u = await fetchEmailTemplateUsage(emailType)
+                                    setDeleteBuiltinUsage(u)
+                                    setDeleteBuiltinTarget(emailType)
+                                  }}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Remove
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {filteredEmailTypes.length === 0 && (
+                      <p className="text-[11px] text-neutral-600 leading-snug px-1 py-4 text-center">
+                        No standard templates match &ldquo;{templateSearch.trim()}&rdquo;.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={EYEBROW}>My templates</p>
+                    <Button
                       type="button"
-                      onClick={() => setSelectedType(emailType)}
-                      className={cn(
-                        'w-full text-left px-3 py-2.5 rounded-lg border transition-all',
-                        isSelected
-                          ? 'bg-neutral-800 border-neutral-600'
-                          : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80',
-                      )}
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px] px-2"
+                      onClick={() => {
+                        setNewCustomName('')
+                        setNewCustomOpen(true)
+                      }}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className={cn('text-sm font-medium truncate', isSelected ? 'text-white' : 'text-neutral-300')}>
-                          {label}
-                        </span>
-                        {customized && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-400 border border-blue-800/60 font-medium shrink-0">
-                            Custom
-                          </span>
+                      <Plus className="h-3 w-3 mr-1" />
+                      New
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-2 mt-2">
+                    {filteredCustomRows.map(row => {
+                      const sel = selectedCustomId === row.id
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            'w-full rounded-lg border transition-all',
+                            sel
+                              ? 'bg-neutral-800 border-neutral-600'
+                              : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80',
+                          )}
+                        >
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="w-full text-left px-3 py-2.5 cursor-pointer"
+                            onClick={() => setSelectedCustomId(row.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setSelectedCustomId(row.id)
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className={cn('text-sm font-medium truncate', sel ? 'text-white' : 'text-neutral-300')}>
+                                {row.name}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-500 border border-neutral-700 shrink-0">
+                                {row.audience === 'venue' ? 'Client' : 'Artist'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-neutral-600 mt-0.5 font-mono truncate">
+                              {customEmailTypeValue(row.id)}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1 px-2 pb-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] px-2"
+                              onClick={e => {
+                                e.stopPropagation()
+                                enterEditCustom(row.id)
+                              }}
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] px-2"
+                              onClick={async e => {
+                                e.stopPropagation()
+                                const { data } = await duplicateCustomRow(row.id)
+                                if (data) {
+                                  setSelectedCustomId(data.id)
+                                  setCustomNameDraft(data.name)
+                                  setCustomSubjectDraft(data.subject_template)
+                                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(data.blocks) ?? defaultCustomBlocksDoc())
+                                  setSidebarMode('edit-custom')
+                                }
+                              }}
+                            >
+                              <Copy className="h-3 w-3 mr-1" />
+                              Duplicate
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] px-2 text-red-400/90 border-red-900/50"
+                              onClick={async e => {
+                                e.stopPropagation()
+                                const u = await fetchEmailTemplateUsage(customEmailTypeValue(row.id))
+                                setDeleteCustomUsage(u)
+                                setDeleteCustomId(row.id)
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {filteredCustomRows.length === 0 && (
+                      <p className="text-[11px] text-neutral-600 leading-snug px-1 py-3">
+                        No custom templates yet. Use New to create one for {activeGroup === 'client' ? 'client' : 'artist'} emails.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : sidebarMode === 'edit-custom' && selectedCustomRow ? (
+            <>
+              <div className="shrink-0 flex flex-col gap-2 border-b border-neutral-800 pb-3">
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={backToBrowse}
+                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white shrink-0 mt-0.5"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Back
+                  </button>
+                  <div className="flex-1 min-w-0 text-right flex flex-col items-end gap-1.5">
+                    <span className="text-sm font-medium text-white truncate max-w-full">{customNameDraft || 'Untitled'}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-500">
+                      Custom · {selectedCustomRow.audience === 'venue' ? 'Client' : 'Artist'}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={saving || !isCustomDirty}
+                        onClick={saveCustomTemplate}
+                      >
+                        <Save className="h-3 w-3 mr-1" />
+                        {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                className={cn(
+                  'flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-4 pt-3',
+                  '[scrollbar-width:thin]',
+                )}
+              >
+                <div>
+                  <p className={EYEBROW}>Template name</p>
+                  <Input
+                    value={customNameDraft}
+                    onChange={e => setCustomNameDraft(e.target.value)}
+                    className="text-sm mt-1"
+                  />
+                </div>
+                <div>
+                  <p className={EYEBROW}>Subject</p>
+                  <Input
+                    value={customSubjectDraft}
+                    onChange={e => setCustomSubjectDraft(e.target.value)}
+                    placeholder="Use merge tokens like {{venue.name}}"
+                    className="text-sm mt-1"
+                  />
+                  <p className="text-[10px] text-neutral-600 mt-1">
+                    Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                  </p>
+                </div>
+                <div className="border border-neutral-800 rounded-lg p-3 bg-neutral-900/50">
+                  <div className="flex items-center justify-between">
+                    <span className={EYEBROW}>Blocks</span>
+                    <span className="text-xs text-neutral-500">{customBlocksDraft.blocks.length} block(s)</span>
+                  </div>
+                  <div className="relative mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs w-full"
+                      onClick={() => setBlockMenuOpen(o => !o)}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add block
+                    </Button>
+                    {blockMenuOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md border border-neutral-700 bg-neutral-950 shadow-lg py-1">
+                        {(['prose', 'bullet_list', 'key_value', 'table', 'divider'] as const).map(k => (
+                          <button
+                            key={k}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 capitalize"
+                            onClick={() => addCustomBlock(k)}
+                          >
+                            {k.replace('_', ' ')}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3 mt-3">
+                    {customBlocksDraft.blocks.map((block, i) => (
+                      <div key={i} className="border border-neutral-800 rounded-md p-2 space-y-2 bg-neutral-950/60">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-neutral-500 uppercase">{block.kind.replace('_', ' ')}</span>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-neutral-800 text-neutral-500"
+                              onClick={() => moveCustomBlock(i, -1)}
+                              aria-label="Move up"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-neutral-800 text-neutral-500"
+                              onClick={() => moveCustomBlock(i, 1)}
+                              aria-label="Move down"
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-neutral-800 text-red-400/80"
+                              onClick={() => removeCustomBlock(i)}
+                              aria-label="Remove block"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        {block.kind !== 'divider' && (
+                          <Input
+                            value={'title' in block ? block.title ?? '' : ''}
+                            onChange={e => updateCustomBlock(i, { title: e.target.value } as Partial<CustomEmailBlock>)}
+                            placeholder="Section title (optional)"
+                            className="h-8 text-xs"
+                          />
+                        )}
+                        {block.kind === 'prose' && (
+                          <textarea
+                            value={block.body}
+                            onChange={e => updateCustomBlock(i, { body: e.target.value } as Partial<CustomEmailBlock>)}
+                            rows={4}
+                            className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs text-neutral-200 resize-none"
+                          />
+                        )}
+                        {block.kind === 'bullet_list' && (
+                          <div className="space-y-1">
+                            {block.items.map((line, li) => (
+                              <div key={li} className="flex gap-1">
+                                <Input
+                                  value={line}
+                                  onChange={e => {
+                                    const items = [...block.items]
+                                    items[li] = e.target.value
+                                    updateCustomBlock(i, { items } as Partial<CustomEmailBlock>)
+                                  }}
+                                  className="h-8 text-xs flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  className="shrink-0 px-2 rounded border border-neutral-800 text-neutral-500 hover:text-red-400 text-xs"
+                                  onClick={() => updateCustomBlock(i, {
+                                    items: block.items.filter((_, j) => j !== li),
+                                  } as Partial<CustomEmailBlock>)}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => updateCustomBlock(i, { items: [...block.items, ''] } as Partial<CustomEmailBlock>)}
+                            >
+                              + Item
+                            </Button>
+                          </div>
+                        )}
+                        {block.kind === 'key_value' && (
+                          <div className="space-y-2">
+                            {block.rows.map((rowkv, ri) => (
+                              <div key={ri} className="space-y-1 border border-neutral-800/80 rounded p-2">
+                                <Input
+                                  value={rowkv.label}
+                                  onChange={e => {
+                                    const rows = block.rows.map((x, j) =>
+                                      j === ri ? { ...x, label: e.target.value } : x)
+                                    updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
+                                  }}
+                                  placeholder="Label"
+                                  className="h-8 text-xs"
+                                />
+                                <Select
+                                  value={rowkv.valueKey ?? '__static__'}
+                                  onValueChange={v => {
+                                    const rows = block.rows.map((x, j) =>
+                                      j === ri
+                                        ? v === '__static__'
+                                          ? { ...x, valueKey: null, value: x.value ?? '' }
+                                          : { ...x, valueKey: v, value: null }
+                                        : x)
+                                    updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-xs bg-neutral-950 border-neutral-700">
+                                    <SelectValue placeholder="Value source" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__static__" className="text-xs">Static text</SelectItem>
+                                    {mergeKeyOptions.map(k => (
+                                      <SelectItem key={k} value={k} className="text-xs">{k}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {!(rowkv.valueKey) && (
+                                  <Input
+                                    value={rowkv.value ?? ''}
+                                    onChange={e => {
+                                      const rows = block.rows.map((x, j) =>
+                                        j === ri ? { ...x, value: e.target.value } : x)
+                                      updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
+                                    }}
+                                    placeholder="Text (supports merge tokens)"
+                                    className="h-8 text-xs"
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  className="text-[10px] text-red-400/80"
+                                  onClick={() => updateCustomBlock(i, {
+                                    rows: block.rows.filter((_, j) => j !== ri),
+                                  } as Partial<CustomEmailBlock>)}
+                                >
+                                  Remove row
+                                </button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => updateCustomBlock(i, {
+                                rows: [...block.rows, { label: 'New', value: '' }],
+                              } as Partial<CustomEmailBlock>)}
+                            >
+                              + Row
+                            </Button>
+                          </div>
+                        )}
+                        {block.kind === 'table' && (
+                          <div className="space-y-2 text-[10px] text-neutral-500">
+                            <p>Headers</p>
+                            <div className="flex flex-wrap gap-1">
+                              {block.headers.map((h, hi) => (
+                                <Input
+                                  key={hi}
+                                  value={h}
+                                  onChange={e => {
+                                    const headers = [...block.headers]
+                                    headers[hi] = e.target.value
+                                    updateCustomBlock(i, { headers } as Partial<CustomEmailBlock>)
+                                  }}
+                                  className="h-8 text-xs w-24"
+                                />
+                              ))}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 text-[10px]"
+                                onClick={() => updateCustomBlock(i, {
+                                  headers: [...block.headers, 'Column'],
+                                } as Partial<CustomEmailBlock>)}
+                              >
+                                + Col
+                              </Button>
+                            </div>
+                            <p>Rows</p>
+                            {block.rows.map((cells, ri) => (
+                              <div key={ri} className="flex flex-wrap gap-1 items-center">
+                                {cells.map((c, ci) => (
+                                  <Input
+                                    key={ci}
+                                    value={c}
+                                    onChange={e => {
+                                      const rows = block.rows.map((r, rj) =>
+                                        rj === ri
+                                          ? r.map((cell, ck) => (ck === ci ? e.target.value : cell))
+                                          : r)
+                                      updateCustomBlock(i, { rows } as Partial<CustomEmailBlock>)
+                                    }}
+                                    className="h-8 text-xs w-24"
+                                  />
+                                ))}
+                                <button
+                                  type="button"
+                                  className="text-red-400/80 px-1"
+                                  onClick={() => updateCustomBlock(i, {
+                                    rows: block.rows.filter((_, j) => j !== ri),
+                                  } as Partial<CustomEmailBlock>)}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => updateCustomBlock(i, {
+                                rows: [...block.rows, block.headers.map(() => '')],
+                              } as Partial<CustomEmailBlock>)}
+                            >
+                              + Row
+                            </Button>
+                          </div>
                         )}
                       </div>
-                      <p className="text-[11px] text-neutral-600 mt-0.5 leading-snug line-clamp-2">{description}</p>
-                    </button>
-                  )
-                })}
-                {filteredEmailTypes.length === 0 && (
-                  <p className="text-[11px] text-neutral-600 leading-snug px-1 py-6 text-center">
-                    No templates match &ldquo;{templateSearch.trim()}&rdquo;.
-                  </p>
-                )}
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           ) : (
@@ -721,9 +1412,9 @@ export default function EmailTemplates() {
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
               <iframe
-                key={`${activeGroup}-${selectedType}-${sidebarMode}`}
+                key={`${activeGroup}-${selectedType}-${sidebarMode}-${selectedCustomId ?? ''}`}
                 srcDoc={previewHtml}
-                title={`Email preview - ${selectedType}`}
+                title={`Email preview - ${selectedCustomId ?? selectedType}`}
                 className="w-full h-full border-0 min-h-[480px]"
                 sandbox="allow-same-origin"
               />
@@ -775,16 +1466,185 @@ export default function EmailTemplates() {
                   setActiveGroup(pendingGroup)
                   setTemplateSearch('')
                   setSelectedType(pendingGroup === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
+                  setSelectedCustomId(null)
                   setSidebarMode('browse')
                   setPendingGroup(null)
                 } else {
                   setSidebarMode('browse')
-                  setEditorDraft(draftFromSaved(getTemplate(selectedType)))
+                  if (sidebarMode === 'edit-custom' && selectedCustomId) {
+                    const row = customRows.find(r => r.id === selectedCustomId)
+                    if (row) {
+                      setCustomNameDraft(row.name)
+                      setCustomSubjectDraft(row.subject_template)
+                      setCustomBlocksDraft(parseCustomEmailBlocksDoc(row.blocks) ?? defaultCustomBlocksDoc())
+                    }
+                  } else {
+                    setEditorDraft(draftFromSaved(getTemplate(selectedType)))
+                  }
                 }
               }}
             >
               Discard
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteBuiltinTarget} onOpenChange={v => { if (!v) { setDeleteBuiltinTarget(null); setDeleteBuiltinUsage(null) } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove saved template?</DialogTitle>
+          </DialogHeader>
+          {deleteBuiltinUsage && (deleteBuiltinUsage.pipelineTemplateItemCount > 0 || deleteBuiltinUsage.taskCount > 0) ? (
+            <p className="text-sm text-neutral-400">
+              Pipeline templates or tasks still reference this email type. Removing only deletes <strong>your</strong> saved copy—automations will fall back to product defaults until you pick another template in those tasks.
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-400">
+              Removes your overrides for this type. Built-in wording and layout come back.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteBuiltinTarget(null); setDeleteBuiltinUsage(null) }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (deleteBuiltinTarget) {
+                  await deleteTemplate(deleteBuiltinTarget)
+                  setDeleteBuiltinTarget(null)
+                  setDeleteBuiltinUsage(null)
+                  setEditorDraft(draftFromSaved(getTemplate(deleteBuiltinTarget)))
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={duplicateOpen} onOpenChange={v => !v && setDuplicateOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Copy customization to…</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-neutral-400 mb-2">
+            Copies your saved layout and sections to another standard template in this group.
+                    </p>
+          <Select
+            value={duplicateTargetType}
+            onValueChange={v => setDuplicateTargetType(v as AnyEmailType)}
+          >
+            <SelectTrigger className="bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER).map(t => (
+                <SelectItem key={t} value={t} disabled={t === duplicateSourceType}>
+                  {activeGroup === 'client'
+                    ? VENUE_EMAIL_TYPE_LABELS[t as VenueEmailType]
+                    : ARTIST_EMAIL_TYPE_LABELS[t as ArtistEmailType]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!duplicateSourceType) return
+                const srcTmpl = getTemplate(duplicateSourceType)
+                const layout = artistLayoutForSend(
+                  srcTmpl?.layout ?? null,
+                  srcTmpl?.custom_subject ?? null,
+                  srcTmpl?.custom_intro ?? null,
+                )
+                await upsertTemplate(duplicateTargetType, { layout })
+                setDuplicateOpen(false)
+              }}
+            >
+              Copy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newCustomOpen} onOpenChange={v => !v && setNewCustomOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New custom template</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-neutral-400 mb-2">
+            {activeGroup === 'client'
+              ? 'Creates a client (venue) email you can pick in Pipeline or queue for sends.'
+              : 'Creates an artist-facing email. Task completion can send it to the artist address on file.'}
+          </p>
+          <Input
+            value={newCustomName}
+            onChange={e => setNewCustomName(e.target.value)}
+            placeholder="Template name"
+            className="text-sm"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewCustomOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!newCustomName.trim()}
+              onClick={async () => {
+                const { data } = await insertCustomRow({
+                  audience: activeGroup === 'client' ? 'venue' : 'artist',
+                  name: newCustomName.trim(),
+                })
+                setNewCustomOpen(false)
+                setNewCustomName('')
+                if (data) {
+                  setSelectedCustomId(data.id)
+                  setCustomNameDraft(data.name)
+                  setCustomSubjectDraft(data.subject_template)
+                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(data.blocks) ?? defaultCustomBlocksDoc())
+                  setSidebarMode('edit-custom')
+                }
+              }}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteCustomId} onOpenChange={v => { if (!v) { setDeleteCustomId(null); setDeleteCustomUsage(null) } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete custom template?</DialogTitle>
+          </DialogHeader>
+          {deleteCustomUsage && (deleteCustomUsage.pipelineTemplateItemCount > 0 || deleteCustomUsage.taskCount > 0) ? (
+            <p className="text-sm text-neutral-400">
+              This template is still referenced by {deleteCustomUsage.pipelineTemplateItemCount} pipeline step(s) and{' '}
+              {deleteCustomUsage.taskCount} task(s). Duplicate it to a new template, update those references, then delete this one.
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-400">
+              Permanently deletes this template. There is no built-in fallback for this email type.
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteCustomId(null); setDeleteCustomUsage(null) }}>
+              {deleteCustomUsage && (deleteCustomUsage.pipelineTemplateItemCount > 0 || deleteCustomUsage.taskCount > 0)
+                ? 'Close'
+                : 'Cancel'}
+            </Button>
+            {!(deleteCustomUsage && (deleteCustomUsage.pipelineTemplateItemCount > 0 || deleteCustomUsage.taskCount > 0)) && (
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (deleteCustomId) {
+                    await deleteCustomRow(deleteCustomId)
+                    if (selectedCustomId === deleteCustomId) setSelectedCustomId(null)
+                  }
+                  setDeleteCustomId(null)
+                  setDeleteCustomUsage(null)
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

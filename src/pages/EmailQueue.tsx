@@ -9,6 +9,8 @@ import {
 import type { VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import {
   EMAIL_QUEUE_BUFFER_OPTIONS,
   clampEmailQueueBufferMinutes,
@@ -46,10 +48,12 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function TypeBadge({ type }: { type: VenueEmailType }) {
+function TypeBadge({ type }: { type: string }) {
+  const label = VENUE_EMAIL_TYPE_LABELS[type as VenueEmailType]
+    ?? (type.startsWith('custom:') ? 'Custom email' : type)
   return (
     <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
-      {VENUE_EMAIL_TYPE_LABELS[type]}
+      {label}
     </span>
   )
 }
@@ -220,43 +224,88 @@ export default function EmailQueue() {
     setSendError(null)
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setSendError('Not signed in.')
+        return
+      }
+
+      const profilePayload = {
+        artist_name: profile.artist_name,
+        company_name: profile.company_name,
+        from_email: profile.from_email,
+        reply_to_email: profile.reply_to_email,
+        website: profile.website,
+        phone: profile.phone,
+        social_handle: profile.social_handle,
+        tagline: profile.tagline,
+      }
+
+      const dealPayload = email.deal ? {
+        deal: {
+          description: email.deal.description,
+          gross_amount: email.deal.gross_amount,
+          event_date: email.deal.event_date,
+          payment_due_date: email.deal.payment_due_date,
+          agreement_url: email.deal.agreement_url,
+          notes: email.deal.notes,
+        },
+      } : {}
+
+      const venuePayload = email.venue ? {
+        venue: {
+          name: email.venue.name,
+          city: email.venue.city ?? null,
+          location: email.venue.location ?? null,
+        },
+      } : {}
+
+      const recipientPayload = {
+        name: email.contact?.name || email.recipient_email,
+        email: email.recipient_email,
+      }
+
+      const payload: Record<string, unknown> = {
+        profile: profilePayload,
+        recipient: recipientPayload,
+        ...dealPayload,
+        ...venuePayload,
+      }
+
+      const cid = parseCustomTemplateId(email.email_type)
+      if (cid) {
+        const { data: row } = await supabase
+          .from('custom_email_templates')
+          .select('subject_template, blocks, audience')
+          .eq('id', cid)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (!row || row.audience !== 'venue') {
+          throw new Error('Custom template not found')
+        }
+        payload.custom_venue_template = {
+          subject_template: row.subject_template,
+          blocks: row.blocks,
+        }
+      } else {
+        payload.type = email.email_type
+        const { data: tmpl } = await supabase
+          .from('email_templates')
+          .select('custom_subject, custom_intro, layout')
+          .eq('user_id', user.id)
+          .eq('email_type', email.email_type)
+          .maybeSingle()
+        if (tmpl) {
+          payload.custom_subject = tmpl.custom_subject
+          payload.custom_intro = tmpl.custom_intro
+          payload.layout = tmpl.layout
+        }
+      }
+
       const res = await fetch('/.netlify/functions/send-venue-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: email.email_type,
-          profile: {
-            artist_name: profile.artist_name,
-            company_name: profile.company_name,
-            from_email: profile.from_email,
-            reply_to_email: profile.reply_to_email,
-            website: profile.website,
-            phone: profile.phone,
-            social_handle: profile.social_handle,
-            tagline: profile.tagline,
-          },
-          recipient: {
-            name: email.contact?.name || email.recipient_email,
-            email: email.recipient_email,
-          },
-          ...(email.deal ? {
-            deal: {
-              description: email.deal.description,
-              gross_amount: email.deal.gross_amount,
-              event_date: email.deal.event_date,
-              payment_due_date: email.deal.payment_due_date,
-              agreement_url: email.deal.agreement_url,
-              notes: email.deal.notes,
-            }
-          } : {}),
-          ...(email.venue ? {
-            venue: {
-              name: email.venue.name,
-              city: email.venue.city ?? null,
-              location: email.venue.location ?? null,
-            }
-          } : {}),
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {

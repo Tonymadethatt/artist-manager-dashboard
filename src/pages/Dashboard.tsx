@@ -14,6 +14,7 @@ import {
   VENUE_EMAIL_TYPE_LABELS,
   OUTREACH_STATUS_LABELS,
   type OutreachStatus,
+  type VenueEmailType,
 } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -493,7 +494,8 @@ export default function Dashboard() {
                         {email.venue?.name ?? email.recipient_email}
                       </div>
                       <div className="text-xs text-neutral-600">
-                        {VENUE_EMAIL_TYPE_LABELS[email.email_type]}
+                        {VENUE_EMAIL_TYPE_LABELS[email.email_type as VenueEmailType]
+                          ?? (email.email_type.startsWith('custom:') ? 'Custom email' : email.email_type)}
                       </div>
                     </div>
                     <div className="text-right shrink-0">

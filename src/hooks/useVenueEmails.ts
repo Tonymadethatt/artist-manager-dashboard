@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { VenueEmail, VenueEmailType, VenueEmailStatus } from '@/types'
+import type { VenueEmail, VenueEmailStatus } from '@/types'
 
 interface LogEmailParams {
   venue_id?: string | null
   deal_id?: string | null
   contact_id?: string | null
-  email_type: VenueEmailType
+  email_type: string
   recipient_email: string
   subject: string
   status: VenueEmailStatus

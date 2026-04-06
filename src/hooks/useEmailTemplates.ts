@@ -84,9 +84,30 @@ export function useEmailTemplates() {
     })
   }
 
+  const deleteTemplate = async (email_type: AnyEmailType) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: new Error('Not authenticated') }
+    const { error } = await supabase
+      .from('email_templates')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('email_type', email_type)
+    if (error) return { error: new Error(error.message) }
+    setTemplates(prev => prev.filter(t => t.email_type !== email_type))
+    return {}
+  }
+
   const getTemplate = (email_type: AnyEmailType): EmailTemplate | undefined => {
     return templates.find(t => t.email_type === email_type)
   }
 
-  return { templates, loading, upsertTemplate, resetTemplate, getTemplate, refetch: fetchTemplates }
+  return {
+    templates,
+    loading,
+    upsertTemplate,
+    resetTemplate,
+    deleteTemplate,
+    getTemplate,
+    refetch: fetchTemplates,
+  }
 }

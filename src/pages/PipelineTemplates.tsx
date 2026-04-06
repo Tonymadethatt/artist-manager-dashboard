@@ -1,4 +1,4 @@
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { ArrowLeft, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
@@ -11,20 +11,24 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import type { TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence, VenueEmailType } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import type { ArtistEmailType, TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence, VenueEmailType } from '@/types'
+import {
+  ARTIST_EMAIL_TYPE_LABELS,
+  TASK_PRIORITY_LABELS,
+  TASK_RECURRENCE_LABELS,
+  OUTREACH_STATUS_LABELS,
+  OUTREACH_STATUS_ORDER,
+  VENUE_EMAIL_TYPE_LABELS,
+} from '@/types'
 import { cn } from '@/lib/utils'
+import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
   high: 'bg-red-500',
   medium: 'bg-amber-400',
   low: 'bg-neutral-600',
 }
-
-const EMAIL_ACTION_OPTIONS: { value: string; label: string }[] = [
-  { value: '__none__', label: 'None' },
-  ...Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l })),
-]
 
 interface ItemFormState {
   title: string
@@ -49,10 +53,12 @@ const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral
 function TemplateItemFormFields({
   itemForm,
   setItemForm,
+  emailActionOptions,
   compact = false,
 }: {
   itemForm: ItemFormState
   setItemForm: Dispatch<SetStateAction<ItemFormState>>
+  emailActionOptions: { value: string; label: string }[]
   compact?: boolean
 }) {
   const gap = compact ? 'gap-3' : 'gap-x-4 gap-y-4'
@@ -106,7 +112,7 @@ function TemplateItemFormFields({
         <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
           <SelectTrigger className="h-8 w-full text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+            {emailActionOptions.map(({ value, label }) => (
               <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
             ))}
           </SelectContent>
@@ -122,6 +128,26 @@ export default function PipelineTemplates() {
     addTemplate, updateTemplate, deleteTemplate,
     addTemplateItem, updateTemplateItem, deleteTemplateItem,
   } = useTaskTemplates()
+
+  const { rows: customEmailRows } = useCustomEmailTemplates()
+
+  const emailActionOptions = useMemo(() => {
+    const builtin = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
+    const customs = customEmailRows.map(r => ({
+      value: customEmailTypeValue(r.id),
+      label: `${r.name} (${r.audience === 'venue' ? 'custom · client' : 'custom · artist'})`,
+    }))
+    return [{ value: '__none__', label: 'None' }, ...builtin, ...customs]
+  }, [customEmailRows])
+
+  const emailTypeLabel = useMemo(() => {
+    const m = new Map(customEmailRows.map(r => [customEmailTypeValue(r.id), r.name]))
+    return (emailType: string) =>
+      VENUE_EMAIL_TYPE_LABELS[emailType as VenueEmailType]
+      ?? ARTIST_EMAIL_TYPE_LABELS[emailType as ArtistEmailType]
+      ?? m.get(emailType)
+      ?? emailType
+  }, [customEmailRows])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [seeded, setSeeded] = useState(false)
@@ -409,7 +435,7 @@ export default function PipelineTemplates() {
                           <span className="text-sm text-neutral-200">{item.title}</span>
                           {item.email_type && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-800/60 font-medium shrink-0">
-                              {VENUE_EMAIL_TYPE_LABELS[item.email_type as VenueEmailType] ?? item.email_type}
+                              {emailTypeLabel(item.email_type)}
                             </span>
                           )}
                         </div>
@@ -491,7 +517,12 @@ export default function PipelineTemplates() {
                 className="h-8 text-sm"
               />
             </div>
-            <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} compact />
+            <TemplateItemFormFields
+              itemForm={itemForm}
+              setItemForm={setItemForm}
+              emailActionOptions={emailActionOptions}
+              compact
+            />
           </div>
           <DialogFooter className="gap-2 sm:gap-0 pt-1">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={closeItemDialog}>

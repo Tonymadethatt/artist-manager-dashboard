@@ -7,7 +7,6 @@ import type {
   TaskPriority,
   TaskRecurrence,
   PaymentMethod,
-  VenueEmailType,
   VenueEmailStatus,
   DealTerms,
   TemplateSection,
@@ -363,7 +362,7 @@ export interface Database {
           venue_id: string | null
           deal_id: string | null
           contact_id: string | null
-          email_type: VenueEmailType
+          email_type: string
           recipient_email: string
           subject: string
           status: VenueEmailStatus
@@ -377,7 +376,7 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           contact_id?: string | null
-          email_type: VenueEmailType
+          email_type: string
           recipient_email: string
           subject: string
           status?: VenueEmailStatus
@@ -391,7 +390,7 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           contact_id?: string | null
-          email_type?: VenueEmailType
+          email_type?: string
           recipient_email?: string
           subject?: string
           status?: VenueEmailStatus
@@ -663,6 +662,39 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      custom_email_templates: {
+        Row: {
+          id: string
+          user_id: string
+          audience: 'venue' | 'artist'
+          name: string
+          subject_template: string
+          blocks: unknown
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          audience: 'venue' | 'artist'
+          name: string
+          subject_template?: string
+          blocks?: unknown
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          audience?: 'venue' | 'artist'
+          name?: string
+          subject_template?: string
+          blocks?: unknown
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       email_templates: {
         Row: {

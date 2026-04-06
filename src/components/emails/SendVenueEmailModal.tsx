@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
+import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { customEmailTypeValue, isCustomEmailType } from '@/lib/email/customTemplateId'
 import { supabase } from '@/lib/supabase'
 import type { Deal, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
@@ -27,7 +29,7 @@ interface SendVenueEmailModalProps {
   open: boolean
   onClose: () => void
   onSent?: () => void
-  defaultType?: VenueEmailType
+  defaultType?: VenueEmailType | string
   deal?: Deal | null
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null
   recipientEmail?: string
@@ -93,10 +95,11 @@ export function SendVenueEmailModal({
 }: SendVenueEmailModalProps) {
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
+  const { rows: customRows } = useCustomEmailTemplates()
 
   const logEmail = async (params: {
     venue_id?: string | null; deal_id?: string | null; contact_id?: string | null
-    email_type: VenueEmailType; recipient_email: string; subject: string
+    email_type: string; recipient_email: string; subject: string
     status: VenueEmailStatus; notes?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -116,7 +119,11 @@ export function SendVenueEmailModal({
     })
   }
 
-  const [emailType, setEmailType] = useState<VenueEmailType>(defaultType ?? getDefaultType(deal))
+  const venueCustomOptions = customRows.filter(r => r.audience === 'venue')
+
+  const [emailType, setEmailType] = useState<string>(
+    (defaultType as string) ?? getDefaultType(deal),
+  )
   const [recipientEmail, setRecipientEmail] = useState(initialEmail)
   const [recipientName, setRecipientName] = useState(initialName)
   const [sending, setSending] = useState(false)
@@ -125,7 +132,7 @@ export function SendVenueEmailModal({
 
   useEffect(() => {
     if (open) {
-      setEmailType(defaultType ?? getDefaultType(deal))
+      setEmailType((defaultType as string) ?? getDefaultType(deal))
       setRecipientEmail(initialEmail)
       setRecipientName(initialName)
       setStatus('idle')
@@ -150,40 +157,54 @@ export function SendVenueEmailModal({
     }
 
     try {
-      const tmpl = getTemplate(emailType)
+      const customRow = isCustomEmailType(emailType)
+        ? customRows.find(r => customEmailTypeValue(r.id) === emailType)
+        : undefined
+      const tmpl = !customRow ? getTemplate(emailType as VenueEmailType) : undefined
+
+      const payload: Record<string, unknown> = {
+        profile: {
+          artist_name: profile.artist_name,
+          company_name: profile.company_name,
+          from_email: profile.from_email,
+          reply_to_email: profile.reply_to_email,
+          website: profile.website,
+          phone: profile.phone,
+          social_handle: profile.social_handle,
+          tagline: profile.tagline,
+        },
+        recipient: { name: recipientName || recipientEmail, email: recipientEmail },
+        ...(deal ? {
+          deal: {
+            description: deal.description,
+            gross_amount: deal.gross_amount,
+            event_date: deal.event_date,
+            payment_due_date: deal.payment_due_date,
+            agreement_url: deal.agreement_url,
+            notes: deal.notes,
+          },
+        } : {}),
+        ...(venue ? {
+          venue: { name: venue.name, city: venue.city ?? null, location: venue.location ?? null },
+        } : {}),
+      }
+
+      if (customRow) {
+        payload.custom_venue_template = {
+          subject_template: customRow.subject_template,
+          blocks: customRow.blocks,
+        }
+      } else {
+        payload.type = emailType
+        payload.custom_subject = tmpl?.custom_subject ?? null
+        payload.custom_intro = tmpl?.custom_intro ?? null
+        payload.layout = tmpl?.layout ?? null
+      }
+
       const res = await fetch('/.netlify/functions/send-venue-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: emailType,
-          profile: {
-            artist_name: profile.artist_name,
-            company_name: profile.company_name,
-            from_email: profile.from_email,
-            reply_to_email: profile.reply_to_email,
-            website: profile.website,
-            phone: profile.phone,
-            social_handle: profile.social_handle,
-            tagline: profile.tagline,
-          },
-          recipient: { name: recipientName || recipientEmail, email: recipientEmail },
-          custom_subject: tmpl?.custom_subject ?? null,
-          custom_intro: tmpl?.custom_intro ?? null,
-          layout: tmpl?.layout ?? null,
-          ...(deal ? {
-            deal: {
-              description: deal.description,
-              gross_amount: deal.gross_amount,
-              event_date: deal.event_date,
-              payment_due_date: deal.payment_due_date,
-              agreement_url: deal.agreement_url,
-              notes: deal.notes,
-            }
-          } : {}),
-          ...(venue ? {
-            venue: { name: venue.name, city: venue.city ?? null, location: venue.location ?? null }
-          } : {}),
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -191,14 +212,18 @@ export function SendVenueEmailModal({
         throw new Error(err.message ?? 'Send failed')
       }
 
-      // Log the sent email
+      const logSubject = customRow
+        ? `${customRow.name} · ${venue?.name ?? 'venue'}`
+        : subjectMap[emailType as VenueEmailType]
+
+      // Log the sent email — custom types stored as custom:<uuid> for queue/history parity
       await logEmail({
         venue_id: venueId ?? null,
         deal_id: dealId ?? null,
         contact_id: contactId ?? null,
-        email_type: emailType,
+        email_type: customRow ? customEmailTypeValue(customRow.id) : emailType,
         recipient_email: recipientEmail,
-        subject: subjectMap[emailType],
+        subject: logSubject,
         status: 'sent',
       })
 
@@ -210,13 +235,18 @@ export function SendVenueEmailModal({
       setStatus('error')
 
       // Log as failed
+      const customRowFail = isCustomEmailType(emailType)
+        ? customRows.find(r => customEmailTypeValue(r.id) === emailType)
+        : undefined
       await logEmail({
         venue_id: venueId ?? null,
         deal_id: dealId ?? null,
         contact_id: contactId ?? null,
-        email_type: emailType,
+        email_type: customRowFail ? customEmailTypeValue(customRowFail.id) : emailType,
         recipient_email: recipientEmail,
-        subject: subjectMap[emailType],
+        subject: customRowFail
+          ? `${customRowFail.name} · ${venue?.name ?? 'venue'}`
+          : subjectMap[emailType as VenueEmailType],
         status: 'failed',
         notes: err instanceof Error ? err.message : 'Unknown error',
       })
@@ -241,7 +271,7 @@ export function SendVenueEmailModal({
           {/* Email type */}
           <div className="space-y-1.5">
             <Label>Email type</Label>
-            <Select value={emailType} onValueChange={v => setEmailType(v as VenueEmailType)}>
+            <Select value={emailType} onValueChange={v => setEmailType(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -249,10 +279,17 @@ export function SendVenueEmailModal({
                 {EMAIL_TYPE_OPTIONS.map(t => (
                   <SelectItem key={t} value={t}>{VENUE_EMAIL_TYPE_LABELS[t]}</SelectItem>
                 ))}
+                {venueCustomOptions.map(r => (
+                  <SelectItem key={r.id} value={customEmailTypeValue(r.id)}>
+                    {r.name} (custom)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-neutral-500 leading-relaxed">
-              {getTypeDescription(emailType, deal, venue?.name)}
+              {isCustomEmailType(emailType)
+                ? 'Your block-based client template. Merge tokens fill from deal and venue when you send.'
+                : getTypeDescription(emailType as VenueEmailType, deal, venue?.name)}
             </p>
           </div>
 

@@ -19,6 +19,7 @@
 
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -38,6 +39,7 @@ type VenueEmailType =
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
+  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
 
@@ -150,6 +152,33 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const customIds = [...new Set(
+    emails
+      .map(e => parseCustomTemplateId(e.email_type as string))
+      .filter((x): x is string => !!x),
+  )]
+
+  const customRowById = new Map<string, { subject_template: string; blocks: unknown; audience: string }>()
+  if (customIds.length > 0) {
+    const { data: cRows, error: cErr } = await supabase
+      .from('custom_email_templates')
+      .select('id, subject_template, blocks, audience')
+      .in('id', customIds)
+
+    if (cErr) {
+      console.error('[process-email-queue] custom_email_templates:', cErr.message)
+      return { statusCode: 500, body: JSON.stringify({ error: cErr.message }) }
+    }
+
+    for (const r of cRows ?? []) {
+      customRowById.set(r.id as string, {
+        subject_template: r.subject_template as string,
+        blocks: r.blocks,
+        audience: r.audience as string,
+      })
+    }
+  }
+
   const results: Array<{ id: string; result: 'sent' | 'failed'; reason?: string }> = []
 
   for (const email of emails) {
@@ -173,40 +202,75 @@ const handler: Handler = async (event) => {
       continue
     }
 
+    const cid = parseCustomTemplateId(email.email_type as string)
+    const customRow = cid ? customRowById.get(cid) : undefined
+
+    if (cid && (!customRow || customRow.audience !== 'venue')) {
+      await supabase
+        .from('venue_emails')
+        .update({
+          status: 'failed',
+          notes: 'Auto-send failed: custom venue template missing or invalid audience',
+        })
+        .eq('id', email.id)
+      results.push({ id: email.id, result: 'failed', reason: 'custom_template_invalid' })
+      continue
+    }
+
     const tmpl = templateByUserAndType.get(`${email.user_id}:${email.email_type}`)
 
-    const requestBody = {
-      type: email.email_type as VenueEmailType,
-      profile: {
-        artist_name: profile.artist_name,
-        company_name: profile.company_name,
-        from_email: profile.from_email,
-        reply_to_email: profile.reply_to_email,
-        website: profile.website,
-        phone: profile.phone,
-        social_handle: profile.social_handle,
-        tagline: profile.tagline,
-      },
-      recipient: {
-        name: (email.contact as { name?: string } | null)?.name || email.recipient_email,
-        email: email.recipient_email,
-      },
-      ...(email.deal ? { deal: email.deal } : {}),
-      ...(email.venue ? {
+    const profilePayload = {
+      artist_name: profile.artist_name,
+      company_name: profile.company_name,
+      from_email: profile.from_email,
+      reply_to_email: profile.reply_to_email,
+      website: profile.website,
+      phone: profile.phone,
+      social_handle: profile.social_handle,
+      tagline: profile.tagline,
+    }
+
+    const recipientPayload = {
+      name: (email.contact as { name?: string } | null)?.name || email.recipient_email,
+      email: email.recipient_email,
+    }
+
+    const dealPayload = email.deal ? { deal: email.deal } : {}
+    const venuePayload = email.venue
+      ? {
         venue: {
           name: (email.venue as { name: string }).name,
           city: (email.venue as { city?: string | null }).city ?? null,
           location: (email.venue as { location?: string | null }).location ?? null,
-        }
-      } : {}),
-      ...(tmpl
-        ? {
-          custom_subject: tmpl.custom_subject,
-          custom_intro: tmpl.custom_intro,
-          layout: tmpl.layout,
-        }
-        : {}),
-    }
+        },
+      }
+      : {}
+
+    const requestBody = customRow
+      ? {
+        profile: profilePayload,
+        recipient: recipientPayload,
+        ...dealPayload,
+        ...venuePayload,
+        custom_venue_template: {
+          subject_template: customRow.subject_template,
+          blocks: customRow.blocks,
+        },
+      }
+      : {
+        type: email.email_type as VenueEmailType,
+        profile: profilePayload,
+        recipient: recipientPayload,
+        ...dealPayload,
+        ...venuePayload,
+        ...(tmpl
+          ? {
+            custom_subject: tmpl.custom_subject,
+            custom_intro: tmpl.custom_intro,
+            layout: tmpl.layout,
+          }
+          : {}),
+      }
 
     try {
       const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-venue-email`, {

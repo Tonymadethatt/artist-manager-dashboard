@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
 import { normalizeEmailTemplateLayout } from '../../src/lib/emailLayout'
 import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
+import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -43,8 +44,16 @@ interface Recipient {
   email: string
 }
 
+interface CustomVenueTemplatePayload {
+  subject_template: string
+  blocks: unknown
+  show_reply_button?: boolean
+  reply_button_label?: string | null
+}
+
 interface RequestBody {
-  type: VenueEmailType
+  type?: VenueEmailType
+  custom_venue_template?: CustomVenueTemplatePayload
   profile: ArtistProfile
   recipient: Recipient
   deal?: DealData
@@ -53,6 +62,16 @@ interface RequestBody {
   custom_intro?: string | null
   layout?: EmailTemplateLayoutV1 | null
 }
+
+const VENUE_TYPES = new Set<string>([
+  'booking_confirmation',
+  'payment_receipt',
+  'payment_reminder',
+  'agreement_ready',
+  'booking_confirmed',
+  'follow_up',
+  'rebooking_inquiry',
+])
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -71,40 +90,76 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { type, profile, recipient, deal, venue, custom_subject, custom_intro, layout: rawLayout } = body
-  if (!type || !profile?.from_email || !recipient?.email) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: type, profile.from_email, recipient.email' }) }
-  }
-
-  const layout = normalizeEmailTemplateLayout(rawLayout)
-  const siteUrl = process.env.URL || ''
-  const html = buildVenueEmailDocument({
+  const {
     type,
     profile,
     recipient,
     deal,
     venue,
-    custom_intro,
     custom_subject,
-    layout,
-    logoBaseUrl: siteUrl,
-    responsiveClasses: true,
-  })
-  const artistNameUpper = profile.artist_name.toUpperCase()
-  const replyTo = profile.reply_to_email || profile.from_email
-  const venueName = venue?.name || deal?.description || 'your venue'
+    custom_intro,
+    layout: rawLayout,
+    custom_venue_template,
+  } = body
 
-  const subjectMap: Record<VenueEmailType, string> = {
-    booking_confirmation: `Booking Confirmation - ${artistNameUpper} at ${venueName}`,
-    payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
-    payment_reminder: `Payment Reminder - ${artistNameUpper}`,
-    agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
-    booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
-    follow_up: `Following Up - ${artistNameUpper}`,
-    rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
+  if (!profile?.from_email || !recipient?.email) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: profile.from_email, recipient.email' }) }
   }
 
-  const subject = custom_subject?.trim() || layout?.subject?.trim() || subjectMap[type]
+  if (!custom_venue_template && (!type || !VENUE_TYPES.has(type))) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Missing or invalid type (or provide custom_venue_template)' }) }
+  }
+
+  const siteUrl = process.env.URL || ''
+  const replyTo = profile.reply_to_email || profile.from_email
+  const artistNameUpper = profile.artist_name.toUpperCase()
+  const venueName = venue?.name || deal?.description || 'your venue'
+
+  let html: string
+  let subject: string
+
+  if (custom_venue_template) {
+    const built = buildCustomEmailDocument({
+      audience: 'venue',
+      subjectTemplate: custom_venue_template.subject_template,
+      blocksRaw: custom_venue_template.blocks,
+      profile,
+      recipient,
+      deal,
+      venue,
+      logoBaseUrl: siteUrl,
+      responsiveClasses: true,
+      showReplyButton: custom_venue_template.show_reply_button !== false,
+      replyButtonLabel: custom_venue_template.reply_button_label ?? null,
+    })
+    html = built.html
+    subject = built.subject
+  } else {
+    const layout = normalizeEmailTemplateLayout(rawLayout)
+    html = buildVenueEmailDocument({
+      type: type!,
+      profile,
+      recipient,
+      deal,
+      venue,
+      custom_intro,
+      custom_subject,
+      layout,
+      logoBaseUrl: siteUrl,
+      responsiveClasses: true,
+    })
+
+    const subjectMap: Record<VenueEmailType, string> = {
+      booking_confirmation: `Booking Confirmation - ${artistNameUpper} at ${venueName}`,
+      payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
+      payment_reminder: `Payment Reminder - ${artistNameUpper}`,
+      agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
+      booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
+      follow_up: `Following Up - ${artistNameUpper}`,
+      rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
+    }
+    subject = custom_subject?.trim() || layout?.subject?.trim() || subjectMap[type!]
+  }
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
