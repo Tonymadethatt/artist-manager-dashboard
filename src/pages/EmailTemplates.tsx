@@ -53,6 +53,7 @@ const CLIENT_ORDER: VenueEmailType[] = [
   'booking_confirmed',
   'payment_reminder',
   'payment_receipt',
+  'rebooking_inquiry',
 ]
 
 // ── Artist email metadata ──────────────────────────────────────────────────
@@ -66,7 +67,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   management_report:          'Management Update - {start} to {end}',
   retainer_reminder:          'Hey DJ, quick note from management',
-  performance_report_request: 'Quick check-in: How did the show go?',
+  performance_report_request: 'Quick check-in: How did the show go at {venue}?',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder', 'performance_report_request']
@@ -125,7 +126,9 @@ export default function EmailTemplates() {
       const intro = editIntro.trim() || null
       const subj = editSubject.trim() || null
       if (selectedType === 'management_report') return buildManagementReportHtml(intro, subj)
-      if (selectedType === 'performance_report_request') return buildPerformanceReportRequestHtml()
+      if (selectedType === 'performance_report_request') {
+        return buildPerformanceReportRequestHtml(editIntro.trim() || null, editSubject.trim() || null)
+      }
       return buildRetainerReminderHtml(intro, subj)
     }
     return buildVenueEmailHtml(

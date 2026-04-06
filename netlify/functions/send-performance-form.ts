@@ -9,6 +9,35 @@ interface RequestBody {
   fromEmail: string
   replyToEmail: string
   managerName: string
+  custom_subject?: string | null
+  custom_intro?: string | null
+}
+
+function applyPerformanceReportPlaceholders(text: string, venueName: string, artistFullName: string): string {
+  const first = artistFullName.split(/\s+/)[0] || artistFullName
+  return text
+    .replace(/\{venue\}/g, venueName)
+    .replace(/\{artist\}/g, first)
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function buildPerformanceCardInner(
+  customIntro: string | null | undefined,
+  venueName: string,
+  artistName: string,
+): string {
+  const defaultP = 'Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.'
+  const raw = customIntro?.trim()
+  if (!raw) {
+    return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${defaultP}</p>`
+  }
+  const applied = applyPerformanceReportPlaceholders(raw, venueName, artistName)
+  if (applied.includes('<')) return applied
+  const withBreaks = escapeHtml(applied).replace(/\n/g, '<br/>')
+  return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${withBreaks}</p>`
 }
 
 const handler: Handler = async (event) => {
@@ -50,7 +79,12 @@ const handler: Handler = async (event) => {
     ? `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${fmtDate(body.eventDate)}</p>`
     : `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong></p>`
 
-  const subject = `Quick check-in: How did the show go at ${body.venueName}?`
+  const subjectRaw = body.custom_subject?.trim()
+  const subject = subjectRaw
+    ? applyPerformanceReportPlaceholders(subjectRaw, body.venueName, body.artistName)
+    : `Quick check-in: How did the show go at ${body.venueName}?`
+
+  const cardInner = buildPerformanceCardInner(body.custom_intro, body.venueName, body.artistName)
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -86,7 +120,7 @@ const handler: Handler = async (event) => {
     ${eventDateLine}
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:20px 22px;margin-bottom:24px;">
-      <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>
+      ${cardInner}
       <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
     </div>
 

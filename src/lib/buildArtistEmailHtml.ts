@@ -1,6 +1,12 @@
 // Frontend preview builder for artist-facing emails.
 // Mirrors send-report.ts and send-reminder.ts HTML structure with mock data.
 
+import { applyPerformanceReportPlaceholders } from '@/lib/performanceReportEmailPlaceholders'
+
+function escapeHtmlPlain(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 const logoUrl = '/dj-luijay-logo.png'
 const igIconUrl = '/icons/icon-ig.png'
 
@@ -208,9 +214,30 @@ export function buildRetainerReminderHtml(customIntro?: string | null, _customSu
 </html>`
 }
 
-export function buildPerformanceReportRequestHtml(): string {
-  const subject = 'Quick check-in: How did the show go at Skyline Bar & Lounge?'
+const PERF_PREVIEW_VENUE = 'Skyline Bar & Lounge'
+const PERF_PREVIEW_ARTIST = 'DJ Luijay'
+
+export function buildPerformanceReportRequestHtml(
+  customIntro?: string | null,
+  customSubject?: string | null,
+): string {
   const formUrl = '#'
+  const venueName = PERF_PREVIEW_VENUE
+  const artistFull = PERF_PREVIEW_ARTIST
+  const firstName = artistFull.split(/\s+/)[0] || artistFull
+  const subjectRaw = customSubject?.trim()
+  const subject = subjectRaw
+    ? applyPerformanceReportPlaceholders(subjectRaw, venueName, artistFull)
+    : `Quick check-in: How did the show go at ${venueName}?`
+
+  const defaultCardBody = `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>`
+  const cardInner = (() => {
+    const raw = customIntro?.trim()
+    if (!raw) return defaultCardBody
+    const applied = applyPerformanceReportPlaceholders(raw, venueName, artistFull)
+    if (applied.includes('<')) return applied
+    return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${escapeHtmlPlain(applied).replace(/\n/g, '<br/>')}</p>`
+  })()
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -224,11 +251,11 @@ export function buildPerformanceReportRequestHtml(): string {
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey DJ Luijay,</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey ${firstName},</p>
     <p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">Skyline Bar &amp; Lounge</strong> &mdash; April 4, 2026</p>
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:20px 22px;margin-bottom:24px;">
-      <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>
+      ${cardInner}
       <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
     </div>
 

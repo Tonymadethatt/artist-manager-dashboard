@@ -67,6 +67,13 @@ export async function queueEmailAutomationForCompletedTask(
       .eq('user_id', user.id)
       .maybeSingle()
 
+    const { data: perfTmpl } = await supabase
+      .from('email_templates')
+      .select('custom_subject, custom_intro')
+      .eq('user_id', user.id)
+      .eq('email_type', 'performance_report_request')
+      .maybeSingle()
+
     const p = profile as ArtistProfile | null
     if (!p) {
       // #region agent log
@@ -95,6 +102,8 @@ export async function queueEmailAutomationForCompletedTask(
             fromEmail: p.from_email,
             replyToEmail: p.reply_to_email || p.from_email,
             managerName: p.manager_name || 'Your Manager',
+            custom_subject: perfTmpl?.custom_subject ?? null,
+            custom_intro: perfTmpl?.custom_intro ?? null,
           }),
         })
       }

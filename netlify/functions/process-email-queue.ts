@@ -123,6 +123,29 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const templateByUserAndType = new Map<string, { custom_subject: string | null; custom_intro: string | null }>()
+  const templateUserIds = [...new Set(emails.map(e => e.user_id))]
+  if (templateUserIds.length > 0) {
+    const { data: tmplRows, error: tmplErr } = await supabase
+      .from('email_templates')
+      .select('user_id, email_type, custom_subject, custom_intro')
+      .in('user_id', templateUserIds)
+
+    if (tmplErr) {
+      console.error('[process-email-queue] email_templates error:', tmplErr.message)
+      return { statusCode: 500, body: JSON.stringify({ error: tmplErr.message }) }
+    }
+
+    for (const row of tmplRows ?? []) {
+      const uid = row.user_id as string
+      const et = row.email_type as string
+      templateByUserAndType.set(`${uid}:${et}`, {
+        custom_subject: row.custom_subject as string | null,
+        custom_intro: row.custom_intro as string | null,
+      })
+    }
+  }
+
   const results: Array<{ id: string; result: 'sent' | 'failed'; reason?: string }> = []
 
   for (const email of emails) {
@@ -145,6 +168,8 @@ const handler: Handler = async (event) => {
       results.push({ id: email.id, result: 'failed', reason: 'no_artist_profile' })
       continue
     }
+
+    const tmpl = templateByUserAndType.get(`${email.user_id}:${email.email_type}`)
 
     const requestBody = {
       type: email.email_type as VenueEmailType,
@@ -170,6 +195,12 @@ const handler: Handler = async (event) => {
           location: (email.venue as { location?: string | null }).location ?? null,
         }
       } : {}),
+      ...(tmpl
+        ? {
+          custom_subject: tmpl.custom_subject,
+          custom_intro: tmpl.custom_intro,
+        }
+        : {}),
     }
 
     try {

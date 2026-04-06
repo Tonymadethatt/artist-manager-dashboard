@@ -20,8 +20,7 @@ export function usePerformanceReports() {
 
   /**
    * Creates a new performance report row and sends the form email to the artist.
-   * The authenticated client creates the row (RLS allows it).
-   * send-performance-form.ts only sends the Resend email (no Supabase access needed in the function).
+   * Loads `performance_report_request` overrides from email_templates when present.
    */
   const createReport = async (
     venueId: string,
@@ -47,6 +46,13 @@ export function usePerformanceReports() {
     const report = row as PerformanceReport
     setReports(prev => [report, ...prev])
 
+    const { data: perfTmpl } = await supabase
+      .from('email_templates')
+      .select('custom_subject, custom_intro')
+      .eq('user_id', user.id)
+      .eq('email_type', 'performance_report_request')
+      .maybeSingle()
+
     // Call function to send email (only needs RESEND_API_KEY)
     const siteUrl = window.location.origin
     const formUrl = `${siteUrl}/performance-report/${report.token}`
@@ -64,6 +70,8 @@ export function usePerformanceReports() {
           fromEmail: profile.from_email,
           replyToEmail: profile.reply_to_email || profile.from_email,
           managerName: profile.manager_name || 'Your Manager',
+          custom_subject: perfTmpl?.custom_subject ?? null,
+          custom_intro: perfTmpl?.custom_intro ?? null,
         }),
       })
       if (!res.ok) {
@@ -88,6 +96,9 @@ export function usePerformanceReports() {
     reportId: string,
     profile: Pick<ArtistProfile, 'artist_name' | 'artist_email' | 'from_email' | 'reply_to_email' | 'manager_name'>,
   ): Promise<{ formUrl?: string; error?: string }> => {
+    const { data: { user: resendUser } } = await supabase.auth.getUser()
+    if (!resendUser) return { error: 'Not authenticated' }
+
     // Generate a new UUID token using crypto API
     const newToken = crypto.randomUUID()
 
@@ -104,6 +115,13 @@ export function usePerformanceReports() {
 
     const report = updated as PerformanceReport
     setReports(prev => prev.map(r => r.id === reportId ? report : r))
+
+    const { data: perfTmpl } = await supabase
+      .from('email_templates')
+      .select('custom_subject, custom_intro')
+      .eq('user_id', resendUser.id)
+      .eq('email_type', 'performance_report_request')
+      .maybeSingle()
 
     const siteUrl = window.location.origin
     const formUrl = `${siteUrl}/performance-report/${newToken}`
@@ -123,6 +141,8 @@ export function usePerformanceReports() {
           fromEmail: profile.from_email,
           replyToEmail: profile.reply_to_email || profile.from_email,
           managerName: profile.manager_name || 'Your Manager',
+          custom_subject: perfTmpl?.custom_subject ?? null,
+          custom_intro: perfTmpl?.custom_intro ?? null,
         }),
       })
       if (!res.ok) {
