@@ -89,31 +89,31 @@ export default function FileBuilder() {
 
   const handleTemplateChange = (id: string) => {
     setSelectedTemplateId(id)
-    setVars({})
     setSavedText(false)
     setSavedPdf(false)
     const tpl = templates.find(t => t.id === id)
     if (tpl && !fileName) setFileName(`${tpl.name} — `)
   }
 
-  const setVar = (key: string, value: string) => {
-    setVars(prev => ({ ...prev, [key]: value }))
-    setSavedText(false)
-    setSavedPdf(false)
-  }
-
   useEffect(() => {
-    if (!selectedTemplate || variables.length === 0) return
+    if (!selectedTemplate) {
+      setVars({})
+      return
+    }
+    if (variables.length === 0) {
+      setVars({})
+      return
+    }
     const venue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
     const deal = selectedDealId ? deals.find(d => d.id === selectedDealId) ?? null : null
-    const pre = buildAgreementPrefill(venue, profile, deal, mergeContact)
-    setVars(prev => {
-      const next = { ...prev }
-      for (const key of variables) {
-        if (pre[key] && !next[key]?.trim()) next[key] = pre[key]
-      }
-      return next
-    })
+    const pre = buildAgreementPrefill(venue, profile ?? null, deal, mergeContact)
+    const next: Record<string, string> = {}
+    for (const key of variables) {
+      next[key] = pre[key] ?? ''
+    }
+    setVars(next)
+    setSavedText(false)
+    setSavedPdf(false)
   }, [
     selectedVenueId,
     selectedDealId,
@@ -302,6 +302,11 @@ export default function FileBuilder() {
               <p className="text-xs text-neutral-500 leading-relaxed max-w-2xl">
                 Choose a template and optional links. Save plain text or a branded PDF to Files (public link for agreement emails).
               </p>
+              {selectedTemplate && variables.length > 0 && (
+                <p className="text-[11px] text-neutral-600 leading-relaxed max-w-2xl mt-2">
+                  Merge fields in the template are filled from your selected venue, deal, contact, and Settings profile—no separate variable editor.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-x-5 md:gap-y-4">
@@ -399,48 +404,6 @@ export default function FileBuilder() {
               />
             </div>
           </section>
-
-          {selectedTemplate && variables.length > 0 && (
-            <section
-              className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
-              aria-labelledby="file-builder-vars-heading"
-            >
-              <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-3 border-b border-neutral-800/90">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
-                  Merge fields
-                </p>
-                <h3 id="file-builder-vars-heading" className="text-sm font-semibold text-neutral-100">
-                  Variables
-                </h3>
-                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                  {variables.length} token{variables.length !== 1 ? 's' : ''} in this template. Venue, deal, and contact pre-fill empty fields.
-                </p>
-                {variables.includes('company_name') && !profile?.company_name?.trim() && (
-                  <p className="text-[11px] text-amber-600/95 mt-2 leading-snug">
-                    Set <span className="font-medium text-neutral-300">Company name</span> in Settings to pre-fill{' '}
-                    <code className="text-neutral-400">{'{{company_name}}'}</code>.
-                  </p>
-                )}
-              </div>
-              <div className="p-4 sm:p-5 pt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-                  {variables.map(key => (
-                    <div key={key} className="space-y-1.5 min-w-0">
-                      <Label className="font-mono text-[11px] text-neutral-400 truncate block">
-                        {'{{'}{key}{'}}'}
-                      </Label>
-                      <Input
-                        value={vars[key] ?? ''}
-                        onChange={e => setVar(key, e.target.value)}
-                        placeholder={`Value for ${key}`}
-                        className="w-full"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
 
           {selectedTemplate && variables.length === 0 && (
             <p className="text-xs text-neutral-500 px-0.5 leading-relaxed">

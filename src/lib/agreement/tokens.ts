@@ -65,8 +65,11 @@ export function buildAgreementPrefill(
     }
     out.gross_amount = String(deal.gross_amount)
     out.gross_amount_display = usd.format(deal.gross_amount)
-    out.commission_rate = String(deal.commission_rate)
+    // Match Earnings UI: stored as fraction (0.2), agreements show as percent (20%)
+    out.commission_rate = `${Math.round(deal.commission_rate * 100)}%`
+    out.commission_rate_fraction = String(deal.commission_rate)
     out.commission_amount = String(deal.commission_amount)
+    out.commission_amount_display = usd.format(deal.commission_amount)
     out.commission_tier = COMMISSION_TIER_LABELS[deal.commission_tier]
     if (deal.payment_due_date) out.payment_due_date = deal.payment_due_date
     if (deal.agreement_url) out.agreement_url = deal.agreement_url
@@ -78,7 +81,12 @@ export function buildAgreementPrefill(
     if (mergeContact.role) out.contact_role = mergeContact.role
     if (mergeContact.email) out.contact_email = mergeContact.email
     if (mergeContact.phone) out.contact_phone = mergeContact.phone
-    if (mergeContact.company?.trim()) out.contact_company = mergeContact.company.trim()
+    if (mergeContact.company?.trim()) {
+      const co = mergeContact.company.trim()
+      out.contact_company = co
+      // Many templates use {{company_name}} for the counterparty; fill from contact when Settings artist company is empty.
+      if (!out.company_name?.trim()) out.company_name = co
+    }
   }
 
   return out
