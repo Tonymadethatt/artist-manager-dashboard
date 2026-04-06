@@ -1,25 +1,70 @@
-import type { Handler } from '@netlify/functions'
+import type { Handler, HandlerEvent } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 /**
  * GET /.netlify/functions/public-agreement-pdf?slug=...
  * Proxied from /agreements/:slug so share links stay on the site domain.
+ *
+ * Netlify 200 rewrites do not always populate queryStringParameters; fall back to
+ * rawQuery, pathname segments, and rawUrl so /agreements/{slug} still works.
  */
+function decodeSlugSegment(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw).trim().toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+function resolveSlugFromEvent(event: HandlerEvent): string | null {
+  const fromParams = event.queryStringParameters?.slug
+  if (fromParams) {
+    const s = decodeSlugSegment(fromParams)
+    if (s) return s
+  }
+
+  const q = event.rawQuery?.replace(/^\?/, '') ?? ''
+  if (q) {
+    const fromSearch = new URLSearchParams(q).get('slug')
+    if (fromSearch) {
+      const s = decodeSlugSegment(fromSearch)
+      if (s) return s
+    }
+  }
+
+  const pathMatch = (event.path || '').match(/\/agreements\/([^/?#]+)/)
+  if (pathMatch?.[1]) {
+    const s = decodeSlugSegment(pathMatch[1])
+    if (s) return s
+  }
+
+  try {
+    const u = new URL(event.rawUrl)
+    const seg = u.pathname.match(/\/agreements\/([^/?#]+)/)?.[1]
+    if (seg) {
+      const s = decodeSlugSegment(seg)
+      if (s) return s
+    }
+    const rq = u.searchParams.get('slug')
+    if (rq) {
+      const s = decodeSlugSegment(rq)
+      if (s) return s
+    }
+  } catch {
+    // ignore invalid rawUrl
+  }
+
+  return null
+}
+
 const handler: Handler = async event => {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: 'Method not allowed', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
-  const raw = event.queryStringParameters?.slug
-  if (!raw) {
+  const slug = resolveSlugFromEvent(event)
+  if (!slug) {
     return { statusCode: 400, body: 'Missing slug', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
-  }
-
-  let slug = ''
-  try {
-    slug = decodeURIComponent(raw).trim().toLowerCase()
-  } catch {
-    return { statusCode: 400, body: 'Invalid slug', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
   if (slug.length > 220 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {

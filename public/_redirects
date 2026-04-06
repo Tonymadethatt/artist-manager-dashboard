@@ -1,2 +1,2 @@
-/agreements/:slug  /.netlify/functions/public-agreement-pdf?slug=:slug  200
+/agreements/*  /.netlify/functions/public-agreement-pdf?slug=:splat  200
 /* /index.html 200
