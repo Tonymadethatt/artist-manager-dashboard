@@ -1,5 +1,5 @@
-import type { GeneratedFile } from '@/types'
-import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
+import type { GeneratedFile } from '../../types'
+import { resolveGeneratedFileDownloadUrl } from './resolveGeneratedFileDownloadUrl'
 
 /** Build a client/server payload for custom-template email attachment blocks (public URL + display name). */
 export function buildEmailAttachmentPayloadFromFile(

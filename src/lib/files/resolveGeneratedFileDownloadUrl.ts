@@ -1,5 +1,5 @@
-import type { GeneratedFile } from '@/types'
-import { resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
+import type { GeneratedFile } from '../../types'
+import { resolvedPdfHrefFromOrigin } from './pdfShareUrl'
 
 export type GeneratedFileSource = 'generated' | 'upload'
 
