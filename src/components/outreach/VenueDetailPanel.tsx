@@ -102,32 +102,17 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
     await onUpdate(venue.id, { status })
     // Auto-apply any template that triggers on this status
     const matching = templates.filter(t => t.trigger_status === status)
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' },
-      body: JSON.stringify({
-        sessionId: 'cfe38b',
-        location: 'VenueDetailPanel.tsx:handleStatusChange',
-        message: 'status change from venue detail panel',
-        hypothesisId: 'H5-detail-path',
-        timestamp: Date.now(),
-        data: {
-          status,
-          matchingTemplateCount: matching.length,
-          invokesApplyTemplate: matching.length > 0,
-        },
-      }),
-    }).catch(() => {})
-    // #endregion
     if (matching.length > 0) {
       let totalTasks = 0
+      let emailsQueued = 0
       for (const t of matching) {
-        const { count } = await applyTemplate(t.id, venue.id)
+        const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id)
         totalTasks += count
+        emailsQueued += q ?? 0
       }
       if (totalTasks > 0) {
-        setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[status]}"`)
+        const emailPart = emailsQueued > 0 ? ` · ${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued` : ''
+        setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[status]}"${emailPart}`)
         setTimeout(() => setAutoApplyMsg(null), 4000)
       }
     }

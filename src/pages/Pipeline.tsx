@@ -24,6 +24,7 @@ import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail, Ve
 import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -173,11 +174,16 @@ function VenueProgressPanelConnected({
         }
       }
 
+      const vType = t.email_type as VenueEmailType
+      if (await hasRecentPendingVenueEmail(venue.id, vType, 45)) {
+        continue
+      }
+
       await onQueueEmail({
         venue_id: venue.id,
-        email_type: t.email_type as VenueEmailType,
+        email_type: vType,
         recipient_email: primaryContact.email,
-        subject: `${VENUE_EMAIL_TYPE_LABELS[t.email_type as VenueEmailType] ?? t.email_type} - ${venue.name}`,
+        subject: `${VENUE_EMAIL_TYPE_LABELS[vType] ?? t.email_type} - ${venue.name}`,
         notes: `Auto-queued from task: ${t.title}`,
       })
     }

@@ -63,32 +63,18 @@ export default function Outreach() {
     await updateVenue(venue.id, { status: newStatus })
     const matching = templates.filter(t => t.trigger_status === newStatus)
     let totalTasks = 0
+    let emailsQueued = 0
     for (const t of matching) {
-      const { count } = await applyTemplate(t.id, venue.id)
+      const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id)
       totalTasks += count
+      emailsQueued += q ?? 0
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' },
-      body: JSON.stringify({
-        sessionId: 'cfe38b',
-        runId: 'post-fix',
-        location: 'Outreach.tsx:handleStatusChange',
-        message: 'outreach table status: update + template apply',
-        hypothesisId: 'H1-list-path',
-        timestamp: Date.now(),
-        data: {
-          newStatus,
-          matchingTemplateCount: matching.length,
-          tasksCreated: totalTasks,
-        },
-      }),
-    }).catch(() => {})
-    // #endregion
+    const parts: string[] = []
+    if (totalTasks > 0) parts.push(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created`)
+    if (emailsQueued > 0) parts.push(`${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued`)
     showToast(
-      totalTasks > 0
-        ? `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · ${totalTasks} task${totalTasks !== 1 ? 's' : ''} from template${matching.length !== 1 ? 's' : ''}`
+      parts.length > 0
+        ? `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · ${parts.join(' · ')}`
         : `${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`
     )
     // Keep detail panel in sync if open

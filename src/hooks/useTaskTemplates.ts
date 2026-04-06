@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { queueImmediateEmailsForTemplate } from '@/lib/queueEmailsFromTemplate'
 import type { TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence } from '@/types'
 
 function addDays(dateStr: string, n: number) {
@@ -112,7 +113,11 @@ export function useTaskTemplates() {
   }
 
   // Batch-creates tasks from a template linked to a venue (and optionally a deal)
-  const applyTemplate = async (templateId: string, venueId: string, dealId?: string | null): Promise<{ count: number; error?: Error }> => {
+  const applyTemplate = async (
+    templateId: string,
+    venueId: string,
+    dealId?: string | null
+  ): Promise<{ count: number; emailsQueued?: number; error?: Error }> => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { count: 0, error: new Error('Not authenticated') }
 
@@ -134,28 +139,10 @@ export function useTaskTemplates() {
     }))
 
     const { error } = await supabase.from('tasks').insert(inserts)
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' },
-      body: JSON.stringify({
-        sessionId: 'cfe38b',
-        location: 'useTaskTemplates.ts:applyTemplate',
-        message: 'applyTemplate result',
-        hypothesisId: 'H3-H4-insert',
-        timestamp: Date.now(),
-        data: {
-          templateId,
-          venueId: venueId.slice(0, 8),
-          itemCount: template.items?.length ?? 0,
-          insertCount: inserts.length,
-          dbError: error ? error.message : null,
-        },
-      }),
-    }).catch(() => {})
-    // #endregion
     if (error) return { count: 0, error: new Error(error.message) }
-    return { count: inserts.length }
+
+    const { queued: emailsQueued } = await queueImmediateEmailsForTemplate(venueId, template, dealId)
+    return { count: inserts.length, emailsQueued }
   }
 
   // Seed default templates if user has none — called from PipelineTemplates on first load
