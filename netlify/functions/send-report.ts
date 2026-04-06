@@ -1,4 +1,15 @@
 import type { Handler } from '@netlify/functions'
+import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
+import { artistLayoutForSend } from '../../src/lib/emailLayout'
+import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
+
+function escapeHtmlEnt(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
 interface ArtistProfile {
   artist_name: string
@@ -80,7 +91,7 @@ function sectionCard(title: string, content: string, accentColor: string = '#60a
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
-function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }, customSubject?: string | null, customIntro?: string | null): string {
+function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo.png`
@@ -199,6 +210,11 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     perfSection = sectionCard('Post-Show Activity', rows(perfRows), '#22c55e')
   }
 
+  const introRawG = L.intro?.trim()
+  const greetingInner = introRawG
+    ? escapeHtmlEnt(introRawG).replace(/\n/g, '<br/>')
+    : `${summaryLine} Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.`
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -234,7 +250,7 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   <div class="email-body" style="padding:28px 32px;">
 
     <!-- Greeting -->
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${customIntro ? customIntro : `${summaryLine} Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.`}</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${profile.artist_name},<br><br>${greetingInner}</p>
 
     ${heroValue ? `<!-- Hero win -->
     <div style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:26px 20px;margin-bottom:22px;">
@@ -251,7 +267,11 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     ${brandSection}
     ${tasksSection}
 
-    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">That is the full picture. Reach out if you want to talk through anything.</p>
+    ${renderAppendBlocksHtml(L.appendBlocks)}
+
+    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">${L.closing?.trim()
+    ? escapeHtmlEnt(L.closing).replace(/\n/g, '<br/>')
+    : 'That is the full picture. Reach out if you want to talk through anything.'}</p>
 
   </div>
 
@@ -289,6 +309,7 @@ const handler: Handler = async (event) => {
     testOnly?: boolean
     custom_subject?: string | null
     custom_intro?: string | null
+    layout?: unknown | null
   }
   try {
     body = JSON.parse(event.body ?? '{}')
@@ -296,7 +317,8 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, report, dateRange, cc = [], testOnly = false, custom_subject, custom_intro } = body
+  const { profile, report, dateRange, cc = [], testOnly = false, custom_subject, custom_intro, layout: layoutRaw } = body
+  const L = artistLayoutForSend(layoutRaw, custom_subject, custom_intro)
   if (!profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
@@ -304,13 +326,13 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set. Add it in Settings.' }) }
   }
 
-  const html = buildHtml(profile, report, dateRange, custom_subject, custom_intro)
+  const html = buildHtml(profile, report, dateRange, L)
   const startFmt = fmtDate(dateRange.start)
   const endFmt = fmtDate(dateRange.end)
   const defaultSubject = testOnly
     ? `[TEST] Management Update - ${startFmt} to ${endFmt}`
     : `Management Update - ${startFmt} to ${endFmt}`
-  const subject = custom_subject || defaultSubject
+  const subject = L.subject?.trim() || defaultSubject
 
   const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
 

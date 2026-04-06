@@ -1,6 +1,6 @@
-import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
-import { effectiveTemplateLayout } from '@/lib/emailLayout'
-import { escapeHtmlPlain, renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
+import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import { effectiveTemplateLayout } from '../emailLayout'
+import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
 
 export type VenueRenderEmailType =
   | 'booking_confirmation'

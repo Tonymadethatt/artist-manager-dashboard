@@ -39,6 +39,7 @@ interface SendVenueEmailModalProps {
 
 const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
   'booking_confirmation',
+  'booking_confirmed',
   'agreement_ready',
   'payment_reminder',
   'payment_receipt',
@@ -60,6 +61,8 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
   switch (type) {
     case 'booking_confirmation':
       return `Confirms the booking details with ${venue}: event date, agreed amount, and next steps including agreement.`
+    case 'booking_confirmed':
+      return `Officially confirms the booking with ${venue}: event summary and what happens next.`
     case 'agreement_ready':
       return `Notifies ${venue} that the agreement is ready for review${deal?.agreement_url ? ' and includes the link' : ''}.`
     case 'payment_reminder':
@@ -138,6 +141,7 @@ export function SendVenueEmailModal({
     const companyName = profile.company_name || profile.artist_name
     const subjectMap: Record<VenueEmailType, string> = {
       booking_confirmation: `Booking Confirmation - ${companyName} at ${venue?.name || 'your venue'}`,
+      booking_confirmed: `Booking Confirmed - ${companyName} | ${venue?.name || 'your venue'}`,
       payment_receipt: `Payment Received - Thank You | ${companyName}`,
       payment_reminder: `Payment Reminder - ${companyName}`,
       agreement_ready: `Agreement Ready for Review - ${companyName}`,
@@ -165,6 +169,7 @@ export function SendVenueEmailModal({
           recipient: { name: recipientName || recipientEmail, email: recipientEmail },
           custom_subject: tmpl?.custom_subject ?? null,
           custom_intro: tmpl?.custom_intro ?? null,
+          layout: tmpl?.layout ?? null,
           ...(deal ? {
             deal: {
               description: deal.description,

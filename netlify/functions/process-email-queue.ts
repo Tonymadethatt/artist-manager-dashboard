@@ -122,12 +122,16 @@ const handler: Handler = async (event) => {
     }
   }
 
-  const templateByUserAndType = new Map<string, { custom_subject: string | null; custom_intro: string | null }>()
+  const templateByUserAndType = new Map<string, {
+    custom_subject: string | null
+    custom_intro: string | null
+    layout: unknown | null
+  }>()
   const templateUserIds = [...new Set(emails.map(e => e.user_id))]
   if (templateUserIds.length > 0) {
     const { data: tmplRows, error: tmplErr } = await supabase
       .from('email_templates')
-      .select('user_id, email_type, custom_subject, custom_intro')
+      .select('user_id, email_type, custom_subject, custom_intro, layout')
       .in('user_id', templateUserIds)
 
     if (tmplErr) {
@@ -141,6 +145,7 @@ const handler: Handler = async (event) => {
       templateByUserAndType.set(`${uid}:${et}`, {
         custom_subject: row.custom_subject as string | null,
         custom_intro: row.custom_intro as string | null,
+        layout: row.layout ?? null,
       })
     }
   }
@@ -198,6 +203,7 @@ const handler: Handler = async (event) => {
         ? {
           custom_subject: tmpl.custom_subject,
           custom_intro: tmpl.custom_intro,
+          layout: tmpl.layout,
         }
         : {}),
     }

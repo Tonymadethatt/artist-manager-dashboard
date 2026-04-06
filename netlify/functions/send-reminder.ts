@@ -1,4 +1,15 @@
 import type { Handler } from '@netlify/functions'
+import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
+import { artistLayoutForSend } from '../../src/lib/emailLayout'
+import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
+
+function escapeHtmlEnt(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
 interface ArtistProfile {
   artist_name: string
@@ -24,7 +35,7 @@ function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 }
 
-function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, customSubject?: string | null, customIntro?: string | null): string {
+function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo.png`
@@ -92,7 +103,9 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
 
     <!-- Greeting and value recap -->
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:20px;">Hey ${profile.artist_name},</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${customIntro ? customIntro : recapLine}</p>
+    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${L.intro?.trim()
+    ? escapeHtmlEnt(L.intro).replace(/\n/g, '<br/>')
+    : recapLine}</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer. There is a balance that has not cleared yet. Here is where things stand:</p>
 
     <!-- Fee breakdown table -->
@@ -124,9 +137,13 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
       <div style="font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.5px;">${money(totalOutstanding)}</div>
     </div>
 
+    ${renderAppendBlocksHtml(L.appendBlocks)}
+
     <!-- Closing, warm and no pressure -->
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>
+    ${L.closing?.trim()
+    ? `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;">${escapeHtmlEnt(L.closing).replace(/\n/g, '<br/>')}</p>`
+    : `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
+    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
 
   </div>
 
@@ -156,23 +173,31 @@ const handler: Handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'RESEND_API_KEY not configured' }) }
   }
 
-  let body: { profile: ArtistProfile; unpaidFees: UnpaidFee[]; totalOutstanding: number; custom_subject?: string | null; custom_intro?: string | null }
+  let body: {
+    profile: ArtistProfile
+    unpaidFees: UnpaidFee[]
+    totalOutstanding: number
+    custom_subject?: string | null
+    custom_intro?: string | null
+    layout?: unknown | null
+  }
   try {
     body = JSON.parse(event.body ?? '{}')
   } catch {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, unpaidFees, totalOutstanding, custom_subject, custom_intro } = body
+  const { profile, unpaidFees, totalOutstanding, custom_subject, custom_intro, layout: layoutRaw } = body
+  const L = artistLayoutForSend(layoutRaw, custom_subject, custom_intro)
   if (!profile?.artist_email || !profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
 
-  const html = buildReminderHtml(profile, unpaidFees, totalOutstanding, custom_subject, custom_intro)
+  const html = buildReminderHtml(profile, unpaidFees, totalOutstanding, L)
 
   // Subject is casual, does not signal urgency or debt
   const firstName = profile.artist_name.split(' ')[0]
-  const subject = custom_subject || `Hey ${firstName}, quick note from management`
+  const subject = L.subject?.trim() || `Hey ${firstName}, quick note from management`
 
   const to = [profile.artist_email]
   const cc = profile.manager_email ? [profile.manager_email] : []

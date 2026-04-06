@@ -671,6 +671,8 @@ export interface Database {
           email_type: string
           custom_subject: string | null
           custom_intro: string | null
+          layout: unknown | null
+          layout_version: number
           created_at: string
           updated_at: string
         }
@@ -680,6 +682,8 @@ export interface Database {
           email_type: string
           custom_subject?: string | null
           custom_intro?: string | null
+          layout?: unknown | null
+          layout_version?: number
           created_at?: string
           updated_at?: string
         }
@@ -689,6 +693,8 @@ export interface Database {
           email_type?: string
           custom_subject?: string | null
           custom_intro?: string | null
+          layout?: unknown | null
+          layout_version?: number
           created_at?: string
           updated_at?: string
         }

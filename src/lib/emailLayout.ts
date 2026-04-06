@@ -49,7 +49,7 @@ export function normalizeEmailTemplateLayout(raw: unknown): EmailTemplateLayoutV
     : undefined
   return {
     ...p,
-    appendBlocks: blocks && blocks.length > 0 ? blocks : p.appendBlocks,
+    appendBlocks: blocks && blocks.length > 0 ? blocks : undefined,
   }
 }
 
@@ -68,6 +68,16 @@ export function effectiveTemplateLayout(
   if (cs && !L.subject?.trim()) L.subject = cs
   if (ci && !L.intro?.trim()) L.intro = ci
   return L
+}
+
+/** Merge DB layout json + legacy columns for artist-facing senders. */
+export function artistLayoutForSend(
+  layoutRaw: unknown,
+  customSubject?: string | null,
+  customIntro?: string | null,
+): EmailTemplateLayoutV1 {
+  const normalized = normalizeEmailTemplateLayout(layoutRaw)
+  return effectiveTemplateLayout(normalized, customSubject, customIntro)
 }
 
 export function layoutHasAnyCustomization(L: EmailTemplateLayoutV1): boolean {

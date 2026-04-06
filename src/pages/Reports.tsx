@@ -177,6 +177,7 @@ export default function Reports() {
           testOnly,
           custom_subject: reportTemplate?.custom_subject ?? null,
           custom_intro: reportTemplate?.custom_intro ?? null,
+          layout: reportTemplate?.layout ?? null,
         }),
       })
       if (res.ok) {

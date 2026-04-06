@@ -21,19 +21,12 @@ export async function queueEmailAutomationForCompletedTask(
   task: Task,
   options?: QueueEmailOnTaskCompleteOptions
 ): Promise<{ ok: boolean; reason: string }> {
-  // #region agent log
-  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:entry', message: 'queueEmailAutomationForCompletedTask', data: { hypothesisId: 'H1', taskId: task.id, hasEmailType: !!task.email_type, hasVenueId: !!task.venue_id, emailType: task.email_type ?? null }, timestamp: Date.now() }) }).catch(() => {})
-  // #endregion
-
   if (!task.email_type || !task.venue_id) {
     return { ok: true, reason: 'no_email_type_or_venue' }
   }
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:auth', message: 'not_authenticated', data: { hypothesisId: 'H2', taskId: task.id }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
     return { ok: false, reason: 'not_authenticated' }
   }
 
@@ -69,16 +62,13 @@ export async function queueEmailAutomationForCompletedTask(
 
     const { data: perfTmpl } = await supabase
       .from('email_templates')
-      .select('custom_subject, custom_intro')
+      .select('custom_subject, custom_intro, layout')
       .eq('user_id', user.id)
       .eq('email_type', 'performance_report_request')
       .maybeSingle()
 
     const p = profile as ArtistProfile | null
     if (!p) {
-      // #region agent log
-      fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:perf', message: 'no_artist_profile', data: { hypothesisId: 'H3', taskId: task.id }, timestamp: Date.now() }) }).catch(() => {})
-      // #endregion
       return { ok: false, reason: 'no_artist_profile' }
     }
 
@@ -104,6 +94,7 @@ export async function queueEmailAutomationForCompletedTask(
             managerName: p.manager_name || 'Your Manager',
             custom_subject: perfTmpl?.custom_subject ?? null,
             custom_intro: perfTmpl?.custom_intro ?? null,
+            layout: perfTmpl?.layout ?? null,
           }),
         })
       }
@@ -111,9 +102,6 @@ export async function queueEmailAutomationForCompletedTask(
       console.error('[queueEmailOnTaskComplete] performance form:', e)
       return { ok: false, reason: 'performance_form_failed' }
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:perf_done', message: 'performance_report_ok', data: { hypothesisId: 'H3', taskId: task.id }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
     return { ok: true, reason: 'performance_report_sent' }
   }
 
@@ -126,9 +114,6 @@ export async function queueEmailAutomationForCompletedTask(
   const contacts = (contactRows ?? []) as Contact[]
   const primaryContact = contacts.find(c => c.email)
   if (!primaryContact?.email) {
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:contact', message: 'no_contact_email', data: { hypothesisId: 'H4', taskId: task.id, venueId: task.venue_id }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
     return { ok: false, reason: 'no_contact_email' }
   }
 
@@ -150,9 +135,6 @@ export async function queueEmailAutomationForCompletedTask(
   }
 
   if (await hasRecentPendingVenueEmail(v.id, vType, 45)) {
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:dedupe', message: 'skip_duplicate_pending', data: { hypothesisId: 'H5', taskId: task.id, emailType: vType }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
     return { ok: true, reason: 'dedupe_recent_pending' }
   }
 
@@ -170,14 +152,8 @@ export async function queueEmailAutomationForCompletedTask(
 
   if (error) {
     console.error('[queueEmailOnTaskComplete] insert failed:', error.message)
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:insert_err', message: error.message, data: { hypothesisId: 'H5', taskId: task.id }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
     return { ok: false, reason: 'venue_email_insert_failed' }
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'cfe38b' }, body: JSON.stringify({ sessionId: 'cfe38b', location: 'queueEmailOnTaskComplete.ts:queued', message: 'venue_email_queued', data: { hypothesisId: 'H1', taskId: task.id, emailType: vType }, timestamp: Date.now() }) }).catch(() => {})
-  // #endregion
   return { ok: true, reason: 'venue_email_queued' }
 }

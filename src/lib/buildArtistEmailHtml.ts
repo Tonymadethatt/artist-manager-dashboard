@@ -2,6 +2,9 @@
 // Mirrors send-report.ts and send-reminder.ts HTML structure with mock data.
 
 import { applyPerformanceReportPlaceholders } from '@/lib/performanceReportEmailPlaceholders'
+import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
+import { artistLayoutForSend } from '@/lib/emailLayout'
+import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
 
 function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -70,7 +73,12 @@ const sharedStyles = `
 // Management Report preview
 // ---------------------------------------------------------------------------
 
-export function buildManagementReportHtml(customIntro?: string | null, _customSubject?: string | null): string {
+export function buildManagementReportHtml(
+  customIntro?: string | null,
+  _customSubject?: string | null,
+  layout?: EmailTemplateLayoutV1 | null,
+): string {
+  const L = artistLayoutForSend(layout ?? null, null, customIntro)
   const startFmt = fmtDate('2026-03-28')
   const endFmt = fmtDate('2026-04-04')
 
@@ -100,9 +108,14 @@ export function buildManagementReportHtml(customIntro?: string | null, _customSu
   <div style="font-size:13px;color:#d1d1d1;line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
 </div>`
 
-  const opener = customIntro
-    ? customIntro
+  const introRaw = L.intro?.trim()
+  const opener = introRaw
+    ? escapeHtmlPlain(introRaw).replace(/\n/g, '<br/>')
     : `A booking came through this period, the work is paying off. Here is your full management update covering <strong>${startFmt}</strong> through <strong>${endFmt}</strong>.`
+
+  const closer = L.closing?.trim()
+    ? escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')
+    : 'That is the full picture. Reach out if you want to talk through anything.'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -126,7 +139,8 @@ export function buildManagementReportHtml(customIntro?: string | null, _customSu
     ${dealsSection}
     ${retainerSection}
     ${balanceCallout}
-    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">That is the full picture. Reach out if you want to talk through anything.</p>
+    ${renderAppendBlocksHtml(L.appendBlocks)}
+    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">${closer}</p>
   </div>
   ${sharedFooter}
 </div>
@@ -138,9 +152,14 @@ export function buildManagementReportHtml(customIntro?: string | null, _customSu
 // Retainer Reminder preview
 // ---------------------------------------------------------------------------
 
-export function buildRetainerReminderHtml(customIntro?: string | null, _customSubject?: string | null): string {
-  const recapLine = customIntro
-    ? customIntro
+export function buildRetainerReminderHtml(
+  customIntro?: string | null,
+  _customSubject?: string | null,
+  layout?: EmailTemplateLayoutV1 | null,
+): string {
+  const L = artistLayoutForSend(layout ?? null, null, customIntro)
+  const recapLine = L.intro?.trim()
+    ? escapeHtmlPlain(L.intro).replace(/\n/g, '<br/>')
     : `We have been heads down on the management side. Outreach is active, conversations are moving, and I am continuing to push the brand forward.`
 
   const feeRows = [
@@ -205,8 +224,11 @@ export function buildRetainerReminderHtml(customIntro?: string | null, _customSu
       <div style="font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.5px;">${money(900)}</div>
     </div>
 
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>
+    ${renderAppendBlocksHtml(L.appendBlocks)}
+    ${L.closing?.trim()
+    ? `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
+    : `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
+    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
   </div>
   ${sharedFooter}
 </div>
@@ -220,19 +242,21 @@ const PERF_PREVIEW_ARTIST = 'DJ Luijay'
 export function buildPerformanceReportRequestHtml(
   customIntro?: string | null,
   customSubject?: string | null,
+  layout?: EmailTemplateLayoutV1 | null,
 ): string {
+  const L = artistLayoutForSend(layout ?? null, customSubject, customIntro)
   const formUrl = '#'
   const venueName = PERF_PREVIEW_VENUE
   const artistFull = PERF_PREVIEW_ARTIST
   const firstName = artistFull.split(/\s+/)[0] || artistFull
-  const subjectRaw = customSubject?.trim()
+  const subjectRaw = L.subject?.trim()
   const subject = subjectRaw
     ? applyPerformanceReportPlaceholders(subjectRaw, venueName, artistFull)
     : `Quick check-in: How did the show go at ${venueName}?`
 
   const defaultCardBody = `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>`
   const cardInner = (() => {
-    const raw = customIntro?.trim()
+    const raw = L.intro?.trim()
     if (!raw) return defaultCardBody
     const applied = applyPerformanceReportPlaceholders(raw, venueName, artistFull)
     if (applied.includes('<')) return applied
@@ -258,6 +282,11 @@ export function buildPerformanceReportRequestHtml(
       ${cardInner}
       <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
     </div>
+
+    ${renderAppendBlocksHtml(L.appendBlocks)}
+    ${L.closing?.trim()
+    ? `<p style="font-size:13px;color:#d1d1d1;line-height:1.7;margin-bottom:12px;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
+    : ''}
 
     <p style="font-size:13px;color:#555555;line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>

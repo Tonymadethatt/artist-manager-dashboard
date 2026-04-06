@@ -48,7 +48,7 @@ export function usePerformanceReports() {
 
     const { data: perfTmpl } = await supabase
       .from('email_templates')
-      .select('custom_subject, custom_intro')
+      .select('custom_subject, custom_intro, layout')
       .eq('user_id', user.id)
       .eq('email_type', 'performance_report_request')
       .maybeSingle()
@@ -72,6 +72,7 @@ export function usePerformanceReports() {
           managerName: profile.manager_name || 'Your Manager',
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
+          layout: perfTmpl?.layout ?? null,
         }),
       })
       if (!res.ok) {
@@ -118,7 +119,7 @@ export function usePerformanceReports() {
 
     const { data: perfTmpl } = await supabase
       .from('email_templates')
-      .select('custom_subject, custom_intro')
+      .select('custom_subject, custom_intro, layout')
       .eq('user_id', resendUser.id)
       .eq('email_type', 'performance_report_request')
       .maybeSingle()
@@ -143,6 +144,7 @@ export function usePerformanceReports() {
           managerName: profile.manager_name || 'Your Manager',
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
+          layout: perfTmpl?.layout ?? null,
         }),
       })
       if (!res.ok) {

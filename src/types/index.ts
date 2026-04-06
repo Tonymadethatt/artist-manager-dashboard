@@ -330,6 +330,7 @@ export type VenueEmailType =
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
+  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
 
@@ -344,6 +345,7 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   payment_receipt: 'Payment Receipt',
   payment_reminder: 'Payment Reminder',
   agreement_ready: 'Agreement Ready',
+  booking_confirmed: 'Booking Confirmed',
   follow_up: 'Follow-Up',
   rebooking_inquiry: 'Rebooking Inquiry',
 }
@@ -360,6 +362,8 @@ export interface EmailTemplate {
   email_type: AnyEmailType
   custom_subject: string | null
   custom_intro: string | null
+  layout?: import('@/lib/emailLayout').EmailTemplateLayoutV1 | null
+  layout_version?: number
   created_at: string
   updated_at: string
 }

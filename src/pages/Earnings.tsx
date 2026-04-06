@@ -162,6 +162,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
           totalOutstanding: totals.outstanding,
           custom_subject: reminderTemplate?.custom_subject ?? null,
           custom_intro: reminderTemplate?.custom_intro ?? null,
+          layout: reminderTemplate?.layout ?? null,
         }),
       })
       if (res.ok) {

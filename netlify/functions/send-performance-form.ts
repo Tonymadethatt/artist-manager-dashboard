@@ -1,4 +1,6 @@
 import type { Handler } from '@netlify/functions'
+import { artistLayoutForSend } from '../../src/lib/emailLayout'
+import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
 
 interface RequestBody {
   token: string
@@ -11,6 +13,15 @@ interface RequestBody {
   managerName: string
   custom_subject?: string | null
   custom_intro?: string | null
+  layout?: unknown | null
+}
+
+function escapeHtmlEnt(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 function applyPerformanceReportPlaceholders(text: string, venueName: string, artistFullName: string): string {
@@ -79,12 +90,17 @@ const handler: Handler = async (event) => {
     ? `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${fmtDate(body.eventDate)}</p>`
     : `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong></p>`
 
-  const subjectRaw = body.custom_subject?.trim()
+  const L = artistLayoutForSend(body.layout, body.custom_subject, body.custom_intro)
+  const subjectRaw = L.subject?.trim()
   const subject = subjectRaw
     ? applyPerformanceReportPlaceholders(subjectRaw, body.venueName, body.artistName)
     : `Quick check-in: How did the show go at ${body.venueName}?`
 
-  const cardInner = buildPerformanceCardInner(body.custom_intro, body.venueName, body.artistName)
+  const cardInner = buildPerformanceCardInner(L.intro ?? body.custom_intro, body.venueName, body.artistName)
+  const appendHtml = renderAppendBlocksHtml(L.appendBlocks)
+  const closingExtra = L.closing?.trim()
+    ? `<p style="font-size:13px;color:#d1d1d1;line-height:1.7;margin-bottom:12px;">${escapeHtmlEnt(L.closing).replace(/\n/g, '<br/>')}</p>`
+    : ''
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -123,6 +139,9 @@ const handler: Handler = async (event) => {
       ${cardInner}
       <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
     </div>
+
+    ${appendHtml}
+    ${closingExtra}
 
     <p style="font-size:13px;color:#555555;line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>

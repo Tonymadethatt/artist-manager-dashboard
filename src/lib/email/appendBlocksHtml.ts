@@ -1,4 +1,4 @@
-import type { EmailTemplateAppendBlock } from '@/lib/emailLayout'
+import type { EmailTemplateAppendBlock } from '../emailLayout'
 
 export function escapeHtmlPlain(s: string): string {
   return s
