@@ -110,6 +110,7 @@ export function useTasks() {
             recurrence: task.recurrence,
             venue_id: task.venue_id,
             deal_id: task.deal_id,
+            email_type: task.email_type ?? null,
           })
           .select('*, venue:venues(id, name), deal:deals(id, description)')
           .single()

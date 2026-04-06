@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, GripVertical, Pencil, Check, X } from 'lucide-react'
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { ArrowLeft, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,71 @@ const EMPTY_ITEM: ItemFormState = {
   priority: 'medium',
   recurrence: 'none',
   email_type: '__none__',
+}
+
+const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
+
+function TemplateItemFormFields({
+  itemForm,
+  setItemForm,
+}: {
+  itemForm: ItemFormState
+  setItemForm: Dispatch<SetStateAction<ItemFormState>>
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+      <div className="space-y-1.5">
+        <div className={EYEBROW}>Days after trigger</div>
+        <Input
+          type="number"
+          min={0}
+          value={itemForm.days_offset}
+          onChange={e => setItemForm(f => ({ ...f, days_offset: e.target.value }))}
+          className="h-8 w-20 text-xs"
+          aria-label="Due date offset in days after template runs"
+        />
+        <p className="text-[10px] text-neutral-600 leading-snug">
+          0 = same day as status change or manual apply. Each step is one full calendar day from that date.
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        <div className={EYEBROW}>Priority</div>
+        <Select value={itemForm.priority} onValueChange={v => setItemForm(f => ({ ...f, priority: v as TaskPriority }))}>
+          <SelectTrigger className="h-8 text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
+              <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5 sm:col-span-2">
+        <div className={EYEBROW}>Repeats</div>
+        <Select value={itemForm.recurrence} onValueChange={v => setItemForm(f => ({ ...f, recurrence: v as TaskRecurrence }))}>
+          <SelectTrigger className="h-8 max-w-xs text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
+              <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-neutral-600 leading-snug">
+          After you complete the task on Pipeline, a new task is created with the next due date: daily +1 day, weekly +7 days, monthly +1 month from the task&apos;s due date (not from the day you checked it off).
+        </p>
+      </div>
+      <div className="space-y-1.5 sm:col-span-2">
+        <div className={EYEBROW}>Email on complete</div>
+        <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
+          <SelectTrigger className="h-8 max-w-md text-xs bg-neutral-950 border-neutral-700"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
+              <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  )
 }
 
 export default function PipelineTemplates() {
@@ -296,9 +361,12 @@ export default function PipelineTemplates() {
 
               {/* Task items */}
               <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
-                  <span className="text-sm font-medium text-neutral-300">Tasks in this template</span>
-                  <span className="text-xs text-neutral-600">{selectedTemplate.items?.length ?? 0} items</span>
+                <div className="px-4 py-3 border-b border-neutral-800 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium text-neutral-300">Tasks in this template</h3>
+                    <p className="text-[11px] text-neutral-600 mt-0.5">Each row becomes a real task on the Pipeline when this template runs.</p>
+                  </div>
+                  <span className="text-xs text-neutral-600 shrink-0 tabular-nums">{selectedTemplate.items?.length ?? 0} items</span>
                 </div>
 
                 {(!selectedTemplate.items || selectedTemplate.items.length === 0) && editingItemId === null && (
@@ -310,72 +378,40 @@ export default function PipelineTemplates() {
                 <div className="divide-y divide-neutral-800/60">
                   {(selectedTemplate.items ?? []).map(item => (
                     <div key={item.id} className="group flex items-start gap-3 px-4 py-3">
-                      <GripVertical className="h-4 w-4 text-neutral-800 mt-0.5 shrink-0" />
                       {editingItemId === item.id ? (
-                        <div className="flex-1 space-y-2">
-                          <Input
-                            value={itemForm.title}
-                            onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
-                            placeholder="Task title"
-                            className="h-7 text-sm"
-                            autoFocus
-                          />
-                          <Input
-                            value={itemForm.notes}
-                            onChange={e => setItemForm(f => ({ ...f, notes: e.target.value }))}
-                            placeholder="Notes (optional)"
-                            className="h-7 text-sm"
-                          />
-                          <div className="flex gap-2 flex-wrap">
-                            <div className="flex items-center gap-1.5">
-                              <Label className="text-xs whitespace-nowrap">Day offset</Label>
-                              <Input
-                                type="number"
-                                value={itemForm.days_offset}
-                                onChange={e => setItemForm(f => ({ ...f, days_offset: e.target.value }))}
-                                className="h-7 w-16 text-xs"
-                              />
-                            </div>
-                            <Select value={itemForm.priority} onValueChange={v => setItemForm(f => ({ ...f, priority: v as TaskPriority }))}>
-                              <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
-                                  <SelectItem key={v} value={v}>{l}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select value={itemForm.recurrence} onValueChange={v => setItemForm(f => ({ ...f, recurrence: v as TaskRecurrence }))}>
-                              <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
-                                  <SelectItem key={v} value={v}>{l}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <div className="flex items-center gap-1.5">
-                              <Label className="text-xs whitespace-nowrap text-neutral-400">Email action</Label>
-                              <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
-                                <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
-                                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                        <div className="flex-1 space-y-3 min-w-0">
+                          <div className="space-y-1.5">
+                            <div className={EYEBROW}>Task title</div>
+                            <Input
+                              value={itemForm.title}
+                              onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
+                              placeholder="Task title"
+                              className="h-8 text-sm"
+                              autoFocus
+                            />
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button size="sm" className="h-7 text-xs" onClick={handleSaveItem} disabled={savingItem}>
+                          <div className="space-y-1.5">
+                            <div className={EYEBROW}>Notes</div>
+                            <Input
+                              value={itemForm.notes}
+                              onChange={e => setItemForm(f => ({ ...f, notes: e.target.value }))}
+                              placeholder="Optional"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} />
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button size="sm" className="h-8 text-xs" onClick={handleSaveItem} disabled={savingItem}>
                               {savingItem ? 'Saving...' : 'Save'}
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={cancelItemEdit}>Cancel</Button>
+                            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={cancelItemEdit}>Cancel</Button>
                           </div>
                         </div>
                       ) : (
                         <>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} />
+                              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', PRIORITY_DOT[item.priority])} title={TASK_PRIORITY_LABELS[item.priority]} />
                               <span className="text-sm text-neutral-200">{item.title}</span>
                               {item.email_type && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-900/40 text-blue-400 border border-blue-800/60 font-medium shrink-0">
@@ -383,15 +419,17 @@ export default function PipelineTemplates() {
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <span className="text-[10px] text-neutral-600">
-                                Day {item.days_offset}
+                            <div className="flex items-center gap-2 flex-wrap mt-1">
+                              <span className="text-[10px] text-neutral-500 tabular-nums">
+                                Due +{item.days_offset}d after apply
                               </span>
                               {item.recurrence !== 'none' && (
-                                <span className="text-[10px] text-neutral-600">{TASK_RECURRENCE_LABELS[item.recurrence]}</span>
+                                <span className="text-[10px] text-neutral-600 border border-neutral-700/80 rounded px-1.5 py-0.5">
+                                  {TASK_RECURRENCE_LABELS[item.recurrence]}
+                                </span>
                               )}
                               {item.notes && (
-                                <span className="text-[10px] text-neutral-700 truncate">{item.notes}</span>
+                                <span className="text-[10px] text-neutral-700 truncate max-w-full">{item.notes}</span>
                               )}
                             </div>
                           </div>
@@ -417,58 +455,24 @@ export default function PipelineTemplates() {
 
                 {/* Add item row */}
                 {editingItemId === null && (
-                  <div className="border-t border-neutral-800 px-4 py-3 space-y-2 bg-neutral-900/50">
-                    <div className="flex items-center gap-2">
+                  <div className="border-t border-neutral-800 px-4 py-3 space-y-3 bg-neutral-950/40">
+                    <div className="space-y-1.5">
+                      <div className={EYEBROW}>New task</div>
                       <Input
                         value={itemForm.title}
                         onChange={e => setItemForm(f => ({ ...f, title: e.target.value }))}
-                        placeholder="Add a task to this template..."
-                        className="h-8 text-sm flex-1"
-                        onKeyDown={e => e.key === 'Enter' && handleSaveItem()}
+                        placeholder="Add a task to this template…"
+                        className="h-8 text-sm"
+                        onKeyDown={e => e.key === 'Enter' && itemForm.title.trim() && handleSaveItem()}
                       />
                     </div>
-                    {itemForm.title && (
-                      <div className="flex gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          <Label className="text-xs whitespace-nowrap text-neutral-500">Day</Label>
-                          <Input
-                            type="number"
-                            value={itemForm.days_offset}
-                            onChange={e => setItemForm(f => ({ ...f, days_offset: e.target.value }))}
-                            className="h-7 w-14 text-xs"
-                          />
-                        </div>
-                        <Select value={itemForm.priority} onValueChange={v => setItemForm(f => ({ ...f, priority: v as TaskPriority }))}>
-                          <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
-                              <SelectItem key={v} value={v}>{l}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Select value={itemForm.recurrence} onValueChange={v => setItemForm(f => ({ ...f, recurrence: v as TaskRecurrence }))}>
-                          <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
-                              <SelectItem key={v} value={v}>{l}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex items-center gap-1.5">
-                          <Label className="text-xs whitespace-nowrap text-neutral-400">Email action</Label>
-                          <Select value={itemForm.email_type} onValueChange={v => setItemForm(f => ({ ...f, email_type: v }))}>
-                            <SelectTrigger className="h-7 w-40 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {EMAIL_ACTION_OPTIONS.map(({ value, label }) => (
-                                <SelectItem key={value} value={value}>{label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button size="sm" className="h-7 text-xs" onClick={handleSaveItem} disabled={savingItem || !itemForm.title.trim()}>
-                          {savingItem ? 'Adding...' : 'Add'}
+                    {itemForm.title.trim() && (
+                      <>
+                        <TemplateItemFormFields itemForm={itemForm} setItemForm={setItemForm} />
+                        <Button size="sm" className="h-8 text-xs" onClick={handleSaveItem} disabled={savingItem || !itemForm.title.trim()}>
+                          {savingItem ? 'Adding...' : 'Add task'}
                         </Button>
-                      </div>
+                      </>
                     )}
                   </div>
                 )}
