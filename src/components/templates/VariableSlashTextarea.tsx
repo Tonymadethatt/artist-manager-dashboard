@@ -1,16 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-
-function parseSlashMenu(text: string, cursor: number): { start: number; filter: string } | null {
-  const before = text.slice(0, cursor)
-  const slash = before.lastIndexOf('/')
-  if (slash < 0) return null
-  if (slash > 0 && !/[\s\n]/.test(before[slash - 1]!)) return null
-  const after = before.slice(slash + 1)
-  if (!/^[\w_]*$/.test(after)) return null
-  return { start: slash, filter: after }
-}
+import { parseSlashMenu } from '@/lib/templates/parseSlashMenu'
 
 interface VariableSlashTextareaProps {
   value: string
@@ -19,6 +10,8 @@ interface VariableSlashTextareaProps {
   placeholder?: string
   className?: string
   minHeightClass?: string
+  /** Forwarded to the native textarea (e.g. 1 for compact single-line fields). */
+  rows?: number
 }
 
 export function VariableSlashTextarea({
@@ -28,6 +21,7 @@ export function VariableSlashTextarea({
   placeholder,
   className,
   minHeightClass = 'min-h-[120px]',
+  rows,
 }: VariableSlashTextareaProps) {
   const taRef = useRef<HTMLTextAreaElement>(null)
   const [menu, setMenu] = useState<{ start: number; filter: string } | null>(null)
@@ -67,6 +61,7 @@ export function VariableSlashTextarea({
       <Textarea
         ref={taRef}
         value={value}
+        rows={rows}
         placeholder={placeholder}
         onChange={e => {
           const v = e.target.value

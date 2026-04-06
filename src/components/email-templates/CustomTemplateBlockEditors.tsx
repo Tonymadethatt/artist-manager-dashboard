@@ -1,6 +1,5 @@
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -8,7 +7,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { RichBodyEditor } from '@/components/templates/RichBodyEditor'
+import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import type { CustomEmailBlock } from '@/lib/email/customEmailBlocks'
+import {
+  CUSTOM_EMAIL_ACCENT_PRESETS,
+  defaultAccentForBlockKind,
+  parseAccentColorHex,
+} from '@/lib/email/customEmailAccentPresets'
 import { cn } from '@/lib/utils'
 
 const CARD = 'rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1a1a1a]'
@@ -61,21 +67,51 @@ function BlockChrome(props: {
   )
 }
 
+type TitledBlockKind = 'prose' | 'bullet_list' | 'key_value' | 'table'
+
 function TitleHeaderStrip(props: {
-  accentClass: string
-  value: string
-  onChange: (v: string) => void
+  blockKind: TitledBlockKind
+  accentColor: string | null | undefined
+  onAccentChange: (hex: string) => void
+  title: string
+  onTitleChange: (v: string) => void
+  mergeKeyOptions: readonly string[]
   placeholder?: string
 }) {
+  const accentHex = parseAccentColorHex(props.accentColor) ?? defaultAccentForBlockKind(props.blockKind)
   return (
-    <div className={CARD_HEADER}>
-      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', props.accentClass)} />
-      <Input
-        value={props.value}
-        onChange={e => props.onChange(e.target.value)}
-        placeholder={props.placeholder ?? 'Section title (optional)'}
-        className="h-7 min-w-0 flex-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400 placeholder:text-neutral-600 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium bg-transparent border-0 shadow-none focus-visible:ring-0 px-0"
+    <div className={cn(CARD_HEADER, 'flex-wrap gap-y-1')}>
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: accentHex }}
+        aria-hidden
       />
+      <div className="flex items-center gap-1 shrink-0" title="Header accent">
+        {CUSTOM_EMAIL_ACCENT_PRESETS.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            className={cn(
+              'w-4 h-4 rounded-full border border-[#333] shrink-0 transition-transform',
+              accentHex.toLowerCase() === p.hex.toLowerCase() ? 'ring-1 ring-white ring-offset-1 ring-offset-[#161616] scale-110' : 'opacity-80 hover:opacity-100',
+            )}
+            style={{ background: p.hex }}
+            onClick={() => props.onAccentChange(p.hex)}
+            aria-label={`Accent ${p.label}`}
+          />
+        ))}
+      </div>
+      <div className="w-full min-w-[120px] sm:w-auto sm:flex-1 order-3 sm:order-none">
+        <VariableSlashTextarea
+          value={props.title}
+          onChange={props.onTitleChange}
+          variableKeys={[...props.mergeKeyOptions]}
+          placeholder={props.placeholder ?? 'Section title (optional)'}
+          rows={2}
+          minHeightClass="min-h-[36px] max-h-20 py-1.5"
+          className="text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400 placeholder:text-neutral-600 placeholder:normal-case placeholder:tracking-normal placeholder:font-medium bg-transparent border border-transparent border-b border-[#2a2a2a]/80 rounded-none shadow-none focus-visible:ring-0 px-0 resize-none"
+        />
+      </div>
     </div>
   )
 }
@@ -84,27 +120,31 @@ function ProseEditor(props: {
   block: Extract<CustomEmailBlock, { kind: 'prose' }>
   index: number
   total: number
+  mergeKeyOptions: readonly string[]
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
       <BlockChrome label="Text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          accentClass="bg-[#60a5fa]"
-          value={block.title ?? ''}
-          onChange={v => onUpdate({ title: v || null })}
+          blockKind="prose"
+          accentColor={block.accentColor}
+          onAccentChange={hex => onUpdate({ accentColor: hex })}
+          title={block.title ?? ''}
+          onTitleChange={v => onUpdate({ title: v || null })}
+          mergeKeyOptions={mergeKeyOptions}
         />
         <div className={CARD_BODY}>
-          <textarea
+          <RichBodyEditor
             value={block.body}
-            onChange={e => onUpdate({ body: e.target.value })}
-            rows={10}
-            className="w-full min-h-[160px] rounded-md border border-[#2a2a2a] bg-[#141414] px-3 py-2.5 text-[13px] text-[#d1d1d1] leading-relaxed placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-500 resize-y"
+            onChange={html => onUpdate({ body: html })}
+            variableKeys={[...mergeKeyOptions]}
             placeholder="Message body…"
+            className="border-[#2a2a2a] bg-[#141414]/95"
           />
         </div>
       </div>
@@ -116,36 +156,48 @@ function BulletListEditor(props: {
   block: Extract<CustomEmailBlock, { kind: 'bullet_list' }>
   index: number
   total: number
+  mergeKeyOptions: readonly string[]
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
+  const accentHex = parseAccentColorHex(block.accentColor) ?? defaultAccentForBlockKind('bullet_list')
   return (
     <div className="min-w-0">
       <BlockChrome label="Bullet list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          accentClass="bg-[#22c55e]"
-          value={block.title ?? ''}
-          onChange={v => onUpdate({ title: v || null })}
+          blockKind="bullet_list"
+          accentColor={block.accentColor}
+          onAccentChange={hex => onUpdate({ accentColor: hex })}
+          title={block.title ?? ''}
+          onTitleChange={v => onUpdate({ title: v || null })}
+          mergeKeyOptions={mergeKeyOptions}
         />
         <div className={cn(CARD_BODY, 'space-y-0')}>
           <ul className="list-none m-0 p-0 space-y-2">
             {block.items.map((line, li) => (
               <li key={li} className="flex gap-2 items-start">
-                <span className="text-[#22c55e] mt-2.5 text-[6px] leading-none select-none shrink-0" aria-hidden>
+                <span
+                  className="mt-2.5 text-[6px] leading-none select-none shrink-0"
+                  style={{ color: accentHex }}
+                  aria-hidden
+                >
                   ●
                 </span>
                 <div className="flex-1 min-w-0 flex gap-1">
-                  <Input
+                  <VariableSlashTextarea
                     value={line}
-                    onChange={e => {
+                    onChange={v => {
                       const items = [...block.items]
-                      items[li] = e.target.value
+                      items[li] = v
                       onUpdate({ items })
                     }}
-                    className="h-9 text-[13px] text-[#d1d1d1] bg-[#141414] border-[#2a2a2a] flex-1"
+                    variableKeys={[...mergeKeyOptions]}
+                    rows={2}
+                    minHeightClass="min-h-[36px] py-2"
+                    className="text-[13px] text-[#d1d1d1] bg-[#141414] border-[#2a2a2a] flex-1 rounded-md"
                   />
                   <button
                     type="button"
@@ -188,22 +240,28 @@ function KeyValueEditor(props: {
       <BlockChrome label="Key / value" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          accentClass="bg-[#60a5fa]"
-          value={block.title ?? ''}
-          onChange={v => onUpdate({ title: v || null })}
+          blockKind="key_value"
+          accentColor={block.accentColor}
+          onAccentChange={hex => onUpdate({ accentColor: hex })}
+          title={block.title ?? ''}
+          onTitleChange={v => onUpdate({ title: v || null })}
+          mergeKeyOptions={mergeKeyOptions}
         />
         <div className={cn(CARD_BODY, 'py-2')}>
           <div className="divide-y divide-[#222222]">
             {block.rows.map((rowkv, ri) => (
               <div key={ri} className="flex flex-col sm:flex-row gap-2 sm:items-center py-2.5 first:pt-0 last:pb-0">
-                <Input
+                <VariableSlashTextarea
                   value={rowkv.label}
-                  onChange={e => {
-                    const rows = block.rows.map((x, j) => (j === ri ? { ...x, label: e.target.value } : x))
+                  onChange={v => {
+                    const rows = block.rows.map((x, j) => (j === ri ? { ...x, label: v } : x))
                     onUpdate({ rows })
                   }}
+                  variableKeys={[...mergeKeyOptions]}
                   placeholder="Label"
-                  className="h-9 text-[13px] text-neutral-400 bg-[#141414] border-[#2a2a2a] sm:w-[42%] shrink-0"
+                  rows={2}
+                  minHeightClass="min-h-[36px] py-2"
+                  className="text-[13px] text-neutral-400 bg-[#141414] border-[#2a2a2a] sm:w-[42%] shrink-0 rounded-md"
                 />
                 <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                   <Select
@@ -234,16 +292,17 @@ function KeyValueEditor(props: {
                     </SelectContent>
                   </Select>
                   {!rowkv.valueKey && (
-                    <Input
+                    <VariableSlashTextarea
                       value={rowkv.value ?? ''}
-                      onChange={e => {
-                        const rows = block.rows.map((x, j) =>
-                          j === ri ? { ...x, value: e.target.value } : x,
-                        )
+                      onChange={v => {
+                        const rows = block.rows.map((x, j) => (j === ri ? { ...x, value: v } : x))
                         onUpdate({ rows })
                       }}
+                      variableKeys={[...mergeKeyOptions]}
                       placeholder="Value (merge tokens ok)"
-                      className="h-9 text-[13px] text-neutral-200 bg-[#141414] border-[#2a2a2a]"
+                      rows={2}
+                      minHeightClass="min-h-[36px] py-2"
+                      className="text-[13px] text-neutral-200 bg-[#141414] border-[#2a2a2a] rounded-md"
                     />
                   )}
                 </div>
@@ -276,11 +335,12 @@ function TableEditor(props: {
   block: Extract<CustomEmailBlock, { kind: 'table' }>
   index: number
   total: number
+  mergeKeyOptions: readonly string[]
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
 
   const addColumn = () => {
     onUpdate({ headers: [...block.headers, ''] })
@@ -306,9 +366,12 @@ function TableEditor(props: {
       <BlockChrome label="Table" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          accentClass="bg-[#60a5fa]"
-          value={block.title ?? ''}
-          onChange={v => onUpdate({ title: v || null })}
+          blockKind="table"
+          accentColor={block.accentColor}
+          onAccentChange={hex => onUpdate({ accentColor: hex })}
+          title={block.title ?? ''}
+          onTitleChange={v => onUpdate({ title: v || null })}
+          mergeKeyOptions={mergeKeyOptions}
         />
         <div className={CARD_BODY}>
           <div className="flex flex-wrap gap-1.5 mb-3">
@@ -338,15 +401,18 @@ function TableEditor(props: {
                       key={hi}
                       className="text-left font-medium text-[11px] text-neutral-500 p-0 border-b border-[#2a2a2a] align-bottom"
                     >
-                      <input
+                      <VariableSlashTextarea
                         value={h}
-                        onChange={e => {
+                        onChange={v => {
                           const headers = [...block.headers]
-                          headers[hi] = e.target.value
+                          headers[hi] = v
                           onUpdate({ headers })
                         }}
-                        className="w-full min-w-[72px] bg-transparent text-neutral-400 placeholder:text-neutral-600 px-2.5 py-2 text-[11px] font-medium focus:outline-none focus:ring-1 focus:ring-inset focus:ring-neutral-600"
+                        variableKeys={[...mergeKeyOptions]}
                         placeholder={`Col ${hi + 1}`}
+                        rows={2}
+                        minHeightClass="min-h-[36px] py-2"
+                        className="w-full min-w-[72px] bg-transparent text-neutral-400 placeholder:text-neutral-600 px-2.5 text-[11px] font-medium border-0 rounded-none shadow-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600 resize-none"
                       />
                     </th>
                   ))}
@@ -357,17 +423,18 @@ function TableEditor(props: {
                   <tr key={ri} className="border-b border-[#222222] last:border-b-0">
                     {cells.map((c, ci) => (
                       <td key={ci} className="p-0 align-top">
-                        <input
+                        <VariableSlashTextarea
                           value={c}
-                          onChange={e => {
+                          onChange={v => {
                             const rows = block.rows.map((r, rj) =>
-                              rj === ri
-                                ? r.map((cell, ck) => (ck === ci ? e.target.value : cell))
-                                : r,
+                              rj === ri ? r.map((cell, ck) => (ck === ci ? v : cell)) : r,
                             )
                             onUpdate({ rows })
                           }}
-                          className="w-full min-w-[72px] bg-transparent text-[#d1d1d1] px-2.5 py-2 text-[13px] focus:outline-none focus:ring-1 focus:ring-inset focus:ring-neutral-600"
+                          variableKeys={[...mergeKeyOptions]}
+                          rows={2}
+                          minHeightClass="min-h-[36px] py-2"
+                          className="w-full min-w-[72px] bg-transparent text-[#d1d1d1] px-2.5 text-[13px] border-0 rounded-none shadow-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600 resize-none"
                         />
                       </td>
                     ))}
@@ -478,6 +545,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   block={block}
                   index={i}
                   total={total}
+                  mergeKeyOptions={mergeKeyOptions}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -490,6 +558,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   block={block}
                   index={i}
                   total={total}
+                  mergeKeyOptions={mergeKeyOptions}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -515,6 +584,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   block={block}
                   index={i}
                   total={total}
+                  mergeKeyOptions={mergeKeyOptions}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}

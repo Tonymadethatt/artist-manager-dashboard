@@ -1,12 +1,15 @@
+import { parseAccentColorHex } from '@/lib/email/customEmailAccentPresets'
+
 export type CustomEmailBlock =
-  | { kind: 'prose'; title?: string | null; body: string }
-  | { kind: 'bullet_list'; title?: string | null; items: string[] }
+  | { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null }
+  | { kind: 'bullet_list'; title?: string | null; items: string[]; accentColor?: string | null }
   | {
       kind: 'key_value'
       title?: string | null
       rows: Array<{ label: string; valueKey?: string | null; value?: string | null }>
+      accentColor?: string | null
     }
-  | { kind: 'table'; title?: string | null; headers: string[]; rows: string[][] }
+  | { kind: 'table'; title?: string | null; headers: string[]; rows: string[][]; accentColor?: string | null }
   | { kind: 'divider' }
 
 export interface CustomEmailBlocksDoc {
@@ -20,12 +23,14 @@ function isObj(x: unknown): x is Record<string, unknown> {
 
 function parseBlock(raw: unknown): CustomEmailBlock | null {
   if (!isObj(raw) || typeof raw.kind !== 'string') return null
+  const accent = parseAccentColorHex(raw.accentColor)
   switch (raw.kind) {
     case 'prose':
       return {
         kind: 'prose',
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         body: typeof raw.body === 'string' ? raw.body : '',
+        ...(accent ? { accentColor: accent } : {}),
       }
     case 'bullet_list': {
       const items = Array.isArray(raw.items) ? raw.items.filter((x): x is string => typeof x === 'string') : []
@@ -33,6 +38,7 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         kind: 'bullet_list',
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         items,
+        ...(accent ? { accentColor: accent } : {}),
       }
     }
     case 'key_value': {
@@ -45,7 +51,12 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
           value: typeof r.value === 'string' ? r.value : r.value === null ? null : undefined,
         }))
         .filter(r => r.label.length > 0)
-      return { kind: 'key_value', title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined, rows }
+      return {
+        kind: 'key_value',
+        title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
+        rows,
+        ...(accent ? { accentColor: accent } : {}),
+      }
     }
     case 'table': {
       const headers = Array.isArray(raw.headers)
@@ -60,6 +71,7 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         headers,
         rows,
+        ...(accent ? { accentColor: accent } : {}),
       }
     }
     case 'divider':

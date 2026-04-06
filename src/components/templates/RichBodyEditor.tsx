@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Editor } from '@tiptap/core'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Table } from '@tiptap/extension-table'
@@ -8,6 +9,7 @@ import TableHeader from '@tiptap/extension-table-header'
 import Placeholder from '@tiptap/extension-placeholder'
 import { List, ListOrdered, Table as TableIcon, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { parseSlashMenu } from '@/lib/templates/parseSlashMenu'
 
 /** Convert legacy plain-text content to HTML paragraphs for TipTap. */
 function initContent(content: string): string {
@@ -25,12 +27,20 @@ interface RichBodyEditorProps {
   onChange: (html: string) => void
   variableKeys: string[]
   placeholder?: string
+  className?: string
 }
 
-export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: RichBodyEditorProps) {
+export function RichBodyEditor({ value, onChange, variableKeys, placeholder, className }: RichBodyEditorProps) {
   const [varMenuOpen, setVarMenuOpen] = useState(false)
+  const [slashMenu, setSlashMenu] = useState<{ anchor: number; filter: string } | null>(null)
   const varMenuRef = useRef<HTMLDivElement>(null)
+  const slashMenuRef = useRef<HTMLDivElement>(null)
   const prevValue = useRef(value)
+  const variableKeysRef = useRef(variableKeys)
+  const editorRef = useRef<Editor | null>(null)
+  useEffect(() => {
+    variableKeysRef.current = variableKeys
+  }, [variableKeys])
 
   const editor = useEditor({
     extensions: [
@@ -39,9 +49,36 @@ export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: R
       TableRow,
       TableHeader,
       TableCell,
-      Placeholder.configure({ placeholder: placeholder ?? 'Section content… Type to start.' }),
+      Placeholder.configure({
+        placeholder: placeholder ?? 'Section content… Type / to insert a variable.',
+      }),
     ],
     content: initContent(value),
+    editorProps: {
+      handleKeyDown: (_view, event) => {
+        const keys = variableKeysRef.current
+        if (event.key === 'Escape') {
+          setSlashMenu(null)
+          return false
+        }
+        if (event.key !== 'Enter' || keys.length === 0) return false
+        const ed = editorRef.current
+        if (!ed) return false
+        const { from } = ed.state.selection
+        if (!ed.state.selection.empty) return false
+        const before = ed.state.doc.textBetween(0, from, '\n')
+        const m = parseSlashMenu(before, before.length)
+        if (!m) return false
+        const f = m.filter.toLowerCase()
+        const filtered = keys.filter(k => f === '' || k.toLowerCase().includes(f))
+        if (filtered.length === 0) return false
+        event.preventDefault()
+        const anchor = from - (before.length - m.start)
+        ed.chain().focus().deleteRange({ from: anchor, to: from }).insertContent(`{{${filtered[0]}}}`).run()
+        setSlashMenu(null)
+        return true
+      },
+    },
     onUpdate: ({ editor: ed }) => {
       const html = ed.getHTML()
       prevValue.current = html
@@ -49,12 +86,16 @@ export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: R
     },
   })
 
+  useEffect(() => {
+    editorRef.current = editor
+  }, [editor])
+
   // Sync when the section id changes (value reset from outside)
   useEffect(() => {
     if (!editor) return
     if (prevValue.current === value) return
     const incoming = initContent(value)
-      editor.commands.setContent(incoming, { emitUpdate: false })
+    editor.commands.setContent(incoming, { emitUpdate: false })
     prevValue.current = value
   }, [value, editor])
 
@@ -70,6 +111,64 @@ export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: R
     return () => document.removeEventListener('mousedown', handler)
   }, [varMenuOpen])
 
+  useEffect(() => {
+    if (!editor) return
+    const syncSlash = () => {
+      const keys = variableKeysRef.current
+      if (keys.length === 0) {
+        setSlashMenu(null)
+        return
+      }
+      const { from } = editor.state.selection
+      if (!editor.state.selection.empty) {
+        setSlashMenu(null)
+        return
+      }
+      const before = editor.state.doc.textBetween(0, from, '\n')
+      const m = parseSlashMenu(before, before.length)
+      if (!m) {
+        setSlashMenu(null)
+        return
+      }
+      const anchor = from - (before.length - m.start)
+      setSlashMenu({ anchor, filter: m.filter })
+    }
+    editor.on('selectionUpdate', syncSlash)
+    editor.on('transaction', syncSlash)
+    return () => {
+      editor.off('selectionUpdate', syncSlash)
+      editor.off('transaction', syncSlash)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    if (!slashMenu) return
+    const handler = (e: MouseEvent) => {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
+        setSlashMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [slashMenu])
+
+  const slashFiltered = useMemo(() => {
+    const f = slashMenu?.filter.toLowerCase() ?? ''
+    return variableKeys.filter(k => f === '' || k.toLowerCase().includes(f))
+  }, [slashMenu, variableKeys])
+
+  const insertSlashPick = (key: string) => {
+    const ed = editorRef.current
+    if (!ed || !slashMenu) return
+    const { from } = ed.state.selection
+    ed.chain()
+      .focus()
+      .deleteRange({ from: slashMenu.anchor, to: from })
+      .insertContent(`{{${key}}}`)
+      .run()
+    setSlashMenu(null)
+  }
+
   const insertVariable = (key: string) => {
     editor?.chain().focus().insertContent(`{{${key}}}`).run()
     setVarMenuOpen(false)
@@ -80,9 +179,12 @@ export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: R
   }
 
   return (
-    <div className="rounded-md border border-neutral-800 bg-neutral-950/70 overflow-visible">
+    <div
+      ref={slashMenuRef}
+      className={cn('rounded-md border border-neutral-800 bg-neutral-950/70 overflow-visible', className)}
+    >
       {/* Toolbar */}
-      <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-neutral-800 bg-neutral-900/80 flex-wrap">
+      <div className="relative flex items-center gap-0.5 px-2 py-1.5 border-b border-neutral-800 bg-neutral-900/80 flex-wrap">
         <button
           type="button"
           onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleBold().run() }}
@@ -191,6 +293,26 @@ export function RichBodyEditor({ value, onChange, variableKeys, placeholder }: R
               )}
             </div>
           </>
+        )}
+
+        {slashMenu && slashFiltered.length > 0 && (
+          <div
+            className="absolute top-full left-2 right-2 mt-0.5 z-50 max-h-40 overflow-y-auto rounded-md border border-neutral-700 bg-neutral-900 shadow-lg py-1 text-left"
+            role="listbox"
+          >
+            {slashFiltered.slice(0, 60).map(k => (
+              <button
+                key={k}
+                type="button"
+                role="option"
+                className="w-full px-2 py-1.5 text-left text-xs font-mono text-neutral-200 hover:bg-neutral-800"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => insertSlashPick(k)}
+              >
+                {`{{${k}}}`}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
