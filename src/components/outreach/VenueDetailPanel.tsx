@@ -52,7 +52,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const [savingDeal, setSavingDeal] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [sendEmailOpen, setSendEmailOpen] = useState(false)
-  const [sendEmailType, setSendEmailType] = useState<'booking_confirmed' | 'follow_up'>('booking_confirmed')
+  const [sendEmailType, setSendEmailType] = useState<'booking_confirmation' | 'follow_up'>('booking_confirmation')
   const [queuedFollowUp, setQueuedFollowUp] = useState(false)
   const [queuingFollowUp, setQueuingFollowUp] = useState(false)
   const [autoApplyMsg, setAutoApplyMsg] = useState<string | null>(null)
@@ -244,11 +244,11 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => { setSendEmailType('booking_confirmed'); setSendEmailOpen(true) }}
+                  onClick={() => { setSendEmailType('booking_confirmation'); setSendEmailOpen(true) }}
                   className="gap-1.5"
                 >
                   <MailCheck className="h-3.5 w-3.5" />
-                  Send booking confirmed email
+                  Send booking confirmation
                 </Button>
               )}
               {followUpPast && isOpenStatus && !queuedFollowUp && (

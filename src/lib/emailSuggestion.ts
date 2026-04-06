@@ -27,12 +27,12 @@ export function getNextEmailSuggestion(
 
   const venueDeals = deals.filter(d => d.venue_id === venue.id)
 
-  // 1. Booked but booking_confirmed not yet sent
-  if (venue.status === 'booked' && !hasSent('booking_confirmed')) {
+  // 1. Booked but booking confirmation not yet sent
+  if (venue.status === 'booked' && !hasSent('booking_confirmation')) {
     return {
-      type: 'booking_confirmed',
-      label: VENUE_EMAIL_TYPE_LABELS.booking_confirmed,
-      reason: 'Venue is booked — send the confirmation email.',
+      type: 'booking_confirmation',
+      label: VENUE_EMAIL_TYPE_LABELS.booking_confirmation,
+      reason: 'Venue is booked — send the booking confirmation email.',
     }
   }
 

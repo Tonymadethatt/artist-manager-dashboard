@@ -175,7 +175,7 @@ export function useTaskTemplates() {
         description: 'Tasks to complete once a venue is booked.',
         trigger_status: 'booked',
         items: [
-          { title: 'Confirm booking details', days_offset: 0, priority: 'high', sort_order: 0, email_type: 'booking_confirmed' },
+          { title: 'Confirm booking details', days_offset: 0, priority: 'high', sort_order: 0, email_type: 'booking_confirmation' },
           { title: 'Post-event check-in', days_offset: 1, priority: 'low', sort_order: 1, email_type: null },
         ],
       },

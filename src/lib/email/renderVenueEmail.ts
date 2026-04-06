@@ -1,14 +1,17 @@
-import type { Handler } from '@netlify/functions'
+import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
+import { effectiveTemplateLayout } from '@/lib/emailLayout'
+import { escapeHtmlPlain, renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
 
-type VenueEmailType =
+export type VenueRenderEmailType =
   | 'booking_confirmation'
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
+  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
 
-interface ArtistProfile {
+export interface VenueRenderProfile {
   artist_name: string
   company_name: string | null
   from_email: string
@@ -19,7 +22,7 @@ interface ArtistProfile {
   tagline: string | null
 }
 
-interface DealData {
+export interface VenueRenderDeal {
   description: string
   gross_amount: number
   event_date: string | null
@@ -28,25 +31,31 @@ interface DealData {
   notes: string | null
 }
 
-interface VenueData {
+export interface VenueRenderVenue {
   name: string
   city: string | null
   location: string | null
 }
 
-interface Recipient {
+export interface VenueRenderRecipient {
   name: string
   email: string
 }
 
-interface RequestBody {
-  type: VenueEmailType
-  profile: ArtistProfile
-  recipient: Recipient
-  deal?: DealData
-  venue?: VenueData
-  custom_subject?: string | null
-  custom_intro?: string | null
+export interface BuildVenueEmailDocumentOptions {
+  type: VenueRenderEmailType
+  profile: VenueRenderProfile
+  recipient: VenueRenderRecipient
+  deal?: VenueRenderDeal
+  venue?: VenueRenderVenue
+  /** Legacy column overrides (merged with layout) */
+  customIntro?: string | null
+  customSubject?: string | null
+  layout?: EmailTemplateLayoutV1 | null
+  /** '' = relative URLs for dev/preview; production Netlify passes site origin */
+  logoBaseUrl: string
+  /** Include responsive wrapper classes (Netlify sends true) */
+  responsiveClasses?: boolean
 }
 
 function money(n: number) {
@@ -55,7 +64,8 @@ function money(n: number) {
 
 function fmtDate(iso: string) {
   const [y, m, d] = iso.split('-')
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
   return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
 }
 
@@ -67,15 +77,51 @@ function card(title: string, content: string, accentColor = '#60a5fa'): string {
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
 }
 
-function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Recipient, deal?: DealData, venue?: VenueData, customIntro?: string | null, customSubject?: string | null): string {
-  const artistName = profile.artist_name                         // "DJ Luijay" — body paragraphs
-  const artistNameUpper = artistName.toUpperCase()              // "DJ LUIJAY" — subjects & headings
-  const companyName = profile.company_name || profile.artist_name // "DJ Luijay LLC" — footer only
+function applyGreetingTemplate(greeting: string, firstName: string): string {
+  return greeting.replace(/\{firstName\}/gi, firstName)
+}
+
+const replyMap: Record<VenueRenderEmailType, { label: string; bodyText: string }> = {
+  follow_up:            { label: 'Reply to This Email',          bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
+  booking_confirmation: { label: 'Reply to Booking',             bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
+  agreement_ready:      { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
+  payment_reminder:     { label: 'Confirm Payment',              bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
+  booking_confirmed:    { label: 'Reply to Confirmation',        bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
+  payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
+  rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
+}
+
+function logoUrls(base: string) {
+  const prefix = base.replace(/\/$/, '')
+  return {
+    logo: prefix ? `${prefix}/dj-luijay-logo.png` : '/dj-luijay-logo.png',
+    ig: prefix ? `${prefix}/icons/icon-ig.png` : '/icons/icon-ig.png',
+  }
+}
+
+export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): string {
+  const {
+    type,
+    profile,
+    recipient,
+    deal,
+    venue,
+    customIntro,
+    customSubject,
+    layout: layoutRaw,
+    logoBaseUrl,
+    responsiveClasses = false,
+  } = opts
+
+  const layout = effectiveTemplateLayout(layoutRaw, customSubject, customIntro)
+
+  const artistName = profile.artist_name
+  const artistNameUpper = artistName.toUpperCase()
+  const companyName = profile.company_name || profile.artist_name
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
   const firstName = recipient.name.split(' ')[0]
-  const siteUrl = process.env.URL || ''
-  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const { logo: logoUrl, ig: igUrl } = logoUrls(logoBaseUrl)
 
   let subject = ''
   let greeting = ''
@@ -146,6 +192,27 @@ function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Reci
       break
     }
 
+    case 'booking_confirmed': {
+      subject = `Booking Confirmed - ${artistNameUpper} | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `We are happy to confirm that the booking for ${artistName} at ${venueName} is officially confirmed.`
+      const confirmedRows = [
+        deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
+        row('Venue', venueName, '#ffffff'),
+        deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
+        row('Status', 'Confirmed', '#ffffff'),
+      ].filter(Boolean).join('')
+      bodyCards = card('Booking Details', confirmedRows, '#22c55e')
+      const stepsContent = [
+        '<li style="margin-bottom:8px;">You will receive a formal agreement to sign if not already completed.</li>',
+        '<li style="margin-bottom:8px;">Payment details will be outlined per the agreed terms.</li>',
+        `<li>For any questions, reach us at <strong>${replyTo}</strong>.</li>`,
+      ].join('')
+      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;margin-bottom:12px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>What Comes Next</p><ul style="font-size:13px;color:#d1d1d1;line-height:1.7;padding-left:16px;">${stepsContent}</ul></div>`
+      closing = `Thank you for making this happen. We are excited to bring a great show to your venue.`
+      break
+    }
+
     case 'follow_up': {
       subject = `Following Up - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
@@ -170,48 +237,67 @@ function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Reci
     }
   }
 
-  // Apply custom overrides if set
-  if (customIntro) intro = customIntro
-  if (customSubject) subject = customSubject
+  const subjOverride = layout.subject?.trim()
+  if (subjOverride) subject = subjOverride
 
-  // Smart reply button — unique label + pre-filled body per email type
-  const replyMap: Record<VenueEmailType, { label: string; bodyText: string }> = {
-    follow_up:            { label: 'Reply to This Email',          bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
-    booking_confirmation: { label: 'Reply to Booking',             bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
-    agreement_ready:      { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
-    payment_reminder:     { label: 'Confirm Payment',              bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
-    payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
-    rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
+  const introOverride = layout.intro?.trim()
+  if (introOverride) {
+    intro = escapeHtmlPlain(introOverride).replace(/\n/g, '<br/>')
   }
-  const { label: replyLabel, bodyText: replyBody } = replyMap[type]
+
+  const greetOverride = layout.greeting?.trim()
+  if (greetOverride) {
+    greeting = escapeHtmlPlain(applyGreetingTemplate(greetOverride, firstName)).replace(/\n/g, '<br/>')
+  }
+
+  const closingOverride = layout.closing?.trim()
+  if (closingOverride) {
+    closing = escapeHtmlPlain(closingOverride).replace(/\n/g, '<br/>')
+  }
+
+  const appendHtml = renderAppendBlocksHtml(layout.appendBlocks)
+
+  const { label: defaultReplyLabel, bodyText: replyBody } = replyMap[type]
+  const replyLabel = layout.footer?.replyButtonLabel?.trim() || defaultReplyLabel
+  const showReply = layout.footer?.showReplyButton !== false
   const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`
 
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const footerLinks = [
     profile.website ? `<a href="${profile.website}" style="color:#888888;text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
-    handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${siteUrl}/icons/icon-ig.png" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${handle}</span></a>` : '',
+    handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${handle}</span></a>` : '',
     profile.phone ? `<span style="font-size:11px;color:#888888;">${profile.phone}</span>` : '',
   ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')
+
+  const replyBlock = showReply
+    ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
+    : ''
+
+  const mobileStyles = responsiveClasses ? `
+  @media only screen and (max-width: 600px) {
+    .wrapper { margin: 0 !important; border-radius: 0 !important; border-left: none !important; border-right: none !important; }
+    .email-body { padding: 22px 18px !important; }
+    .email-footer { padding: 16px 18px !important; }
+  }` : ''
+
+  const wrapperClass = responsiveClasses ? ' class="wrapper"' : ''
+  const bodyClass = responsiveClasses ? ' class="email-body"' : ''
+  const footerClass = responsiveClasses ? ' class="email-footer"' : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${subject}</title>
+<title>${escapeHtmlPlain(subject)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
-  @media only screen and (max-width: 600px) {
-    .wrapper { margin: 0 !important; border-radius: 0 !important; border-left: none !important; border-right: none !important; }
-    .email-body { padding: 22px 18px !important; }
-    .email-header { padding: 24px 18px !important; }
-    .email-footer { padding: 16px 18px !important; }
-  }
+${mobileStyles}
 </style>
 </head>
 <body>
-<div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
+<div${wrapperClass} style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <div style="padding:28px 32px 0 32px;">
     <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
@@ -222,87 +308,21 @@ function buildHtml(type: VenueEmailType, profile: ArtistProfile, recipient: Reci
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
 
-  <div class="email-body" style="padding:28px 32px;">
+  <div${bodyClass} style="padding:28px 32px;">
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">${greeting}</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:24px;">${intro}</p>
     ${bodyCards}
+    ${appendHtml}
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-top:8px;">${closing}</p>
   </div>
 
-  <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
+  <div${footerClass} style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${companyName.toUpperCase()}</div>
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
-    <a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${replyLabel}</a>
+    ${replyBlock}
   </div>
 
 </div>
 </body>
 </html>`
 }
-
-const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ message: 'Method not allowed' }) }
-  }
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    return { statusCode: 500, body: JSON.stringify({ message: 'RESEND_API_KEY not configured' }) }
-  }
-
-  let body: RequestBody
-  try {
-    body = JSON.parse(event.body ?? '{}')
-  } catch {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
-  }
-
-  const { type, profile, recipient, deal, venue, custom_subject, custom_intro } = body
-  if (!type || !profile?.from_email || !recipient?.email) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: type, profile.from_email, recipient.email' }) }
-  }
-
-  const html = buildHtml(type, profile, recipient, deal, venue, custom_intro, custom_subject)
-  const artistNameUpper = profile.artist_name.toUpperCase()
-  const replyTo = profile.reply_to_email || profile.from_email
-  const venueName = venue?.name || deal?.description || 'your venue'
-
-  const subjectMap: Record<VenueEmailType, string> = {
-    booking_confirmation: `Booking Confirmation - ${artistNameUpper} at ${venueName}`,
-    payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
-    payment_reminder: `Payment Reminder - ${artistNameUpper}`,
-    agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
-    follow_up: `Following Up - ${artistNameUpper}`,
-    rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
-  }
-
-  const resendRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: profile.from_email,
-      to: [recipient.email],
-      reply_to: [replyTo],
-      subject: custom_subject || subjectMap[type],
-      html,
-    }),
-  })
-
-  if (!resendRes.ok) {
-    const err = await resendRes.json().catch(() => ({}))
-    return {
-      statusCode: resendRes.status,
-      body: JSON.stringify({ message: (err as { message?: string }).message ?? 'Resend API error' }),
-    }
-  }
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Email sent successfully' }),
-  }
-}
-
-export { handler }

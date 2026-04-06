@@ -38,7 +38,6 @@ type VenueEmailType =
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
-  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
 

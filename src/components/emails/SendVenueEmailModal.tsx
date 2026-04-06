@@ -39,7 +39,6 @@ interface SendVenueEmailModalProps {
 
 const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
   'booking_confirmation',
-  'booking_confirmed',
   'agreement_ready',
   'payment_reminder',
   'payment_receipt',
@@ -60,9 +59,7 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
   const venue = venueName || 'the venue'
   switch (type) {
     case 'booking_confirmation':
-      return `Confirms the booking details with ${venue}. Mentions the event date, agreed amount, and that a formal agreement will follow.`
-    case 'booking_confirmed':
-      return `Sends a final booking confirmed notice to ${venue} with event details and what comes next.`
+      return `Confirms the booking details with ${venue}: event date, agreed amount, and next steps including agreement.`
     case 'agreement_ready':
       return `Notifies ${venue} that the agreement is ready for review${deal?.agreement_url ? ' and includes the link' : ''}.`
     case 'payment_reminder':
@@ -144,7 +141,6 @@ export function SendVenueEmailModal({
       payment_receipt: `Payment Received - Thank You | ${companyName}`,
       payment_reminder: `Payment Reminder - ${companyName}`,
       agreement_ready: `Agreement Ready for Review - ${companyName}`,
-      booking_confirmed: `Booking Confirmed - ${companyName} | ${venue?.name || 'your venue'}`,
       follow_up: `Following Up - ${companyName}`,
       rebooking_inquiry: `Rebooking Inquiry - ${companyName} at ${venue?.name || 'your venue'}`,
     }

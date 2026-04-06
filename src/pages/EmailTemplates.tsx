@@ -27,8 +27,7 @@ import { cn } from '@/lib/utils'
 // ── Client email metadata ──────────────────────────────────────────────────
 
 const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
-  booking_confirmation: 'Sent when a deal is created. Confirms booking details.',
-  booking_confirmed:    'Final confirmed notice with event details and next steps.',
+  booking_confirmation: 'Confirms booking details with the venue (initial summary or final confirmation).',
   agreement_ready:      'Notifies venue the agreement is ready, includes the link.',
   payment_reminder:     'Friendly reminder about an outstanding payment.',
   payment_receipt:      'Confirms payment has been received.',
@@ -38,7 +37,6 @@ const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
 
 const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
   booking_confirmation: 'Booking Confirmation - {artist} at {venue}',
-  booking_confirmed:    'Booking Confirmed - {artist} | {venue}',
   agreement_ready:      'Agreement Ready for Review - {artist}',
   payment_reminder:     'Payment Reminder - {artist}',
   payment_receipt:      'Payment Received - Thank You | {artist}',
@@ -50,7 +48,6 @@ const CLIENT_ORDER: VenueEmailType[] = [
   'follow_up',
   'booking_confirmation',
   'agreement_ready',
-  'booking_confirmed',
   'payment_reminder',
   'payment_receipt',
   'rebooking_inquiry',
