@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { makeAgreementPdfSlug } from '@/lib/agreement/sanitize'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import type { GeneratedFile, GeneratedFileOutputFormat } from '@/types'
 
 const FILE_SELECT = `
@@ -39,6 +41,7 @@ function normalizeGeneratedRow(
     output_format: (row.output_format as GeneratedFileOutputFormat | undefined) ?? 'text',
     pdf_storage_path: (row.pdf_storage_path as string | null | undefined) ?? null,
     pdf_public_url: (row.pdf_public_url as string | null | undefined) ?? null,
+    pdf_share_slug: (row.pdf_share_slug as string | null | undefined) ?? null,
   }
 }
 
@@ -54,7 +57,10 @@ export function useFiles() {
       .select(FILE_SELECT)
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
-    else setFiles((data ?? []) as GeneratedFile[])
+    else
+      setFiles(
+        (data ?? []).map(r => normalizeGeneratedRow(r as Record<string, unknown>, null))
+      )
     setLoading(false)
   }, [])
 
@@ -150,7 +156,8 @@ export function useFiles() {
     if (insErr || !inserted) return { error: insErr ?? new Error('Insert failed') }
 
     const fileId = inserted.id as string
-    const path = `${user.id}/${fileId}.pdf`
+    const slug = makeAgreementPdfSlug(file.name, fileId)
+    const path = `${user.id}/${slug}.pdf`
 
     const { error: upErr } = await supabase.storage
       .from('agreement-pdfs')
@@ -161,15 +168,32 @@ export function useFiles() {
       return { error: upErr }
     }
 
+    const shareOrigin = publicSiteOrigin()
+    const shareUrl = shareOrigin ? `${shareOrigin}/agreements/${slug}` : ''
     const { data: pub } = supabase.storage.from('agreement-pdfs').getPublicUrl(path)
-    const pdf_public_url = pub.publicUrl
+    const storagePublicUrl = pub.publicUrl
 
-    const { data: final, error: updErr } = await supabase
+    let finalUpdate = await supabase
       .from('generated_files')
-      .update({ pdf_storage_path: path, pdf_public_url })
+      .update({
+        pdf_storage_path: path,
+        pdf_public_url: shareUrl || storagePublicUrl,
+        pdf_share_slug: slug,
+      })
       .eq('id', fileId)
       .select(FILE_SELECT)
       .single()
+
+    if (finalUpdate.error && isMissingColumnError(finalUpdate.error)) {
+      finalUpdate = await supabase
+        .from('generated_files')
+        .update({ pdf_storage_path: path, pdf_public_url: storagePublicUrl })
+        .eq('id', fileId)
+        .select(FILE_SELECT)
+        .single()
+    }
+
+    const { data: final, error: updErr } = finalUpdate
 
     if (updErr || !final) {
       await supabase.storage.from('agreement-pdfs').remove([path])

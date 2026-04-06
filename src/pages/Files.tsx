@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { sanitizeFilenameStem } from '@/lib/agreement'
+import { hasResolvablePdfLink, resolvedPdfHref } from '@/lib/files/pdfShareUrl'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
 import type { GeneratedFile } from '@/types'
 import { cn } from '@/lib/utils'
@@ -33,14 +34,29 @@ export default function Files() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [clipboardBanner, setClipboardBanner] = useState<string | null>(null)
 
-  const handleDownload = (file: GeneratedFile) => {
-    if (formatOf(file) === 'pdf' && file.pdf_public_url) {
-      const a = document.createElement('a')
-      a.href = file.pdf_public_url
-      a.download = `${sanitizeFilenameStem(file.name)}.pdf`
-      a.target = '_blank'
-      a.rel = 'noreferrer'
-      a.click()
+  const handleDownload = async (file: GeneratedFile) => {
+    if (formatOf(file) === 'pdf') {
+      const href = resolvedPdfHref(file)
+      if (!href) return
+      const filename = `${sanitizeFilenameStem(file.name)}.pdf`
+      try {
+        const res = await fetch(href, { mode: 'cors', credentials: 'omit' })
+        if (!res.ok) throw new Error('fetch failed')
+        const blob = await res.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = filename
+        a.rel = 'noreferrer'
+        a.click()
+        URL.revokeObjectURL(objectUrl)
+      } catch {
+        const a = document.createElement('a')
+        a.href = href
+        a.target = '_blank'
+        a.rel = 'noreferrer'
+        a.click()
+      }
       return
     }
     const blob = new Blob([file.content], { type: 'text/plain' })
@@ -54,12 +70,13 @@ export default function Files() {
 
   const copyPdfLink = async (file: GeneratedFile) => {
     setClipboardBanner(null)
-    if (!file.pdf_public_url) {
+    const href = resolvedPdfHref(file)
+    if (!href) {
       setClipboardBanner('This file has no public PDF URL yet.')
       window.setTimeout(() => setClipboardBanner(null), 5000)
       return
     }
-    const ok = await copyTextToClipboard(file.pdf_public_url)
+    const ok = await copyTextToClipboard(href)
     if (ok) {
       setCopiedId(file.id)
       window.setTimeout(() => setCopiedId(null), 2000)
@@ -72,10 +89,11 @@ export default function Files() {
   }
 
   const handleSetDealAgreementUrl = async () => {
-    if (!preview || formatOf(preview) !== 'pdf' || !preview.pdf_public_url || !dealForUrl) return
+    const pdfHref = preview ? resolvedPdfHref(preview) : null
+    if (!preview || formatOf(preview) !== 'pdf' || !pdfHref || !dealForUrl) return
     setSettingUrl(true)
     setUrlFeedback(null)
-    const res = await updateDeal(dealForUrl, { agreement_url: preview.pdf_public_url })
+    const res = await updateDeal(dealForUrl, { agreement_url: pdfHref })
     setSettingUrl(false)
     if (res.error) {
       setUrlFeedback('Could not update deal.')
@@ -162,7 +180,7 @@ export default function Files() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1 justify-end flex-wrap">
-                        {fmt === 'pdf' && file.pdf_public_url && (
+                        {fmt === 'pdf' && hasResolvablePdfLink(file) && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -224,7 +242,7 @@ export default function Files() {
               </div>
             </div>
 
-            {formatOf(preview) === 'pdf' && preview.pdf_public_url && (
+            {formatOf(preview) === 'pdf' && resolvedPdfHref(preview) && (
               <div className="px-5 py-3 border-b border-neutral-800 space-y-2">
                 <Button
                   variant="outline"
@@ -264,10 +282,10 @@ export default function Files() {
               </div>
             )}
 
-            {formatOf(preview) === 'pdf' && preview.pdf_public_url ? (
+            {formatOf(preview) === 'pdf' && resolvedPdfHref(preview) ? (
               <iframe
                 title="PDF preview"
-                src={preview.pdf_public_url}
+                src={resolvedPdfHref(preview) ?? ''}
                 className={cn('flex-1 w-full min-h-[50vh] border-0 bg-neutral-950')}
               />
             ) : (

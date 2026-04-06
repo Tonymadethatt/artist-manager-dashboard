@@ -23,6 +23,23 @@ export function sanitizeFilenameStem(name: string): string {
   return name.replace(/[^a-zA-Z0-9\s-_]/g, '').trim() || 'document'
 }
 
+/**
+ * URL/storage-safe slug for agreement PDF share links: readable name + short id from file UUID.
+ * Example: blue-room-agreement-march-2026-a1b2c3d4e5f6
+ */
+export function makeAgreementPdfSlug(fileName: string, fileId: string): string {
+  const stem =
+    fileName
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'agreement'
+  const idPart = fileId.replace(/-/g, '').slice(0, 12)
+  return `${stem}-${idPart}`
+}
+
 /** Detect whether a content string was authored as HTML (TipTap output) vs plain text. */
 export function isHtmlContent(content: string): boolean {
   return /<\s*(p|ul|ol|li|table|h[1-6]|strong|em|br\s*\/?)[\s>/]/i.test(content)

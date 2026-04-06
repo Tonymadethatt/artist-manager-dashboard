@@ -187,6 +187,8 @@ export interface GeneratedFile {
   output_format: GeneratedFileOutputFormat
   pdf_storage_path: string | null
   pdf_public_url: string | null
+  /** Set when using first-party /agreements/{slug} links; null for legacy rows. */
+  pdf_share_slug: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   template?: Pick<Template, 'id' | 'name'> | null

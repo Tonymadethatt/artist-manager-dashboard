@@ -177,6 +177,7 @@ export interface Database {
           output_format: 'text' | 'pdf'
           pdf_storage_path: string | null
           pdf_public_url: string | null
+          pdf_share_slug: string | null
           created_at: string
         }
         Insert: {
@@ -190,6 +191,7 @@ export interface Database {
           output_format?: 'text' | 'pdf'
           pdf_storage_path?: string | null
           pdf_public_url?: string | null
+          pdf_share_slug?: string | null
           created_at?: string
         }
         Update: {
@@ -203,6 +205,7 @@ export interface Database {
           output_format?: 'text' | 'pdf'
           pdf_storage_path?: string | null
           pdf_public_url?: string | null
+          pdf_share_slug?: string | null
           created_at?: string
         }
         Relationships: [

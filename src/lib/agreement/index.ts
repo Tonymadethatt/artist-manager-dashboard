@@ -17,4 +17,10 @@ export {
   resolveAgreementLogo,
 } from './renderHtml'
 export { htmlDocumentToPdfBlob } from './pdf'
-export { escapeHtml, sanitizeFilenameStem, isHtmlContent, stripHtmlToText } from './sanitize'
+export {
+  escapeHtml,
+  sanitizeFilenameStem,
+  makeAgreementPdfSlug,
+  isHtmlContent,
+  stripHtmlToText,
+} from './sanitize'

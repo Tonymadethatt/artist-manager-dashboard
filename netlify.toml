@@ -3,5 +3,11 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[[redirects]]
+  from = "/agreements/:slug"
+  to = "/.netlify/functions/public-agreement-pdf?slug=:slug"
+  status = 200
+  force = true
+
 [functions]
   node_bundler = "esbuild"
