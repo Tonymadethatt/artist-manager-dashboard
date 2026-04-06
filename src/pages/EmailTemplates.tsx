@@ -48,6 +48,8 @@ import {
 } from '@/lib/email/customEmailBlocks'
 import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+
+const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
 import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
@@ -879,7 +881,7 @@ export default function EmailTemplates() {
                     Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
                   </p>
                 </div>
-                <CustomTemplateBlocksEditorSection
+                <CustomBlocksEditorSection
                   blocks={customBlocksDraft.blocks}
                   mergeKeyOptions={mergeKeyOptions}
                   blockMenuOpen={blockMenuOpen}
