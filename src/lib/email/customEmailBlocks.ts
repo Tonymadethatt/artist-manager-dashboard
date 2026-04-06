@@ -15,6 +15,8 @@ export type CustomEmailBlock =
 export interface CustomEmailBlocksDoc {
   version: 1
   blocks: CustomEmailBlock[]
+  /** Optional opening line with {{merge}} tokens. Empty/missing uses defaults (venue: Hi + contact first name; artist: Hey + profile artist name). */
+  greeting?: string | null
 }
 
 function isObj(x: unknown): x is Record<string, unknown> {
@@ -90,7 +92,11 @@ export function parseCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc | 
     const p = parseBlock(b)
     if (p) blocks.push(p)
   }
-  return { version: 1, blocks }
+  const doc: CustomEmailBlocksDoc = { version: 1, blocks }
+  if ('greeting' in raw && typeof raw.greeting === 'string' && raw.greeting.length > 0) {
+    doc.greeting = raw.greeting
+  }
+  return doc
 }
 
 export function defaultCustomBlocksDoc(): CustomEmailBlocksDoc {

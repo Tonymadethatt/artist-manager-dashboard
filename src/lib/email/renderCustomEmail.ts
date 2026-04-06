@@ -93,6 +93,30 @@ function rowKv(label: string, value: string, valueColor = '#ffffff'): string {
   return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #222222;"><span style="font-size:13px;color:#888888;">${escapeHtmlPlain(label)}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${escapeHtmlPlain(value)}</span></div>`
 }
 
+const OPENING_LINE_P_STYLE = 'font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;'
+
+function renderCustomOpeningLine(
+  audience: CustomMergeAudience,
+  doc: CustomEmailBlocksDoc,
+  ctx: CustomEmailMergeContext,
+  recipient: VenueRenderRecipient,
+): string {
+  const custom = doc.greeting?.trim()
+  if (custom) {
+    const merged = applyMergeToText(custom, ctx, audience).trim()
+    if (!merged) return ''
+    return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
+  }
+  if (audience === 'artist') {
+    const merged = applyMergeToText('Hey {{profile.artist_name}},', ctx, audience).trim()
+    if (!merged) return ''
+    return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
+  }
+  const firstName = recipient.name.split(' ')[0]
+  const line = `Hi ${firstName},`
+  return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(line)}</p>`
+}
+
 function renderBlocks(
   doc: CustomEmailBlocksDoc,
   ctx: CustomEmailMergeContext,
@@ -270,27 +294,20 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
 
-  const firstName = opts.recipient.name.split(' ')[0]
-  let mainBody: string
-  let footerHtml: string
+  const openingHtml = renderCustomOpeningLine(opts.audience, doc, ctx, opts.recipient)
+  const mainBody = `
+    <div${bodyClass} style="padding:28px 32px;">
+      ${openingHtml}
+      ${bodyInner}
+      ${attachmentBlock}
+    </div>`
 
+  let footerHtml: string
   if (opts.audience === 'venue') {
     const showReply = opts.showReplyButton !== false
     const replyLabel = opts.replyButtonLabel?.trim() || 'Reply to This Email'
-    mainBody = `
-    <div${bodyClass} style="padding:28px 32px;">
-      <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hi ${escapeHtmlPlain(firstName)},</p>
-      ${bodyInner}
-      ${attachmentBlock}
-    </div>`
     footerHtml = venueFooter(opts.profile, subject, showReply, replyLabel, igUrl)
   } else {
-    mainBody = `
-    <div${bodyClass} style="padding:28px 32px;">
-      <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey ${escapeHtmlPlain(firstName)},</p>
-      ${bodyInner}
-      ${attachmentBlock}
-    </div>`
     footerHtml = artistStaticFooter(igUrl)
   }
 

@@ -324,12 +324,15 @@ export default function EmailTemplates() {
       const attachment = attachUrl && attachFile?.name?.trim()
         ? { url: attachUrl, fileName: attachFile.name.trim() }
         : undefined
+      const previewRecipient = aud === 'artist'
+        ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
+        : PREVIEW_MOCK_RECIPIENT
       const { html } = buildCustomEmailDocument({
         audience: aud,
         subjectTemplate: subj.trim() || ' ',
         blocksRaw: doc,
         profile: PREVIEW_MOCK_PROFILE,
-        recipient: PREVIEW_MOCK_RECIPIENT,
+        recipient: previewRecipient,
         deal: PREVIEW_MOCK_DEAL,
         venue: PREVIEW_MOCK_VENUE,
         logoBaseUrl: '',
@@ -908,6 +911,28 @@ export default function EmailTemplates() {
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
                     Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                  </p>
+                </div>
+                <div>
+                  <p className={EYEBROW}>Opening line</p>
+                  <Input
+                    value={customBlocksDraft.greeting ?? ''}
+                    onChange={e => {
+                      const v = e.target.value
+                      setCustomBlocksDraft(prev => ({
+                        ...prev,
+                        greeting: v === '' ? undefined : v,
+                      }))
+                    }}
+                    placeholder={
+                      activeGroup === 'client'
+                        ? 'Default: Hi + contact first name'
+                        : 'Default: Hey {{profile.artist_name}},'
+                    }
+                    className="text-sm mt-1"
+                  />
+                  <p className="text-[10px] text-neutral-600 mt-1">
+                    Optional. Same merge tokens as subject. Leave empty for the default.
                   </p>
                 </div>
                 <div>
