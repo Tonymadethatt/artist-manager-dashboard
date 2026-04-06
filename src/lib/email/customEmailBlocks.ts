@@ -1,4 +1,4 @@
-import { parseAccentColorHex } from '@/lib/email/customEmailAccentPresets'
+import { parseAccentColorHex } from './customEmailAccentPresets'
 
 export type CustomEmailBlock =
   | { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null }
