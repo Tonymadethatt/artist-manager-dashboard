@@ -11,8 +11,8 @@
  * resolves `agreement_generated_file_id` so sends stay correct if URL was never backfilled.
  */
 
-import type { GeneratedFile } from '@/types'
-import { resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
+import type { GeneratedFile } from '../types'
+import { resolvedPdfHrefFromOrigin } from './files/pdfShareUrl'
 
 export type AgreementResolutionSource =
   | 'progress_panel'

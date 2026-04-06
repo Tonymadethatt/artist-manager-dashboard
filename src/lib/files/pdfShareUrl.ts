@@ -1,4 +1,4 @@
-import type { GeneratedFile } from '@/types'
+import type { GeneratedFile } from '../../types'
 
 /**
  * Site origin for first-party agreement links.
