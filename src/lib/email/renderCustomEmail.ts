@@ -171,8 +171,8 @@ function renderBlocks(
 
 function customAttachmentDownloadHtml(url: string, fileName: string): string {
   const safeUrl = escapeHtmlPlain(url)
-  const safeName = escapeHtmlPlain(fileName)
-  return `<div style="margin-top:6px;margin-bottom:4px;"><div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#888888;margin:0 0 12px 0;">Attachment</p><a href="${safeUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-weight:700;font-size:13px;padding:12px 22px;border-radius:6px;text-decoration:none;">Download ${safeName}</a><p style="font-size:11px;color:#666666;margin:12px 0 0 0;word-break:break-all;">${safeUrl}</p></div></div>`
+  const safeTitle = escapeHtmlPlain(fileName)
+  return `<div style="margin-top:16px;"><a href="${safeUrl}" title="${safeTitle}" style="display:inline-block;background:#ffffff;color:#000000;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;text-decoration:none;">Download</a></div>`
 }
 
 export interface BuildCustomEmailOptions {
