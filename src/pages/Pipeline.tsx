@@ -10,6 +10,7 @@ import { VenueWorkCard } from '@/components/pipeline/VenueWorkCard'
 import { VenueProgressPanel, type ProgressUpdate } from '@/components/pipeline/VenueProgressPanel'
 import { TaskItem } from '@/components/pipeline/TaskItem'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
+import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,9 +21,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import type { Task, TaskPriority, TaskRecurrence, Venue, Contact, VenueEmail } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS } from '@/types'
+import {
+  TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS, ACTIVITY_CATEGORY_LABELS, OUTREACH_STATUS_LABELS,
+  VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS,
+} from '@/types'
 import { cn } from '@/lib/utils'
 import { queueEmailAutomationForCompletedTask } from '@/lib/queueEmailOnTaskComplete'
+import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -35,6 +41,8 @@ const EMPTY_FORM = {
   recurrence: 'none' as TaskRecurrence,
   venue_id: '',
   deal_id: '',
+  email_type: '__none__' as string,
+  generated_file_id: '',
 }
 
 function groupByDate(tasks: Task[]) {
@@ -170,6 +178,17 @@ export default function Pipeline() {
   const { deals } = useDeals()
   const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
   const { applyTemplate } = useTaskTemplates()
+  const { rows: customEmailRows } = useCustomEmailTemplates()
+
+  const emailActionOptions = useMemo(() => {
+    const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
+    const builtinArtist = Object.entries(ARTIST_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: `${l} (artist)` }))
+    const customs = customEmailRows.map(r => ({
+      value: customEmailTypeValue(r.id),
+      label: `${r.name} (${r.audience === 'venue' ? 'custom · client' : 'custom · artist'})`,
+    }))
+    return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
+  }, [customEmailRows])
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
   const [filter, setFilter] = useState<Filter>('all')
@@ -236,6 +255,8 @@ export default function Pipeline() {
       recurrence: t.recurrence,
       venue_id: t.venue_id ?? '',
       deal_id: t.deal_id ?? '',
+      email_type: t.email_type ?? '__none__',
+      generated_file_id: t.generated_file_id ?? '',
     })
     setEditTask(t)
     setAddOpen(true)
@@ -255,6 +276,8 @@ export default function Pipeline() {
       recurrence: form.recurrence,
       venue_id: form.venue_id || null,
       deal_id: form.deal_id || null,
+      email_type: form.email_type === '__none__' ? null : form.email_type,
+      generated_file_id: form.generated_file_id || null,
     }
     if (editTask) {
       await updateTask(editTask.id, payload)
@@ -533,6 +556,31 @@ export default function Pipeline() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Email on complete</Label>
+              <Select value={form.email_type} onValueChange={v => setField('email_type', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {emailActionOptions.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Agreement PDF (optional)</Label>
+              <AgreementPdfPicker
+                value={form.generated_file_id || null}
+                onChange={id => setField('generated_file_id', id ?? '')}
+                venueId={form.venue_id || null}
+                dealId={form.deal_id || null}
+              />
+              {form.generated_file_id && form.email_type !== 'agreement_ready' && form.email_type !== '__none__' && (
+                <p className="text-[10px] text-amber-500/90">
+                  Linked PDF applies to agreement-style emails; for other types it may have no effect.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>

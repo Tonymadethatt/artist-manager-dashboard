@@ -1,4 +1,7 @@
 import { useState, useMemo } from 'react'
+import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
+import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useVenues } from '@/hooks/useVenues'
@@ -14,7 +17,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
-import { TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS } from '@/types'
+import {
+  TASK_PRIORITY_LABELS, TASK_RECURRENCE_LABELS,
+  VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS,
+} from '@/types'
 import { cn } from '@/lib/utils'
 
 const PRIORITY_BADGE: Record<TaskPriority, 'destructive' | 'warning' | 'secondary'> = {
@@ -31,6 +37,8 @@ const EMPTY_FORM = {
   recurrence: 'none' as TaskRecurrence,
   venue_id: '',
   deal_id: '',
+  email_type: '__none__' as string,
+  generated_file_id: '',
 }
 
 function isOverdue(task: Task) {
@@ -64,6 +72,17 @@ export default function Tasks() {
   const { tasks, loading, addTask, updateTask, deleteTask, completeTask, uncompleteTask } = useTasks()
   const { venues } = useVenues()
   const { deals } = useDeals()
+  const { rows: customEmailRows } = useCustomEmailTemplates()
+
+  const emailActionOptions = useMemo(() => {
+    const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
+    const builtinArtist = Object.entries(ARTIST_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: `${l} (artist)` }))
+    const customs = customEmailRows.map(r => ({
+      value: customEmailTypeValue(r.id),
+      label: `${r.name} (${r.audience === 'venue' ? 'custom · client' : 'custom · artist'})`,
+    }))
+    return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
+  }, [customEmailRows])
   const [showCompleted, setShowCompleted] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
@@ -97,6 +116,8 @@ export default function Tasks() {
       recurrence: t.recurrence,
       venue_id: t.venue_id ?? '',
       deal_id: t.deal_id ?? '',
+      email_type: t.email_type ?? '__none__',
+      generated_file_id: t.generated_file_id ?? '',
     })
     setEditTask(t)
     setAddOpen(true)
@@ -116,6 +137,8 @@ export default function Tasks() {
       recurrence: form.recurrence,
       venue_id: form.venue_id || null,
       deal_id: form.deal_id || null,
+      email_type: form.email_type === '__none__' ? null : form.email_type,
+      generated_file_id: form.generated_file_id || null,
     }
     if (editTask) {
       await updateTask(editTask.id, payload)
@@ -263,6 +286,11 @@ export default function Tasks() {
                         {task.notes && (
                           <span className="text-xs text-neutral-600 truncate max-w-xs">{task.notes}</span>
                         )}
+                        {task.agreement_file && (
+                          <span className="text-xs text-blue-400/90 truncate max-w-[200px]" title={task.agreement_file.name}>
+                            PDF: {task.agreement_file.name}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -369,6 +397,33 @@ export default function Tasks() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Email on complete</Label>
+              <Select value={form.email_type} onValueChange={v => setField('email_type', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {emailActionOptions.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Agreement PDF (optional)</Label>
+              <AgreementPdfPicker
+                value={form.generated_file_id || null}
+                onChange={id => setField('generated_file_id', id ?? '')}
+                venueId={form.venue_id || null}
+                dealId={form.deal_id || null}
+              />
+              {form.generated_file_id && form.email_type !== 'agreement_ready' && form.email_type !== '__none__' && (
+                <p className="text-[10px] text-amber-500/90">
+                  Linked PDF applies to agreement-style emails; for other types it may have no effect.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1">

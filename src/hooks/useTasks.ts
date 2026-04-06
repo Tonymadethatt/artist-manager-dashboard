@@ -30,7 +30,12 @@ export function useTasks() {
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select('*, venue:venues(id, name), deal:deals(id, description)')
+      .select(`
+        *,
+        venue:venues(id, name),
+        deal:deals(id, description),
+        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
+      `)
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
@@ -48,25 +53,48 @@ export function useTasks() {
     recurrence: TaskRecurrence
     venue_id: string | null
     deal_id: string | null
+    email_type?: string | null
+    generated_file_id?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ user_id: user.id, ...task })
-      .select('*, venue:venues(id, name), deal:deals(id, description)')
+      .insert({
+        user_id: user.id,
+        title: task.title,
+        notes: task.notes,
+        due_date: task.due_date,
+        priority: task.priority,
+        recurrence: task.recurrence,
+        venue_id: task.venue_id,
+        deal_id: task.deal_id,
+        email_type: task.email_type ?? null,
+        generated_file_id: task.generated_file_id ?? null,
+      })
+      .select(`
+        *,
+        venue:venues(id, name),
+        deal:deals(id, description),
+        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
+      `)
       .single()
     if (error) return { error }
     setTasks(prev => [data as Task, ...prev])
     return { data: data as Task }
   }
 
-  const updateTask = async (id: string, updates: Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'venue' | 'deal'>>) => {
+  const updateTask = async (id: string, updates: Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'venue' | 'deal' | 'agreement_file'>>) => {
     const { data, error } = await supabase
       .from('tasks')
       .update(updates)
       .eq('id', id)
-      .select('*, venue:venues(id, name), deal:deals(id, description)')
+      .select(`
+        *,
+        venue:venues(id, name),
+        deal:deals(id, description),
+        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
+      `)
       .single()
     if (error) return { error }
     setTasks(prev => prev.map(t => t.id === id ? data as Task : t))
@@ -111,14 +139,31 @@ export function useTasks() {
             venue_id: task.venue_id,
             deal_id: task.deal_id,
             email_type: task.email_type ?? null,
+            generated_file_id: task.generated_file_id ?? null,
           })
-          .select('*, venue:venues(id, name), deal:deals(id, description)')
+          .select(`
+            *,
+            venue:venues(id, name),
+            deal:deals(id, description),
+            agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
+          `)
           .single()
         if (spawned) setTasks(prev => [spawned as Task, ...prev])
       }
     }
 
-    await queueEmailAutomationForCompletedTask(task, {})
+    const { data: freshTask } = await supabase
+      .from('tasks')
+      .select(`
+        *,
+        venue:venues(id, name),
+        deal:deals(id, description),
+        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
+      `)
+      .eq('id', id)
+      .single()
+
+    await queueEmailAutomationForCompletedTask((freshTask ?? task) as Task, {})
 
     return {}
   }

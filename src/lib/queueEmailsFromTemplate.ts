@@ -1,8 +1,21 @@
 import { supabase } from '@/lib/supabase'
-import type { TaskTemplate } from '@/types'
+import type { Deal, GeneratedFile, TaskTemplate } from '@/types'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import {
+  computeResolvedAgreement,
+  dealSyncPatchFromResolution,
+  isGeneratedFileInScopeForDeal,
+  isGeneratedFileInScopeForTask,
+} from '@/lib/resolveAgreementUrl'
+
+async function loadGeneratedFileRow(id: string | null | undefined): Promise<GeneratedFile | null> {
+  if (!id) return null
+  const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+  return (data as GeneratedFile | null) ?? null
+}
 
 function isVenueEmailType(s: string): s is VenueEmailType {
   return Object.prototype.hasOwnProperty.call(VENUE_EMAIL_TYPE_LABELS, s)
@@ -33,6 +46,14 @@ export async function queueImmediateEmailsForTemplate(
   const venueName = venueRow?.name ?? 'Venue'
 
   let queued = 0
+  const siteOrigin = publicSiteOrigin()
+
+  let dealRow: Deal | null = null
+  if (dealId) {
+    const { data: d } = await supabase.from('deals').select('*').eq('id', dealId).maybeSingle()
+    dealRow = (d as Deal | null) ?? null
+  }
+
   for (const item of template.items ?? []) {
     if (!item.email_type || item.days_offset !== 0) continue
 
@@ -41,6 +62,37 @@ export async function queueImmediateEmailsForTemplate(
 
     const customId = parseCustomTemplateId(item.email_type)
     if (!isVenueEmailType(item.email_type) && !customId) continue
+
+    let pinnedFile: GeneratedFile | null = null
+    if (item.generated_file_id) {
+      const f = await loadGeneratedFileRow(item.generated_file_id)
+      if (f && f.user_id === user.id && isGeneratedFileInScopeForTask(f, user.id, venueId, dealId ?? null)) {
+        pinnedFile = f
+      }
+    }
+    let dealCanonFile: GeneratedFile | null = null
+    if (dealRow?.agreement_generated_file_id) {
+      const f = await loadGeneratedFileRow(dealRow.agreement_generated_file_id)
+      if (f && isGeneratedFileInScopeForDeal(f, user.id, dealRow.venue_id)) dealCanonFile = f
+    }
+    const resolution = computeResolvedAgreement({
+      siteOrigin,
+      progressPanelUrl: null,
+      pinnedFile,
+      dealFile: dealCanonFile,
+      dealAgreementUrl: dealRow?.agreement_url ?? null,
+    })
+    const syncPatch = dealSyncPatchFromResolution(resolution)
+    const shouldPersist =
+      dealRow &&
+      syncPatch &&
+      (item.email_type === 'agreement_ready' || !!customId)
+    if (shouldPersist && dealRow) {
+      await supabase.from('deals').update(syncPatch).eq('id', dealRow.id)
+      dealRow = { ...dealRow, ...syncPatch }
+    }
+
+    if (item.email_type === 'agreement_ready' && !resolution.url) continue
 
     let subject: string
     if (customId) {

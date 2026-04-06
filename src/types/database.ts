@@ -248,6 +248,7 @@ export interface Database {
           manager_paid_date: string | null
           payment_due_date: string | null
           agreement_url: string | null
+          agreement_generated_file_id: string | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -268,6 +269,7 @@ export interface Database {
           manager_paid_date?: string | null
           payment_due_date?: string | null
           agreement_url?: string | null
+          agreement_generated_file_id?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -288,6 +290,7 @@ export interface Database {
           manager_paid_date?: string | null
           payment_due_date?: string | null
           agreement_url?: string | null
+          agreement_generated_file_id?: string | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -543,6 +546,7 @@ export interface Database {
           venue_id: string | null
           deal_id: string | null
           email_type: string | null
+          generated_file_id: string | null
           created_at: string
         }
         Insert: {
@@ -558,6 +562,7 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           email_type?: string | null
+          generated_file_id?: string | null
           created_at?: string
         }
         Update: {
@@ -573,6 +578,7 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           email_type?: string | null
+          generated_file_id?: string | null
           created_at?: string
         }
         Relationships: [
@@ -628,6 +634,7 @@ export interface Database {
           recurrence: TaskRecurrence
           sort_order: number
           email_type: string | null
+          generated_file_id: string | null
           created_at: string
         }
         Insert: {
@@ -640,6 +647,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           sort_order?: number
           email_type?: string | null
+          generated_file_id?: string | null
           created_at?: string
         }
         Update: {
@@ -652,6 +660,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           sort_order?: number
           email_type?: string | null
+          generated_file_id?: string | null
           created_at?: string
         }
         Relationships: [

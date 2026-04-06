@@ -32,14 +32,21 @@ export function inferredPdfSlugFromStoragePath(pdf_storage_path: string | null):
 /**
  * Canonical href for opening/copying/previewing a PDF: first-party `/agreements/{slug}` when possible.
  */
-export function resolvedPdfHref(file: GeneratedFile): string | null {
+/**
+ * Same as {@link resolvedPdfHref} but uses an explicit origin (e.g. Netlify `URL` env in workers).
+ */
+export function resolvedPdfHrefFromOrigin(file: GeneratedFile, origin: string): string | null {
   if (file.output_format !== 'pdf') return null
   const slug =
     file.pdf_share_slug?.trim().toLowerCase() ||
     inferredPdfSlugFromStoragePath(file.pdf_storage_path)
-  const origin = publicSiteOrigin()
-  if (slug && origin) return `${origin}/agreements/${slug}`
+  const base = origin.trim().replace(/\/$/, '')
+  if (slug && base) return `${base}/agreements/${slug}`
   return file.pdf_public_url?.trim() || null
+}
+
+export function resolvedPdfHref(file: GeneratedFile): string | null {
+  return resolvedPdfHrefFromOrigin(file, publicSiteOrigin())
 }
 
 export function hasResolvablePdfLink(file: GeneratedFile): boolean {

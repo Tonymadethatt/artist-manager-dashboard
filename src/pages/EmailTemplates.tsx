@@ -149,6 +149,8 @@ export default function EmailTemplates() {
   const [deleteCustomUsage, setDeleteCustomUsage] = useState<{ pipelineTemplateItemCount: number; taskCount: number } | null>(null)
   const [newCustomOpen, setNewCustomOpen] = useState(false)
   const [newCustomName, setNewCustomName] = useState('')
+  const [newCustomError, setNewCustomError] = useState<string | null>(null)
+  const [newCustomSubmitting, setNewCustomSubmitting] = useState(false)
 
   const filteredEmailTypes = useMemo((): AnyEmailType[] => {
     const types = (activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER) as AnyEmailType[]
@@ -521,11 +523,26 @@ export default function EmailTemplates() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="mb-5 shrink-0">
-        <h1 className="text-base font-semibold text-white">Email templates</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">
-          Customize copy, optional sections, and footer for each automated email. Preview matches what recipients see.
-        </p>
+      <div className="mb-5 shrink-0 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-semibold text-white">Email templates</h1>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Customize copy, optional sections, and footer for each automated email. Preview matches what recipients see.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 text-xs shrink-0 self-stretch sm:self-center sm:whitespace-nowrap"
+          onClick={() => {
+            setNewCustomError(null)
+            setNewCustomName('')
+            setNewCustomOpen(true)
+          }}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
+          New custom template
+        </Button>
       </div>
 
       <div className="flex gap-5 flex-1 min-h-0">
@@ -689,22 +706,7 @@ export default function EmailTemplates() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={EYEBROW}>My templates</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[10px] px-2"
-                      onClick={() => {
-                        setNewCustomName('')
-                        setNewCustomOpen(true)
-                      }}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      New
-                    </Button>
-                  </div>
+                  <p className={EYEBROW}>My templates</p>
                   <div className="flex flex-col gap-2 mt-2">
                     {filteredCustomRows.map(row => {
                       const sel = selectedCustomId === row.id
@@ -1567,43 +1569,82 @@ export default function EmailTemplates() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={newCustomOpen} onOpenChange={v => !v && setNewCustomOpen(false)}>
+      <Dialog
+        open={newCustomOpen}
+        onOpenChange={v => {
+          if (!v) {
+            setNewCustomOpen(false)
+            setNewCustomError(null)
+            setNewCustomSubmitting(false)
+          }
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>New custom template</DialogTitle>
+            <DialogTitle>Create a custom template</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-neutral-400 mb-2">
-            {activeGroup === 'client'
-              ? 'Creates a client (venue) email you can pick in Pipeline or queue for sends.'
-              : 'Creates an artist-facing email. Task completion can send it to the artist address on file.'}
-          </p>
-          <Input
-            value={newCustomName}
-            onChange={e => setNewCustomName(e.target.value)}
-            placeholder="Template name"
-            className="text-sm"
-          />
+          <div className="space-y-2">
+            <p className="text-sm text-neutral-400 leading-relaxed">
+              You’ll open the block editor next: set the subject line, add sections (text, lists, tables, merge fields),
+              and preview the full email before saving.
+            </p>
+            <p className="text-xs text-neutral-500">
+              {activeGroup === 'client'
+                ? 'Audience: venues (client emails). You can use this template from Pipeline, the email queue, and manual sends.'
+                : 'Audience: your artist profile email. You can attach it to pipeline tasks that complete with this template.'}
+            </p>
+            <Input
+              value={newCustomName}
+              onChange={e => { setNewCustomName(e.target.value); setNewCustomError(null) }}
+              placeholder="Name (e.g. Post-show check-in)"
+              className="text-sm"
+              aria-label="Custom template name"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newCustomName.trim() && !newCustomSubmitting) {
+                  e.preventDefault()
+                  void (document.getElementById('new-custom-create-btn') as HTMLButtonElement | null)?.click()
+                }
+              }}
+            />
+            {newCustomError && (
+              <p className="text-xs text-red-400 leading-snug">{newCustomError}</p>
+            )}
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewCustomOpen(false)}>Cancel</Button>
             <Button
-              disabled={!newCustomName.trim()}
+              variant="outline"
+              disabled={newCustomSubmitting}
+              onClick={() => { setNewCustomOpen(false); setNewCustomError(null) }}
+            >
+              Cancel
+            </Button>
+            <Button
+              id="new-custom-create-btn"
+              disabled={!newCustomName.trim() || newCustomSubmitting}
               onClick={async () => {
-                const { data } = await insertCustomRow({
+                setNewCustomError(null)
+                setNewCustomSubmitting(true)
+                const res = await insertCustomRow({
                   audience: activeGroup === 'client' ? 'venue' : 'artist',
                   name: newCustomName.trim(),
                 })
-                setNewCustomOpen(false)
-                setNewCustomName('')
-                if (data) {
-                  setSelectedCustomId(data.id)
-                  setCustomNameDraft(data.name)
-                  setCustomSubjectDraft(data.subject_template)
-                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(data.blocks) ?? defaultCustomBlocksDoc())
+                setNewCustomSubmitting(false)
+                if (res.error) {
+                  setNewCustomError(res.error.message)
+                  return
+                }
+                if (res.data) {
+                  setNewCustomOpen(false)
+                  setNewCustomName('')
+                  setSelectedCustomId(res.data.id)
+                  setCustomNameDraft(res.data.name)
+                  setCustomSubjectDraft(res.data.subject_template)
+                  setCustomBlocksDraft(parseCustomEmailBlocksDoc(res.data.blocks) ?? defaultCustomBlocksDoc())
                   setSidebarMode('edit-custom')
                 }
               }}
             >
-              Create
+              {newCustomSubmitting ? 'Creating…' : 'Continue to editor'}
             </Button>
           </DialogFooter>
         </DialogContent>

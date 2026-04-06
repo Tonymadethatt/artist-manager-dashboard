@@ -275,9 +275,12 @@ export interface Task {
   venue_id: string | null
   deal_id: string | null
   email_type: string | null
+  /** Optional PDF for agreement_ready / custom venue merges; overrides deal agreement file for this step. */
+  generated_file_id: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name'> | null
   deal?: Pick<Deal, 'id' | 'description'> | null
+  agreement_file?: Pick<GeneratedFile, 'id' | 'name'> | null
 }
 
 export interface TaskTemplateItem {
@@ -290,6 +293,7 @@ export interface TaskTemplateItem {
   recurrence: TaskRecurrence
   sort_order: number
   email_type: string | null
+  generated_file_id: string | null
   created_at: string
 }
 
@@ -319,6 +323,8 @@ export interface Deal {
   manager_paid_date: string | null
   payment_due_date: string | null
   agreement_url: string | null
+  /** Canonical agreement PDF in Files; resolved to share URL with {@link resolveAgreementUrl}. */
+  agreement_generated_file_id: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -406,6 +412,6 @@ export interface VenueEmail {
   notes: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null
-  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount' | 'agreement_url' | 'notes' | 'payment_due_date' | 'artist_paid'> | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount' | 'agreement_url' | 'agreement_generated_file_id' | 'notes' | 'payment_due_date' | 'artist_paid'> | null
   contact?: Pick<Contact, 'id' | 'name' | 'email'> | null
 }

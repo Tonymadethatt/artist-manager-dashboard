@@ -1,9 +1,22 @@
 import { supabase } from '@/lib/supabase'
-import type { ArtistProfile, Contact, Deal, Task, Venue } from '@/types'
+import type { ArtistProfile, Contact, Deal, GeneratedFile, Task, Venue } from '@/types'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import {
+  computeResolvedAgreement,
+  dealSyncPatchFromResolution,
+  isGeneratedFileInScopeForDeal,
+  isGeneratedFileInScopeForTask,
+} from '@/lib/resolveAgreementUrl'
+
+async function loadGeneratedFileRow(id: string | null | undefined): Promise<GeneratedFile | null> {
+  if (!id) return null
+  const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+  return (data as GeneratedFile | null) ?? null
+}
 
 function isVenueEmailType(s: string): s is VenueEmailType {
   return Object.prototype.hasOwnProperty.call(VENUE_EMAIL_TYPE_LABELS, s)
@@ -53,6 +66,28 @@ export async function queueEmailAutomationForCompletedTask(
   const primaryDeal: Deal | undefined = task.deal_id
     ? venueDeals.find(d => d.id === task.deal_id) ?? venueDeals[0]
     : venueDeals[0]
+
+  const siteOrigin = publicSiteOrigin()
+  let pinnedFile: GeneratedFile | null = null
+  if (task.generated_file_id) {
+    const f = await loadGeneratedFileRow(task.generated_file_id)
+    if (f && isGeneratedFileInScopeForTask(f, user.id, task.venue_id, task.deal_id)) pinnedFile = f
+  }
+  let dealCanonFile: GeneratedFile | null = null
+  if (primaryDeal?.agreement_generated_file_id) {
+    const f = await loadGeneratedFileRow(primaryDeal.agreement_generated_file_id)
+    if (f && isGeneratedFileInScopeForDeal(f, user.id, primaryDeal.venue_id)) dealCanonFile = f
+  }
+  const agreementResolution = computeResolvedAgreement({
+    siteOrigin,
+    progressPanelUrl: options?.agreementUrl,
+    pinnedFile,
+    dealFile: dealCanonFile,
+    dealAgreementUrl: primaryDeal?.agreement_url ?? null,
+  })
+  const agreementSyncPatch = dealSyncPatchFromResolution(agreementResolution)
+  const dealForMerge: Deal | undefined =
+    primaryDeal && agreementSyncPatch ? { ...primaryDeal, ...agreementSyncPatch } : primaryDeal
 
   if (task.email_type === 'performance_report_request') {
     const { data: profile } = await supabase
@@ -134,14 +169,14 @@ export async function queueEmailAutomationForCompletedTask(
       }
 
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
-      const dealPayload = primaryDeal
+      const dealPayload = dealForMerge
         ? {
-          description: primaryDeal.description ?? '',
-          gross_amount: primaryDeal.gross_amount,
-          event_date: primaryDeal.event_date,
-          payment_due_date: primaryDeal.payment_due_date,
-          agreement_url: primaryDeal.agreement_url,
-          notes: primaryDeal.notes,
+          description: dealForMerge.description ?? '',
+          gross_amount: dealForMerge.gross_amount,
+          event_date: dealForMerge.event_date,
+          payment_due_date: dealForMerge.payment_due_date,
+          agreement_url: dealForMerge.agreement_url,
+          notes: dealForMerge.notes,
         }
         : undefined
 
@@ -209,15 +244,17 @@ export async function queueEmailAutomationForCompletedTask(
 
   const vType = task.email_type as string
 
-  // Progress panel passes URL on confirm; board/list completeTask has no URL — skip until URL exists on deal or options.
-  if (vType === 'agreement_ready' && isVenueEmailType(vType)) {
-    const url = options?.agreementUrl?.trim()
-    if (!url && !primaryDeal?.agreement_url) {
-      return { ok: true, reason: 'agreement_ready_needs_url' }
-    }
-    if (url && primaryDeal) {
-      await supabase.from('deals').update({ agreement_url: url }).eq('id', primaryDeal.id)
-    }
+  if (vType === 'agreement_ready' && isVenueEmailType(vType) && !agreementResolution.url) {
+    return { ok: true, reason: 'agreement_ready_needs_url' }
+  }
+
+  const isVenueCustomEmail = !!cid && customVenueName !== null
+  if (
+    primaryDeal &&
+    agreementSyncPatch &&
+    ((vType === 'agreement_ready' && isVenueEmailType(vType)) || isVenueCustomEmail)
+  ) {
+    await supabase.from('deals').update(agreementSyncPatch).eq('id', primaryDeal.id)
   }
 
   if (await hasRecentPendingVenueEmail(v.id, vType, 45)) {
