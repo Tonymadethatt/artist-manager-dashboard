@@ -370,7 +370,7 @@ const handler: Handler = async (event) => {
         ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
       }
       try {
-        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-custom-artist-email`, {
+        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-venue-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(artistBody),

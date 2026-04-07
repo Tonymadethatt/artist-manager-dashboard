@@ -52,9 +52,16 @@ interface CustomVenueTemplatePayload {
   reply_button_label?: string | null
 }
 
+interface CustomArtistTemplatePayload {
+  subject_template: string
+  blocks: unknown
+}
+
 interface RequestBody {
   type?: VenueEmailType
   custom_venue_template?: CustomVenueTemplatePayload
+  /** Artist-targeted custom template (same pipeline as venue custom; avoids a separate function bundle). */
+  custom_artist_template?: CustomArtistTemplatePayload
   attachment?: unknown
   profile: ArtistProfile
   recipient: Recipient
@@ -102,6 +109,7 @@ const handler: Handler = async (event) => {
     custom_intro,
     layout: rawLayout,
     custom_venue_template,
+    custom_artist_template,
     attachment: rawAttachment,
   } = body
 
@@ -109,8 +117,13 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: profile.from_email, recipient.email' }) }
   }
 
-  if (!custom_venue_template && (!type || !VENUE_TYPES.has(type))) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing or invalid type (or provide custom_venue_template)' }) }
+  const hasArtistCustom = !!custom_artist_template
+  const hasVenueCustom = !!custom_venue_template
+  if (hasArtistCustom && hasVenueCustom) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Provide only one of custom_artist_template or custom_venue_template' }) }
+  }
+  if (!hasArtistCustom && !hasVenueCustom && (!type || !VENUE_TYPES.has(type))) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Missing or invalid type (or provide custom_venue_template / custom_artist_template)' }) }
   }
 
   const siteUrl = process.env.URL || ''
@@ -121,7 +134,24 @@ const handler: Handler = async (event) => {
   let html: string
   let subject: string
 
-  if (custom_venue_template) {
+  if (custom_artist_template) {
+    const supabaseUrl = process.env.SUPABASE_URL || ''
+    const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
+    const built = buildCustomEmailDocument({
+      audience: 'artist',
+      subjectTemplate: custom_artist_template.subject_template,
+      blocksRaw: custom_artist_template.blocks,
+      profile,
+      recipient,
+      deal,
+      venue,
+      logoBaseUrl: siteUrl,
+      responsiveClasses: true,
+      ...(attachment ? { attachment } : {}),
+    })
+    html = built.html
+    subject = built.subject
+  } else if (custom_venue_template) {
     const supabaseUrl = process.env.SUPABASE_URL || ''
     const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
     const built = buildCustomEmailDocument({
@@ -186,13 +216,18 @@ const handler: Handler = async (event) => {
     const err = await resendRes.json().catch(() => ({}))
     return {
       statusCode: resendRes.status,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: (err as { message?: string }).message ?? 'Resend API error' }),
     }
   }
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ message: 'Email sent successfully' }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: 'Email sent successfully',
+      ...(custom_artist_template ? { subject } : {}),
+    }),
   }
 }
 

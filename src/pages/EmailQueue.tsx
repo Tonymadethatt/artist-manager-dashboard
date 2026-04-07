@@ -295,8 +295,7 @@ export default function EmailQueue() {
         ...venuePayload,
       }
 
-      let sendPath: '/.netlify/functions/send-venue-email' | '/.netlify/functions/send-custom-artist-email' =
-        '/.netlify/functions/send-venue-email'
+      const sendPath = '/.netlify/functions/send-venue-email'
 
       const cid = parseCustomTemplateId(email.email_type)
       if (cid) {
@@ -310,7 +309,6 @@ export default function EmailQueue() {
           throw new Error('Custom template not found')
         }
         if (row.audience === 'artist') {
-          sendPath = '/.netlify/functions/send-custom-artist-email'
           payload.custom_artist_template = {
             subject_template: row.subject_template,
             blocks: row.blocks,
