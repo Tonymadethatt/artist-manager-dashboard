@@ -208,3 +208,21 @@ export async function hasRecentPendingArtistCustomEmail(
     .limit(1)
   return (rows?.length ?? 0) > 0
 }
+
+/** True if an artist-targeted email is already pending (any age). Avoids stacking duplicates in the queue. */
+export async function hasPendingArtistEmail(
+  userId: string,
+  emailType: string,
+  recipientEmail: string,
+): Promise<boolean> {
+  const { data: rows } = await supabase
+    .from('venue_emails')
+    .select('id')
+    .eq('user_id', userId)
+    .is('venue_id', null)
+    .eq('email_type', emailType)
+    .eq('recipient_email', recipientEmail)
+    .eq('status', 'pending')
+    .limit(1)
+  return (rows?.length ?? 0) > 0
+}

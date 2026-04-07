@@ -25,12 +25,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { Deal, CommissionTier, PaymentMethod } from '@/types'
-import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
+import { ARTIST_EMAIL_TYPE_LABELS, COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { hasPendingArtistEmail } from '@/lib/queueEmailsFromTemplate'
+import { buildRetainerReceivedPayload } from '@/lib/reports/buildManagementReportData'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
 import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
@@ -93,6 +95,9 @@ function RetainerTab(_: { hideSummary?: boolean }) {
   const [reminderStatus, setReminderStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const [reminderMsg, setReminderMsg] = useState('')
   const lastReminderSendAt = useRef(0)
+  const [receivedQueueStatus, setReceivedQueueStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
+  const [receivedQueueMsg, setReceivedQueueMsg] = useState('')
+  const lastReceivedQueueAt = useRef(0)
 
   // Payment dialog state
   const [payOpen, setPayOpen] = useState(false)
@@ -114,6 +119,11 @@ function RetainerTab(_: { hideSummary?: boolean }) {
     const received = feesWithTotals.reduce((s, f) => s + f.totalPaid, 0)
     return { owed, received, outstanding: owed - received }
   }, [feesWithTotals])
+
+  const retainerReceivedReady = useMemo(() => {
+    const { settledFees } = buildRetainerReceivedPayload(fees)
+    return totals.outstanding === 0 && settledFees.length > 0
+  }, [fees, totals.outstanding])
 
   const openPayDialog = (feeId: string, balance: number) => {
     setPayFeeId(feeId)
@@ -208,6 +218,60 @@ function RetainerTab(_: { hideSummary?: boolean }) {
     setTimeout(() => setReminderStatus('idle'), 4000)
   }
 
+  const handleQueueRetainerReceived = async () => {
+    if (!profile?.artist_email || !profile.from_email) {
+      setReceivedQueueStatus('error')
+      setReceivedQueueMsg('Set artist email and from address in Settings.')
+      setTimeout(() => setReceivedQueueStatus('idle'), 4000)
+      return
+    }
+    if (!retainerReceivedReady) return
+    const now = Date.now()
+    if (now - lastReceivedQueueAt.current < RETAINER_RESEND_CONFIRM_MS) {
+      if (!window.confirm('You queued this email recently. Add another to the queue now?')) return
+    }
+    setReceivedQueueStatus('working')
+    setReceivedQueueMsg('')
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setReceivedQueueStatus('error')
+        setReceivedQueueMsg('Not signed in')
+        setTimeout(() => setReceivedQueueStatus('idle'), 4000)
+        return
+      }
+      if (await hasPendingArtistEmail(user.id, 'retainer_received', profile.artist_email)) {
+        setReceivedQueueStatus('error')
+        setReceivedQueueMsg('Already in email queue (pending). Check Email Queue.')
+        setTimeout(() => setReceivedQueueStatus('idle'), 5000)
+        return
+      }
+      const { error } = await supabase.from('venue_emails').insert({
+        user_id: user.id,
+        venue_id: null,
+        deal_id: null,
+        contact_id: null,
+        email_type: 'retainer_received',
+        recipient_email: profile.artist_email,
+        subject: `${ARTIST_EMAIL_TYPE_LABELS.retainer_received} - ${profile.artist_name ?? 'Artist'}`,
+        status: 'pending',
+        notes: 'Queued from Earnings · retainer fully paid',
+      })
+      if (error) {
+        setReceivedQueueStatus('error')
+        setReceivedQueueMsg(error.message)
+      } else {
+        lastReceivedQueueAt.current = Date.now()
+        setReceivedQueueStatus('success')
+        setReceivedQueueMsg('Added to email queue — sends on next run')
+      }
+    } catch {
+      setReceivedQueueStatus('error')
+      setReceivedQueueMsg('Could not add to queue')
+    }
+    setTimeout(() => setReceivedQueueStatus('idle'), 4000)
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-16">
       <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
@@ -240,6 +304,29 @@ function RetainerTab(_: { hideSummary?: boolean }) {
                 </Button>
                 {reminderStatus === 'success' && <span className="text-xs text-green-400">{reminderMsg}</span>}
                 {reminderStatus === 'error' && <span className="text-xs text-red-400">{reminderMsg}</span>}
+              </>
+            )}
+            {retainerReceivedReady && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleQueueRetainerReceived}
+                  disabled={
+                    receivedQueueStatus === 'working'
+                    || !profile?.artist_email
+                    || !profile?.from_email
+                  }
+                  title={
+                    !profile?.artist_email || !profile?.from_email
+                      ? 'Artist email and from address are required (Settings).'
+                      : undefined
+                  }
+                >
+                  {receivedQueueStatus === 'working' ? 'Queueing…' : 'Queue payment received email'}
+                </Button>
+                {receivedQueueStatus === 'success' && <span className="text-xs text-green-400">{receivedQueueMsg}</span>}
+                {receivedQueueStatus === 'error' && <span className="text-xs text-red-400">{receivedQueueMsg}</span>}
               </>
             )}
             <Button size="sm" onClick={() => setAddOpen(true)}>
