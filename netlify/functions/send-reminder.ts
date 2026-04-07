@@ -180,6 +180,7 @@ const handler: Handler = async (event) => {
     custom_subject?: string | null
     custom_intro?: string | null
     layout?: unknown | null
+    testOnly?: boolean
   }
   try {
     body = JSON.parse(event.body ?? '{}')
@@ -187,20 +188,46 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON body' }) }
   }
 
-  const { profile, unpaidFees, totalOutstanding, custom_subject, custom_intro, layout: layoutRaw } = body
+  const {
+    profile,
+    unpaidFees,
+    totalOutstanding,
+    custom_subject,
+    custom_intro,
+    layout: layoutRaw,
+    testOnly = false,
+  } = body
   const L = artistLayoutForSend(layoutRaw, custom_subject, custom_intro)
-  if (!profile?.artist_email || !profile?.from_email) {
+  if (!profile?.from_email) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
+  }
+  if (testOnly) {
+    if (!profile.manager_email) {
+      return { statusCode: 400, body: JSON.stringify({ message: 'manager_email not set. Add it in Settings.' }) }
+    }
+  } else if (!profile?.artist_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
   }
 
-  const html = buildReminderHtml(profile, unpaidFees, totalOutstanding, L)
+  const demoRow: UnpaidFee = {
+    month: 'January 2026 (sample)',
+    owed: 350,
+    paid: 0,
+    balance: 350,
+  }
+  const feesForHtml = testOnly && unpaidFees.length === 0 ? [demoRow] : unpaidFees
+  const totalForHtml = testOnly && unpaidFees.length === 0 ? demoRow.balance : totalOutstanding
+
+  const html = buildReminderHtml(profile, feesForHtml, totalForHtml, L)
 
   // Subject is casual, does not signal urgency or debt
   const firstName = profile.artist_name.split(' ')[0]
-  const subject = L.subject?.trim() || `Hey ${firstName}, quick note from management`
+  const defaultSubjectBase = `Hey ${firstName}, quick note from management`
+  const defaultSubject = testOnly ? `[TEST] ${defaultSubjectBase}` : defaultSubjectBase
+  const subject = L.subject?.trim() || defaultSubject
 
-  const to = [profile.artist_email]
-  const cc = profile.manager_email ? [profile.manager_email] : []
+  const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
+  const cc = testOnly ? [] : (profile.manager_email ? [profile.manager_email] : [])
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',

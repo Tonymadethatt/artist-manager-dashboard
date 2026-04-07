@@ -1,10 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
-  ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown, Pencil, Copy,
+  ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown, Pencil, Copy, Send,
 } from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { useFiles } from '@/hooks/useFiles'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { supabase } from '@/lib/supabase'
+import { sendEmailTemplateTest } from '@/lib/email/sendEmailTemplateTest'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -135,6 +138,9 @@ export default function EmailTemplates() {
     duplicateRow: duplicateCustomRow,
   } = useCustomEmailTemplates()
   const { files: generatedFilesForTemplates } = useFiles()
+  const { profile: artistProfile } = useArtistProfile()
+  const [testSendLoading, setTestSendLoading] = useState(false)
+  const [testSendBanner, setTestSendBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [activeGroup, setActiveGroup] = useState<Group>('client')
   const [selectedType, setSelectedType] = useState<AnyEmailType>('follow_up')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('browse')
@@ -301,6 +307,10 @@ export default function EmailTemplates() {
     setExtraOpen(!!blocks && blocks.length > 0)
   }, [selectedType, sidebarMode, editorDraft.appendBlocks?.length])
 
+  useEffect(() => {
+    setTestSendBanner(null)
+  }, [selectedType, selectedCustomId, activeGroup, sidebarMode])
+
   const previewLayout = sidebarMode === 'edit'
     ? editorDraft
     : draftFromSaved(getTemplate(selectedType))
@@ -383,6 +393,51 @@ export default function EmailTemplates() {
     customAttachmentFileIdDraft,
     generatedFilesForTemplates,
   ])
+
+  const handleSendTemplateTest = useCallback(async () => {
+    if (!artistProfile) return
+    setTestSendLoading(true)
+    setTestSendBanner(null)
+    const result = await sendEmailTemplateTest({
+      supabase,
+      profile: artistProfile,
+      previewLayout,
+      activeGroup,
+      selectedType,
+      selectedCustomId,
+      sidebarMode,
+      customRows,
+      customBlocksDraft,
+      customSubjectDraft,
+      customAttachmentFileIdDraft,
+      generatedFilesForTemplates,
+    })
+    setTestSendLoading(false)
+    if (result.ok) {
+      setTestSendBanner({
+        kind: 'ok',
+        text: `Test sent to ${artistProfile.manager_email ?? 'your manager email'}`,
+      })
+    } else {
+      setTestSendBanner({ kind: 'err', text: result.message })
+    }
+  }, [
+    artistProfile,
+    previewLayout,
+    activeGroup,
+    selectedType,
+    selectedCustomId,
+    sidebarMode,
+    customRows,
+    customBlocksDraft,
+    customSubjectDraft,
+    customAttachmentFileIdDraft,
+    generatedFilesForTemplates,
+  ])
+
+  const testSendDisabled = !artistProfile?.manager_email?.trim()
+    || !artistProfile?.from_email?.trim()
+    || testSendLoading
 
   const isDirty = !layoutsEqual(editorDraft, savedLayoutNormalized)
   const hasCustom = !!(savedTmpl && layoutHasAnyCustomization(artistLayoutForSend(
@@ -1253,15 +1308,65 @@ export default function EmailTemplates() {
           )}
         >
           <div className="flex-1 min-h-0 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col min-w-0">
-            <div className="px-4 py-2.5 border-b border-neutral-800 flex items-center gap-2 shrink-0">
+            <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
               <Monitor className="h-3.5 w-3.5 text-neutral-500" />
               <span className="text-xs font-medium text-neutral-400">Preview — {typeLabel}</span>
-              <span className="text-[10px] text-neutral-600 ml-auto">
+              <span className="text-[10px] text-neutral-600">
                 {activeGroup === 'client'
                   ? 'Mock: Alex / Skyline Bar'
                   : 'Mock: DJ Luijay'}
               </span>
+              <div className="w-full min-[520px]:w-auto min-[520px]:ml-auto flex flex-col items-stretch min-[520px]:items-end gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  disabled={testSendDisabled}
+                  onClick={() => void handleSendTemplateTest()}
+                  title={
+                    !artistProfile?.manager_email?.trim()
+                      ? 'Add manager email in Settings to send tests'
+                      : !artistProfile?.from_email?.trim()
+                        ? 'Set from email in your artist profile'
+                        : 'Send this preview to your manager email'
+                  }
+                >
+                  {testSendLoading ? (
+                    <span className="text-neutral-400">Sending…</span>
+                  ) : (
+                    <>
+                      <Send className="h-3 w-3" />
+                      Send test to myself
+                    </>
+                  )}
+                </Button>
+                {!artistProfile?.manager_email?.trim() && (
+                  <span className="text-[10px] text-neutral-600 text-right">
+                    Requires manager email (Settings).
+                  </span>
+                )}
+                {activeGroup === 'artist'
+                  && selectedType === 'performance_report_request'
+                  && !selectedCustomId && (
+                  <span className="text-[10px] text-neutral-600 text-right max-w-[280px]">
+                    Test email uses a sample form link (not a real report).
+                  </span>
+                )}
+              </div>
             </div>
+            {testSendBanner && (
+              <div
+                className={cn(
+                  'px-4 py-2 text-[11px] border-b border-neutral-800',
+                  testSendBanner.kind === 'ok'
+                    ? 'text-green-400 bg-green-950/20'
+                    : 'text-red-400 bg-red-950/20',
+                )}
+              >
+                {testSendBanner.text}
+              </div>
+            )}
             <div className="flex-1 min-h-0 overflow-hidden">
               <iframe
                 key={`${activeGroup}-${selectedType}-${sidebarMode}-${selectedCustomId ?? ''}`}
