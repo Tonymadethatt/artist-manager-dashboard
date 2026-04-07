@@ -84,9 +84,13 @@ export function useNavBadgesData(pathname: string) {
     })
   }, [])
 
-  // Re-fetch counts whenever the user navigates to a new page.
-  // This keeps badges current after markSeen clears a section and
-  // after background events (template auto-tasks, queued emails) add new rows.
+  // Fetch on mount
+  useEffect(() => {
+    void fetchCounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Re-fetch on every navigation so counts update after markSeen clears a section
   const prevPathname = useRef<string | null>(null)
   useEffect(() => {
     if (pathname !== prevPathname.current) {
@@ -95,11 +99,13 @@ export function useNavBadgesData(pathname: string) {
     }
   }, [pathname, fetchCounts])
 
-  // Also fetch once on initial mount regardless of pathname match
+  // Poll every 30 seconds so badges appear promptly after background events
+  // (template auto-tasks, artist form submissions, emails added to queue)
+  // without requiring the user to navigate to a different page first.
   useEffect(() => {
-    void fetchCounts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const id = setInterval(() => { void fetchCounts() }, 30_000)
+    return () => clearInterval(id)
+  }, [fetchCounts])
 
   /**
    * Call when user visits a section. Atomically sets seen_at[section] = now()
