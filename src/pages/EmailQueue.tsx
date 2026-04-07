@@ -436,7 +436,7 @@ export default function EmailQueue() {
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
             </div>
           ) : pendingEmails.length === 0 ? (
-            <EmptyState message="No emails queued. Completing tasks with an email action will queue emails here." />
+            <EmptyState message="No emails queued. Client emails from tasks wait here before auto-send. Artist custom template emails send right away and appear under History." />
           ) : (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">

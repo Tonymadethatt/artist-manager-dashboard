@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   queueEmailAutomationForCompletedTask,
+  taskEmailAutomationUserMessage,
   type QueueEmailOnTaskCompleteOptions,
 } from '@/lib/queueEmailOnTaskComplete'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
@@ -28,6 +29,7 @@ export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [emailAutomationBanner, setEmailAutomationBanner] = useState<string | null>(null)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -114,6 +116,7 @@ export function useTasks() {
   const completeTask = async (id: string, emailOptions?: QueueEmailOnTaskCompleteOptions) => {
     const task = tasks.find(t => t.id === id)
     if (!task) return { error: new Error('Task not found') }
+    setEmailAutomationBanner(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -166,9 +169,14 @@ export function useTasks() {
       .eq('id', id)
       .single()
 
-    await queueEmailAutomationForCompletedTask((freshTask ?? task) as Task, emailOptions ?? {})
+    const completedTaskRow = (freshTask ?? task) as Task
+    const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, emailOptions ?? {})
+    if (completedTaskRow.email_type && !autoResult.ok) {
+      const msg = taskEmailAutomationUserMessage(autoResult.reason).trim()
+      setEmailAutomationBanner(msg || null)
+    }
 
-    return {}
+    return { automation: autoResult }
   }
 
   const uncompleteTask = async (id: string) => {
@@ -182,5 +190,20 @@ export function useTasks() {
     return updateTask(id, { due_date: addDays(base, days) })
   }
 
-  return { tasks, loading, error, refetch: fetchTasks, addTask, updateTask, deleteTask, completeTask, uncompleteTask, snoozeTask }
+  const dismissEmailAutomationBanner = useCallback(() => setEmailAutomationBanner(null), [])
+
+  return {
+    tasks,
+    loading,
+    error,
+    emailAutomationBanner,
+    dismissEmailAutomationBanner,
+    refetch: fetchTasks,
+    addTask,
+    updateTask,
+    deleteTask,
+    completeTask,
+    uncompleteTask,
+    snoozeTask,
+  }
 }

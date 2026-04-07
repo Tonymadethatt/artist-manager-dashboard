@@ -168,7 +168,18 @@ function VenueProgressPanelConnected({
 }
 
 export default function Pipeline() {
-  const { tasks, loading, addTask, updateTask, deleteTask, completeTask, uncompleteTask, snoozeTask } = useTasks()
+  const {
+    tasks,
+    loading,
+    addTask,
+    updateTask,
+    deleteTask,
+    completeTask,
+    uncompleteTask,
+    snoozeTask,
+    emailAutomationBanner,
+    dismissEmailAutomationBanner,
+  } = useTasks()
   const { venues, updateVenue } = useVenues()
   const { deals } = useDeals()
   const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
@@ -291,6 +302,21 @@ export default function Pipeline() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {emailAutomationBanner && (
+        <div
+          role="alert"
+          className="mb-3 flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-amber-950/80 border border-amber-800 text-xs text-amber-100 shrink-0"
+        >
+          <p>{emailAutomationBanner}</p>
+          <button
+            type="button"
+            onClick={dismissEmailAutomationBanner}
+            className="shrink-0 text-amber-400 hover:text-amber-200 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center gap-3 mb-5 flex-wrap shrink-0">
         <div className="flex items-center gap-3">

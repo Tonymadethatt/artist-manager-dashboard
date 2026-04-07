@@ -10,4 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Forward Netlify functions when using `netlify dev` (default API port 8888).
+  // Without this, Vite on :5173 returns 404 for `/.netlify/functions/*` and artist emails never send locally.
+  server: {
+    proxy: {
+      '/.netlify/functions': {
+        target: process.env.VITE_NETLIFY_FUNCTIONS_URL ?? 'http://127.0.0.1:8888',
+        changeOrigin: true,
+      },
+    },
+  },
 })

@@ -69,7 +69,17 @@ function groupByDate(tasks: Task[]) {
 }
 
 export default function Tasks() {
-  const { tasks, loading, addTask, updateTask, deleteTask, completeTask, uncompleteTask } = useTasks()
+  const {
+    tasks,
+    loading,
+    addTask,
+    updateTask,
+    deleteTask,
+    completeTask,
+    uncompleteTask,
+    emailAutomationBanner,
+    dismissEmailAutomationBanner,
+  } = useTasks()
   const { venues } = useVenues()
   const { deals } = useDeals()
   const { rows: customEmailRows } = useCustomEmailTemplates()
@@ -161,6 +171,21 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5 max-w-3xl">
+      {emailAutomationBanner && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-amber-950/80 border border-amber-800 text-xs text-amber-100"
+        >
+          <p>{emailAutomationBanner}</p>
+          <button
+            type="button"
+            onClick={dismissEmailAutomationBanner}
+            className="shrink-0 text-amber-400 hover:text-amber-200 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {/* Header stats */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">

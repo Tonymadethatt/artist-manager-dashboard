@@ -28,6 +28,31 @@ export type QueueEmailOnTaskCompleteOptions = {
   agreementUrl?: string | null
 }
 
+/** User-visible explanation when `queueEmailAutomationForCompletedTask` returns `ok: false`. */
+export function taskEmailAutomationUserMessage(reason: string): string {
+  switch (reason) {
+    case 'no_artist_email':
+      return 'Add your artist email and from email in your profile so artist template emails can send.'
+    case 'custom_artist_send_failed':
+      return 'The artist email could not be sent. On localhost, run Netlify Dev and use that URL (Vite alone cannot reach functions). Check the browser Network tab for send-custom-artist-email.'
+    case 'custom_template_not_found':
+      return 'That custom email template no longer exists. Edit the task and pick a current template.'
+    case 'no_venue_for_venue_email':
+      return 'Link this task to a venue or deal so the client email can be queued and sent.'
+    case 'no_contact_email':
+      return 'Add a contact with an email address for this venue.'
+    case 'not_authenticated':
+      return 'You are not signed in.'
+    case 'venue_email_insert_failed':
+      return 'Could not queue the email. Try again.'
+    default:
+      if (reason === 'custom_artist_sent' || reason === 'venue_email_queued' || reason === 'performance_report_sent') {
+        return ''
+      }
+      return `Email automation: ${reason.replace(/_/g, ' ')}`
+  }
+}
+
 /**
  * Runs the same email automation as Pipeline's progress confirm (step 5), but callable from any
  * task completion path (board, list, Tasks page, progress panel).
@@ -248,10 +273,36 @@ export async function queueEmailAutomationForCompletedTask(
             },
           }),
         })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: 'Send failed' }))
-          console.error('[queueEmailOnTaskComplete] custom artist:', err)
+        const rawText = await res.text()
+        let parsed: { message?: string; subject?: string } | null = null
+        try {
+          parsed = rawText ? (JSON.parse(rawText) as { message?: string; subject?: string }) : null
+        } catch {
+          parsed = null
+        }
+        const sentOk = res.ok && parsed?.message === 'Email sent successfully'
+        if (!sentOk) {
+          console.error('[queueEmailOnTaskComplete] custom artist: bad response', res.status, rawText.slice(0, 300))
           return { ok: false, reason: 'custom_artist_send_failed' }
+        }
+        const subjectLine =
+          typeof parsed?.subject === 'string' && parsed.subject.trim()
+            ? parsed.subject.trim()
+            : `${ctRow.name} (artist template)`
+        const { error: logErr } = await supabase.from('venue_emails').insert({
+          user_id: user.id,
+          venue_id: null,
+          deal_id: task.deal_id ?? null,
+          contact_id: null,
+          email_type: task.email_type,
+          recipient_email: p.artist_email,
+          subject: subjectLine,
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          notes: `Sent immediately (artist custom template: ${ctRow.name}). Task: ${task.title}`,
+        })
+        if (logErr) {
+          console.warn('[queueEmailOnTaskComplete] custom artist: email sent but history log failed:', logErr.message)
         }
       } catch (e) {
         console.error('[queueEmailOnTaskComplete] custom artist:', e)

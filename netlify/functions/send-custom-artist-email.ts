@@ -108,7 +108,11 @@ const handler: Handler = async (event) => {
     }
   }
 
-  return { statusCode: 200, body: JSON.stringify({ message: 'Email sent successfully' }) }
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Email sent successfully', subject }),
+  }
 }
 
 export { handler }
