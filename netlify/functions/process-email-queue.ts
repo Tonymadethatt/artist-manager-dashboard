@@ -20,7 +20,8 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
-import { isQueuedBuiltinArtistEmailType } from '../../src/lib/email/queuedBuiltinArtistEmail'
+import { isQueueBufferZeroEmailType, isQueuedBuiltinArtistEmailType } from '../../src/lib/email/queuedBuiltinArtistEmail'
+import { parsePerfFormQueueNotes } from '../../src/lib/email/performanceFormQueuePayload'
 import { fetchReportInputsForUser } from '../../src/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
@@ -148,7 +149,7 @@ const handler: Handler = async (event) => {
     const p = profileByUser.get(e.user_id)
     const cidBuf = parseCustomTemplateId(e.email_type as string)
     const audienceForBuffer = cidBuf ? customAudienceById.get(cidBuf) : null
-    const bufferMin = audienceForBuffer === 'artist' || isQueuedBuiltinArtistEmailType(e.email_type as string)
+    const bufferMin = audienceForBuffer === 'artist' || isQueueBufferZeroEmailType(e.email_type as string)
       ? 0
       : clampEmailQueueBufferMinutes(p?.email_queue_buffer_minutes as unknown)
     const ageMs = nowMs - new Date(e.created_at).getTime()
@@ -240,6 +241,74 @@ const handler: Handler = async (event) => {
         .update({ status: 'failed', notes: 'Auto-send failed: artist profile not configured' })
         .eq('id', email.id)
       results.push({ id: email.id, result: 'failed', reason: 'no_artist_profile' })
+      continue
+    }
+
+    if (email.email_type === 'performance_report_request') {
+      const perfPayload = parsePerfFormQueueNotes(email.notes as string | null)
+      const fullProf = profileByUser.get(email.user_id) as Record<string, unknown> | undefined
+      if (!perfPayload?.token) {
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: 'Auto-send failed: missing performance form payload' })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason: 'perf_form_payload' })
+        continue
+      }
+      if (!fullProf?.artist_email) {
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: 'Auto-send failed: artist email not configured' })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason: 'no_artist_email' })
+        continue
+      }
+      const perfTmpl = templateByUserAndType.get(`${email.user_id}:performance_report_request`)
+      try {
+        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-performance-form`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: perfPayload.token,
+            venueName: perfPayload.venueName,
+            eventDate: perfPayload.eventDate,
+            artistName: String(fullProf.artist_name ?? ''),
+            artistEmail: String(fullProf.artist_email ?? ''),
+            fromEmail: String(fullProf.from_email ?? ''),
+            replyToEmail: (fullProf.reply_to_email as string | null) || String(fullProf.from_email ?? ''),
+            managerName: (fullProf.manager_name as string | null) || 'Your Manager',
+            custom_subject: perfTmpl?.custom_subject ?? null,
+            custom_intro: perfTmpl?.custom_intro ?? null,
+            layout: perfTmpl?.layout ?? null,
+          }),
+        })
+        if (sendRes.ok) {
+          await supabase
+            .from('venue_emails')
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              notes: '[src:queue_cron] Performance form email',
+            })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'sent' })
+        } else {
+          const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+          const reason = (err as { message?: string }).message ?? 'Send failed'
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason })
+        }
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'Unknown error'
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason })
+      }
       continue
     }
 

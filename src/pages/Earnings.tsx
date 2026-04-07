@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
@@ -30,6 +30,9 @@ import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+
+const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
 import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
 import type { GeneratedFile } from '@/types'
 
@@ -89,6 +92,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
   const [saving, setSaving] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const [reminderMsg, setReminderMsg] = useState('')
+  const lastReminderSendAt = useRef(0)
 
   // Payment dialog state
   const [payOpen, setPayOpen] = useState(false)
@@ -152,6 +156,10 @@ function RetainerTab(_: { hideSummary?: boolean }) {
 
   const handleSendReminder = async () => {
     if (!profile) return
+    const now = Date.now()
+    if (now - lastReminderSendAt.current < RETAINER_RESEND_CONFIRM_MS) {
+      if (!window.confirm('You sent a retainer reminder recently. Send another now?')) return
+    }
     setReminderStatus('sending')
     const unpaidFees = feesWithTotals
       .filter(f => f.balance > 0)
@@ -170,8 +178,24 @@ function RetainerTab(_: { hideSummary?: boolean }) {
         }),
       })
       if (res.ok) {
+        lastReminderSendAt.current = Date.now()
         setReminderStatus('success')
         setReminderMsg(`Reminder sent to ${profile.artist_email}`)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user && profile.artist_email) {
+          const firstName = (profile.artist_name ?? 'Artist').split(/\s+/)[0] || 'Artist'
+          const subj = (reminderTemplate?.custom_subject as string | null)?.trim()
+            || `Hey ${firstName}, quick note from management`
+          await recordOutboundEmail(supabase, {
+            user_id: user.id,
+            email_type: 'retainer_reminder',
+            recipient_email: profile.artist_email,
+            subject: subj,
+            status: 'sent',
+            source: 'earnings_manual',
+            detail: `Outstanding ${totals.outstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+          })
+        }
       } else {
         const err = await res.json().catch(() => ({}))
         setReminderStatus('error')

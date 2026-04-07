@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { PerformanceReport, ArtistProfile } from '@/types'
+import { ARTIST_EMAIL_TYPE_LABELS } from '@/types'
+import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 
 export function usePerformanceReports() {
   const [reports, setReports] = useState<PerformanceReport[]>([])
@@ -81,6 +83,19 @@ export function usePerformanceReports() {
         // Return the report and formUrl even if email fails — manager can copy link manually
         return { report, formUrl, error: 'Report created but email failed to send. Use copy link.' }
       }
+      const label = ARTIST_EMAIL_TYPE_LABELS.performance_report_request
+      const subj = (perfTmpl?.custom_subject as string | null)?.trim() || `${label} · ${venueName}`
+      await recordOutboundEmail(supabase, {
+        user_id: user.id,
+        venue_id: venueId,
+        deal_id: dealId,
+        email_type: 'performance_report_request',
+        recipient_email: profile.artist_email,
+        subject: subj,
+        status: 'sent',
+        source: 'performance_form',
+        detail: venueName,
+      })
     } catch (e) {
       console.error('[usePerformanceReports] Email send error:', e)
       return { report, formUrl, error: 'Report created but email failed to send. Use copy link.' }
@@ -152,6 +167,19 @@ export function usePerformanceReports() {
         console.error('[usePerformanceReports] Resend email failed:', err)
         return { formUrl, error: 'Token reset but email failed. Use copy link.' }
       }
+      const label = ARTIST_EMAIL_TYPE_LABELS.performance_report_request
+      const subj = (perfTmpl?.custom_subject as string | null)?.trim() || `${label} · ${venueName}`
+      await recordOutboundEmail(supabase, {
+        user_id: resendUser.id,
+        venue_id: report.venue_id,
+        deal_id: report.deal_id,
+        email_type: 'performance_report_request',
+        recipient_email: profile.artist_email,
+        subject: subj,
+        status: 'sent',
+        source: 'performance_form',
+        detail: `${venueName} (resend)`,
+      })
     } catch (e) {
       console.error('[usePerformanceReports] Resend error:', e)
       return { formUrl, error: 'Token reset but email failed. Use copy link.' }

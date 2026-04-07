@@ -178,8 +178,8 @@ export default function Pipeline() {
     completeTask,
     uncompleteTask,
     snoozeTask,
-    emailAutomationBanner,
-    dismissEmailAutomationBanner,
+    emailAutomationFeedback,
+    dismissEmailAutomationFeedback,
   } = useTasks()
   const { venues, updateVenue } = useVenues()
   const { deals } = useDeals()
@@ -358,16 +358,26 @@ export default function Pipeline() {
           {toast}
         </div>
       )}
-      {emailAutomationBanner && (
+      {emailAutomationFeedback && (
         <div
-          role="alert"
-          className="mb-3 flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-amber-950/80 border border-amber-800 text-xs text-amber-100 shrink-0"
+          role="status"
+          className={cn(
+            'mb-3 flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg border text-xs shrink-0',
+            emailAutomationFeedback.kind === 'error' && 'bg-amber-950/80 border-amber-800 text-amber-100',
+            emailAutomationFeedback.kind === 'success' && 'bg-green-950/70 border-green-800 text-green-100',
+            emailAutomationFeedback.kind === 'info' && 'bg-neutral-900 border-neutral-600 text-neutral-200',
+          )}
         >
-          <p>{emailAutomationBanner}</p>
+          <p>{emailAutomationFeedback.message}</p>
           <button
             type="button"
-            onClick={dismissEmailAutomationBanner}
-            className="shrink-0 text-amber-400 hover:text-amber-200 underline"
+            onClick={dismissEmailAutomationFeedback}
+            className={cn(
+              'shrink-0 underline',
+              emailAutomationFeedback.kind === 'error' && 'text-amber-400 hover:text-amber-200',
+              emailAutomationFeedback.kind === 'success' && 'text-green-400 hover:text-green-200',
+              emailAutomationFeedback.kind === 'info' && 'text-neutral-400 hover:text-neutral-200',
+            )}
           >
             Dismiss
           </button>

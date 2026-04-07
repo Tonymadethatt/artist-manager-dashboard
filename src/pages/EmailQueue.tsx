@@ -26,7 +26,9 @@ import {
   DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
   type EmailQueueBufferMinutes,
 } from '@/lib/emailQueueBuffer'
-import { isQueuedBuiltinArtistEmailType } from '@/lib/email/queuedBuiltinArtistEmail'
+import { isQueuedBuiltinArtistEmailType, isQueueBufferZeroEmailType } from '@/lib/email/queuedBuiltinArtistEmail'
+import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
+import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
@@ -46,11 +48,22 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
-/** Artist-targeted and builtin artist system rows use buffer 0 in the worker. */
+function pendingNotesLine(email: VenueEmail): string | null {
+  if (email.email_type === 'performance_report_request') {
+    const p = parsePerfFormQueueNotes(email.notes)
+    if (p) {
+      const when = p.eventDate ? ` · show ${p.eventDate}` : ''
+      return `Performance form · ${p.venueName}${when}`
+    }
+  }
+  return email.notes?.trim() || null
+}
+
+/** Same rules as `process-email-queue` (artist custom = 0; management, retainer, performance form = 0). */
 function effectiveQueueBufferMinutes(email: VenueEmail, userBuffer: number): number {
   const cid = parseCustomTemplateId(email.email_type)
   if (cid && !email.venue_id) return 0
-  if (isQueuedBuiltinArtistEmailType(email.email_type)) return 0
+  if (isQueueBufferZeroEmailType(email.email_type)) return 0
   return userBuffer
 }
 
@@ -127,6 +140,7 @@ interface PendingRowProps {
 
 function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sending, dismissing }: PendingRowProps) {
   const recipientName = email.contact?.name || null
+  const noteLine = pendingNotesLine(email)
 
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-neutral-800 last:border-0">
@@ -144,7 +158,9 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
           <CountdownBadge createdAt={email.created_at} bufferMinutes={bufferMinutes} />
           <span className="text-[10px] text-neutral-700">{fmtDate(email.created_at)}</span>
         </div>
-        {email.notes && <p className="text-xs text-neutral-600 italic">{email.notes}</p>}
+        {noteLine && (
+          <p className="text-xs text-neutral-600 italic">{noteLine}</p>
+        )}
       </div>
       <div className="flex gap-2 shrink-0 items-start pt-0.5">
         <Button
@@ -341,6 +357,41 @@ export default function EmailQueue() {
             + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
           )
         }
+        setPreviewLoading(false)
+        return
+      }
+
+      if (email.email_type === 'performance_report_request') {
+        const perfPayload = parsePerfFormQueueNotes(email.notes)
+        if (!perfPayload) {
+          setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Missing performance form data on this row.</div>')
+          setPreviewLoading(false)
+          return
+        }
+        const { data: perfTmpl } = await supabase
+          .from('email_templates')
+          .select('custom_subject')
+          .eq('user_id', user.id)
+          .eq('email_type', 'performance_report_request')
+          .maybeSingle()
+        const subj = (perfTmpl?.custom_subject as string | null)?.trim()
+          || `Quick check-in: How did the show go at ${perfPayload.venueName}?`
+        setPreviewSubject(subj)
+        const site = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
+        const formUrl = `${site}/performance-report/${perfPayload.token}`
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const toe = esc(profile.artist_email ?? email.recipient_email)
+        const ev = perfPayload.eventDate
+          ? `<p style="margin:0 0 12px;color:#a3a3a3">Show: ${esc(perfPayload.eventDate)}</p>` : ''
+        setPreviewHtml(
+          `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+          + `<div style="padding:24px;max-width:560px;margin:0 auto">`
+          + `<p style="color:#888;font-size:11px;margin:0 0 16px">Performance form · to <strong>${toe}</strong></p>`
+          + `<p style="margin:0 0 8px">Venue: <strong>${esc(perfPayload.venueName)}</strong></p>`
+          + ev
+          + `<p style="margin:16px 0 8px;word-break:break-all"><a href="${formUrl}" style="color:#93c5fd">${esc(formUrl)}</a></p>`
+          + `<p style="margin:0;color:#666;font-size:11px">Real send uses your template layout from Email templates.</p></div></body></html>`,
+        )
         setPreviewLoading(false)
         return
       }
@@ -550,6 +601,50 @@ export default function EmailQueue() {
         }
 
         await updateEmailStatus(email.id, 'sent')
+        return
+      }
+
+      if (email.email_type === 'performance_report_request') {
+        const perfPayload = parsePerfFormQueueNotes(email.notes)
+        if (!perfPayload?.token) throw new Error('Missing performance form data on this row.')
+        if (!profile.artist_email) throw new Error('Artist email not set in profile.')
+        const { data: perfTmpl } = await supabase
+          .from('email_templates')
+          .select('custom_subject, custom_intro, layout')
+          .eq('user_id', user.id)
+          .eq('email_type', 'performance_report_request')
+          .maybeSingle()
+        const res = await fetch('/.netlify/functions/send-performance-form', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: perfPayload.token,
+            venueName: perfPayload.venueName,
+            eventDate: perfPayload.eventDate,
+            artistName: profile.artist_name ?? '',
+            artistEmail: profile.artist_email,
+            fromEmail: profile.from_email,
+            replyToEmail: profile.reply_to_email || profile.from_email,
+            managerName: profile.manager_name || 'Your Manager',
+            custom_subject: perfTmpl?.custom_subject ?? null,
+            custom_intro: perfTmpl?.custom_intro ?? null,
+            layout: perfTmpl?.layout ?? null,
+          }),
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          let msg = `Send failed (${res.status})`
+          try {
+            const err = JSON.parse(text) as { message?: string }
+            if (err.message) msg = err.message
+          } catch {
+            if (text.trim()) msg = text.slice(0, 240)
+          }
+          throw new Error(msg)
+        }
+        await updateEmailStatus(email.id, 'sent', {
+          notes: formatOutboundEmailNotes('email_queue_send_now', 'Performance form email'),
+        })
         return
       }
 
@@ -775,6 +870,22 @@ export default function EmailQueue() {
         </div>
       )}
 
+      <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5 text-[11px] text-neutral-500 leading-relaxed">
+        <p className="font-medium text-neutral-400 mb-1.5">About the queue</p>
+        <ul className="list-disc pl-4 space-y-1">
+          <li>
+            <span className="text-neutral-400">Queue</span> is for delayed <code className="text-neutral-600">pending</code> sends.
+            Management report, retainer reminder, and performance form requests send on the next worker run (no minute buffer), or use Send now.
+          </li>
+          <li>
+            <span className="text-neutral-400">History</span> includes cron-sent rows, Send now from here, pipeline &quot;Send email&quot; modal (logged immediately), and Reports / Earnings sends.
+          </li>
+          <li>
+            Reports, Earnings, and Performance reports &quot;send form&quot; from their pages deliver immediately—they do not add a pending row unless you use task automation (performance form queues through Email queue when a task completes).
+          </li>
+        </ul>
+      </div>
+
       {/* Queue tab */}
       {activeTab === 'queue' && (
         <>
@@ -783,7 +894,7 @@ export default function EmailQueue() {
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
             </div>
           ) : pendingEmails.length === 0 ? (
-            <EmptyState message="No emails queued. Emails from tasks wait here before auto-send (artist custom templates send on the next queue run)." />
+            <EmptyState message="No emails queued. Pending rows from tasks and outreach appear here. Artist custom templates and zero-buffer types send on the next queue run." />
           ) : (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">

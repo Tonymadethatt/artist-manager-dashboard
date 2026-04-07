@@ -25,7 +25,8 @@ import { supabase } from '@/lib/supabase'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
-import type { Deal, GeneratedFile, Venue, VenueEmailType, VenueEmailStatus } from '@/types'
+import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
+import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 
 interface SendVenueEmailModalProps {
@@ -101,28 +102,6 @@ export function SendVenueEmailModal({
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
   const { rows: customRows } = useCustomEmailTemplates()
-
-  const logEmail = async (params: {
-    venue_id?: string | null; deal_id?: string | null; contact_id?: string | null
-    email_type: string; recipient_email: string; subject: string
-    status: VenueEmailStatus; notes?: string | null
-  }) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const sentAt = params.status === 'sent' ? new Date().toISOString() : null
-    await supabase.from('venue_emails').insert({
-      user_id: user.id,
-      venue_id: params.venue_id ?? null,
-      deal_id: params.deal_id ?? null,
-      contact_id: params.contact_id ?? null,
-      email_type: params.email_type,
-      recipient_email: params.recipient_email,
-      subject: params.subject,
-      status: params.status,
-      sent_at: sentAt,
-      notes: params.notes ?? null,
-    })
-  }
 
   const venueCustomOptions = customRows.filter(r => r.audience === 'venue')
 
@@ -270,16 +249,20 @@ export function SendVenueEmailModal({
         ? `${customRow.name} · ${venue?.name ?? 'venue'}`
         : subjectMap[emailType as VenueEmailType]
 
-      // Log the sent email — custom types stored as custom:<uuid> for queue/history parity
-      await logEmail({
-        venue_id: venueId ?? null,
-        deal_id: dealId ?? null,
-        contact_id: contactId ?? null,
-        email_type: customRow ? customEmailTypeValue(customRow.id) : emailType,
-        recipient_email: recipientEmail,
-        subject: logSubject,
-        status: 'sent',
-      })
+      const { data: { user: uSend } } = await supabase.auth.getUser()
+      if (uSend) {
+        await recordOutboundEmail(supabase, {
+          user_id: uSend.id,
+          venue_id: venueId ?? null,
+          deal_id: dealId ?? null,
+          contact_id: contactId ?? null,
+          email_type: customRow ? customEmailTypeValue(customRow.id) : emailType,
+          recipient_email: recipientEmail,
+          subject: logSubject,
+          status: 'sent',
+          source: 'modal_immediate',
+        })
+      }
 
       setStatus('success')
       onSent?.()
@@ -292,18 +275,23 @@ export function SendVenueEmailModal({
       const customRowFail = isCustomEmailType(emailType)
         ? customRows.find(r => customEmailTypeValue(r.id) === emailType)
         : undefined
-      await logEmail({
-        venue_id: venueId ?? null,
-        deal_id: dealId ?? null,
-        contact_id: contactId ?? null,
-        email_type: customRowFail ? customEmailTypeValue(customRowFail.id) : emailType,
-        recipient_email: recipientEmail,
-        subject: customRowFail
-          ? `${customRowFail.name} · ${venue?.name ?? 'venue'}`
-          : subjectMap[emailType as VenueEmailType],
-        status: 'failed',
-        notes: err instanceof Error ? err.message : 'Unknown error',
-      })
+      const { data: { user: uFail } } = await supabase.auth.getUser()
+      if (uFail) {
+        await recordOutboundEmail(supabase, {
+          user_id: uFail.id,
+          venue_id: venueId ?? null,
+          deal_id: dealId ?? null,
+          contact_id: contactId ?? null,
+          email_type: customRowFail ? customEmailTypeValue(customRowFail.id) : emailType,
+          recipient_email: recipientEmail,
+          subject: customRowFail
+            ? `${customRowFail.name} · ${venue?.name ?? 'venue'}`
+            : subjectMap[emailType as VenueEmailType],
+          status: 'failed',
+          source: 'modal_immediate',
+          detail: err instanceof Error ? err.message : 'Unknown error',
+        })
+      }
     } finally {
       setSending(false)
     }

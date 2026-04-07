@@ -3,9 +3,16 @@ import { supabase } from '@/lib/supabase'
 import {
   queueEmailAutomationForCompletedTask,
   taskEmailAutomationUserMessage,
+  taskEmailAutomationSuccessMessage,
+  taskEmailAutomationInfoMessage,
   type QueueEmailOnTaskCompleteOptions,
 } from '@/lib/queueEmailOnTaskComplete'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
+
+export type EmailAutomationFeedback =
+  | { kind: 'error'; message: string }
+  | { kind: 'success'; message: string }
+  | { kind: 'info'; message: string }
 
 function addDays(dateStr: string, n: number) {
   const d = new Date(dateStr)
@@ -29,7 +36,7 @@ export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [emailAutomationBanner, setEmailAutomationBanner] = useState<string | null>(null)
+  const [emailAutomationFeedback, setEmailAutomationFeedback] = useState<EmailAutomationFeedback | null>(null)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -116,7 +123,7 @@ export function useTasks() {
   const completeTask = async (id: string, emailOptions?: QueueEmailOnTaskCompleteOptions) => {
     const task = tasks.find(t => t.id === id)
     if (!task) return { error: new Error('Task not found') }
-    setEmailAutomationBanner(null)
+    setEmailAutomationFeedback(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -171,9 +178,16 @@ export function useTasks() {
 
     const completedTaskRow = (freshTask ?? task) as Task
     const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, emailOptions ?? {})
-    if (completedTaskRow.email_type && !autoResult.ok) {
-      const msg = taskEmailAutomationUserMessage(autoResult.reason).trim()
-      setEmailAutomationBanner(msg || null)
+    if (completedTaskRow.email_type) {
+      if (!autoResult.ok) {
+        const msg = taskEmailAutomationUserMessage(autoResult.reason).trim()
+        if (msg) setEmailAutomationFeedback({ kind: 'error', message: msg })
+      } else {
+        const success = taskEmailAutomationSuccessMessage(autoResult.reason)
+        const info = taskEmailAutomationInfoMessage(autoResult.reason)
+        if (success) setEmailAutomationFeedback({ kind: 'success', message: success })
+        else if (info) setEmailAutomationFeedback({ kind: 'info', message: info })
+      }
     }
 
     return { automation: autoResult }
@@ -197,6 +211,30 @@ export function useTasks() {
           .eq('email_type', task.email_type)
           .eq('status', 'pending')
           .gte('created_at', twoHoursAgo)
+
+        if (task.email_type === 'performance_report_request') {
+          let venueIdForCleanup: string | null = task.venue_id
+          if (!venueIdForCleanup && task.deal_id) {
+            const { data: dr } = await supabase
+              .from('deals')
+              .select('venue_id')
+              .eq('id', task.deal_id)
+              .maybeSingle()
+            venueIdForCleanup = (dr as { venue_id: string } | null)?.venue_id ?? null
+          }
+          const dealKey = task.deal_id ?? null
+          if (venueIdForCleanup) {
+            let qPerf = supabase
+              .from('performance_reports')
+              .delete()
+              .eq('user_id', user.id)
+              .eq('venue_id', venueIdForCleanup)
+              .eq('submitted', false)
+              .gte('created_at', twoHoursAgo)
+            qPerf = dealKey ? qPerf.eq('deal_id', dealKey) : qPerf.is('deal_id', null)
+            await qPerf
+          }
+        }
       }
     }
 
@@ -210,14 +248,14 @@ export function useTasks() {
     return updateTask(id, { due_date: addDays(base, days) })
   }
 
-  const dismissEmailAutomationBanner = useCallback(() => setEmailAutomationBanner(null), [])
+  const dismissEmailAutomationFeedback = useCallback(() => setEmailAutomationFeedback(null), [])
 
   return {
     tasks,
     loading,
     error,
-    emailAutomationBanner,
-    dismissEmailAutomationBanner,
+    emailAutomationFeedback,
+    dismissEmailAutomationFeedback,
     refetch: fetchTasks,
     addTask,
     updateTask,

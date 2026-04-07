@@ -64,14 +64,27 @@ export function useVenueEmails() {
     return logEmail({ ...params, status: 'pending' })
   }
 
-  const updateEmailStatus = async (id: string, status: VenueEmailStatus) => {
+  const updateEmailStatus = async (
+    id: string,
+    status: VenueEmailStatus,
+    patch?: { notes?: string | null },
+  ) => {
     const sentAt = status === 'sent' ? new Date().toISOString() : null
     const { error } = await supabase
       .from('venue_emails')
-      .update({ status, ...(sentAt ? { sent_at: sentAt } : {}) })
+      .update({
+        status,
+        ...(sentAt ? { sent_at: sentAt } : {}),
+        ...(patch?.notes !== undefined ? { notes: patch.notes } : {}),
+      })
       .eq('id', id)
     if (error) return { error: new Error(error.message) }
-    setEmails(prev => prev.map(e => e.id === id ? { ...e, status, sent_at: sentAt ?? e.sent_at } : e))
+    setEmails(prev => prev.map(e => e.id === id ? {
+      ...e,
+      status,
+      sent_at: sentAt ?? e.sent_at,
+      ...(patch?.notes !== undefined ? { notes: patch.notes ?? null } : {}),
+    } : e))
     return {}
   }
 

@@ -3,6 +3,7 @@ import type { ArtistProfile, Contact, Deal, GeneratedFile, Task, Venue } from '@
 import type { VenueEmailType } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { hasRecentPendingArtistCustomEmail, hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
+import { serializePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { resolveTaskEmailAudience } from '@/lib/email/resolveTaskEmailAudience'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
@@ -25,6 +26,40 @@ function isVenueEmailType(s: string): s is VenueEmailType {
   return Object.prototype.hasOwnProperty.call(VENUE_EMAIL_TYPE_LABELS, s)
 }
 
+async function findOpenPerformanceReportDraft(
+  userId: string,
+  venueId: string,
+  dealId: string | null | undefined,
+  withinHours: number,
+): Promise<{ token: string } | null> {
+  const since = new Date(Date.now() - withinHours * 60 * 60 * 1000).toISOString()
+  let q = supabase
+    .from('performance_reports')
+    .select('token')
+    .eq('user_id', userId)
+    .eq('venue_id', venueId)
+    .eq('submitted', false)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  q = dealId ? q.eq('deal_id', dealId) : q.is('deal_id', null)
+  const { data } = await q.maybeSingle()
+  const row = data as { token: string } | null
+  return row?.token ? { token: row.token } : null
+}
+
+/** Shown in a success (green) banner after task complete when automation succeeded. */
+export function taskEmailAutomationSuccessMessage(reason: string): string | null {
+  switch (reason) {
+    case 'performance_report_queued':
+      return 'Performance form email is in Email queue and will send shortly (buffer off). You can open Email queue to send now or cancel.'
+    case 'venue_email_queued':
+      return 'Email queued — open Email queue to send now or wait for auto-send.'
+    default:
+      return null
+  }
+}
+
 export type QueueEmailOnTaskCompleteOptions = {
   /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
   agreementUrl?: string | null
@@ -45,7 +80,7 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     case 'no_venue_for_venue_email':
       return 'Link this task to a venue or deal so the client email can be queued and sent.'
     case 'performance_report_needs_venue':
-      return 'Performance report request needs a linked venue (or deal with a venue) so the form email can go to the venue contact.'
+      return 'Performance report request needs a linked venue (or deal with a venue) so the form email can include the correct show context.'
     case 'no_contact_email':
       return 'Add a contact with an email address for this venue.'
     case 'not_authenticated':
@@ -59,12 +94,26 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     default:
       if (
         reason === 'venue_email_queued'
-        || reason === 'performance_report_sent'
+        || reason === 'performance_report_queued'
         || reason === 'retainer_nothing_owed'
       ) {
         return ''
       }
       return `Email automation: ${reason.replace(/_/g, ' ')}`
+  }
+}
+
+/** Non-error heads-up after complete (amber), e.g. dedupe skips. */
+export function taskEmailAutomationInfoMessage(reason: string): string | null {
+  switch (reason) {
+    case 'performance_report_recent_duplicate':
+      return 'An open performance report already exists for this venue/show. Open Performance reports to copy the link or resend — no duplicate was created.'
+    case 'dedupe_recent_pending':
+      return 'The same email is already pending in your queue for this venue.'
+    case 'agreement_ready_needs_url':
+      return 'Agreement is not linked on this deal yet — add a URL or PDF in the progress panel before the agreement email can queue.'
+    default:
+      return null
   }
 }
 
@@ -170,49 +219,62 @@ export async function queueEmailAutomationForCompletedTask(
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const { data: perfTmpl } = await supabase
-      .from('email_templates')
-      .select('custom_subject, custom_intro, layout')
-      .eq('user_id', user.id)
-      .eq('email_type', 'performance_report_request')
-      .maybeSingle()
-
     const p = profile as ArtistProfile | null
     if (!p) {
       return { ok: false, reason: 'no_artist_profile' }
     }
+    if (!p.artist_email || !p.from_email) {
+      return { ok: false, reason: 'no_artist_email' }
+    }
+
+    const dealKey = primaryDeal?.id ?? null
+    if (await findOpenPerformanceReportDraft(user.id, v.id, dealKey, 48)) {
+      return { ok: true, reason: 'performance_report_recent_duplicate' }
+    }
+    if (await hasRecentPendingVenueEmail(v.id, 'performance_report_request', 45)) {
+      return { ok: true, reason: 'dedupe_recent_pending' }
+    }
 
     const eventDate = primaryDeal?.event_date ?? v.deal_terms?.event_date ?? null
+    let token: string
     try {
-      const { data: reportRow } = await supabase
+      const { data: reportRow, error: insErr } = await supabase
         .from('performance_reports')
-        .insert({ user_id: user.id, venue_id: v.id, deal_id: primaryDeal?.id ?? null })
+        .insert({ user_id: user.id, venue_id: v.id, deal_id: dealKey })
         .select('token')
         .single()
-      if (reportRow?.token) {
-        await fetch('/.netlify/functions/send-performance-form', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: reportRow.token,
-            venueName: v.name,
-            eventDate,
-            artistName: p.artist_name,
-            artistEmail: p.artist_email,
-            fromEmail: p.from_email,
-            replyToEmail: p.reply_to_email || p.from_email,
-            managerName: p.manager_name || 'Your Manager',
-            custom_subject: perfTmpl?.custom_subject ?? null,
-            custom_intro: perfTmpl?.custom_intro ?? null,
-            layout: perfTmpl?.layout ?? null,
-          }),
-        })
+      if (insErr || !reportRow?.token) {
+        console.error('[queueEmailOnTaskComplete] performance_reports insert:', insErr?.message)
+        return { ok: false, reason: 'performance_form_failed' }
       }
+      token = reportRow.token as string
     } catch (e) {
       console.error('[queueEmailOnTaskComplete] performance form:', e)
       return { ok: false, reason: 'performance_form_failed' }
     }
-    return { ok: true, reason: 'performance_report_sent' }
+
+    const label = ARTIST_EMAIL_TYPE_LABELS.performance_report_request
+    const notesPayload = serializePerfFormQueueNotes({
+      token,
+      venueName: v.name,
+      eventDate,
+    })
+    const { error: qErr } = await supabase.from('venue_emails').insert({
+      user_id: user.id,
+      venue_id: v.id,
+      deal_id: dealKey,
+      contact_id: null,
+      email_type: 'performance_report_request',
+      recipient_email: p.artist_email,
+      subject: `${label} · ${v.name}`,
+      status: 'pending',
+      notes: notesPayload,
+    })
+    if (qErr) {
+      console.error('[queueEmailOnTaskComplete] performance queue insert:', qErr.message)
+      return { ok: false, reason: 'venue_email_insert_failed' }
+    }
+    return { ok: true, reason: 'performance_report_queued' }
   }
 
   if (audience.kind === 'artist') {

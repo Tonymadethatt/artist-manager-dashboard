@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Send, Calendar, RefreshCw } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
@@ -12,6 +12,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+
+const REPORT_RESEND_CONFIRM_MS = 3 * 60 * 1000
 
 type Preset = '7d' | '30d' | 'custom'
 
@@ -64,6 +68,7 @@ export default function Reports() {
   const [testSending, setTestSending] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [testMsg, setTestMsg] = useState('')
+  const lastReportSendAt = useRef(0)
 
   const { venues } = useVenues()
   const { deals } = useDeals()
@@ -190,6 +195,24 @@ export default function Reports() {
         setStatus('success')
         const recipient = testOnly ? (profile.manager_email ?? 'you') : profile.artist_email
         setMsg(`Report sent to ${recipient}`)
+        if (!testOnly && profile.artist_email) {
+          lastReportSendAt.current = Date.now()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const startFmt = new Date(`${startDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            const endFmt = new Date(`${endDate}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            const subj = (reportTemplate?.custom_subject as string | null)?.trim() || `Management Update - ${startFmt} to ${endFmt}`
+            await recordOutboundEmail(supabase, {
+              user_id: user.id,
+              email_type: 'management_report',
+              recipient_email: profile.artist_email,
+              subject: subj,
+              status: 'sent',
+              source: 'reports_manual',
+              detail: `${startDate}\u2013${endDate}`,
+            })
+          }
+        }
       } else if (res.status === 404) {
         setStatus('error')
         setMsg('Functions not found — this only works on the deployed Netlify site, not localhost.')
@@ -205,7 +228,13 @@ export default function Reports() {
     setS(false)
   }
 
-  const handleSend = () => doSend(false)
+  const handleSend = () => {
+    const now = Date.now()
+    if (now - lastReportSendAt.current < REPORT_RESEND_CONFIRM_MS) {
+      if (!window.confirm('You sent a management report to the artist recently. Send again now?')) return
+    }
+    void doSend(false)
+  }
   const handleTestSend = () => doSend(true)
 
   return (
