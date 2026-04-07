@@ -325,10 +325,12 @@ export default function Pipeline() {
 
   const handleCompleteTask = useCallback(async (id: string, emailOpts?: QueueEmailOnTaskCompleteOptions) => {
     const task = tasks.find(t => t.id === id)
-    // Add to set BEFORE the async call so filteredTasks includes it
-    // when completeTask's internal setTasks fires on the same render cycle
-    setRecentlyCompletedIds(prev => new Set([...prev, id]))
     const result = await completeTask(id, emailOpts)
+    if (result && 'error' in result && result.error) {
+      showToast(result.error.message)
+      return result
+    }
+    setRecentlyCompletedIds(prev => new Set([...prev, id]))
     showToast(task ? `"${task.title}" marked complete` : 'Task completed')
     return result
   }, [completeTask, tasks, showToast])

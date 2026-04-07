@@ -127,7 +127,7 @@ function TemplateItemFormFields({
 
 export default function PipelineTemplates() {
   const {
-    templates, loading, seedDefaultTemplates, seedPerformanceTemplate,
+    templates, loading, seedDefaultTemplates, seedPerformanceTemplate, seedMissingPipelineStatusTemplates,
     addTemplate, updateTemplate, deleteTemplate,
     addTemplateItem, updateTemplateItem, deleteTemplateItem,
   } = useTaskTemplates()
@@ -183,10 +183,11 @@ export default function PipelineTemplates() {
           // After seed, auto-select first
         })
       }
-      // Always seed the performance template (idempotent — only inserts if missing)
+      // Always seed the performance template + missing status packs (idempotent)
       seedPerformanceTemplate()
+      seedMissingPipelineStatusTemplates()
     }
-  }, [loading, templates, seeded, seedDefaultTemplates, seedPerformanceTemplate])
+  }, [loading, templates, seeded, seedDefaultTemplates, seedPerformanceTemplate, seedMissingPipelineStatusTemplates])
 
   // Auto-select first template when list loads/changes
   useEffect(() => {
@@ -281,6 +282,11 @@ export default function PipelineTemplates() {
         <div>
           <h1 className="text-base font-semibold text-white">Task Templates</h1>
           <p className="text-xs text-neutral-500 mt-0.5">Reusable task packs that auto-create tasks when venues are added or change status.</p>
+          <p className="text-[11px] text-neutral-600 mt-2 max-w-xl leading-snug">
+            Each <span className="text-neutral-500">auto-trigger</span> status runs every template tied to that status when the venue enters it — use one template per status to avoid duplicate tasks.
+            Rows are ordered by <span className="text-neutral-500">sort order</span> and <span className="text-neutral-500">days after trigger</span> sets each task&apos;s due date from the day the pack runs.
+            Match <span className="text-neutral-500">Email on complete</span> to the step (e.g. agreement send only after prep). If an old &quot;agreement&quot; step predates the prep/send split, edit the template or remove it and refresh this page to add the missing status packs.
+          </p>
         </div>
       </div>
 

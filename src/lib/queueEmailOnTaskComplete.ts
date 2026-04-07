@@ -16,10 +16,77 @@ import {
   isGeneratedFileInScopeForTask,
 } from '@/lib/resolveAgreementUrl'
 
+export type QueueEmailOnTaskCompleteOptions = {
+  /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
+  agreementUrl?: string | null
+}
+
 async function loadGeneratedFileRow(id: string | null | undefined): Promise<GeneratedFile | null> {
   if (!id) return null
   const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
   return (data as GeneratedFile | null) ?? null
+}
+
+/** Loads venue/deal + task PDF + deal agreement fields so resolution matches the send path. */
+export async function loadAgreementResolutionForTask(
+  task: Task,
+  options?: QueueEmailOnTaskCompleteOptions,
+): Promise<ReturnType<typeof computeResolvedAgreement>> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { url: null, source: 'none', syncGeneratedFileId: null }
+  }
+
+  let resolvedVenueId: string | null = task.venue_id
+  if (!resolvedVenueId && task.deal_id) {
+    const { data: dealVenueRow } = await supabase
+      .from('deals')
+      .select('venue_id')
+      .eq('id', task.deal_id)
+      .maybeSingle()
+    resolvedVenueId = (dealVenueRow as { venue_id: string } | null)?.venue_id ?? null
+  }
+
+  let primaryDeal: Deal | undefined
+  if (resolvedVenueId) {
+    const { data: deals } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('venue_id', resolvedVenueId)
+      .order('created_at', { ascending: false })
+    const venueDeals = (deals ?? []) as Deal[]
+    primaryDeal = task.deal_id
+      ? venueDeals.find(d => d.id === task.deal_id) ?? venueDeals[0]
+      : venueDeals[0]
+  } else if (task.deal_id) {
+    const { data: onlyDeal } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('id', task.deal_id)
+      .maybeSingle()
+    if (onlyDeal) primaryDeal = onlyDeal as Deal
+  }
+
+  const siteOrigin = publicSiteOrigin()
+  let pinnedFile: GeneratedFile | null = null
+  if (task.generated_file_id) {
+    const f = await loadGeneratedFileRow(task.generated_file_id)
+    if (f && isGeneratedFileInScopeForTask(f, user.id, resolvedVenueId ?? task.venue_id, task.deal_id)) {
+      pinnedFile = f
+    }
+  }
+  let dealCanonFile: GeneratedFile | null = null
+  if (primaryDeal?.agreement_generated_file_id) {
+    const f = await loadGeneratedFileRow(primaryDeal.agreement_generated_file_id)
+    if (f && isGeneratedFileInScopeForDeal(f, user.id, primaryDeal.venue_id)) dealCanonFile = f
+  }
+  return computeResolvedAgreement({
+    siteOrigin,
+    progressPanelUrl: options?.agreementUrl,
+    pinnedFile,
+    dealFile: dealCanonFile,
+    dealAgreementUrl: primaryDeal?.agreement_url ?? null,
+  })
 }
 
 function isVenueEmailType(s: string): s is VenueEmailType {
@@ -58,11 +125,6 @@ export function taskEmailAutomationSuccessMessage(reason: string): string | null
     default:
       return null
   }
-}
-
-export type QueueEmailOnTaskCompleteOptions = {
-  /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
-  agreementUrl?: string | null
 }
 
 /** User-visible explanation when `queueEmailAutomationForCompletedTask` returns `ok: false`. */
@@ -179,26 +241,7 @@ export async function queueEmailAutomationForCompletedTask(
     }
   }
 
-  const siteOrigin = publicSiteOrigin()
-  let pinnedFile: GeneratedFile | null = null
-  if (task.generated_file_id) {
-    const f = await loadGeneratedFileRow(task.generated_file_id)
-    if (f && isGeneratedFileInScopeForTask(f, user.id, resolvedVenueId ?? task.venue_id, task.deal_id)) {
-      pinnedFile = f
-    }
-  }
-  let dealCanonFile: GeneratedFile | null = null
-  if (primaryDeal?.agreement_generated_file_id) {
-    const f = await loadGeneratedFileRow(primaryDeal.agreement_generated_file_id)
-    if (f && isGeneratedFileInScopeForDeal(f, user.id, primaryDeal.venue_id)) dealCanonFile = f
-  }
-  const agreementResolution = computeResolvedAgreement({
-    siteOrigin,
-    progressPanelUrl: options?.agreementUrl,
-    pinnedFile,
-    dealFile: dealCanonFile,
-    dealAgreementUrl: primaryDeal?.agreement_url ?? null,
-  })
+  const agreementResolution = await loadAgreementResolutionForTask(task, options)
   const agreementSyncPatch = dealSyncPatchFromResolution(agreementResolution)
 
   const audience = await resolveTaskEmailAudience(task.email_type, user.id)

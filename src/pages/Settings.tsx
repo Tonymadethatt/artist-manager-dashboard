@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
-import { Input } from '@/components/ui/input'
+import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
+import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { ArtistProfile } from '@/types'
+import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
 type FormState = {
   artist_name: string
@@ -121,6 +121,7 @@ function SectionCard({
 
 export default function Settings() {
   const { profile, loading, updateProfile } = useArtistProfile()
+  const { presetsFor, addPreset, deletePreset } = useProfileFieldPresets(profile?.user_id ?? null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const lastHydratedUserId = useRef<string | null>(null)
   const savingRef = useRef(false)
@@ -150,22 +151,63 @@ export default function Settings() {
   const setField = (key: FormKey, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
-  const handleFieldBlur = useCallback(
-    async (key: FormKey) => {
+  const saveField = useCallback(
+    async (key: FormKey, state: FormState) => {
       if (!profile || savingRef.current) return
-      if (fieldMatchesProfile(key, form, profile)) return
+      if (fieldMatchesProfile(key, state, profile)) return
       savingRef.current = true
-      const partial = buildPartial(key, form)
+      const partial = buildPartial(key, state)
       const result = await updateProfile(partial)
       savingRef.current = false
       if (result && 'error' in result && result.error) {
         showToast(result.error.message || 'Could not save. Try again.', 'err')
         return
       }
+      const pk = Object.keys(partial)[0] as keyof typeof partial
+      const stored = partial[pk] as string | null | undefined
+      const presetKey = key as ProfileFieldPresetKey
+      const presetRes = await addPreset(presetKey, stored)
+      if (!presetRes.ok && 'error' in presetRes && presetRes.error) {
+        console.warn('profile_field_preset insert failed', presetRes.error)
+      }
       showToast('Saved', 'ok')
     },
-    [profile, form, updateProfile, showToast]
+    [profile, updateProfile, showToast, addPreset]
   )
+
+  const handleFieldBlur = useCallback(
+    (key: FormKey) => () => {
+      void saveField(key, form)
+    },
+    [saveField, form]
+  )
+
+  const applyPreset = useCallback(
+    (key: FormKey, value: string) => {
+      setForm(prev => {
+        const next = { ...prev, [key]: value }
+        void saveField(key, next)
+        return next
+      })
+    },
+    [saveField]
+  )
+
+  const handleDeletePreset = useCallback(
+    async (id: string) => {
+      const res = await deletePreset(id)
+      if ('error' in res && res.error) {
+        showToast(res.error.message || 'Could not remove saved value.', 'err')
+      }
+    },
+    [deletePreset, showToast]
+  )
+
+  const presetControls = (key: FormKey) => ({
+    presets: presetsFor(key as ProfileFieldPresetKey),
+    onApplyPreset: (v: string) => applyPreset(key, v),
+    onDeletePreset: handleDeletePreset,
+  })
 
   if (loading) {
     return (
@@ -178,7 +220,7 @@ export default function Settings() {
   const fieldGrid = 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 md:gap-y-4'
   const fieldFull = 'sm:col-span-2'
   const hint = 'text-xs text-neutral-600 leading-snug'
-  const blur = (key: FormKey) => () => void handleFieldBlur(key)
+  const blur = (key: FormKey) => handleFieldBlur(key)
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -209,21 +251,23 @@ export default function Settings() {
           <div className={fieldGrid}>
             <div className="space-y-1">
               <Label>Artist name</Label>
-              <Input
+              <FieldWithPresets
                 value={form.artist_name}
-                onChange={e => setField('artist_name', e.target.value)}
+                onChange={v => setField('artist_name', v)}
                 onBlur={blur('artist_name')}
                 placeholder="DJ Luijay"
+                {...presetControls('artist_name')}
               />
             </div>
             <div className="space-y-1">
               <Label>Artist email</Label>
-              <Input
+              <FieldWithPresets
                 type="email"
                 value={form.artist_email}
-                onChange={e => setField('artist_email', e.target.value)}
+                onChange={v => setField('artist_email', v)}
                 onBlur={blur('artist_email')}
                 placeholder="artist@example.com"
+                {...presetControls('artist_email')}
               />
             </div>
             <p className={cn(hint, fieldFull)}>
@@ -240,61 +284,67 @@ export default function Settings() {
           <div className={fieldGrid}>
             <div className="space-y-1">
               <Label>Company name</Label>
-              <Input
+              <FieldWithPresets
                 value={form.company_name}
-                onChange={e => setField('company_name', e.target.value)}
+                onChange={v => setField('company_name', v)}
                 onBlur={blur('company_name')}
                 placeholder="DJ Luijay LLC"
+                {...presetControls('company_name')}
               />
               <p className={hint}>Sender name in venue emails. Defaults to artist name if blank.</p>
             </div>
             <div className="space-y-1">
               <Label>Reply-to email</Label>
-              <Input
+              <FieldWithPresets
                 type="email"
                 value={form.reply_to_email}
-                onChange={e => setField('reply_to_email', e.target.value)}
+                onChange={v => setField('reply_to_email', v)}
                 onBlur={blur('reply_to_email')}
                 placeholder="management@djluijay.live"
+                {...presetControls('reply_to_email')}
               />
               <p className={hint}>Real inbox for replies — not the automated send address.</p>
             </div>
             <div className="space-y-1">
               <Label>Website</Label>
-              <Input
+              <FieldWithPresets
                 value={form.website}
-                onChange={e => setField('website', e.target.value)}
+                onChange={v => setField('website', v)}
                 onBlur={blur('website')}
                 placeholder="https://djluijay.com"
+                {...presetControls('website')}
               />
             </div>
             <div className="space-y-1">
               <Label>Phone</Label>
-              <Input
+              <FieldWithPresets
                 value={form.phone}
-                onChange={e => setField('phone', e.target.value)}
+                onChange={v => setField('phone', v)}
                 onBlur={blur('phone')}
                 placeholder="+1 (555) 000-0000"
+                {...presetControls('phone')}
               />
             </div>
             <div className={cn('space-y-1', fieldFull)}>
               <Label>Social handle</Label>
-              <Input
+              <FieldWithPresets
                 value={form.social_handle}
-                onChange={e => setField('social_handle', e.target.value)}
+                onChange={v => setField('social_handle', v)}
                 onBlur={blur('social_handle')}
                 placeholder="@djluijay"
+                {...presetControls('social_handle')}
               />
             </div>
             <div className={cn('space-y-1', fieldFull)}>
               <Label>Tagline</Label>
-              <Textarea
+              <FieldWithPresets
+                multiline
+                rows={2}
                 value={form.tagline}
-                onChange={e => setField('tagline', e.target.value)}
+                onChange={v => setField('tagline', v)}
                 onBlur={blur('tagline')}
                 placeholder="DJ and Producer"
-                rows={2}
-                className="resize-none min-h-[4.5rem]"
+                {...presetControls('tagline')}
               />
               <p className={hint}>Short line under the brand name in email headers.</p>
             </div>
@@ -309,32 +359,35 @@ export default function Settings() {
           <div className={fieldGrid}>
             <div className="space-y-1">
               <Label>Your name (manager)</Label>
-              <Input
+              <FieldWithPresets
                 value={form.manager_name}
-                onChange={e => setField('manager_name', e.target.value)}
+                onChange={v => setField('manager_name', v)}
                 onBlur={blur('manager_name')}
                 placeholder="Your name"
+                {...presetControls('manager_name')}
               />
             </div>
             <div className="space-y-1">
               <Label>Your email (manager)</Label>
-              <Input
+              <FieldWithPresets
                 type="email"
                 value={form.manager_email}
-                onChange={e => setField('manager_email', e.target.value)}
+                onChange={v => setField('manager_email', v)}
                 onBlur={blur('manager_email')}
                 placeholder="you@example.com"
+                {...presetControls('manager_email')}
               />
             </div>
             <p className={cn(hint, fieldFull)}>Used for CC on reports and test sends.</p>
             <div className={cn('space-y-1', fieldFull)}>
               <Label>Send reports from</Label>
-              <Input
+              <FieldWithPresets
                 type="email"
                 value={form.from_email}
-                onChange={e => setField('from_email', e.target.value)}
+                onChange={v => setField('from_email', v)}
                 onBlur={blur('from_email')}
                 placeholder="management@updates.djluijay.live"
+                {...presetControls('from_email')}
               />
               <p className={hint}>
                 Must be a verified sender on Resend. Used for all outgoing email.

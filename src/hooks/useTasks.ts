@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   queueEmailAutomationForCompletedTask,
+  loadAgreementResolutionForTask,
   taskEmailAutomationUserMessage,
   taskEmailAutomationSuccessMessage,
   taskEmailAutomationInfoMessage,
@@ -19,6 +20,9 @@ function addDays(dateStr: string, n: number) {
   d.setDate(d.getDate() + n)
   return d.toISOString().split('T')[0]
 }
+
+const AGREEMENT_READY_GUARD_MSG =
+  'Add an agreement URL or PDF on the deal, link a PDF on this task, or paste a URL in the progress panel before completing this task.'
 
 function nextDueDate(dueDate: string, recurrence: TaskRecurrence): string | null {
   if (recurrence === 'none') return null
@@ -128,13 +132,25 @@ export function useTasks() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
 
-    // Mark current task complete
-    await supabase
+    if (task.email_type === 'agreement_ready') {
+      const resolution = await loadAgreementResolutionForTask(task, emailOptions)
+      if (!resolution.url) {
+        setEmailAutomationFeedback({ kind: 'error', message: AGREEMENT_READY_GUARD_MSG })
+        return { error: new Error(AGREEMENT_READY_GUARD_MSG) }
+      }
+    }
+
+    const completedAt = new Date().toISOString()
+    const { error: updateError } = await supabase
       .from('tasks')
-      .update({ completed: true, completed_at: new Date().toISOString() })
+      .update({ completed: true, completed_at: completedAt })
       .eq('id', id)
 
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: true, completed_at: new Date().toISOString() } : t))
+    if (updateError) {
+      return { error: new Error(updateError.message) }
+    }
+
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: true, completed_at: completedAt } : t))
 
     // Spawn next recurrence if applicable
     if (task.recurrence !== 'none' && task.due_date) {

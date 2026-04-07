@@ -245,6 +245,20 @@ export interface ArtistProfile {
   updated_at: string
 }
 
+/** Keys in `profile_field_preset.field_key` — keep in sync with migration 021 CHECK constraint. */
+export type ProfileFieldPresetKey =
+  | 'artist_name'
+  | 'artist_email'
+  | 'manager_name'
+  | 'manager_email'
+  | 'from_email'
+  | 'company_name'
+  | 'website'
+  | 'phone'
+  | 'social_handle'
+  | 'tagline'
+  | 'reply_to_email'
+
 export interface Metric {
   id: string
   user_id: string
