@@ -1,5 +1,5 @@
-import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
-import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
+import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import { renderAppendBlocksHtml } from './appendBlocksHtml'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -34,7 +34,7 @@ export function buildRetainerReceivedEmailHtml(
   siteUrl: string,
 ): string {
   const managerName = profile.manager_name || 'Management'
-  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
 
