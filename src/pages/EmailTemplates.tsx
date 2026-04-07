@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import type { VenueEmailType, ArtistEmailType, AnyEmailType, EmailTemplate } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS } from '@/types'
@@ -200,6 +200,7 @@ export default function EmailTemplates() {
   const [discardConfirm, setDiscardConfirm] = useState(false)
   const [pendingGroup, setPendingGroup] = useState<Group | null>(null)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [templateSearch, setTemplateSearch] = useState('')
   const [selectedCustomId, setSelectedCustomId] = useState<string | null>(null)
   const [customNameDraft, setCustomNameDraft] = useState('')
@@ -362,6 +363,10 @@ export default function EmailTemplates() {
   useEffect(() => {
     setTestSendBanner(null)
   }, [selectedType, selectedCustomId, activeGroup, sidebarMode])
+
+  useEffect(() => {
+    setSaveError(null)
+  }, [selectedType, sidebarMode, selectedCustomId])
 
   const previewLayout = sidebarMode === 'edit'
     ? editorDraft
@@ -606,14 +611,22 @@ export default function EmailTemplates() {
 
   const handleSave = async () => {
     setSaving(true)
+    setSaveError(null)
     const clean = buildCleanLayoutFromDraft(editorDraft)
     const res = await upsertTemplate(selectedType, { layout: clean })
     setSaving(false)
-    if (res && 'data' in res && res.data) {
-      setEditorDraft(draftFromSaved(res.data))
+    if (res && 'error' in res && res.error) {
+      setSaveError(res.error.message)
+      return
     }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    if (res && 'data' in res && res.data) {
+      const nextDraft = draftFromSaved(res.data)
+      setEditorDraft(nextDraft)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } else {
+      setSaveError('Save failed — no data returned.')
+    }
   }
 
   const handleReset = async (emailType: AnyEmailType) => {
@@ -1119,6 +1132,11 @@ export default function EmailTemplates() {
                         {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
                       </Button>
                     </div>
+                    {saveError && (
+                      <p className="text-[10px] text-red-400 max-w-[280px] text-right mt-1 leading-snug">
+                        {saveError}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1426,7 +1444,7 @@ export default function EmailTemplates() {
                 srcDoc={previewHtml}
                 title={`Email preview - ${selectedCustomId ?? selectedType}`}
                 className="w-full h-full border-0 min-h-[480px]"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-scripts"
               />
             </div>
           </div>
@@ -1462,8 +1480,10 @@ export default function EmailTemplates() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogDescription className="text-sm text-neutral-400">
+              Your edits will be lost.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-neutral-400">Your edits will be lost.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setDiscardConfirm(false); setPendingGroup(null) }}>
               Keep editing
