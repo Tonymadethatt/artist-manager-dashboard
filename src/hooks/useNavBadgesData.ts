@@ -99,11 +99,12 @@ export function useNavBadgesData(pathname: string) {
     }
   }, [pathname, fetchCounts])
 
-  // Poll every 30 seconds so badges appear promptly after background events
+  // Poll every 10 seconds so badges appear promptly after background events
   // (template auto-tasks, artist form submissions, emails added to queue)
   // without requiring the user to navigate to a different page first.
+  // Queries are COUNT-only (head: true) so bandwidth cost is negligible.
   useEffect(() => {
-    const id = setInterval(() => { void fetchCounts() }, 30_000)
+    const id = setInterval(() => { void fetchCounts() }, 10_000)
     return () => clearInterval(id)
   }, [fetchCounts])
 
