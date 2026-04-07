@@ -18,32 +18,33 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { useNavBadges } from '@/context/NavBadgesContext'
 
 const NAV_GROUPS = [
   {
     label: 'Workspace',
     items: [
-      { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true  },
-      { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false },
-      { to: '/pipeline',            label: 'Pipeline',      icon: Workflow,        end: false },
-      { to: '/earnings',            label: 'Earnings',      icon: Banknote,        end: false },
-      { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false },
-      { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false },
+      { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true,  badgeKey: null              },
+      { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false, badgeKey: null              },
+      { to: '/pipeline',            label: 'Pipeline',      icon: Workflow,        end: false, badgeKey: 'pipeline'        },
+      { to: '/earnings',            label: 'Earnings',      icon: Banknote,        end: false, badgeKey: null              },
+      { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false, badgeKey: null              },
+      { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false, badgeKey: 'show-reports'    },
     ],
   },
   {
     label: 'Content',
     items: [
-      { to: '/templates', label: 'Templates', icon: FileText,   end: false },
-      { to: '/files',     label: 'Files',     icon: FolderOpen, end: false },
+      { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
+      { to: '/files',     label: 'Files',     icon: FolderOpen, end: false, badgeKey: null },
     ],
   },
   {
     label: 'Email',
     items: [
-      { to: '/reports',         label: 'Reports',         icon: FileBarChart2, end: false },
-      { to: '/email-queue',     label: 'Email Queue',     icon: Inbox,         end: false },
-      { to: '/email-templates', label: 'Email Templates', icon: MailOpen,      end: false },
+      { to: '/reports',         label: 'Reports',         icon: FileBarChart2, end: false, badgeKey: null          },
+      { to: '/email-queue',     label: 'Email Queue',     icon: Inbox,         end: false, badgeKey: 'email-queue' },
+      { to: '/email-templates', label: 'Email Templates', icon: MailOpen,      end: false, badgeKey: null          },
     ],
   },
 ]
@@ -57,6 +58,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const { signOut } = useAuth()
   const location = useLocation()
   const onPipelinePath = location.pathname.startsWith('/pipeline')
+  const { counts } = useNavBadges()
 
   const navContent = (
     <nav className="flex flex-col h-full">
@@ -88,7 +90,9 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               {group.label}
             </p>
             <div className="space-y-0.5">
-              {group.items.map(({ to, label, icon: Icon, end }) => (
+              {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
+                const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
+                return (
                 <div key={to}>
                   <NavLink
                     to={to}
@@ -114,6 +118,11 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                           (isActive || (to === '/pipeline' && onPipelinePath)) ? 'text-white' : 'text-[hsl(var(--sidebar-muted))]'
                         )} />
                         <span className="text-[13px] font-medium tracking-[0.01em]">{label}</span>
+                        {badgeCount > 0 && (
+                          <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold bg-red-600 text-white leading-none shrink-0">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </span>
+                        )}
                       </>
                     )}
                   </NavLink>
@@ -138,7 +147,8 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     </NavLink>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))}

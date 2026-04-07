@@ -31,6 +31,7 @@ import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
 import { isTaskCompletedToday } from '@/lib/tasks/completedAtLocalDate'
+import { useNavBadges } from '@/context/NavBadgesContext'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -193,6 +194,10 @@ export default function Pipeline() {
   const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
   const { applyTemplate } = useTaskTemplates()
   const { rows: customEmailRows } = useCustomEmailTemplates()
+  const { markSeen } = useNavBadges()
+
+  // Mark Pipeline as seen on mount — clears the badge for new tasks
+  useEffect(() => { void markSeen('pipeline') }, [markSeen])
 
   const emailActionOptions = useMemo(() => {
     const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))

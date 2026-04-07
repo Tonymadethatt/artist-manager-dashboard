@@ -398,6 +398,21 @@ export interface Database {
         }
         Relationships: []
       }
+      nav_badges: {
+        Row: {
+          user_id: string
+          seen_at: Record<string, string>
+        }
+        Insert: {
+          user_id: string
+          seen_at?: Record<string, string>
+        }
+        Update: {
+          user_id?: string
+          seen_at?: Record<string, string>
+        }
+        Relationships: []
+      }
       venue_emails: {
         Row: {
           id: string
@@ -452,6 +467,12 @@ export interface Database {
             foreignKeyName: 'venue_emails_deal_id_fkey'
             columns: ['deal_id']
             referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'venue_emails_contact_id_fkey'
+            columns: ['contact_id']
+            referencedRelation: 'contacts'
             referencedColumns: ['id']
           },
         ]
@@ -632,6 +653,12 @@ export interface Database {
             foreignKeyName: 'tasks_deal_id_fkey'
             columns: ['deal_id']
             referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_generated_file_id_fkey'
+            columns: ['generated_file_id']
+            referencedRelation: 'generated_files'
             referencedColumns: ['id']
           },
         ]
@@ -872,7 +899,12 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      update_nav_badge_seen: {
+        Args: { p_section: string }
+        Returns: undefined
+      }
+    }
     Enums: {
       outreach_status: OutreachStatus
       venue_type: VenueType

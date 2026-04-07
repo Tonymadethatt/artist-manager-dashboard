@@ -1,8 +1,13 @@
-import { useState } from 'react'
-import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Clock, ExternalLink, Send } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Clock, ExternalLink, Send, Trash2 } from 'lucide-react'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import type { PerformanceReport } from '@/types'
+import { useNavBadges } from '@/context/NavBadgesContext'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
 
 function formatDate(iso: string) {
   const [y, m, d] = iso.split('T')[0].split('-')
@@ -87,11 +92,17 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
 }
 
 export default function PerformanceReports() {
-  const { reports, loading, refetch, resendReport } = usePerformanceReports()
+  const { reports, loading, refetch, resendReport, deleteReport } = usePerformanceReports()
   const { profile } = useArtistProfile()
+  const { markSeen } = useNavBadges()
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  // Mark Show Reports as seen on mount — clears the badge for newly submitted reports
+  useEffect(() => { void markSeen('show-reports') }, [markSeen])
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PerformanceReport | null>(null)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
@@ -118,6 +129,20 @@ export default function PerformanceReports() {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return
+    setDeleteSubmitting(true)
+    const { error } = await deleteReport(deleteTarget.id)
+    setDeleteSubmitting(false)
+    if (error) {
+      showToast(error, 'err')
+      return
+    }
+    showToast('Report deleted.', 'ok')
+    const removedId = deleteTarget.id
+    setExpanded(prev => (prev === removedId ? null : prev))
+    setDeleteTarget(null)
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -159,7 +184,7 @@ export default function PerformanceReports() {
         <div className="border border-neutral-800 rounded-xl overflow-hidden">
           {/* Header row */}
           <div className="grid grid-cols-[1fr_120px_100px_80px_80px_80px_auto] gap-3 px-4 py-2.5 bg-neutral-900 border-b border-neutral-800">
-            {['Venue', 'Event Date', 'Sent', 'Status', 'Rating', 'Paid', ''].map((h, i) => (
+            {['Venue', 'Event Date', 'Sent', 'Status', 'Rating', 'Paid', 'Actions'].map((h, i) => (
               <span key={i} className="text-[10px] text-neutral-600 uppercase tracking-wide font-medium">{h}</span>
             ))}
           </div>
@@ -208,6 +233,15 @@ export default function PerformanceReports() {
                       </button>
                     </>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(report)}
+                    disabled={actionLoading === report.id || deleteSubmitting}
+                    className="p-1 text-neutral-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                    title="Delete report"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
 
@@ -241,6 +275,42 @@ export default function PerformanceReports() {
           ))}
         </div>
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={v => !v && !deleteSubmitting && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete report?</DialogTitle>
+          </DialogHeader>
+          {deleteTarget && (
+            <>
+              <p className="text-sm text-neutral-400">
+                Permanently delete this report for{' '}
+                <span className="text-neutral-200 font-medium">{deleteTarget.venue?.name ?? 'Unknown venue'}</span>?
+                The form link will stop working.
+              </p>
+              {deleteTarget.submitted && (
+                <p className="text-sm text-amber-200/90 mt-2">
+                  This report was submitted — all saved answers will be lost.
+                </p>
+              )}
+            </>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleteSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => void handleConfirmDelete()}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
