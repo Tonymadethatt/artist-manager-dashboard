@@ -63,13 +63,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const navContent = (
     <nav className="flex flex-col h-full">
       {/* Wordmark */}
-      <div className="h-12 px-4 flex items-center border-b border-[hsl(var(--sidebar-border))] shrink-0">
-        <div className="flex items-center justify-between w-full">
-          <div className="flex flex-col leading-none">
-            <span className="text-white font-bold text-[13px] tracking-[0.12em] uppercase">
+      <div className="h-12 px-3 flex items-center border-b border-[hsl(var(--sidebar-border))] shrink-0">
+        <div className="flex items-center justify-between w-full min-w-0">
+          <div className="flex flex-col leading-none min-w-0">
+            <span className="text-white font-bold text-[13px] tracking-[0.12em] uppercase truncate">
               The Office
             </span>
-            <span className="text-[hsl(var(--sidebar-muted))] text-[9px] tracking-[0.08em] uppercase mt-0.5 font-medium">
+            <span className="text-[hsl(var(--sidebar-muted))] text-[9px] tracking-[0.06em] uppercase mt-0.5 font-medium truncate">
               Artist Management
             </span>
           </div>
@@ -86,7 +86,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       <div className="flex-1 py-4 px-2 overflow-y-auto space-y-6">
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
-            <p className="px-3 mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 select-none">
+            <p className="px-2 mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 select-none">
               {group.label}
             </p>
             <div className="space-y-0.5">
@@ -100,7 +100,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={({ isActive }) =>
                       cn(
-                        'relative flex items-center gap-2.5 pl-3 pr-3 py-[7px] rounded text-sm transition-all duration-150',
+                        'relative flex items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-sm transition-all duration-150',
                         (isActive || (to === '/pipeline' && onPipelinePath))
                           ? 'bg-[hsl(var(--sidebar-active))] text-white'
                           : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
@@ -117,7 +117,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                           'h-[15px] w-[15px] shrink-0 transition-colors',
                           (isActive || (to === '/pipeline' && onPipelinePath)) ? 'text-white' : 'text-[hsl(var(--sidebar-muted))]'
                         )} />
-                        <span className="text-[13px] font-medium tracking-[0.01em]">{label}</span>
+                        <span className="text-[12px] font-medium tracking-[0.01em] truncate flex-1 min-w-0">{label}</span>
                         {badgeCount > 0 && (
                           <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold bg-red-600 text-white leading-none shrink-0">
                             {badgeCount > 99 ? '99+' : badgeCount}
@@ -135,7 +135,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center gap-2 pl-[38px] pr-3 py-1.5 rounded text-[12px] transition-colors mt-0.5',
+                          'flex items-center gap-2 pl-[33px] pr-2.5 py-1.5 rounded text-[12px] transition-colors mt-0.5',
                           isActive
                             ? 'text-neutral-200'
                             : 'text-[hsl(var(--sidebar-muted))] hover:text-neutral-300'
@@ -161,7 +161,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
           onClick={onClose}
           className={({ isActive }) =>
             cn(
-              'relative flex items-center gap-2.5 pl-3 pr-3 py-[7px] rounded text-[13px] font-medium transition-all duration-150',
+              'relative flex items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-[12px] font-medium transition-all duration-150',
               isActive
                 ? 'bg-[hsl(var(--sidebar-active))] text-white'
                 : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
@@ -178,7 +178,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </NavLink>
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-2.5 pl-3 pr-3 py-[7px] rounded text-[13px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
+          className="flex w-full items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-[12px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
         >
           <LogOut className="h-[15px] w-[15px] shrink-0" />
           Sign out
@@ -190,7 +190,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-52 shrink-0 bg-[hsl(var(--sidebar-bg))] h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-36 shrink-0 bg-[hsl(var(--sidebar-bg))] h-screen sticky top-0">
         {navContent}
       </aside>
 
@@ -201,7 +201,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-52 bg-[hsl(var(--sidebar-bg))] flex flex-col shadow-2xl">
+          <aside className="absolute left-0 top-0 bottom-0 w-36 bg-[hsl(var(--sidebar-bg))] flex flex-col shadow-2xl">
             {navContent}
           </aside>
         </div>
