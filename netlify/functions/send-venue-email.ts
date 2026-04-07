@@ -222,12 +222,9 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // CC the user on all outgoing emails (artist_email, and manager_email if set)
+  // CC the manager on all outgoing emails
   const cc: string[] = []
-  if (profile.artist_email && profile.artist_email !== recipient.email) {
-    cc.push(profile.artist_email)
-  }
-  if (profile.manager_email && profile.manager_email !== recipient.email && profile.manager_email !== profile.artist_email) {
+  if (profile.manager_email && profile.manager_email !== recipient.email) {
     cc.push(profile.manager_email)
   }
 
