@@ -189,10 +189,12 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-36 shrink-0 bg-[hsl(var(--sidebar-bg))] h-screen sticky top-0">
-        {navContent}
-      </aside>
+      {/* Desktop sidebar — floating card */}
+      <div className="hidden md:block py-3 pl-3 shrink-0">
+        <aside className="flex flex-col w-36 h-full bg-[hsl(var(--sidebar-bg))] rounded-2xl overflow-hidden border border-white/[0.07]">
+          {navContent}
+        </aside>
+      </div>
 
       {/* Mobile overlay */}
       {mobileOpen && (
