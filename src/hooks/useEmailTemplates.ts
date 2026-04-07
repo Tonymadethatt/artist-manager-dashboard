@@ -81,10 +81,18 @@ export function useEmailTemplates() {
       .select()
 
     if (error) {
-      const details = [error.message, (error as { details?: string }).details, (error as { hint?: string }).hint]
+      const raw = [error.message, (error as { details?: string }).details, (error as { hint?: string }).hint]
         .filter(Boolean)
         .join(' — ')
-      return { error: new Error(details || 'email_templates upsert failed') }
+      const msg = raw || 'email_templates upsert failed'
+      const layoutCache = /layout/i.test(msg) && /schema cache/i.test(msg)
+      return {
+        error: new Error(
+          layoutCache
+            ? `${msg} Run the SQL in supabase/migrations/021_ensure_email_templates_layout.sql on your Supabase project (adds layout + layout_version), then wait a minute or use Dashboard → Settings → API → Reload schema.`
+            : msg,
+        ),
+      }
     }
     const tmpl = (Array.isArray(rows) ? rows[0] : null) as EmailTemplate | null
     if (!tmpl) {
