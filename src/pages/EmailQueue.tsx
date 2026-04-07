@@ -33,6 +33,13 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
+/** Artist custom pending rows use `venue_id` null and skip the user buffer in the worker. */
+function effectiveQueueBufferMinutes(email: VenueEmail, userBuffer: number): number {
+  const cid = parseCustomTemplateId(email.email_type)
+  if (cid && !email.venue_id) return 0
+  return userBuffer
+}
+
 function StatusBadge({ status }: { status: string }) {
   if (status === 'sent') return (
     <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-950 text-green-400 border border-green-800">
@@ -288,6 +295,9 @@ export default function EmailQueue() {
         ...venuePayload,
       }
 
+      let sendPath: '/.netlify/functions/send-venue-email' | '/.netlify/functions/send-custom-artist-email' =
+        '/.netlify/functions/send-venue-email'
+
       const cid = parseCustomTemplateId(email.email_type)
       if (cid) {
         const { data: row } = await supabase
@@ -296,12 +306,29 @@ export default function EmailQueue() {
           .eq('id', cid)
           .eq('user_id', user.id)
           .maybeSingle()
-        if (!row || row.audience !== 'venue') {
+        if (!row) {
           throw new Error('Custom template not found')
         }
-        payload.custom_venue_template = {
-          subject_template: row.subject_template,
-          blocks: row.blocks,
+        if (row.audience === 'artist') {
+          sendPath = '/.netlify/functions/send-custom-artist-email'
+          payload.custom_artist_template = {
+            subject_template: row.subject_template,
+            blocks: row.blocks,
+          }
+          payload.recipient = {
+            name: profile.artist_name.split(/\s+/)[0] || profile.artist_name,
+            email: email.recipient_email,
+          }
+          if (!email.venue) {
+            payload.venue = { name: '', city: null, location: null }
+          }
+        } else if (row.audience === 'venue') {
+          payload.custom_venue_template = {
+            subject_template: row.subject_template,
+            blocks: row.blocks,
+          }
+        } else {
+          throw new Error('Custom template not found')
         }
         const aid = row.attachment_generated_file_id as string | null | undefined
         if (aid) {
@@ -329,7 +356,7 @@ export default function EmailQueue() {
         }
       }
 
-      const res = await fetch('/.netlify/functions/send-venue-email', {
+      const res = await fetch(sendPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -436,7 +463,7 @@ export default function EmailQueue() {
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
             </div>
           ) : pendingEmails.length === 0 ? (
-            <EmptyState message="No emails queued. Client emails from tasks wait here before auto-send. Artist custom template emails send right away and appear under History." />
+            <EmptyState message="No emails queued. Emails from tasks wait here before auto-send (artist custom templates send on the next queue run)." />
           ) : (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
@@ -448,7 +475,7 @@ export default function EmailQueue() {
                 <PendingRow
                   key={email.id}
                   email={email}
-                  bufferMinutes={bufferMinutes}
+                  bufferMinutes={effectiveQueueBufferMinutes(email, bufferMinutes)}
                   onSendNow={handleSendNow}
                   onDismiss={handleDismiss}
                   sending={sendingId === email.id}

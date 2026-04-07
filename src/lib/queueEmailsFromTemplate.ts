@@ -148,3 +148,24 @@ export async function hasRecentPendingVenueEmail(
     .limit(1)
   return (rows?.length ?? 0) > 0
 }
+
+/** Dedupe artist custom template rows (venue_id null, same recipient + email_type). */
+export async function hasRecentPendingArtistCustomEmail(
+  userId: string,
+  emailType: string,
+  recipientEmail: string,
+  withinMinutes: number
+): Promise<boolean> {
+  const since = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString()
+  const { data: rows } = await supabase
+    .from('venue_emails')
+    .select('id')
+    .eq('user_id', userId)
+    .is('venue_id', null)
+    .eq('email_type', emailType)
+    .eq('recipient_email', recipientEmail)
+    .eq('status', 'pending')
+    .gte('created_at', since)
+    .limit(1)
+  return (rows?.length ?? 0) > 0
+}

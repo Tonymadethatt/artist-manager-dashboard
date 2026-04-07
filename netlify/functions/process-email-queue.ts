@@ -2,7 +2,7 @@
  * process-email-queue
  *
  * Called by an external cron job every minute.
- * Finds pending emails older than each user's email_queue_buffer_minutes (5–30; see artist_profile) and sends them automatically.
+ * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates (buffer 0 so the next cron run can send).
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -30,7 +30,6 @@ import { buildEmailAttachmentPayloadFromFile } from '../../src/lib/files/templat
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
 const DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES = 10
-const MIN_EMAIL_QUEUE_BUFFER_MINUTES = EMAIL_QUEUE_BUFFER_OPTIONS[0]
 
 function clampEmailQueueBufferMinutes(value: unknown): number {
   const n = typeof value === 'number' && Number.isFinite(value)
@@ -76,9 +75,7 @@ const handler: Handler = async (event) => {
   // Admin client — bypasses RLS
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-  // Fetch candidates at least as old as the shortest allowed buffer; filter per-user below.
-  const cutoff = new Date(Date.now() - MIN_EMAIL_QUEUE_BUFFER_MINUTES * 60 * 1000).toISOString()
-
+  // Pending rows are filtered per-user by `email_queue_buffer_minutes`. Artist custom templates use 0 so cron can send on the next run.
   const { data: rawCandidates, error: fetchError } = await supabase
     .from('venue_emails')
     .select(`
@@ -88,7 +85,6 @@ const handler: Handler = async (event) => {
       contact:contacts(id, name, email)
     `)
     .eq('status', 'pending')
-    .lte('created_at', cutoff)
     .order('created_at', { ascending: true })
     .limit(150)
 
@@ -118,11 +114,36 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const candidateCustomIds = [...new Set(
+    candidates
+      .map(e => parseCustomTemplateId(e.email_type as string))
+      .filter((x): x is string => !!x),
+  )]
+  const customAudienceById = new Map<string, string>()
+  if (candidateCustomIds.length > 0) {
+    const { data: audRows, error: audErr } = await supabase
+      .from('custom_email_templates')
+      .select('id, audience')
+      .in('id', candidateCustomIds)
+
+    if (audErr) {
+      console.error('[process-email-queue] custom template audience:', audErr.message)
+      return { statusCode: 500, body: JSON.stringify({ error: audErr.message }) }
+    }
+    for (const r of audRows ?? []) {
+      customAudienceById.set(r.id as string, r.audience as string)
+    }
+  }
+
   const nowMs = Date.now()
   const emails: typeof candidates = []
   for (const e of candidates) {
     const p = profileByUser.get(e.user_id)
-    const bufferMin = clampEmailQueueBufferMinutes(p?.email_queue_buffer_minutes as unknown)
+    const cidBuf = parseCustomTemplateId(e.email_type as string)
+    const audienceForBuffer = cidBuf ? customAudienceById.get(cidBuf) : null
+    const bufferMin = audienceForBuffer === 'artist'
+      ? 0
+      : clampEmailQueueBufferMinutes(p?.email_queue_buffer_minutes as unknown)
     const ageMs = nowMs - new Date(e.created_at).getTime()
     if (ageMs >= bufferMin * 60 * 1000) {
       emails.push(e)
@@ -218,12 +239,24 @@ const handler: Handler = async (event) => {
     const cid = parseCustomTemplateId(email.email_type as string)
     const customRow = cid ? customRowById.get(cid) : undefined
 
-    if (cid && (!customRow || customRow.audience !== 'venue')) {
+    if (cid && !customRow) {
       await supabase
         .from('venue_emails')
         .update({
           status: 'failed',
-          notes: 'Auto-send failed: custom venue template missing or invalid audience',
+          notes: 'Auto-send failed: custom template not found',
+        })
+        .eq('id', email.id)
+      results.push({ id: email.id, result: 'failed', reason: 'custom_template_not_found' })
+      continue
+    }
+
+    if (cid && customRow && customRow.audience !== 'venue' && customRow.audience !== 'artist') {
+      await supabase
+        .from('venue_emails')
+        .update({
+          status: 'failed',
+          notes: 'Auto-send failed: unsupported custom template audience',
         })
         .eq('id', email.id)
       results.push({ id: email.id, result: 'failed', reason: 'custom_template_invalid' })
@@ -303,7 +336,72 @@ const handler: Handler = async (event) => {
       }
     }
 
-    const requestBody = customRow
+    if (cid && customRow && customRow.audience === 'artist') {
+      const artistName = profile.artist_name ?? ''
+      const artistBody = {
+        custom_artist_template: {
+          subject_template: customRow.subject_template,
+          blocks: customRow.blocks,
+        },
+        profile: profilePayload,
+        recipient: {
+          name: artistName.split(/\s+/)[0] || artistName,
+          email: email.recipient_email,
+        },
+        ...(dealForSend
+          ? {
+            deal: {
+              description: String(dealForSend.description ?? ''),
+              gross_amount: Number(dealForSend.gross_amount ?? 0),
+              event_date: (dealForSend.event_date as string | null) ?? null,
+              payment_due_date: (dealForSend.payment_due_date as string | null) ?? null,
+              agreement_url: (dealForSend.agreement_url as string | null) ?? null,
+              notes: dealForSend.notes != null ? String(dealForSend.notes) : null,
+            },
+          }
+          : {}),
+        venue: email.venue
+          ? {
+            name: (email.venue as { name: string }).name,
+            city: (email.venue as { city?: string | null }).city ?? null,
+            location: (email.venue as { location?: string | null }).location ?? null,
+          }
+          : { name: '', city: null, location: null },
+        ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
+      }
+      try {
+        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-custom-artist-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(artistBody),
+        })
+        if (sendRes.ok) {
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'sent' })
+        } else {
+          const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+          const reason = (err as { message?: string }).message ?? 'Send failed'
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason })
+        }
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'Unknown error'
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason })
+      }
+      continue
+    }
+
+    const requestBody = customRow?.audience === 'venue'
       ? {
         profile: profilePayload,
         recipient: recipientPayload,

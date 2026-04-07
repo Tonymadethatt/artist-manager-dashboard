@@ -2,10 +2,9 @@ import { supabase } from '@/lib/supabase'
 import type { ArtistProfile, Contact, Deal, GeneratedFile, Task, Venue } from '@/types'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
-import { hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
+import { hasRecentPendingArtistCustomEmail, hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
-import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import {
   computeResolvedAgreement,
   dealSyncPatchFromResolution,
@@ -34,7 +33,7 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     case 'no_artist_email':
       return 'Add your artist email and from email in your profile so artist template emails can send.'
     case 'custom_artist_send_failed':
-      return 'The artist email could not be sent. On localhost, run Netlify Dev and use that URL (Vite alone cannot reach functions). Check the browser Network tab for send-custom-artist-email.'
+      return 'The artist email could not be sent from the server. Open Email queue for details or try Send now on the pending row.'
     case 'custom_template_not_found':
       return 'That custom email template no longer exists. Edit the task and pick a current template.'
     case 'no_venue_for_venue_email':
@@ -46,7 +45,7 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     case 'venue_email_insert_failed':
       return 'Could not queue the email. Try again.'
     default:
-      if (reason === 'custom_artist_sent' || reason === 'venue_email_queued' || reason === 'performance_report_sent') {
+      if (reason === 'venue_email_queued' || reason === 'performance_report_sent') {
         return ''
       }
       return `Email automation: ${reason.replace(/_/g, ' ')}`
@@ -136,8 +135,6 @@ export async function queueEmailAutomationForCompletedTask(
     dealAgreementUrl: primaryDeal?.agreement_url ?? null,
   })
   const agreementSyncPatch = dealSyncPatchFromResolution(agreementResolution)
-  const dealForMerge: Deal | undefined =
-    primaryDeal && agreementSyncPatch ? { ...primaryDeal, ...agreementSyncPatch } : primaryDeal
 
   if (task.email_type === 'performance_report_request') {
     if (!v || !resolvedVenueId) {
@@ -200,7 +197,7 @@ export async function queueEmailAutomationForCompletedTask(
   if (cid) {
     const { data: ctRow } = await supabase
       .from('custom_email_templates')
-      .select('id, audience, name, subject_template, blocks, attachment_generated_file_id')
+      .select('id, audience, name')
       .eq('id', cid)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -221,94 +218,27 @@ export async function queueEmailAutomationForCompletedTask(
         return { ok: false, reason: 'no_artist_email' }
       }
 
-      const origin = typeof window !== 'undefined' ? window.location.origin : ''
-      const dealPayload = dealForMerge
-        ? {
-          description: dealForMerge.description ?? '',
-          gross_amount: dealForMerge.gross_amount,
-          event_date: dealForMerge.event_date,
-          payment_due_date: dealForMerge.payment_due_date,
-          agreement_url: dealForMerge.agreement_url,
-          notes: dealForMerge.notes,
-        }
-        : undefined
-
-      let attachment: { url: string; fileName: string } | undefined
-      const attachId = ctRow.attachment_generated_file_id as string | null | undefined
-      if (attachId) {
-        const gf = await loadGeneratedFileRow(attachId)
-        const att = gf && gf.user_id === user.id ? buildEmailAttachmentPayloadFromFile(gf, siteOrigin) : null
-        if (att) attachment = att
+      if (await hasRecentPendingArtistCustomEmail(user.id, task.email_type, p.artist_email, 45)) {
+        return { ok: true, reason: 'dedupe_recent_pending' }
       }
 
-      try {
-        const res = await fetch(`${origin}/.netlify/functions/send-custom-artist-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            custom_artist_template: {
-              subject_template: ctRow.subject_template,
-              blocks: ctRow.blocks,
-            },
-            ...(attachment ? { attachment } : {}),
-            profile: {
-              artist_name: p.artist_name,
-              company_name: p.company_name,
-              from_email: p.from_email,
-              reply_to_email: p.reply_to_email,
-              website: p.website,
-              phone: p.phone,
-              social_handle: p.social_handle,
-              tagline: p.tagline,
-            },
-            recipient: {
-              name: p.artist_name.split(/\s+/)[0] || p.artist_name,
-              email: p.artist_email,
-            },
-            deal: dealPayload,
-            venue: {
-              name: v?.name ?? '',
-              city: v?.city ?? null,
-              location: v?.location ?? null,
-            },
-          }),
-        })
-        const rawText = await res.text()
-        let parsed: { message?: string; subject?: string } | null = null
-        try {
-          parsed = rawText ? (JSON.parse(rawText) as { message?: string; subject?: string }) : null
-        } catch {
-          parsed = null
-        }
-        const sentOk = res.ok && parsed?.message === 'Email sent successfully'
-        if (!sentOk) {
-          console.error('[queueEmailOnTaskComplete] custom artist: bad response', res.status, rawText.slice(0, 300))
-          return { ok: false, reason: 'custom_artist_send_failed' }
-        }
-        const subjectLine =
-          typeof parsed?.subject === 'string' && parsed.subject.trim()
-            ? parsed.subject.trim()
-            : `${ctRow.name} (artist template)`
-        const { error: logErr } = await supabase.from('venue_emails').insert({
-          user_id: user.id,
-          venue_id: null,
-          deal_id: task.deal_id ?? null,
-          contact_id: null,
-          email_type: task.email_type,
-          recipient_email: p.artist_email,
-          subject: subjectLine,
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          notes: `Sent immediately (artist custom template: ${ctRow.name}). Task: ${task.title}`,
-        })
-        if (logErr) {
-          console.warn('[queueEmailOnTaskComplete] custom artist: email sent but history log failed:', logErr.message)
-        }
-      } catch (e) {
-        console.error('[queueEmailOnTaskComplete] custom artist:', e)
-        return { ok: false, reason: 'custom_artist_send_failed' }
+      const { error } = await supabase.from('venue_emails').insert({
+        user_id: user.id,
+        venue_id: null,
+        deal_id: task.deal_id ?? null,
+        contact_id: null,
+        email_type: task.email_type,
+        recipient_email: p.artist_email,
+        subject: `${ctRow.name} - ${p.artist_name}`,
+        status: 'pending',
+        notes: `Auto-queued from task: ${task.title}`,
+      })
+
+      if (error) {
+        console.error('[queueEmailOnTaskComplete] artist custom insert failed:', error.message)
+        return { ok: false, reason: 'venue_email_insert_failed' }
       }
-      return { ok: true, reason: 'custom_artist_sent' }
+      return { ok: true, reason: 'venue_email_queued' }
     }
 
     customVenueName = ctRow.name
