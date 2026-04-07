@@ -128,8 +128,6 @@ const handler: Handler = async (event) => {
 
   const siteUrl = process.env.URL || ''
   const replyTo = profile.reply_to_email || profile.from_email
-  const artistNameUpper = profile.artist_name.toUpperCase()
-  const venueName = venue?.name || deal?.description || 'your venue'
 
   let html: string
   let subject: string
@@ -171,6 +169,8 @@ const handler: Handler = async (event) => {
     html = built.html
     subject = built.subject
   } else {
+    const artistNameUpper = (profile.artist_name ?? '').toUpperCase()
+    const venueName = venue?.name || deal?.description || 'your venue'
     const layout = normalizeEmailTemplateLayout(rawLayout)
     html = buildVenueEmailDocument({
       type: type!,

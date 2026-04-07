@@ -314,7 +314,7 @@ export default function EmailQueue() {
             blocks: row.blocks,
           }
           payload.recipient = {
-            name: profile.artist_name.split(/\s+/)[0] || profile.artist_name,
+            name: (profile.artist_name ?? '').split(/\s+/)[0] || profile.artist_name || 'Artist',
             email: email.recipient_email,
           }
           if (!email.venue) {
