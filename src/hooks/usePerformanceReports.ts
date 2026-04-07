@@ -188,5 +188,20 @@ export function usePerformanceReports() {
     return { formUrl }
   }
 
-  return { reports, loading, refetch: fetchReports, createReport, resendReport }
+  const deleteReport = async (reportId: string): Promise<{ error?: string }> => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Not authenticated' }
+
+    const { error } = await supabase
+      .from('performance_reports')
+      .delete()
+      .eq('id', reportId)
+      .eq('user_id', user.id)
+
+    if (error) return { error: error.message }
+    setReports(prev => prev.filter(r => r.id !== reportId))
+    return {}
+  }
+
+  return { reports, loading, refetch: fetchReports, createReport, resendReport, deleteReport }
 }
