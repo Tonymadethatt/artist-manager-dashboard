@@ -39,14 +39,14 @@ export function VenueWorkCard({
   const todayTasks = tasks.filter(t => !t.completed && t.due_date === today)
   const upcomingTasks = tasks.filter(t => !t.completed && t.due_date && t.due_date > today)
   const noDateTasks = tasks.filter(t => !t.completed && !t.due_date)
-  const completedTasks = tasks.filter(t => t.completed)
+  /** Parent only passes completions from today in the main pipeline feed. */
+  const completedTodayTasks = tasks.filter(t => t.completed)
 
-  const orderedTasks = [
+  const openOrdered = [
     ...overdueTasks,
     ...todayTasks,
     ...upcomingTasks,
     ...noDateTasks,
-    ...completedTasks,
   ]
 
   const hasOverdue = overdueTasks.length > 0
@@ -57,7 +57,6 @@ export function VenueWorkCard({
       hasOverdue ? 'border-red-800' : 'border-neutral-800',
       selected && 'ring-2 ring-white/25 border-neutral-600',
     )}>
-      {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
         onClick={() => {
@@ -89,29 +88,49 @@ export function VenueWorkCard({
         </div>
       </div>
 
-      {/* Task list */}
       {!collapsed && (
         <>
           <div className="px-2 pb-1 flex flex-col min-h-[40px]">
-            {orderedTasks.length === 0 ? (
-              <p className="text-xs text-neutral-700 py-3 text-center">No open tasks</p>
+            {openOrdered.length === 0 && completedTodayTasks.length === 0 ? (
+              <p className="text-xs text-neutral-700 py-3 text-center">No tasks</p>
             ) : (
-              orderedTasks.map(task => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  onComplete={onComplete}
-                  onUncomplete={onUncomplete}
-                  onSnooze={onSnooze}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                />
-              ))
+              <>
+                {openOrdered.map(task => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onComplete={onComplete}
+                    onUncomplete={onUncomplete}
+                    onSnooze={onSnooze}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                  />
+                ))}
+                {completedTodayTasks.length > 0 && (
+                  <>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 pt-2 pb-0.5 px-1 border-t border-neutral-800/80 mt-1">
+                      Done today
+                    </div>
+                    {completedTodayTasks.map(task => (
+                      <TaskItem
+                        key={task.id}
+                        task={task}
+                        onComplete={onComplete}
+                        onUncomplete={onUncomplete}
+                        onSnooze={onSnooze}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                      />
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
 
           <div className="px-2 py-2 border-t border-neutral-800">
             <button
+              type="button"
               onClick={() => onAddTask(venue?.id ?? null)}
               className="flex items-center gap-1.5 text-xs text-neutral-600 hover:text-neutral-300 transition-colors w-full py-0.5 rounded hover:bg-neutral-800 px-1"
             >

@@ -33,10 +33,21 @@ interface TaskItemProps {
   onSnooze: (id: string, days: number) => void
   onEdit: (task: Task) => void
   onDelete: (id: string) => void
+  /** Shown under title in list/archive (e.g. venue name). */
+  contextLabel?: string | null
   compact?: boolean
 }
 
-export function TaskItem({ task, onComplete, onUncomplete, onSnooze, onEdit, onDelete, compact = false }: TaskItemProps) {
+export function TaskItem({
+  task,
+  onComplete,
+  onUncomplete,
+  onSnooze,
+  onEdit,
+  onDelete,
+  contextLabel,
+  compact = false,
+}: TaskItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [snoozeOpen, setSnoozeOpen] = useState(false)
   const [snoozeDays, setSnoozeDays] = useState('1')
@@ -57,9 +68,12 @@ export function TaskItem({ task, onComplete, onUncomplete, onSnooze, onEdit, onD
       isOverdue && 'border-l-2 border-red-500 pl-2.5',
       task.completed && 'opacity-50',
     )}>
-      {/* Checkbox */}
       <button
-        onClick={() => task.completed ? onUncomplete(task.id) : onComplete(task.id)}
+        type="button"
+        onClick={e => {
+          e.stopPropagation()
+          task.completed ? onUncomplete(task.id) : onComplete(task.id)
+        }}
         className={cn(
           'flex-shrink-0 mt-0.5 w-4 h-4 rounded border-2 transition-colors flex items-center justify-center',
           task.completed
@@ -70,97 +84,134 @@ export function TaskItem({ task, onComplete, onUncomplete, onSnooze, onEdit, onD
         {task.completed && <div className="w-2 h-2 bg-neutral-300 rounded-sm" />}
       </button>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-1">
+      <div className="flex-1 min-w-0 flex items-start gap-1">
+        <button
+          type="button"
+          className={cn(
+            'flex-1 min-w-0 text-left rounded px-0.5 -mx-0.5 cursor-pointer hover:bg-neutral-800/50',
+          )}
+          onClick={() => onEdit(task)}
+          onKeyDown={e => { if (e.key === 'Enter') onEdit(task) }}
+        >
           <span className={cn(
-            'text-sm leading-snug',
+            'text-sm leading-snug block',
             task.completed ? 'line-through text-neutral-600' : 'text-neutral-200'
           )}>
             {task.title}
           </span>
+          {contextLabel && (
+            <span className="text-[10px] text-neutral-600 block mt-0.5 truncate">{contextLabel}</span>
+          )}
+          {!compact && (
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className={cn('flex items-center gap-1')}>
+                <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', PRIORITY_DOT[task.priority])} />
+                <span className="text-[10px] text-neutral-600">{PRIORITY_LABEL[task.priority]}</span>
+              </span>
+              {due && (
+                <span className={cn('text-[11px] font-medium', due.color)}>{due.label}</span>
+              )}
+              {task.recurrence !== 'none' && (
+                <span className="text-[10px] text-neutral-700">repeats</span>
+              )}
+              {task.agreement_file && (
+                <span className="text-[10px] text-blue-400/80 truncate max-w-[180px]" title={task.agreement_file.name}>
+                  PDF: {task.agreement_file.name}
+                </span>
+              )}
+            </div>
+          )}
+        </button>
 
-          {/* Actions (show on hover) */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            {!task.completed && (
-              <div className="relative">
-                <button
-                  onClick={() => { setSnoozeOpen(v => !v); setMenuOpen(false) }}
-                  className="p-1 rounded hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
-                  title="Snooze"
-                >
-                  <AlarmClock className="h-3.5 w-3.5" />
-                </button>
-                {snoozeOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-20 bg-neutral-900 border border-neutral-700 rounded shadow-lg p-2 flex items-center gap-1.5 min-w-[130px]">
-                    <span className="text-xs text-neutral-400">+</span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="30"
-                      value={snoozeDays}
-                      onChange={e => setSnoozeDays(e.target.value)}
-                      className="h-6 w-12 text-xs px-1.5"
-                      onKeyDown={e => e.key === 'Enter' && handleSnoozeSubmit()}
-                      autoFocus
-                    />
-                    <span className="text-xs text-neutral-400">days</span>
-                    <button
-                      onClick={handleSnoozeSubmit}
-                      className="text-xs text-neutral-300 hover:text-white px-1.5 py-0.5 rounded bg-neutral-700 hover:bg-neutral-600"
-                    >
-                      Go
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+        <div className="flex items-start gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pt-0.5">
+          {!task.completed && (
             <div className="relative">
               <button
-                onClick={() => { setMenuOpen(v => !v); setSnoozeOpen(false) }}
+                type="button"
+                onClick={e => {
+                  e.stopPropagation()
+                  setSnoozeOpen(v => !v)
+                  setMenuOpen(false)
+                }}
                 className="p-1 rounded hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
+                title="Snooze"
               >
-                <MoreHorizontal className="h-3.5 w-3.5" />
+                <AlarmClock className="h-3.5 w-3.5" />
               </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-20 bg-neutral-900 border border-neutral-700 rounded shadow-lg py-1 min-w-[110px]">
+              {snoozeOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 z-20 bg-neutral-900 border border-neutral-700 rounded shadow-lg p-2 flex items-center gap-1.5 min-w-[130px]"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <span className="text-xs text-neutral-400">+</span>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={snoozeDays}
+                    onChange={e => setSnoozeDays(e.target.value)}
+                    className="h-6 w-12 text-xs px-1.5"
+                    onKeyDown={e => e.key === 'Enter' && handleSnoozeSubmit()}
+                    autoFocus
+                  />
+                  <span className="text-xs text-neutral-400">days</span>
                   <button
-                    onClick={() => { onEdit(task); setMenuOpen(false) }}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                    type="button"
+                    onClick={handleSnoozeSubmit}
+                    className="text-xs text-neutral-300 hover:text-white px-1.5 py-0.5 rounded bg-neutral-700 hover:bg-neutral-600"
                   >
-                    <Pencil className="h-3 w-3" /> Edit
-                  </button>
-                  <button
-                    onClick={() => { onDelete(task.id); setMenuOpen(false) }}
-                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-neutral-800"
-                  >
-                    <Trash2 className="h-3 w-3" /> Delete
+                    Go
                   </button>
                 </div>
               )}
             </div>
+          )}
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation()
+              onDelete(task.id)
+            }}
+            className="p-1 rounded hover:bg-neutral-800 text-neutral-500 hover:text-red-400 transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation()
+                setMenuOpen(v => !v)
+                setSnoozeOpen(false)
+              }}
+              className="p-1 rounded hover:bg-neutral-800 text-neutral-500 hover:text-neutral-300 transition-colors"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+            {menuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 z-20 bg-neutral-900 border border-neutral-700 rounded shadow-lg py-1 min-w-[110px]"
+                onClick={e => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => { onEdit(task); setMenuOpen(false) }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onDelete(task.id); setMenuOpen(false) }}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-red-400 hover:bg-neutral-800"
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {!compact && (
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={cn('flex items-center gap-1')}>
-              <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', PRIORITY_DOT[task.priority])} />
-              <span className="text-[10px] text-neutral-600">{PRIORITY_LABEL[task.priority]}</span>
-            </span>
-            {due && (
-              <span className={cn('text-[11px] font-medium', due.color)}>{due.label}</span>
-            )}
-            {task.recurrence !== 'none' && (
-              <span className="text-[10px] text-neutral-700">repeats</span>
-            )}
-            {task.agreement_file && (
-              <span className="text-[10px] text-blue-400/80 truncate max-w-[180px]" title={task.agreement_file.name}>
-                PDF: {task.agreement_file.name}
-              </span>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )

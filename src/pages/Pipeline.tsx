@@ -30,9 +30,17 @@ import type { QueueEmailOnTaskCompleteOptions } from '@/lib/queueEmailOnTaskComp
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
+import { isTaskCompletedToday } from '@/lib/tasks/completedAtLocalDate'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
+
+function localCalendarYmd(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 const EMPTY_FORM = {
   title: '',
@@ -46,19 +54,18 @@ const EMPTY_FORM = {
   generated_file_id: '',
 }
 
-function groupByDate(tasks: Task[]) {
-  const today = new Date().toISOString().split('T')[0]
+function groupByDate(tasks: Task[], todayYmd: string) {
   const groups: { label: string; color: string; tasks: Task[] }[] = []
-  const overdue = tasks.filter(t => !t.completed && t.due_date && t.due_date < today)
-  const todayTasks = tasks.filter(t => !t.completed && t.due_date === today)
-  const upcoming = tasks.filter(t => !t.completed && t.due_date && t.due_date > today)
+  const overdue = tasks.filter(t => !t.completed && t.due_date && t.due_date < todayYmd)
+  const todayTasks = tasks.filter(t => !t.completed && t.due_date === todayYmd)
+  const upcoming = tasks.filter(t => !t.completed && t.due_date && t.due_date > todayYmd)
   const noDue = tasks.filter(t => !t.completed && !t.due_date)
-  const done = tasks.filter(t => t.completed)
+  const doneToday = tasks.filter(t => isTaskCompletedToday(t, todayYmd))
   if (overdue.length) groups.push({ label: 'Overdue', color: 'text-red-500', tasks: overdue })
   if (todayTasks.length) groups.push({ label: 'Today', color: 'text-green-400', tasks: todayTasks })
   if (upcoming.length) groups.push({ label: 'Upcoming', color: 'text-neutral-400', tasks: upcoming })
   if (noDue.length) groups.push({ label: 'No due date', color: 'text-neutral-600', tasks: noDue })
-  if (done.length) groups.push({ label: 'Completed', color: 'text-neutral-700', tasks: done })
+  if (doneToday.length) groups.push({ label: 'Completed today', color: 'text-neutral-700', tasks: doneToday })
   return groups
 }
 
@@ -199,11 +206,8 @@ export default function Pipeline() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
   const [filter, setFilter] = useState<Filter>('all')
-  const [showCompleted, setShowCompleted] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
-
-  // Track tasks completed this session so they stay visible until page refresh
-  const [recentlyCompletedIds, setRecentlyCompletedIds] = useState<Set<string>>(new Set())
+  const [earlierExpanded, setEarlierExpanded] = useState(false)
 
   // Toast
   const [toast, setToast] = useState<string | null>(null)
@@ -236,26 +240,44 @@ export default function Pipeline() {
     venue: Venue; contact: Contact; emailType: string
   } | null>(null)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localCalendarYmd()
   const weekEnd = (() => {
     const d = new Date()
     d.setDate(d.getDate() + 7)
-    return d.toISOString().split('T')[0]
+    return localCalendarYmd(d)
   })()
 
   const selectedVenue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
 
-  // Apply time filter — always include recently-completed tasks from this session
-  const filteredTasks = useMemo(() => {
-    const open = tasks.filter(t => !t.completed || showCompleted || recentlyCompletedIds.has(t.id))
-    if (filter === 'today') return open.filter(t =>
-      recentlyCompletedIds.has(t.id) || t.due_date === today || (!t.due_date && !t.completed)
-    )
-    if (filter === 'week') return open.filter(t =>
-      recentlyCompletedIds.has(t.id) || !t.due_date || (t.due_date >= today && t.due_date <= weekEnd)
-    )
-    return open
-  }, [tasks, filter, showCompleted, recentlyCompletedIds, today, weekEnd])
+  const incompleteFiltered = useMemo(() => {
+    const incomplete = tasks.filter(t => !t.completed)
+    if (filter === 'today') {
+      return incomplete.filter(t => t.due_date === today || !t.due_date)
+    }
+    if (filter === 'week') {
+      return incomplete.filter(t =>
+        !t.due_date || (t.due_date >= today && t.due_date <= weekEnd)
+      )
+    }
+    return incomplete
+  }, [tasks, filter, today, weekEnd])
+
+  const doneTodayList = useMemo(
+    () => tasks.filter(t => isTaskCompletedToday(t, today)),
+    [tasks, today],
+  )
+
+  const filteredTasks = useMemo(
+    () => [...incompleteFiltered, ...doneTodayList],
+    [incompleteFiltered, doneTodayList],
+  )
+
+  const earlierCompletedTasks = useMemo(
+    () => tasks.filter(t => t.completed && !isTaskCompletedToday(t, today)),
+    [tasks, today],
+  )
+
+  const hasPipelineContent = filteredTasks.length > 0 || earlierCompletedTasks.length > 0
 
   const activeCnt = useMemo(() => tasks.filter(t => !t.completed).length, [tasks])
   const overdueCnt = useMemo(() => tasks.filter(t => !t.completed && t.due_date && t.due_date < today).length, [tasks, today])
@@ -273,7 +295,12 @@ export default function Pipeline() {
   }, [filteredTasks, venues])
 
   // List: group by date
-  const listGroups = useMemo(() => groupByDate(filteredTasks), [filteredTasks])
+  const listGroups = useMemo(() => groupByDate(filteredTasks, today), [filteredTasks, today])
+
+  const requestDeleteTask = useCallback((id: string) => {
+    const t = tasks.find(x => x.id === id)
+    if (t) setConfirmDelete(t)
+  }, [tasks])
 
   const openAdd = (venueId: string | null = null) => {
     setForm({ ...EMPTY_FORM, venue_id: venueId ?? '' })
@@ -330,19 +357,12 @@ export default function Pipeline() {
       showToast(result.error.message)
       return result
     }
-    setRecentlyCompletedIds(prev => new Set([...prev, id]))
     showToast(task ? `"${task.title}" marked complete` : 'Task completed')
     return result
   }, [completeTask, tasks, showToast])
 
   const handleUncompleteTask = useCallback(async (id: string) => {
     const result = await uncompleteTask(id)
-    setRecentlyCompletedIds(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
-    // Also refresh email queue so the cancelled entry disappears
     await refetchEmails()
     return result
   }, [uncompleteTask, refetchEmails])
@@ -412,16 +432,6 @@ export default function Pipeline() {
 
         <div className="flex-1" />
 
-        <label className="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showCompleted}
-            onChange={e => setShowCompleted(e.target.checked)}
-            className="accent-neutral-400"
-          />
-          Show completed
-        </label>
-
         {/* View toggle */}
         <div className="flex items-center gap-0.5 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
           <button
@@ -473,79 +483,121 @@ export default function Pipeline() {
             <div className="flex items-center justify-center py-16">
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
             </div>
-          ) : viewMode === 'board' ? (
-            filteredTasks.length === 0 && boardGroups.generalTasks.length === 0 ? (
-              <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
-                <p className="font-medium text-neutral-400 text-sm mb-1">Nothing here</p>
-                <p className="text-xs text-neutral-600 mb-4">
-                  {filter === 'today' ? 'No tasks for today.' : filter === 'week' ? 'No tasks this week.' : 'No open tasks.'}
-                </p>
-                <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add a task</Button>
-              </div>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto pb-4 -mx-1 px-1 min-h-0 flex-1">
-                {boardGroups.venueCards.map(({ venue, tasks: venueTasks }) => (
-                  <VenueWorkCard
-                    key={venue?.id ?? 'null'}
-                    venue={venue}
-                    tasks={venueTasks}
-                    onComplete={handleCompleteTask}
-                    onUncomplete={handleUncompleteTask}
-                    onSnooze={snoozeTask}
-                    onEdit={openEdit}
-                    onDelete={async (id) => { await deleteTask(id) }}
-                    onAddTask={openAdd}
-                    selected={venue?.id === selectedVenueId}
-                    onSelect={venue ? () => setSelectedVenueId(
-                      selectedVenueId === venue.id ? null : venue.id
-                    ) : undefined}
-                  />
-                ))}
-                {/* General card */}
-                <VenueWorkCard
-                  venue={null}
-                  tasks={boardGroups.generalTasks}
-                  onComplete={handleCompleteTask}
-                  onUncomplete={handleUncompleteTask}
-                  onSnooze={snoozeTask}
-                  onEdit={openEdit}
-                  onDelete={async (id) => { await deleteTask(id) }}
-                  onAddTask={openAdd}
-                />
-              </div>
-            )
+          ) : !hasPipelineContent ? (
+            <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
+              <p className="font-medium text-neutral-400 text-sm mb-1">Nothing here</p>
+              <p className="text-xs text-neutral-600 mb-4">
+                {filter === 'today' ? 'No tasks for today.' : filter === 'week' ? 'No tasks this week.' : 'No tasks yet.'}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add a task</Button>
+            </div>
           ) : (
-            filteredTasks.length === 0 ? (
-              <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-lg">
-                <p className="font-medium text-neutral-400 text-sm mb-1">No tasks</p>
-                <p className="text-xs text-neutral-600 mb-4">Add tasks to track your daily work.</p>
-                <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add first task</Button>
-              </div>
-            ) : (
-              <div className="space-y-6 max-w-2xl">
-                {listGroups.map(group => (
-                  <div key={group.label}>
-                    <div className={cn('text-xs font-semibold uppercase tracking-wider mb-2 px-1', group.color)}>
-                      {group.label} · {group.tasks.length}
+            <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-y-auto">
+              {viewMode === 'board' ? (
+                <>
+                  {filteredTasks.length === 0 ? (
+                    <p className="text-xs text-neutral-600 px-1 shrink-0">
+                      No open tasks or items completed today for this filter. Older completions are below.
+                    </p>
+                  ) : (
+                    <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 min-h-0 shrink-0">
+                      {boardGroups.venueCards.map(({ venue, tasks: venueTasks }) => (
+                        <VenueWorkCard
+                          key={venue?.id ?? 'null'}
+                          venue={venue}
+                          tasks={venueTasks}
+                          onComplete={handleCompleteTask}
+                          onUncomplete={handleUncompleteTask}
+                          onSnooze={snoozeTask}
+                          onEdit={openEdit}
+                          onDelete={requestDeleteTask}
+                          onAddTask={openAdd}
+                          selected={venue?.id === selectedVenueId}
+                          onSelect={venue ? () => setSelectedVenueId(
+                            selectedVenueId === venue.id ? null : venue.id
+                          ) : undefined}
+                        />
+                      ))}
+                      <VenueWorkCard
+                        venue={null}
+                        tasks={boardGroups.generalTasks}
+                        onComplete={handleCompleteTask}
+                        onUncomplete={handleUncompleteTask}
+                        onSnooze={snoozeTask}
+                        onEdit={openEdit}
+                        onDelete={requestDeleteTask}
+                        onAddTask={openAdd}
+                      />
                     </div>
-                    <div className="bg-neutral-900 border border-neutral-800 rounded-lg divide-y divide-neutral-800">
-                      {group.tasks.map(task => (
-                        <div key={task.id} className="px-2">
+                  )}
+                </>
+              ) : (
+                <>
+                  {filteredTasks.length === 0 ? (
+                    <p className="text-xs text-neutral-600 px-1 shrink-0">
+                      No open tasks or items completed today for this filter. Older completions are below.
+                    </p>
+                  ) : (
+                    <div className="space-y-6 max-w-2xl shrink-0">
+                      {listGroups.map(group => (
+                        <div key={group.label}>
+                          <div className={cn('text-xs font-semibold uppercase tracking-wider mb-2 px-1', group.color)}>
+                            {group.label} · {group.tasks.length}
+                          </div>
+                          <div className="bg-neutral-900 border border-neutral-800 rounded-lg divide-y divide-neutral-800">
+                            {group.tasks.map(task => (
+                              <div key={task.id} className="px-2">
+                                <TaskItem
+                                  task={task}
+                                  onComplete={handleCompleteTask}
+                                  onUncomplete={handleUncompleteTask}
+                                  onSnooze={snoozeTask}
+                                  onEdit={openEdit}
+                                  onDelete={requestDeleteTask}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {earlierCompletedTasks.length > 0 && (
+                <div className="border border-neutral-800 rounded-lg bg-neutral-900/50 overflow-hidden shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEarlierExpanded(e => !e)}
+                    className="flex items-center justify-between w-full px-3 py-2.5 text-left text-xs text-neutral-300 hover:bg-neutral-800/80 gap-2"
+                  >
+                    <span>
+                      Earlier completed{' '}
+                      <span className="text-neutral-500">({earlierCompletedTasks.length})</span>
+                    </span>
+                    <span className={cn('text-neutral-500 transition-transform shrink-0', earlierExpanded && 'rotate-180')}>▾</span>
+                  </button>
+                  {earlierExpanded && (
+                    <div className="border-t border-neutral-800 max-h-[min(360px,40vh)] overflow-y-auto">
+                      {earlierCompletedTasks.map(task => (
+                        <div key={task.id} className="px-2 border-b border-neutral-800/80 last:border-b-0">
                           <TaskItem
                             task={task}
                             onComplete={handleCompleteTask}
                             onUncomplete={handleUncompleteTask}
                             onSnooze={snoozeTask}
                             onEdit={openEdit}
-                            onDelete={async (id) => { await deleteTask(id) }}
+                            onDelete={requestDeleteTask}
+                            contextLabel={task.venue_id ? venues.find(v => v.id === task.venue_id)?.name ?? undefined : undefined}
                           />
                         </div>
                       ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
