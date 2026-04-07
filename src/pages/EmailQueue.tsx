@@ -9,8 +9,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import type { GeneratedFile, VenueEmail, VenueEmailType } from '@/types'
-import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import type { ArtistEmailType, GeneratedFile, VenueEmail, VenueEmailType } from '@/types'
+import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
@@ -26,6 +26,13 @@ import {
   DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
   type EmailQueueBufferMinutes,
 } from '@/lib/emailQueueBuffer'
+import { isQueuedBuiltinArtistEmailType } from '@/lib/email/resolveTaskEmailAudience'
+import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
+import {
+  buildManagementReportData,
+  buildRetainerReminderPayload,
+  defaultQueuedManagementReportDateRange,
+} from '@/lib/reports/buildManagementReportData'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('en-US', {
@@ -39,10 +46,11 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
-/** Artist custom pending rows use `venue_id` null and skip the user buffer in the worker. */
+/** Artist-targeted and builtin artist system rows use buffer 0 in the worker. */
 function effectiveQueueBufferMinutes(email: VenueEmail, userBuffer: number): number {
   const cid = parseCustomTemplateId(email.email_type)
   if (cid && !email.venue_id) return 0
+  if (isQueuedBuiltinArtistEmailType(email.email_type)) return 0
   return userBuffer
 }
 
@@ -66,6 +74,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function TypeBadge({ type }: { type: string }) {
   const label = VENUE_EMAIL_TYPE_LABELS[type as VenueEmailType]
+    ?? ARTIST_EMAIL_TYPE_LABELS[type as ArtistEmailType]
     ?? (type.startsWith('custom:') ? 'Custom email' : type)
   return (
     <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
@@ -275,6 +284,67 @@ export default function EmailQueue() {
         tagline: profile.tagline,
       }
 
+      if (isQueuedBuiltinArtistEmailType(email.email_type)) {
+        const inputs = await fetchReportInputsForUser(supabase, user.id)
+        const esc = (s: string) => s
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+
+        if (email.email_type === 'management_report') {
+          const { start, end } = defaultQueuedManagementReportDateRange()
+          const report = buildManagementReportData(inputs, start, end)
+          const { data: mrTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject')
+            .eq('user_id', user.id)
+            .eq('email_type', 'management_report')
+            .maybeSingle()
+          const startFmt = new Date(`${start}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          const endFmt = new Date(`${end}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          const subj = (mrTmpl?.custom_subject as string | null)?.trim() || `Management Update - ${startFmt} to ${endFmt}`
+          setPreviewSubject(subj)
+          const toe = esc(profile.artist_email ?? '')
+          setPreviewHtml(
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            + `<div style="padding:24px;max-width:560px;margin:0 auto">`
+            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Summary preview (rolling 7 days through today) · sent to <strong>${toe}</strong></p>`
+            + `<p style="margin:0 0 12px"><strong>Outreach</strong><br/>`
+            + `New venues: ${report.outreach.venuesContacted} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
+            + `<p style="margin:0 0 12px"><strong>Deals</strong><br/>`
+            + `New: ${report.deals.count} · Gross: ${report.deals.totalGross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Commission owed to management: ${report.deals.allOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="margin:0 0 12px"><strong>Retainer</strong><br/>`
+            + `Outstanding: ${report.retainer.feeOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="margin:0;color:#666;font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,
+          )
+        } else {
+          const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
+          const { data: rrTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject')
+            .eq('user_id', user.id)
+            .eq('email_type', 'retainer_reminder')
+            .maybeSingle()
+          const firstName = (profile.artist_name ?? 'Artist').split(/\s+/)[0] || 'Artist'
+          const subj = (rrTmpl?.custom_subject as string | null)?.trim() || `Hey ${firstName}, quick note from management`
+          setPreviewSubject(subj)
+          const rows = unpaidFees.length === 0
+            ? '<p style="color:#f87171">No outstanding balance — send would be skipped.</p>'
+            : `<ul style="margin:0;padding-left:18px">${unpaidFees.map(f =>
+              `<li>${esc(f.month)}: balance ${f.balance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</li>`,
+            ).join('')}</ul>`
+          setPreviewHtml(
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            + `<div style="padding:24px;max-width:560px;margin:0 auto">`
+            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${totalOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + rows
+            + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
+          )
+        }
+        setPreviewLoading(false)
+        return
+      }
+
       let agreementUrl: string | null = email.deal?.agreement_url ?? null
       if (email.deal) {
         agreementUrl =
@@ -400,6 +470,86 @@ export default function EmailQueue() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setSendError('Not signed in.')
+        return
+      }
+
+      if (isQueuedBuiltinArtistEmailType(email.email_type)) {
+        const inputs = await fetchReportInputsForUser(supabase, user.id)
+        const profileForArtistSend = {
+          artist_name: profile.artist_name,
+          artist_email: profile.artist_email,
+          manager_name: profile.manager_name,
+          manager_email: profile.manager_email,
+          from_email: profile.from_email,
+          company_name: profile.company_name,
+          website: profile.website,
+          social_handle: profile.social_handle,
+          phone: profile.phone,
+          reply_to_email: profile.reply_to_email,
+        }
+
+        const parseErr = async (res: Response) => {
+          const text = await res.text()
+          let msg = `Send failed (${res.status})`
+          try {
+            const err = JSON.parse(text) as { message?: string }
+            if (err.message) msg = err.message
+          } catch {
+            if (text.trim()) msg = `${res.status}: ${text.slice(0, 240)}`
+          }
+          return msg
+        }
+
+        if (email.email_type === 'management_report') {
+          const { start, end } = defaultQueuedManagementReportDateRange()
+          const report = buildManagementReportData(inputs, start, end)
+          const { data: tmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro, layout')
+            .eq('user_id', user.id)
+            .eq('email_type', 'management_report')
+            .maybeSingle()
+          const res = await fetch('/.netlify/functions/send-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile: profileForArtistSend,
+              report,
+              dateRange: { start, end },
+              cc: profile.manager_email ? [profile.manager_email] : [],
+              custom_subject: tmpl?.custom_subject ?? null,
+              custom_intro: tmpl?.custom_intro ?? null,
+              layout: tmpl?.layout ?? null,
+            }),
+          })
+          if (!res.ok) throw new Error(await parseErr(res))
+        } else {
+          const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
+          if (unpaidFees.length === 0) {
+            throw new Error('No outstanding retainer balance')
+          }
+          const { data: tmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro, layout')
+            .eq('user_id', user.id)
+            .eq('email_type', 'retainer_reminder')
+            .maybeSingle()
+          const res = await fetch('/.netlify/functions/send-reminder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile: profileForArtistSend,
+              unpaidFees,
+              totalOutstanding,
+              custom_subject: tmpl?.custom_subject ?? null,
+              custom_intro: tmpl?.custom_intro ?? null,
+              layout: tmpl?.layout ?? null,
+            }),
+          })
+          if (!res.ok) throw new Error(await parseErr(res))
+        }
+
+        await updateEmailStatus(email.id, 'sent')
         return
       }
 

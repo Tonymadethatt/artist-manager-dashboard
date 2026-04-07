@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Deal, GeneratedFile, TaskTemplate } from '@/types'
+import type { ArtistProfile, Deal, GeneratedFile, TaskTemplate } from '@/types'
 import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
@@ -57,10 +57,49 @@ export async function queueImmediateEmailsForTemplate(
   for (const item of template.items ?? []) {
     if (!item.email_type || item.days_offset !== 0) continue
 
-    // Artist-only flows (performance form, etc.) stay on Pipeline task completion.
+    // Performance form is queued only on task completion (needs venue context).
     if (item.email_type === 'performance_report_request') continue
 
     const customId = parseCustomTemplateId(item.email_type)
+
+    if (customId) {
+      const { data: ct0 } = await supabase
+        .from('custom_email_templates')
+        .select('name, audience')
+        .eq('id', customId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (ct0?.audience === 'artist') {
+        const { data: profile } = await supabase
+          .from('artist_profile')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const p = profile as ArtistProfile | null
+        if (!p?.artist_email || !p.from_email) continue
+        if (await hasRecentPendingArtistCustomEmail(user.id, item.email_type, p.artist_email, 45)) continue
+
+        const { error: artistErr } = await supabase.from('venue_emails').insert({
+          user_id: user.id,
+          venue_id: null,
+          deal_id: dealId ?? null,
+          contact_id: null,
+          email_type: item.email_type,
+          recipient_email: p.artist_email,
+          subject: `${ct0.name} - ${p.artist_name}`,
+          status: 'pending',
+          notes: `Auto-queued from template task: ${item.title}`,
+        })
+        if (artistErr) {
+          console.error('[queueEmailsFromTemplate] artist custom insert failed:', artistErr.message)
+        } else {
+          queued += 1
+        }
+        continue
+      }
+    }
+
     if (!isVenueEmailType(item.email_type) && !customId) continue
 
     let pinnedFile: GeneratedFile | null = null

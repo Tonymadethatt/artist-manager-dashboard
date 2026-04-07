@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
-import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
 import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useVenues } from '@/hooks/useVenues'
@@ -100,6 +101,17 @@ export default function Tasks() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
+
+  const customAudienceForForm = useMemo(() => {
+    const cid = parseCustomTemplateId(form.email_type)
+    if (!cid) return null
+    return customEmailRows.find(r => r.id === cid)?.audience ?? null
+  }, [form.email_type, customEmailRows])
+
+  const emailAutomationHintText = useMemo(
+    () => taskEmailAutomationHintWithCustom(form.email_type, customAudienceForForm),
+    [form.email_type, customAudienceForForm],
+  )
 
   const filtered = useMemo(() =>
     showCompleted ? tasks : tasks.filter(t => !t.completed),
@@ -434,6 +446,9 @@ export default function Tasks() {
                   ))}
                 </SelectContent>
               </Select>
+              {emailAutomationHintText && (
+                <p className="text-[11px] text-neutral-500 leading-snug">{emailAutomationHintText}</p>
+              )}
             </div>
 
             <div className="space-y-1">

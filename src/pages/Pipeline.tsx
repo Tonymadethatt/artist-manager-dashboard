@@ -28,7 +28,8 @@ import {
 import { cn } from '@/lib/utils'
 import type { QueueEmailOnTaskCompleteOptions } from '@/lib/queueEmailOnTaskComplete'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
-import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -218,6 +219,17 @@ export default function Pipeline() {
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  const customAudienceForForm = useMemo(() => {
+    const cid = parseCustomTemplateId(form.email_type)
+    if (!cid) return null
+    return customEmailRows.find(r => r.id === cid)?.audience ?? null
+  }, [form.email_type, customEmailRows])
+
+  const emailAutomationHintText = useMemo(
+    () => taskEmailAutomationHintWithCustom(form.email_type, customAudienceForForm),
+    [form.email_type, customAudienceForForm],
+  )
 
   // Email send modal state (triggered from progress panel)
   const [sendEmailState, setSendEmailState] = useState<{
@@ -632,6 +644,9 @@ export default function Pipeline() {
                   ))}
                 </SelectContent>
               </Select>
+              {emailAutomationHintText && (
+                <p className="text-[11px] text-neutral-500 leading-snug">{emailAutomationHintText}</p>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Agreement PDF (optional)</Label>

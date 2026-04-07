@@ -1,9 +1,12 @@
 import { supabase } from '@/lib/supabase'
 import type { ArtistProfile, Contact, Deal, GeneratedFile, Task, Venue } from '@/types'
 import type { VenueEmailType } from '@/types'
-import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { hasRecentPendingArtistCustomEmail, hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { resolveTaskEmailAudience } from '@/lib/email/resolveTaskEmailAudience'
+import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
+import { buildRetainerReminderPayload } from '@/lib/reports/buildManagementReportData'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import {
   computeResolvedAgreement,
@@ -35,17 +38,30 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     case 'custom_artist_send_failed':
       return 'The artist email could not be sent from the server. Open Email queue for details or try Send now on the pending row.'
     case 'custom_template_not_found':
+    case 'template_not_found':
       return 'That custom email template no longer exists. Edit the task and pick a current template.'
+    case 'invalid_custom_id':
+      return 'This task references an invalid custom template id. Edit the task and pick a valid template.'
     case 'no_venue_for_venue_email':
       return 'Link this task to a venue or deal so the client email can be queued and sent.'
+    case 'performance_report_needs_venue':
+      return 'Performance report request needs a linked venue (or deal with a venue) so the form email can go to the venue contact.'
     case 'no_contact_email':
       return 'Add a contact with an email address for this venue.'
     case 'not_authenticated':
       return 'You are not signed in.'
     case 'venue_email_insert_failed':
       return 'Could not queue the email. Try again.'
+    case 'unsupported_email_type':
+      return 'This email type is not supported for task automation. Edit the task and pick a different option.'
+    case 'no_artist_profile':
+      return 'Complete your artist profile before sending the performance report request.'
     default:
-      if (reason === 'venue_email_queued' || reason === 'performance_report_sent') {
+      if (
+        reason === 'venue_email_queued'
+        || reason === 'performance_report_sent'
+        || reason === 'retainer_nothing_owed'
+      ) {
         return ''
       }
       return `Email automation: ${reason.replace(/_/g, ' ')}`
@@ -136,9 +152,17 @@ export async function queueEmailAutomationForCompletedTask(
   })
   const agreementSyncPatch = dealSyncPatchFromResolution(agreementResolution)
 
-  if (task.email_type === 'performance_report_request') {
+  const audience = await resolveTaskEmailAudience(task.email_type, user.id)
+
+  if (audience.kind === 'unknown') {
+    const r = audience.reason
+    if (r === 'template_not_found') return { ok: false, reason: 'custom_template_not_found' }
+    return { ok: false, reason: r }
+  }
+
+  if (audience.kind === 'special') {
     if (!v || !resolvedVenueId) {
-      return { ok: true, reason: 'performance_report_needs_venue' }
+      return { ok: false, reason: 'performance_report_needs_venue' }
     }
     const { data: profile } = await supabase
       .from('artist_profile')
@@ -191,31 +215,31 @@ export async function queueEmailAutomationForCompletedTask(
     return { ok: true, reason: 'performance_report_sent' }
   }
 
-  const cid = parseCustomTemplateId(task.email_type)
-  let customVenueName: string | null = null
-
-  if (cid) {
-    const { data: ctRow } = await supabase
-      .from('custom_email_templates')
-      .select('id, audience, name')
-      .eq('id', cid)
+  if (audience.kind === 'artist') {
+    const { data: profile } = await supabase
+      .from('artist_profile')
+      .select('*')
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (!ctRow) {
-      return { ok: false, reason: 'custom_template_not_found' }
+    const p = profile as ArtistProfile | null
+    if (!p?.artist_email || !p.from_email) {
+      return { ok: false, reason: 'no_artist_email' }
     }
 
-    if (ctRow.audience === 'artist') {
-      const { data: profile } = await supabase
-        .from('artist_profile')
-        .select('*')
+    if (audience.source === 'custom_artist') {
+      const cid = parseCustomTemplateId(task.email_type)
+      if (!cid) return { ok: false, reason: 'invalid_custom_id' }
+
+      const { data: ctRow } = await supabase
+        .from('custom_email_templates')
+        .select('name')
+        .eq('id', cid)
         .eq('user_id', user.id)
         .maybeSingle()
 
-      const p = profile as ArtistProfile | null
-      if (!p?.artist_email || !p.from_email) {
-        return { ok: false, reason: 'no_artist_email' }
+      if (!ctRow) {
+        return { ok: false, reason: 'custom_template_not_found' }
       }
 
       if (await hasRecentPendingArtistCustomEmail(user.id, task.email_type, p.artist_email, 45)) {
@@ -241,6 +265,62 @@ export async function queueEmailAutomationForCompletedTask(
       return { ok: true, reason: 'venue_email_queued' }
     }
 
+    const builtin = audience.builtinType
+    if (builtin === 'management_report' || builtin === 'retainer_reminder') {
+      if (builtin === 'retainer_reminder') {
+        const { fees } = await fetchReportInputsForUser(supabase, user.id)
+        const { unpaidFees } = buildRetainerReminderPayload(fees)
+        if (unpaidFees.length === 0) {
+          return { ok: true, reason: 'retainer_nothing_owed' }
+        }
+      }
+
+      if (await hasRecentPendingArtistCustomEmail(user.id, task.email_type, p.artist_email, 45)) {
+        return { ok: true, reason: 'dedupe_recent_pending' }
+      }
+
+      const label = ARTIST_EMAIL_TYPE_LABELS[builtin]
+      const { error } = await supabase.from('venue_emails').insert({
+        user_id: user.id,
+        venue_id: null,
+        deal_id: task.deal_id ?? null,
+        contact_id: null,
+        email_type: task.email_type,
+        recipient_email: p.artist_email,
+        subject: `${label} - ${p.artist_name}`,
+        status: 'pending',
+        notes: `Auto-queued from task: ${task.title}`,
+      })
+
+      if (error) {
+        console.error('[queueEmailOnTaskComplete] builtin artist insert failed:', error.message)
+        return { ok: false, reason: 'venue_email_insert_failed' }
+      }
+      return { ok: true, reason: 'venue_email_queued' }
+    }
+
+    return { ok: false, reason: 'unsupported_email_type' }
+  }
+
+  // Client (venue) — builtin or custom template to venue contact
+  const cid = parseCustomTemplateId(task.email_type)
+  let customVenueName: string | null = null
+
+  if (cid) {
+    const { data: ctRow } = await supabase
+      .from('custom_email_templates')
+      .select('id, audience, name')
+      .eq('id', cid)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!ctRow) {
+      return { ok: false, reason: 'custom_template_not_found' }
+    }
+    if (ctRow.audience !== 'venue') {
+      return { ok: false, reason: 'unsupported_email_type' }
+    }
+
     customVenueName = ctRow.name
   }
 
@@ -261,7 +341,7 @@ export async function queueEmailAutomationForCompletedTask(
   }
 
   if (!isVenueEmailType(task.email_type) && !cid) {
-    return { ok: true, reason: 'not_venue_email_type' }
+    return { ok: false, reason: 'unsupported_email_type' }
   }
 
   const vType = task.email_type as string
