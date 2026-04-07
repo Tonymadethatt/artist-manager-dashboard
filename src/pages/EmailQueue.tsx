@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap, Eye } from 'lucide-react'
+import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap, Eye, HelpCircle } from 'lucide-react'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -869,45 +875,80 @@ export default function EmailQueue() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 pb-1">
-          {activeTab === 'queue' && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-neutral-500 whitespace-nowrap max-[420px]:hidden">
-                Auto-send
-              </span>
-              <Select
-                value={String(bufferMinutes)}
-                onValueChange={handleBufferChange}
-                disabled={bufferSaving || !profile}
-              >
-                <SelectTrigger
-                  className="w-[108px] sm:w-[118px] h-8 text-xs bg-neutral-950 border-neutral-700"
-                  aria-label="Auto-send after queued (minutes)"
-                  title="Minutes after queue before auto-send"
+        <TooltipProvider delayDuration={200}>
+          <div className="flex items-center gap-2 shrink-0 pb-1">
+            {activeTab === 'queue' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-neutral-500 whitespace-nowrap max-[420px]:hidden">
+                  Auto-send
+                </span>
+                <Select
+                  value={String(bufferMinutes)}
+                  onValueChange={handleBufferChange}
+                  disabled={bufferSaving || !profile}
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
-                    <SelectItem key={m} value={String(m)} className="text-xs">
-                      {m} min
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-            title="Refresh"
-          >
-            <RefreshCw className={cn('h-4 w-4', (refreshing || loading) && 'animate-spin')} />
-          </Button>
-        </div>
+                  <SelectTrigger
+                    className="w-[108px] sm:w-[118px] h-8 text-xs bg-neutral-950 border-neutral-700"
+                    aria-label="Auto-send after queued (minutes)"
+                    title="Minutes after queue before auto-send"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
+                      <SelectItem key={m} value={String(m)} className="text-xs">
+                        {m} min
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-neutral-500 hover:text-neutral-300"
+                  aria-label="About the queue and history"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                align="end"
+                sideOffset={6}
+                className="max-w-[min(20rem,calc(100vw-2rem))] border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-[11px] font-normal leading-relaxed text-neutral-400 shadow-xl"
+              >
+                <p className="font-medium text-neutral-200 mb-1.5">About the queue</p>
+                <ul className="list-disc pl-4 space-y-1 text-left">
+                  <li>
+                    <span className="text-neutral-300">Queue</span> is for delayed <code className="text-neutral-500">pending</code> sends.
+                    Management report, retainer reminder, and performance form requests send on the next worker run (no minute buffer), or use Send now.
+                  </li>
+                  <li>
+                    <span className="text-neutral-300">History</span> includes cron-sent rows, Send now from here, pipeline &quot;Send email&quot; modal (logged immediately), and Reports / Earnings sends.
+                  </li>
+                  <li>
+                    Reports, Earnings, and Performance reports &quot;send form&quot; from their pages deliver immediately—they do not add a pending row unless you use task automation (performance form queues through Email queue when a task completes).
+                  </li>
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+              title="Refresh"
+            >
+              <RefreshCw className={cn('h-4 w-4', (refreshing || loading) && 'animate-spin')} />
+            </Button>
+          </div>
+        </TooltipProvider>
       </div>
 
       {sendError && (
@@ -915,22 +956,6 @@ export default function EmailQueue() {
           {sendError}
         </div>
       )}
-
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5 text-[11px] text-neutral-500 leading-relaxed">
-        <p className="font-medium text-neutral-400 mb-1.5">About the queue</p>
-        <ul className="list-disc pl-4 space-y-1">
-          <li>
-            <span className="text-neutral-400">Queue</span> is for delayed <code className="text-neutral-600">pending</code> sends.
-            Management report, retainer reminder, and performance form requests send on the next worker run (no minute buffer), or use Send now.
-          </li>
-          <li>
-            <span className="text-neutral-400">History</span> includes cron-sent rows, Send now from here, pipeline &quot;Send email&quot; modal (logged immediately), and Reports / Earnings sends.
-          </li>
-          <li>
-            Reports, Earnings, and Performance reports &quot;send form&quot; from their pages deliver immediately—they do not add a pending row unless you use task automation (performance form queues through Email queue when a task completes).
-          </li>
-        </ul>
-      </div>
 
       {/* Queue tab */}
       {activeTab === 'queue' && (
