@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Deal, Metric, MonthlyFee, MonthlyFeePayment, PerformanceReport, Task, Venue } from '@/types'
+import type { Deal, Metric, MonthlyFee, MonthlyFeePayment, PerformanceReport, Task, Venue } from '../../types'
 
 /**
  * Loads the same domain rows the Reports page and management-report email use.

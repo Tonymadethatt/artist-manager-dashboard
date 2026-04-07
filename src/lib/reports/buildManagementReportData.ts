@@ -1,4 +1,4 @@
-import type { Deal, Metric, MonthlyFee, PerformanceReport, Task, Venue } from '@/types'
+import type { Deal, Metric, MonthlyFee, PerformanceReport, Task, Venue } from '../../types'
 
 /** Body.report shape for `/.netlify/functions/send-report`. */
 export type ManagementReportEmailData = {

@@ -1,7 +1,9 @@
-import { supabase } from '@/lib/supabase'
-import type { ArtistEmailType } from '@/types'
-import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
-import { CUSTOM_EMAIL_TYPE_PREFIX, parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { supabase } from '../supabase'
+import type { ArtistEmailType } from '../../types'
+import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '../../types'
+import { CUSTOM_EMAIL_TYPE_PREFIX, parseCustomTemplateId } from './customTemplateId'
+
+export { isQueuedBuiltinArtistEmailType } from './queuedBuiltinArtistEmail'
 
 export type EmailTaskAudienceResolution =
   | { kind: 'client'; source: 'builtin_venue' | 'custom_venue' }
@@ -71,11 +73,6 @@ export async function resolveTaskEmailAudience(
 /** Artist-targeted mail (custom or builtin) — no venue/contact required. */
 export function isArtistAudienceNoVenueRequired(r: EmailTaskAudienceResolution): boolean {
   return r.kind === 'artist'
-}
-
-/** Builtin artist emails that queue like artist custom (null venue, buffer 0). */
-export function isQueuedBuiltinArtistEmailType(emailType: string): boolean {
-  return emailType === 'management_report' || emailType === 'retainer_reminder'
 }
 
 export function isPerformanceReportSpecial(r: EmailTaskAudienceResolution): r is { kind: 'special'; id: 'performance_report_request' } {

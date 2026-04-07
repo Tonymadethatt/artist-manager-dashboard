@@ -26,7 +26,7 @@ import {
   DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
   type EmailQueueBufferMinutes,
 } from '@/lib/emailQueueBuffer'
-import { isQueuedBuiltinArtistEmailType } from '@/lib/email/resolveTaskEmailAudience'
+import { isQueuedBuiltinArtistEmailType } from '@/lib/email/queuedBuiltinArtistEmail'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,

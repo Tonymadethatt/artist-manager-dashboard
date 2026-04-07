@@ -20,7 +20,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
-import { isQueuedBuiltinArtistEmailType } from '../../src/lib/email/resolveTaskEmailAudience'
+import { isQueuedBuiltinArtistEmailType } from '../../src/lib/email/queuedBuiltinArtistEmail'
 import { fetchReportInputsForUser } from '../../src/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
