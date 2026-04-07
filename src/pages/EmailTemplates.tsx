@@ -495,13 +495,20 @@ export default function EmailTemplates() {
   const saveCustomTemplate = async () => {
     if (!selectedCustomId) return
     setSaving(true)
-    await updateCustomRow(selectedCustomId, {
+    const res = await updateCustomRow(selectedCustomId, {
       name: customNameDraft.trim() || 'Untitled',
       subject_template: customSubjectDraft,
       blocks: customBlocksDraft,
       attachment_generated_file_id: customAttachmentFileIdDraft,
     })
     setSaving(false)
+    if (res && 'data' in res && res.data) {
+      const row = res.data
+      setCustomNameDraft(row.name)
+      setCustomSubjectDraft(row.subject_template)
+      setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
+      setCustomAttachmentFileIdDraft(row.attachment_generated_file_id ?? null)
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -568,8 +575,11 @@ export default function EmailTemplates() {
       ),
     }
     if (!clean.appendBlocks?.length) delete clean.appendBlocks
-    await upsertTemplate(selectedType, { layout: clean })
+    const res = await upsertTemplate(selectedType, { layout: clean })
     setSaving(false)
+    if (res && 'data' in res && res.data) {
+      setEditorDraft(draftFromSaved(res.data))
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
