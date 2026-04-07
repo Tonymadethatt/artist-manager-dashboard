@@ -38,7 +38,7 @@ function money(n: number) {
 function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
   const siteUrl = process.env.URL || ''
-  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const monthCount = unpaidFees.length

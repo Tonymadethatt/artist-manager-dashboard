@@ -78,7 +78,7 @@ const handler: Handler = async (event) => {
   const siteUrl = process.env.URL || 'https://localhost:8888'
   const formUrl = `${siteUrl}/performance-report/${body.token}`
   const firstName = body.artistName.split(' ')[0]
-  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
 
   function fmtDate(iso: string) {
     const [y, m, d] = iso.split('-')

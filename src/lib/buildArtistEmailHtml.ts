@@ -11,7 +11,7 @@ function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-const logoUrl = '/dj-luijay-logo.png'
+const logoUrl = '/dj-luijay-logo-email.png'
 const igIconUrl = '/icons/icon-ig.png'
 
 function money(n: number) {

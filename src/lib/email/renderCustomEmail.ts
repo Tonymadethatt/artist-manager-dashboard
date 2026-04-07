@@ -11,7 +11,7 @@ export type { CustomEmailMergeContext }
 function logoUrls(base: string) {
   const prefix = base.replace(/\/$/, '')
   return {
-    logo: prefix ? `${prefix}/dj-luijay-logo.png` : '/dj-luijay-logo.png',
+    logo: prefix ? `${prefix}/dj-luijay-logo-email.png` : '/dj-luijay-logo-email.png',
     ig: prefix ? `${prefix}/icons/icon-ig.png` : '/icons/icon-ig.png',
   }
 }

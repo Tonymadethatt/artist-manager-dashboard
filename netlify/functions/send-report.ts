@@ -94,7 +94,7 @@ function sectionCard(title: string, content: string, accentColor: string = '#60a
 function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
   const siteUrl = process.env.URL || ''
-  const logoUrl = `${siteUrl}/dj-luijay-logo.png`
+  const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const { outreach, deals, retainer, metrics, tasks, performance } = report
