@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { DealTerms, Venue, VenueType, OutreachStatus, TaskTemplate } from '@/types'
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, VENUE_TYPE_ORDER, VENUE_TYPE_LABELS } from '@/types'
+import type { DealTerms, Venue, VenueType, OutreachStatus, OutreachTrack, TaskTemplate } from '@/types'
+import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER, VENUE_TYPE_ORDER, VENUE_TYPE_LABELS } from '@/types'
 
 const VENUE_TYPES: { value: VenueType; label: string }[] = VENUE_TYPE_ORDER.map(value => ({
   value,
@@ -52,6 +52,7 @@ const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   venue_type: 'other',
   priority: 3,
   status: 'not_contacted',
+  outreach_track: 'pipeline',
   follow_up_date: null,
   deal_terms: null,
 }
@@ -71,6 +72,7 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
         venue_type: initialData.venue_type,
         priority: initialData.priority,
         status: initialData.status,
+        outreach_track: initialData.outreach_track ?? 'pipeline',
         follow_up_date: initialData.follow_up_date,
         deal_terms: initialData.deal_terms,
       } : EMPTY)
@@ -117,6 +119,23 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
               placeholder="The Blue Room"
               autoFocus
             />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Track</Label>
+            <Select value={form.outreach_track} onValueChange={v => set('outreach_track', v as OutreachTrack)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {OUTREACH_TRACK_ORDER.map(t => (
+                  <SelectItem key={t} value={t}>{OUTREACH_TRACK_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-neutral-600 leading-snug">
+              {form.outreach_track === 'pipeline'
+                ? 'Pipeline — you sourced this venue. Commission applies to deals.'
+                : 'Community — artist\'s existing network. Nurture work; base fee only.'}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

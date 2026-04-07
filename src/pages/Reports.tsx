@@ -88,12 +88,18 @@ export default function Reports() {
   }
 
   const report = useMemo(() => {
-    // Outreach
+    // Outreach — split by track
+    const pipelineVenues = venues.filter(v => (v.outreach_track ?? 'pipeline') === 'pipeline')
+    const communityVenues = venues.filter(v => v.outreach_track === 'community')
     const venuesContacted = venues.filter(v => inRange(v.created_at)).length
+    const pipelineAdded = pipelineVenues.filter(v => inRange(v.created_at)).length
+    const communityAdded = communityVenues.filter(v => inRange(v.created_at)).length
     const venuesUpdated = venues.filter(v =>
       v.status !== 'not_contacted' && inRange(v.updated_at)
     ).length
     const venuesBooked = venues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
+    const pipelineBooked = pipelineVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
+    const communityBooked = communityVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
     const inDiscussion = venues.filter(v =>
       ['in_discussion', 'agreement_sent'].includes(v.status) && inRange(v.updated_at)
     ).length
@@ -144,7 +150,7 @@ export default function Reports() {
     const totalReportedAttendance = perfInPeriod.reduce((s, r) => s + (r.attendance ?? 0), 0)
 
     return {
-      outreach: { venuesContacted, venuesUpdated, inDiscussion, venuesBooked },
+      outreach: { venuesContacted, pipelineAdded, communityAdded, venuesUpdated, inDiscussion, venuesBooked, pipelineBooked, communityBooked },
       deals: { count: periodDeals.length, totalGross, totalCommission, commissionEarned, commissionReceived, allOutstanding },
       retainer: { feeTotal, feePaid, feeOutstanding, unpaidMonths },
       metrics: { partnerships: partnerships.length, partnershipValue, attendance: attendance.length, totalAttendance, press: press.length, totalReach },
@@ -245,10 +251,14 @@ export default function Reports() {
 
       {/* Report preview */}
       <Section title="Outreach activity">
-        <StatRow label="New venues added" value={String(report.outreach.venuesContacted)} />
+        <StatRow label="New venues added (total)" value={String(report.outreach.venuesContacted)} />
+        <StatRow label="  · Pipeline (sourced)" value={String(report.outreach.pipelineAdded)} />
+        <StatRow label="  · Community (existing)" value={String(report.outreach.communityAdded)} />
         <StatRow label="Venues engaged (status updated)" value={String(report.outreach.venuesUpdated)} />
         <StatRow label="Active discussions" value={String(report.outreach.inDiscussion)} />
-        <StatRow label="Bookings confirmed" value={String(report.outreach.venuesBooked)} />
+        <StatRow label="Bookings confirmed (total)" value={String(report.outreach.venuesBooked)} />
+        <StatRow label="  · Pipeline bookings" value={String(report.outreach.pipelineBooked)} />
+        <StatRow label="  · Community bookings" value={String(report.outreach.communityBooked)} />
       </Section>
 
       <Section title="Deals & revenue">

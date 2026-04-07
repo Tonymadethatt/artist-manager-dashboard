@@ -24,8 +24,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import type { Venue, OutreachStatus, Contact, DealTerms } from '@/types'
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER } from '@/types'
+import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms } from '@/types'
+import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -197,15 +197,28 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1">
-                <Label>Follow-up date</Label>
-                <Input
-                  type="date"
-                  value={venue.follow_up_date ?? ''}
-                  onChange={e => handleFollowUpChange(e.target.value)}
-                />
+                <Label>Track</Label>
+                <Select
+                  value={venue.outreach_track ?? 'pipeline'}
+                  onValueChange={v => onUpdate(venue.id, { outreach_track: v as OutreachTrack })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {OUTREACH_TRACK_ORDER.map(t => (
+                      <SelectItem key={t} value={t}>{OUTREACH_TRACK_LABELS[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Follow-up date</Label>
+              <Input
+                type="date"
+                value={venue.follow_up_date ?? ''}
+                onChange={e => handleFollowUpChange(e.target.value)}
+              />
             </div>
 
             {/* Auto-apply template toast */}

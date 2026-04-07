@@ -575,6 +575,18 @@ export default function Earnings() {
   const setField = <K extends keyof typeof form>(key: K, value: typeof form[K]) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
+  const handleVenueSelect = (venueId: string) => {
+    setField('venue_id', venueId)
+    // Only auto-set tier on new deals (not edits), and only when user hasn't changed it yet
+    if (!editDeal) {
+      const v = venues.find(vn => vn.id === venueId)
+      if (v) {
+        const defaultTier = (v.outreach_track ?? 'pipeline') === 'community' ? 'kept_doors' : 'new_doors'
+        setField('commission_tier', defaultTier)
+      }
+    }
+  }
+
   const handleSave = async () => {
     const gross = parseFloat(form.gross_amount)
     if (!form.description.trim() || isNaN(gross) || gross <= 0) return
@@ -946,7 +958,7 @@ export default function Earnings() {
               <Label>Venue (optional)</Label>
               <Select
                 value={form.venue_id || '__none__'}
-                onValueChange={v => setField('venue_id', v === '__none__' ? '' : v)}
+                onValueChange={v => v === '__none__' ? setField('venue_id', '') : handleVenueSelect(v)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Link to a venue" />

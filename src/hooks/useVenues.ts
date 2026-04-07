@@ -37,6 +37,7 @@ export function useVenues() {
         venue_type: venue.venue_type,
         priority: venue.priority,
         status: venue.status,
+        outreach_track: venue.outreach_track ?? 'pipeline',
         follow_up_date: venue.follow_up_date,
         deal_terms: venue.deal_terms,
       })

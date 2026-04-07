@@ -55,6 +55,15 @@ export const OUTREACH_STATUS_ORDER: OutreachStatus[] = [
   'archived',
 ]
 
+export type OutreachTrack = 'pipeline' | 'community'
+
+export const OUTREACH_TRACK_LABELS: Record<OutreachTrack, string> = {
+  pipeline: 'Pipeline',
+  community: 'Community',
+}
+
+export const OUTREACH_TRACK_ORDER: OutreachTrack[] = ['pipeline', 'community']
+
 export type TemplateType = 'agreement' | 'invoice'
 
 export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors'
@@ -136,6 +145,8 @@ export interface Venue {
   venue_type: VenueType
   priority: number
   status: OutreachStatus
+  /** pipeline = manager-sourced (commission); community = artist existing network (nurture) */
+  outreach_track: OutreachTrack
   follow_up_date: string | null
   deal_terms: DealTerms | null
   created_at: string

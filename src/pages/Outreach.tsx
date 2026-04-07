@@ -14,8 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Venue, OutreachStatus, VenueType } from '@/types'
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER } from '@/types'
+import type { Venue, OutreachStatus, OutreachTrack, VenueType } from '@/types'
+import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
 
 const VENUE_TYPE_LABELS: Record<VenueType, string> = {
@@ -38,6 +38,7 @@ export default function Outreach() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<OutreachStatus | 'all'>('all')
   const [filterType, setFilterType] = useState<VenueType | 'all'>('all')
+  const [filterTrack, setFilterTrack] = useState<OutreachTrack | 'all'>('all')
   const [sortBy, setSortBy] = useState<'updated' | 'priority' | 'name' | 'follow_up'>('updated')
   const [addOpen, setAddOpen] = useState(false)
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
@@ -114,6 +115,7 @@ export default function Outreach() {
     }
     if (filterStatus !== 'all') list = list.filter(v => v.status === filterStatus)
     if (filterType !== 'all') list = list.filter(v => v.venue_type === filterType)
+    if (filterTrack !== 'all') list = list.filter(v => (v.outreach_track ?? 'pipeline') === filterTrack)
 
     return [...list].sort((a, b) => {
       if (sortBy === 'priority') return b.priority - a.priority
@@ -125,7 +127,7 @@ export default function Outreach() {
       }
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     })
-  }, [venues, search, filterStatus, filterType, sortBy])
+  }, [venues, search, filterStatus, filterType, filterTrack, sortBy])
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -170,6 +172,18 @@ export default function Outreach() {
               <SelectItem value="all">All types</SelectItem>
               {(Object.keys(VENUE_TYPE_LABELS) as VenueType[]).map(t => (
                 <SelectItem key={t} value={t}>{VENUE_TYPE_LABELS[t]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterTrack} onValueChange={v => setFilterTrack(v as OutreachTrack | 'all')}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="All tracks" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All tracks</SelectItem>
+              {OUTREACH_TRACK_ORDER.map(t => (
+                <SelectItem key={t} value={t}>{OUTREACH_TRACK_LABELS[t]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -242,7 +256,17 @@ export default function Outreach() {
                     )}
                   >
                     <td className="px-4 py-3">
-                      <div className="font-medium text-neutral-100 leading-tight">{venue.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-neutral-100 leading-tight">{venue.name}</span>
+                        <span className={cn(
+                          'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0',
+                          (venue.outreach_track ?? 'pipeline') === 'pipeline'
+                            ? 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                            : 'bg-purple-950/60 text-purple-400 border border-purple-800/60'
+                        )}>
+                          {OUTREACH_TRACK_LABELS[venue.outreach_track ?? 'pipeline']}
+                        </span>
+                      </div>
                       {(venue.city || venue.location) && (
                         <div className="text-xs text-neutral-500 mt-0.5">
                           {[venue.city, venue.location].filter(Boolean).join(' · ')}

@@ -1,5 +1,6 @@
 import type {
   OutreachStatus,
+  OutreachTrack,
   VenueType,
   TemplateType,
   CommissionTier,
@@ -25,6 +26,7 @@ export interface Database {
           venue_type: VenueType
           priority: number
           status: OutreachStatus
+          outreach_track: OutreachTrack
           follow_up_date: string | null
           deal_terms: DealTerms | null
           created_at: string
@@ -39,6 +41,7 @@ export interface Database {
           venue_type?: VenueType
           priority?: number
           status?: OutreachStatus
+          outreach_track?: OutreachTrack
           follow_up_date?: string | null
           deal_terms?: DealTerms | null
           created_at?: string
@@ -53,6 +56,7 @@ export interface Database {
           venue_type?: VenueType
           priority?: number
           status?: OutreachStatus
+          outreach_track?: OutreachTrack
           follow_up_date?: string | null
           deal_terms?: DealTerms | null
           created_at?: string
