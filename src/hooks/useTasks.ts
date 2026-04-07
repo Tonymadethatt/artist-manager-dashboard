@@ -180,7 +180,27 @@ export function useTasks() {
   }
 
   const uncompleteTask = async (id: string) => {
-    return updateTask(id, { completed: false, completed_at: null })
+    const task = tasks.find(t => t.id === id)
+    const result = await updateTask(id, { completed: false, completed_at: null })
+
+    // Cancel any pending email queue entry that was created when this task was completed.
+    // Match by user, email_type, and recent creation time (within last 2 hours) so we
+    // don't accidentally cancel unrelated rows of the same type.
+    if (task?.email_type) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+        await supabase
+          .from('venue_emails')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('email_type', task.email_type)
+          .eq('status', 'pending')
+          .gte('created_at', twoHoursAgo)
+      }
+    }
+
+    return result
   }
 
   const snoozeTask = async (id: string, days = 1) => {

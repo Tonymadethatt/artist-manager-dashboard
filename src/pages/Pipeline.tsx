@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Plus, LayoutGrid, List, Settings2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTasks } from '@/hooks/useTasks'
@@ -200,6 +200,19 @@ export default function Pipeline() {
   const [filter, setFilter] = useState<Filter>('all')
   const [showCompleted, setShowCompleted] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
+
+  // Track tasks completed this session so they stay visible until page refresh
+  const [recentlyCompletedIds, setRecentlyCompletedIds] = useState<Set<string>>(new Set())
+
+  // Toast
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
+  const showToast = useCallback((msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast(msg)
+    toastTimer.current = setTimeout(() => setToast(null), 2500)
+  }, [])
   const [addOpen, setAddOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
@@ -220,13 +233,17 @@ export default function Pipeline() {
 
   const selectedVenue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
 
-  // Apply time filter
+  // Apply time filter — always include recently-completed tasks from this session
   const filteredTasks = useMemo(() => {
-    const open = showCompleted ? tasks : tasks.filter(t => !t.completed)
-    if (filter === 'today') return open.filter(t => t.due_date === today || (!t.due_date && !t.completed))
-    if (filter === 'week') return open.filter(t => !t.due_date || (t.due_date >= today && t.due_date <= weekEnd))
+    const open = tasks.filter(t => !t.completed || showCompleted || recentlyCompletedIds.has(t.id))
+    if (filter === 'today') return open.filter(t =>
+      recentlyCompletedIds.has(t.id) || t.due_date === today || (!t.due_date && !t.completed)
+    )
+    if (filter === 'week') return open.filter(t =>
+      recentlyCompletedIds.has(t.id) || !t.due_date || (t.due_date >= today && t.due_date <= weekEnd)
+    )
     return open
-  }, [tasks, filter, showCompleted, today, weekEnd])
+  }, [tasks, filter, showCompleted, recentlyCompletedIds, today, weekEnd])
 
   const activeCnt = useMemo(() => tasks.filter(t => !t.completed).length, [tasks])
   const overdueCnt = useMemo(() => tasks.filter(t => !t.completed && t.due_date && t.due_date < today).length, [tasks, today])
@@ -294,6 +311,26 @@ export default function Pipeline() {
     setAddOpen(false)
   }
 
+  const handleCompleteTask = useCallback(async (id: string, emailOpts?: QueueEmailOnTaskCompleteOptions) => {
+    const result = await completeTask(id, emailOpts)
+    setRecentlyCompletedIds(prev => new Set([...prev, id]))
+    const task = tasks.find(t => t.id === id)
+    showToast(task ? `"${task.title}" marked complete` : 'Task completed')
+    return result
+  }, [completeTask, tasks, showToast])
+
+  const handleUncompleteTask = useCallback(async (id: string) => {
+    const result = await uncompleteTask(id)
+    setRecentlyCompletedIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    // Also refresh email queue so the cancelled entry disappears
+    await refetchEmails()
+    return result
+  }, [uncompleteTask, refetchEmails])
+
   const handleOpenSendModal = useCallback((venue: Venue, contact: Contact, emailType: string) => {
     setSendEmailState({ venue, contact, emailType })
   }, [])
@@ -302,6 +339,11 @@ export default function Pipeline() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-neutral-800 border border-neutral-700 text-neutral-100 text-sm px-4 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
+          {toast}
+        </div>
+      )}
       {emailAutomationBanner && (
         <div
           role="alert"
@@ -421,8 +463,8 @@ export default function Pipeline() {
                     key={venue?.id ?? 'null'}
                     venue={venue}
                     tasks={venueTasks}
-                    onComplete={completeTask}
-                    onUncomplete={uncompleteTask}
+                    onComplete={handleCompleteTask}
+                    onUncomplete={handleUncompleteTask}
                     onSnooze={snoozeTask}
                     onEdit={openEdit}
                     onDelete={async (id) => { await deleteTask(id) }}
@@ -437,8 +479,8 @@ export default function Pipeline() {
                 <VenueWorkCard
                   venue={null}
                   tasks={boardGroups.generalTasks}
-                  onComplete={completeTask}
-                  onUncomplete={uncompleteTask}
+                  onComplete={handleCompleteTask}
+                  onUncomplete={handleUncompleteTask}
                   onSnooze={snoozeTask}
                   onEdit={openEdit}
                   onDelete={async (id) => { await deleteTask(id) }}
@@ -465,8 +507,8 @@ export default function Pipeline() {
                         <div key={task.id} className="px-2">
                           <TaskItem
                             task={task}
-                            onComplete={completeTask}
-                            onUncomplete={uncompleteTask}
+                            onComplete={handleCompleteTask}
+                            onUncomplete={handleUncompleteTask}
                             onSnooze={snoozeTask}
                             onEdit={openEdit}
                             onDelete={async (id) => { await deleteTask(id) }}
@@ -490,7 +532,7 @@ export default function Pipeline() {
               deals={deals}
               allEmails={allEmails}
               onClose={() => setSelectedVenueId(null)}
-              onCompleteTask={completeTask}
+              onCompleteTask={handleCompleteTask}
               onUpdateVenue={updateVenue}
               onQueueEmail={queueEmail}
               onOpenSendModal={handleOpenSendModal}
