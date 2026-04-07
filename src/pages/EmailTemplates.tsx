@@ -51,6 +51,7 @@ import type { CustomEmailBlock, CustomEmailBlocksDoc } from '@/lib/email/customE
 import {
   defaultCustomBlocksDoc,
   loadCustomEmailBlocksDoc,
+  normalizeCustomEmailBlocksDoc,
   normalizeTableBlock,
 } from '@/lib/email/customEmailBlocks'
 import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
@@ -76,6 +77,45 @@ function draftFromSaved(t: EmailTemplate | undefined): EmailTemplateLayoutV1 {
 
 function layoutsEqual(a: EmailTemplateLayoutV1, b: EmailTemplateLayoutV1): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** Same normalization as handleSave — persisted layout shape. */
+function buildCleanLayoutFromDraft(editorDraft: EmailTemplateLayoutV1): EmailTemplateLayoutV1 {
+  const clean: EmailTemplateLayoutV1 = {
+    ...editorDraft,
+    subject: editorDraft.subject?.trim() || null,
+    greeting: editorDraft.greeting?.trim() || null,
+    intro: editorDraft.intro?.trim() || null,
+    closing: editorDraft.closing?.trim() || null,
+    appendBlocks: editorDraft.appendBlocks?.filter(b =>
+      b.kind === 'prose_card'
+        ? b.body.trim().length > 0 || (b.title?.trim() ?? '').length > 0
+        : b.items.some(t => t.trim()),
+    ),
+  }
+  if (!clean.appendBlocks?.length) delete clean.appendBlocks
+  return clean
+}
+
+/** Re-run the same load pipeline as saved templates so dirty compare is apples-to-apples. */
+function layoutComparableFromEditorDraft(emailType: AnyEmailType, editorDraft: EmailTemplateLayoutV1): EmailTemplateLayoutV1 {
+  const clean = buildCleanLayoutFromDraft(editorDraft)
+  const synthetic: EmailTemplate = {
+    id: '_',
+    user_id: '_',
+    email_type: emailType,
+    custom_subject: clean.subject?.trim() || null,
+    custom_intro: clean.intro?.trim() || null,
+    layout: clean,
+    layout_version: 1,
+    created_at: '',
+    updated_at: '',
+  }
+  return draftFromSaved(synthetic)
+}
+
+function customBlocksSemanticallyEqual(a: CustomEmailBlocksDoc, b: CustomEmailBlocksDoc): boolean {
+  return JSON.stringify(normalizeCustomEmailBlocksDoc(a)) === JSON.stringify(normalizeCustomEmailBlocksDoc(b))
 }
 
 // ── Client email metadata ──────────────────────────────────────────────────
@@ -218,12 +258,16 @@ export default function EmailTemplates() {
 
   const savedTmpl = getTemplate(selectedType)
   const savedLayoutNormalized = useMemo(() => draftFromSaved(savedTmpl), [savedTmpl])
+  const editorLayoutComparable = useMemo(
+    () => layoutComparableFromEditorDraft(selectedType, editorDraft),
+    [selectedType, editorDraft],
+  )
 
   const selectedCustomRow = selectedCustomId ? customRows.find(r => r.id === selectedCustomId) : undefined
 
   const tryExitEdit = useCallback((fn: () => void) => {
     if (sidebarMode === 'edit') {
-      if (!layoutsEqual(editorDraft, savedLayoutNormalized)) {
+      if (!layoutsEqual(editorLayoutComparable, savedLayoutNormalized)) {
         setDiscardConfirm(true)
         return
       }
@@ -234,7 +278,7 @@ export default function EmailTemplates() {
         const dirty =
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
-          || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+          || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
           || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
         if (dirty) {
           setDiscardConfirm(true)
@@ -245,7 +289,7 @@ export default function EmailTemplates() {
     fn()
   }, [
     sidebarMode,
-    editorDraft,
+    editorLayoutComparable,
     savedLayoutNormalized,
     selectedCustomId,
     customRows,
@@ -269,7 +313,7 @@ export default function EmailTemplates() {
   }
 
   const handleGroupClickBlocked = (g: Group) => {
-    if (sidebarMode === 'edit' && !layoutsEqual(editorDraft, savedLayoutNormalized)) {
+    if (sidebarMode === 'edit' && !layoutsEqual(editorLayoutComparable, savedLayoutNormalized)) {
       setPendingGroup(g)
       setDiscardConfirm(true)
       return
@@ -281,7 +325,7 @@ export default function EmailTemplates() {
         const dirty =
           customNameDraft !== row.name
           || customSubjectDraft !== row.subject_template
-          || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+          || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
           || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
         if (dirty) {
           setPendingGroup(g)
@@ -450,7 +494,7 @@ export default function EmailTemplates() {
     || !artistProfile?.from_email?.trim()
     || testSendLoading
 
-  const isDirty = !layoutsEqual(editorDraft, savedLayoutNormalized)
+  const isDirty = !layoutsEqual(editorLayoutComparable, savedLayoutNormalized)
   const hasCustom = !!(savedTmpl && layoutHasAnyCustomization(artistLayoutForSend(
     savedTmpl.layout,
     savedTmpl.custom_subject,
@@ -461,7 +505,7 @@ export default function EmailTemplates() {
     const parsed = loadCustomEmailBlocksDoc(selectedCustomRow.blocks)
     return customNameDraft !== selectedCustomRow.name
       || customSubjectDraft !== selectedCustomRow.subject_template
-      || JSON.stringify(customBlocksDraft) !== JSON.stringify(parsed)
+      || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
       || (customAttachmentFileIdDraft ?? null) !== (selectedCustomRow.attachment_generated_file_id ?? null)
   })()
 
@@ -562,19 +606,7 @@ export default function EmailTemplates() {
 
   const handleSave = async () => {
     setSaving(true)
-    const clean: EmailTemplateLayoutV1 = {
-      ...editorDraft,
-      subject: editorDraft.subject?.trim() || null,
-      greeting: editorDraft.greeting?.trim() || null,
-      intro: editorDraft.intro?.trim() || null,
-      closing: editorDraft.closing?.trim() || null,
-      appendBlocks: editorDraft.appendBlocks?.filter(b =>
-        b.kind === 'prose_card'
-          ? b.body.trim().length > 0 || (b.title?.trim() ?? '').length > 0
-          : b.items.some(t => t.trim()),
-      ),
-    }
-    if (!clean.appendBlocks?.length) delete clean.appendBlocks
+    const clean = buildCleanLayoutFromDraft(editorDraft)
     const res = await upsertTemplate(selectedType, { layout: clean })
     setSaving(false)
     if (res && 'data' in res && res.data) {
