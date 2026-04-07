@@ -58,8 +58,8 @@ export function resolveMergeKey(
   audience: CustomMergeAudience,
 ): string {
   if (!key || !KEY_SETS[audience].has(key)) return ''
-  const firstName = ctx.recipient.name.split(' ')[0] || ''
-  const venueName = ctx.venue?.name || ctx.deal?.description || ''
+  const firstName = (ctx.recipient.name ?? '').split(/\s+/)[0] || ''
+  const venueName = ctx.venue?.name ?? ctx.deal?.description ?? ''
   switch (key) {
     case 'recipient.firstName':
       return firstName
@@ -78,9 +78,9 @@ export function resolveMergeKey(
     case 'deal.notes':
       return ctx.deal?.notes ?? ''
     case 'profile.artist_name':
-      return ctx.profile.artist_name
+      return ctx.profile.artist_name ?? ''
     case 'profile.company_name':
-      return ctx.profile.company_name || ctx.profile.artist_name
+      return ctx.profile.company_name || ctx.profile.artist_name || ''
     default:
       return ''
   }

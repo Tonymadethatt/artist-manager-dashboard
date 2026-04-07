@@ -112,7 +112,7 @@ function renderCustomOpeningLine(
     if (!merged) return ''
     return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
   }
-  const firstName = recipient.name.split(' ')[0]
+  const firstName = (recipient.name ?? '').split(/\s+/)[0] || ''
   const line = `Hi ${firstName},`
   return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(line)}</p>`
 }
@@ -268,7 +268,11 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     deal: opts.deal,
     venue: opts.venue,
   }
-  const subject = applyMergeToText(opts.subjectTemplate.trim() || 'Message from {{profile.artist_name}}', ctx, opts.audience)
+  const subject = applyMergeToText(
+    String(opts.subjectTemplate ?? '').trim() || 'Message from {{profile.artist_name}}',
+    ctx,
+    opts.audience,
+  )
   const bodyInner = renderBlocks(doc, ctx, opts.audience)
   const attachmentBlock = opts.attachment
     ? customAttachmentDownloadHtml(opts.attachment.url, opts.attachment.fileName)

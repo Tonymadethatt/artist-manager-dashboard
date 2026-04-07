@@ -33,7 +33,17 @@ const SANITIZE = {
 }
 
 export function sanitizeMergedEmailHtml(html: string): string {
-  return DOMPurify.sanitize(html, SANITIZE)
+  const s = html ?? ''
+  try {
+    return DOMPurify.sanitize(s, SANITIZE)
+  } catch (e) {
+    console.error('[sanitizeMergedEmailHtml] DOMPurify failed, using escaped fallback:', e)
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
 }
 
 export function mergedBodyLooksLikeHtml(merged: string): boolean {

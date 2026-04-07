@@ -363,8 +363,15 @@ export default function EmailQueue() {
       })
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Send failed' }))
-        throw new Error((err as { message?: string }).message ?? 'Send failed')
+        const text = await res.text()
+        let msg = `Send failed (${res.status})`
+        try {
+          const err = JSON.parse(text) as { message?: string }
+          if (err.message) msg = err.message
+        } catch {
+          if (text.trim()) msg = `${res.status}: ${text.slice(0, 240)}`
+        }
+        throw new Error(msg)
       }
 
       await updateEmailStatus(email.id, 'sent')
