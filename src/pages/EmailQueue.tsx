@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap } from 'lucide-react'
+import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Zap, Eye } from 'lucide-react'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { Button } from '@/components/ui/button'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import type { GeneratedFile, VenueEmail, VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
@@ -14,6 +17,9 @@ import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import { buildVenueEmailDocument } from '@/lib/email/renderVenueEmail'
+import { normalizeEmailTemplateLayout } from '@/lib/emailLayout'
 import {
   EMAIL_QUEUE_BUFFER_OPTIONS,
   clampEmailQueueBufferMinutes,
@@ -105,11 +111,12 @@ interface PendingRowProps {
   bufferMinutes: number
   onSendNow: (email: VenueEmail) => void
   onDismiss: (id: string) => void
+  onPreview: (email: VenueEmail) => void
   sending: boolean
   dismissing: boolean
 }
 
-function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, sending, dismissing }: PendingRowProps) {
+function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sending, dismissing }: PendingRowProps) {
   const recipientName = email.contact?.name || null
 
   return (
@@ -131,6 +138,15 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, sending, dismi
         {email.notes && <p className="text-xs text-neutral-600 italic">{email.notes}</p>}
       </div>
       <div className="flex gap-2 shrink-0 items-start pt-0.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-300"
+          onClick={() => onPreview(email)}
+          title="Preview email"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -156,7 +172,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, sending, dismi
   )
 }
 
-function HistoryRow({ email }: { email: VenueEmail }) {
+function HistoryRow({ email, onPreview }: { email: VenueEmail; onPreview: (email: VenueEmail) => void }) {
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-neutral-800 last:border-0">
       <div className="flex-1 min-w-0 space-y-1">
@@ -177,6 +193,17 @@ function HistoryRow({ email }: { email: VenueEmail }) {
           <p className="text-xs text-red-500 italic">{email.notes}</p>
         )}
       </div>
+      <div className="shrink-0 pt-0.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 p-0 text-neutral-500 hover:text-neutral-300"
+          onClick={() => onPreview(email)}
+          title="Preview email"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   )
 }
@@ -190,6 +217,9 @@ export default function EmailQueue() {
   const [refreshing, setRefreshing] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [bufferSaving, setBufferSaving] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewSubject, setPreviewSubject] = useState<string>('')
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
@@ -224,6 +254,139 @@ export default function EmailQueue() {
     setRefreshing(false)
   }
 
+  const handlePreview = useCallback(async (email: VenueEmail) => {
+    if (!profile) return
+    setPreviewLoading(true)
+    setPreviewHtml(null)
+    setPreviewSubject(email.subject || '')
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setPreviewLoading(false); return }
+
+      const profileForRender = {
+        artist_name: profile.artist_name ?? '',
+        company_name: profile.company_name ?? null,
+        from_email: profile.from_email,
+        reply_to_email: profile.reply_to_email,
+        website: profile.website,
+        phone: profile.phone,
+        social_handle: profile.social_handle,
+        tagline: profile.tagline,
+      }
+
+      let agreementUrl: string | null = email.deal?.agreement_url ?? null
+      if (email.deal) {
+        agreementUrl =
+          (await resolveDealAgreementUrlForEmailPayload(
+            async id => {
+              const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
+              return (data as GeneratedFile | null) ?? null
+            },
+            email.deal,
+            publicSiteOrigin()
+          )) ?? agreementUrl
+      }
+
+      const dealForRender = email.deal ? {
+        description: email.deal.description,
+        gross_amount: email.deal.gross_amount,
+        event_date: email.deal.event_date,
+        payment_due_date: email.deal.payment_due_date,
+        agreement_url: agreementUrl,
+        notes: email.deal.notes,
+      } : undefined
+
+      const venueForRender = email.venue ? {
+        name: email.venue.name,
+        city: email.venue.city ?? null,
+        location: email.venue.location ?? null,
+      } : undefined
+
+      const cid = parseCustomTemplateId(email.email_type)
+
+      if (cid) {
+        const { data: row } = await supabase
+          .from('custom_email_templates')
+          .select('subject_template, blocks, audience, attachment_generated_file_id')
+          .eq('id', cid)
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (!row) {
+          setPreviewHtml('<div style="padding:40px;color:#888;text-align:center;">Template not found</div>')
+          setPreviewLoading(false)
+          return
+        }
+
+        const previewRecipient = row.audience === 'artist'
+          ? { name: (profile.artist_name ?? '').split(/\s+/)[0] || 'Artist', email: email.recipient_email }
+          : { name: email.contact?.name || email.recipient_email, email: email.recipient_email }
+
+        let attachment: { url: string; fileName: string } | undefined
+        if (row.attachment_generated_file_id) {
+          const { data: gf } = await supabase
+            .from('generated_files')
+            .select('*')
+            .eq('id', row.attachment_generated_file_id as string)
+            .eq('user_id', user.id)
+            .maybeSingle()
+          const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
+          if (att) attachment = att
+        }
+
+        const { html, subject } = buildCustomEmailDocument({
+          audience: row.audience as 'venue' | 'artist',
+          subjectTemplate: row.subject_template as string,
+          blocksRaw: row.blocks,
+          profile: profileForRender,
+          recipient: previewRecipient,
+          deal: dealForRender,
+          venue: venueForRender ?? { name: '', city: null, location: null },
+          logoBaseUrl: '',
+          responsiveClasses: false,
+          showReplyButton: row.audience === 'venue',
+          ...(attachment ? { attachment } : {}),
+        })
+        setPreviewHtml(html)
+        setPreviewSubject(subject)
+      } else {
+        const recipientForRender = {
+          name: email.contact?.name || email.recipient_email,
+          email: email.recipient_email,
+        }
+
+        const { data: tmpl } = await supabase
+          .from('email_templates')
+          .select('custom_subject, custom_intro, layout')
+          .eq('user_id', user.id)
+          .eq('email_type', email.email_type)
+          .maybeSingle()
+
+        const layout = normalizeEmailTemplateLayout(tmpl?.layout ?? null)
+        const html = buildVenueEmailDocument({
+          type: email.email_type as 'booking_confirmation',
+          profile: profileForRender,
+          recipient: recipientForRender,
+          deal: dealForRender,
+          venue: venueForRender,
+          customIntro: tmpl?.custom_intro as string | null ?? null,
+          customSubject: tmpl?.custom_subject as string | null ?? null,
+          layout,
+          logoBaseUrl: '',
+          responsiveClasses: false,
+        })
+        setPreviewHtml(html)
+        setPreviewSubject(email.subject || '')
+      }
+    } catch (err) {
+      console.error('[EmailQueue] preview error:', err)
+      setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Failed to load preview</div>')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [profile])
+
   const handleSendNow = useCallback(async (email: VenueEmail) => {
     if (!profile?.from_email) {
       setSendError('Artist profile not configured. Set up your profile first.')
@@ -245,6 +408,8 @@ export default function EmailQueue() {
         company_name: profile.company_name,
         from_email: profile.from_email,
         reply_to_email: profile.reply_to_email,
+        artist_email: profile.artist_email ?? null,
+        manager_email: profile.manager_email ?? null,
         website: profile.website,
         phone: profile.phone,
         social_handle: profile.social_handle,
@@ -483,6 +648,7 @@ export default function EmailQueue() {
                   bufferMinutes={effectiveQueueBufferMinutes(email, bufferMinutes)}
                   onSendNow={handleSendNow}
                   onDismiss={handleDismiss}
+                  onPreview={handlePreview}
                   sending={sendingId === email.id}
                   dismissing={dismissingId === email.id}
                 />
@@ -509,12 +675,37 @@ export default function EmailQueue() {
                 </p>
               </div>
               {sentEmails.map(email => (
-                <HistoryRow key={email.id} email={email} />
+                <HistoryRow key={email.id} email={email} onPreview={handlePreview} />
               ))}
             </div>
           )}
         </>
       )}
+
+      {/* Preview dialog */}
+      <Dialog open={previewHtml !== null || previewLoading} onOpenChange={v => { if (!v) { setPreviewHtml(null); setPreviewSubject('') } }}>
+        <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0 gap-0 bg-neutral-950 border-neutral-800">
+          <DialogHeader className="px-5 pt-4 pb-3 border-b border-neutral-800 shrink-0">
+            <DialogTitle className="text-sm font-medium text-neutral-200 truncate">
+              {previewSubject || 'Email Preview'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {previewLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+              </div>
+            ) : previewHtml ? (
+              <iframe
+                srcDoc={previewHtml}
+                title="Email preview"
+                className="w-full h-full border-0"
+                sandbox="allow-same-origin"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

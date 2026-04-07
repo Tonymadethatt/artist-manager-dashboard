@@ -19,6 +19,8 @@ interface ArtistProfile {
   company_name: string | null
   from_email: string
   reply_to_email: string | null
+  artist_email?: string | null
+  manager_email?: string | null
   website: string | null
   phone: string | null
   social_handle: string | null
@@ -191,8 +193,8 @@ const handler: Handler = async (event) => {
         recipient,
         deal,
         venue,
-        custom_intro,
-        custom_subject,
+        customIntro: custom_intro,
+        customSubject: custom_subject,
         layout,
         logoBaseUrl: siteUrl,
         responsiveClasses: true,
@@ -220,6 +222,15 @@ const handler: Handler = async (event) => {
     }
   }
 
+  // CC the user on all outgoing emails (artist_email, and manager_email if set)
+  const cc: string[] = []
+  if (profile.artist_email && profile.artist_email !== recipient.email) {
+    cc.push(profile.artist_email)
+  }
+  if (profile.manager_email && profile.manager_email !== recipient.email && profile.manager_email !== profile.artist_email) {
+    cc.push(profile.manager_email)
+  }
+
   try {
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -230,6 +241,7 @@ const handler: Handler = async (event) => {
       body: JSON.stringify({
         from: profile.from_email,
         to: [recipient.email],
+        ...(cc.length > 0 ? { cc } : {}),
         reply_to: [replyTo],
         subject,
         html,

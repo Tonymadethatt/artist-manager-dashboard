@@ -270,6 +270,8 @@ const handler: Handler = async (event) => {
       company_name: profile.company_name,
       from_email: profile.from_email,
       reply_to_email: profile.reply_to_email,
+      artist_email: profile.artist_email ?? null,
+      manager_email: profile.manager_email ?? null,
       website: profile.website,
       phone: profile.phone,
       social_handle: profile.social_handle,
