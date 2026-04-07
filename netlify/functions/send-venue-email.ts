@@ -132,102 +132,135 @@ const handler: Handler = async (event) => {
   let html: string
   let subject: string
 
-  if (custom_artist_template) {
-    const supabaseUrl = process.env.SUPABASE_URL || ''
-    const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
-    const built = buildCustomEmailDocument({
-      audience: 'artist',
-      subjectTemplate: custom_artist_template.subject_template,
-      blocksRaw: custom_artist_template.blocks,
-      profile,
-      recipient,
-      deal,
-      venue,
-      logoBaseUrl: siteUrl,
-      responsiveClasses: true,
-      ...(attachment ? { attachment } : {}),
-    })
-    html = built.html
-    subject = built.subject
-  } else if (custom_venue_template) {
-    const supabaseUrl = process.env.SUPABASE_URL || ''
-    const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
-    const built = buildCustomEmailDocument({
-      audience: 'venue',
-      subjectTemplate: custom_venue_template.subject_template,
-      blocksRaw: custom_venue_template.blocks,
-      profile,
-      recipient,
-      deal,
-      venue,
-      logoBaseUrl: siteUrl,
-      responsiveClasses: true,
-      showReplyButton: custom_venue_template.show_reply_button !== false,
-      replyButtonLabel: custom_venue_template.reply_button_label ?? null,
-      ...(attachment ? { attachment } : {}),
-    })
-    html = built.html
-    subject = built.subject
-  } else {
-    const artistNameUpper = (profile.artist_name ?? '').toUpperCase()
-    const venueName = venue?.name || deal?.description || 'your venue'
-    const layout = normalizeEmailTemplateLayout(rawLayout)
-    html = buildVenueEmailDocument({
-      type: type!,
-      profile,
-      recipient,
-      deal,
-      venue,
-      custom_intro,
-      custom_subject,
-      layout,
-      logoBaseUrl: siteUrl,
-      responsiveClasses: true,
-    })
+  try {
+    if (custom_artist_template) {
+      const supabaseUrl = process.env.SUPABASE_URL || ''
+      const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
+      const built = buildCustomEmailDocument({
+        audience: 'artist',
+        subjectTemplate: custom_artist_template.subject_template ?? '',
+        blocksRaw: custom_artist_template.blocks,
+        profile: {
+          ...profile,
+          artist_name: profile.artist_name ?? '',
+          company_name: profile.company_name ?? null,
+        },
+        recipient,
+        deal,
+        venue,
+        logoBaseUrl: siteUrl,
+        responsiveClasses: true,
+        ...(attachment ? { attachment } : {}),
+      })
+      html = built.html
+      subject = built.subject
+    } else if (custom_venue_template) {
+      const supabaseUrl = process.env.SUPABASE_URL || ''
+      const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
+      const built = buildCustomEmailDocument({
+        audience: 'venue',
+        subjectTemplate: custom_venue_template.subject_template ?? '',
+        blocksRaw: custom_venue_template.blocks,
+        profile: {
+          ...profile,
+          artist_name: profile.artist_name ?? '',
+          company_name: profile.company_name ?? null,
+        },
+        recipient,
+        deal,
+        venue,
+        logoBaseUrl: siteUrl,
+        responsiveClasses: true,
+        showReplyButton: custom_venue_template.show_reply_button !== false,
+        replyButtonLabel: custom_venue_template.reply_button_label ?? null,
+        ...(attachment ? { attachment } : {}),
+      })
+      html = built.html
+      subject = built.subject
+    } else {
+      const artistNameUpper = (profile.artist_name ?? '').toUpperCase()
+      const venueName = venue?.name || deal?.description || 'your venue'
+      const layout = normalizeEmailTemplateLayout(rawLayout)
+      html = buildVenueEmailDocument({
+        type: type!,
+        profile: {
+          ...profile,
+          artist_name: profile.artist_name ?? '',
+          company_name: profile.company_name ?? null,
+        },
+        recipient,
+        deal,
+        venue,
+        custom_intro,
+        custom_subject,
+        layout,
+        logoBaseUrl: siteUrl,
+        responsiveClasses: true,
+      })
 
-    const subjectMap: Record<VenueEmailType, string> = {
-      booking_confirmation: `Booking Confirmation - ${artistNameUpper} at ${venueName}`,
-      payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
-      payment_reminder: `Payment Reminder - ${artistNameUpper}`,
-      agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
-      booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
-      follow_up: `Following Up - ${artistNameUpper}`,
-      rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
+      const subjectMap: Record<VenueEmailType, string> = {
+        booking_confirmation: `Booking Confirmation - ${artistNameUpper} at ${venueName}`,
+        payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
+        payment_reminder: `Payment Reminder - ${artistNameUpper}`,
+        agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
+        booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
+        follow_up: `Following Up - ${artistNameUpper}`,
+        rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
+      }
+      subject = custom_subject?.trim() || layout?.subject?.trim() || subjectMap[type!]
     }
-    subject = custom_subject?.trim() || layout?.subject?.trim() || subjectMap[type!]
-  }
-
-  const resendRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: profile.from_email,
-      to: [recipient.email],
-      reply_to: [replyTo],
-      subject,
-      html,
-    }),
-  })
-
-  if (!resendRes.ok) {
-    const err = await resendRes.json().catch(() => ({}))
+  } catch (renderErr) {
+    const msg = renderErr instanceof Error ? renderErr.message : String(renderErr)
+    const stack = renderErr instanceof Error ? renderErr.stack : undefined
+    console.error('[send-venue-email] render error:', msg, stack)
     return {
-      statusCode: resendRes.status,
+      statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: (err as { message?: string }).message ?? 'Resend API error' }),
+      body: JSON.stringify({ message: `Email render failed: ${msg}` }),
     }
   }
 
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: 'Email sent successfully',
-      ...(custom_artist_template ? { subject } : {}),
-    }),
+  try {
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: profile.from_email,
+        to: [recipient.email],
+        reply_to: [replyTo],
+        subject,
+        html,
+      }),
+    })
+
+    if (!resendRes.ok) {
+      const err = await resendRes.json().catch(() => ({}))
+      return {
+        statusCode: resendRes.status,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: (err as { message?: string }).message ?? 'Resend API error' }),
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: 'Email sent successfully',
+        ...(custom_artist_template ? { subject } : {}),
+      }),
+    }
+  } catch (sendErr) {
+    const msg = sendErr instanceof Error ? sendErr.message : String(sendErr)
+    console.error('[send-venue-email] send error:', msg)
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `Email send failed: ${msg}` }),
+    }
   }
 }
 

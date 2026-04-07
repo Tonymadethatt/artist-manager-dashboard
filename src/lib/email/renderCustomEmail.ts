@@ -224,7 +224,7 @@ function venueFooter(
   igUrl: string,
 ) {
   const replyTo = profile.reply_to_email || profile.from_email
-  const companyName = profile.company_name || profile.artist_name
+  const companyName = profile.company_name || profile.artist_name || ''
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const footerLinks = [
     profile.website ? `<a href="${escapeHtmlPlain(profile.website)}" style="color:#888888;text-decoration:none;font-size:11px;">${escapeHtmlPlain(profile.website.replace(/^https?:\/\//, ''))}</a>` : '',

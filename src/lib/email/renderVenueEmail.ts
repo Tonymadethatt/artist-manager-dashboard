@@ -115,12 +115,12 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
 
   const layout = effectiveTemplateLayout(layoutRaw, customSubject, customIntro)
 
-  const artistName = profile.artist_name
+  const artistName = profile.artist_name ?? ''
   const artistNameUpper = artistName.toUpperCase()
-  const companyName = profile.company_name || profile.artist_name
+  const companyName = profile.company_name || profile.artist_name || ''
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
-  const firstName = recipient.name.split(' ')[0]
+  const firstName = (recipient.name ?? '').split(' ')[0]
   const { logo: logoUrl, ig: igUrl } = logoUrls(logoBaseUrl)
 
   let subject = ''
