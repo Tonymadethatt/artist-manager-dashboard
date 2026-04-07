@@ -36,8 +36,8 @@ export async function queueEmailAutomationForCompletedTask(
   task: Task,
   options?: QueueEmailOnTaskCompleteOptions
 ): Promise<{ ok: boolean; reason: string }> {
-  if (!task.email_type || !task.venue_id) {
-    return { ok: true, reason: 'no_email_type_or_venue' }
+  if (!task.email_type) {
+    return { ok: true, reason: 'no_email_type' }
   }
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,34 +45,58 @@ export async function queueEmailAutomationForCompletedTask(
     return { ok: false, reason: 'not_authenticated' }
   }
 
-  const { data: venue } = await supabase
-    .from('venues')
-    .select('*')
-    .eq('id', task.venue_id)
-    .single()
-
-  if (!venue) {
-    return { ok: false, reason: 'venue_not_found' }
+  /** Task may omit venue while still linking a deal — resolve venue from the deal for email + merge context. */
+  let resolvedVenueId: string | null = task.venue_id
+  if (!resolvedVenueId && task.deal_id) {
+    const { data: dealVenueRow } = await supabase
+      .from('deals')
+      .select('venue_id')
+      .eq('id', task.deal_id)
+      .maybeSingle()
+    resolvedVenueId = (dealVenueRow as { venue_id: string } | null)?.venue_id ?? null
   }
 
-  const v = venue as Venue
+  let v: Venue | null = null
+  if (resolvedVenueId) {
+    const { data: venue } = await supabase
+      .from('venues')
+      .select('*')
+      .eq('id', resolvedVenueId)
+      .maybeSingle()
+    if (venue) v = venue as Venue
+  }
 
-  const { data: deals } = await supabase
-    .from('deals')
-    .select('*')
-    .eq('venue_id', task.venue_id)
-    .order('created_at', { ascending: false })
-
-  const venueDeals = (deals ?? []) as Deal[]
-  const primaryDeal: Deal | undefined = task.deal_id
-    ? venueDeals.find(d => d.id === task.deal_id) ?? venueDeals[0]
-    : venueDeals[0]
+  let venueDeals: Deal[] = []
+  let primaryDeal: Deal | undefined
+  if (resolvedVenueId) {
+    const { data: deals } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('venue_id', resolvedVenueId)
+      .order('created_at', { ascending: false })
+    venueDeals = (deals ?? []) as Deal[]
+    primaryDeal = task.deal_id
+      ? venueDeals.find(d => d.id === task.deal_id) ?? venueDeals[0]
+      : venueDeals[0]
+  } else if (task.deal_id) {
+    const { data: onlyDeal } = await supabase
+      .from('deals')
+      .select('*')
+      .eq('id', task.deal_id)
+      .maybeSingle()
+    if (onlyDeal) {
+      venueDeals = [onlyDeal as Deal]
+      primaryDeal = onlyDeal as Deal
+    }
+  }
 
   const siteOrigin = publicSiteOrigin()
   let pinnedFile: GeneratedFile | null = null
   if (task.generated_file_id) {
     const f = await loadGeneratedFileRow(task.generated_file_id)
-    if (f && isGeneratedFileInScopeForTask(f, user.id, task.venue_id, task.deal_id)) pinnedFile = f
+    if (f && isGeneratedFileInScopeForTask(f, user.id, resolvedVenueId ?? task.venue_id, task.deal_id)) {
+      pinnedFile = f
+    }
   }
   let dealCanonFile: GeneratedFile | null = null
   if (primaryDeal?.agreement_generated_file_id) {
@@ -91,6 +115,9 @@ export async function queueEmailAutomationForCompletedTask(
     primaryDeal && agreementSyncPatch ? { ...primaryDeal, ...agreementSyncPatch } : primaryDeal
 
   if (task.email_type === 'performance_report_request') {
+    if (!v || !resolvedVenueId) {
+      return { ok: true, reason: 'performance_report_needs_venue' }
+    }
     const { data: profile } = await supabase
       .from('artist_profile')
       .select('*')
@@ -185,8 +212,8 @@ export async function queueEmailAutomationForCompletedTask(
       const attachId = ctRow.attachment_generated_file_id as string | null | undefined
       if (attachId) {
         const gf = await loadGeneratedFileRow(attachId)
-        const p = gf && gf.user_id === user.id ? buildEmailAttachmentPayloadFromFile(gf, siteOrigin) : null
-        if (p) attachment = p
+        const att = gf && gf.user_id === user.id ? buildEmailAttachmentPayloadFromFile(gf, siteOrigin) : null
+        if (att) attachment = att
       }
 
       try {
@@ -215,9 +242,9 @@ export async function queueEmailAutomationForCompletedTask(
             },
             deal: dealPayload,
             venue: {
-              name: v.name,
-              city: v.city ?? null,
-              location: v.location ?? null,
+              name: v?.name ?? '',
+              city: v?.city ?? null,
+              location: v?.location ?? null,
             },
           }),
         })
@@ -236,10 +263,14 @@ export async function queueEmailAutomationForCompletedTask(
     customVenueName = ctRow.name
   }
 
+  if (!resolvedVenueId || !v) {
+    return { ok: false, reason: 'no_venue_for_venue_email' }
+  }
+
   const { data: contactRows } = await supabase
     .from('contacts')
     .select('id, email, name')
-    .eq('venue_id', task.venue_id)
+    .eq('venue_id', resolvedVenueId)
     .order('created_at')
 
   const contacts = (contactRows ?? []) as Contact[]
