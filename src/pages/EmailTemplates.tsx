@@ -33,6 +33,7 @@ import {
 import {
   buildManagementReportHtml,
   buildRetainerReminderHtml,
+  buildRetainerReceivedHtml,
   buildPerformanceReportRequestHtml,
 } from '@/lib/buildArtistEmailHtml'
 import type { EmailTemplateAppendBlock, EmailTemplateLayoutV1 } from '@/lib/emailLayout'
@@ -112,16 +113,23 @@ const CLIENT_ORDER: VenueEmailType[] = [
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   management_report:          'Weekly or custom-range report sent to DJ Luijay. Shows outreach, deals, retainer, and impact.',
   retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
+  retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
   performance_report_request: 'Sent to DJ Luijay after a show. Links to the post-show report form.',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   management_report:          'Management Update - {start} to {end}',
   retainer_reminder:          'Hey DJ, quick note from management',
+  retainer_received:          'DJ, retainer received — thank you',
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
 }
 
-const ARTIST_ORDER: ArtistEmailType[] = ['management_report', 'retainer_reminder', 'performance_report_request']
+const ARTIST_ORDER: ArtistEmailType[] = [
+  'management_report',
+  'retainer_reminder',
+  'retainer_received',
+  'performance_report_request',
+]
 
 type Group = 'client' | 'artist'
 
@@ -368,6 +376,9 @@ export default function EmailTemplates() {
           layout.subject ?? null,
           layout,
         )
+      }
+      if (selectedType === 'retainer_received') {
+        return buildRetainerReceivedHtml(layout.intro ?? null, layout.subject ?? null, layout)
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
     }

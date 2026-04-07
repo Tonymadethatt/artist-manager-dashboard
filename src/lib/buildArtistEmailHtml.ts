@@ -5,6 +5,7 @@ import { applyPerformanceReportPlaceholders } from '@/lib/performanceReportEmail
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { artistLayoutForSend } from '@/lib/emailLayout'
 import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
+import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
 
 function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -231,9 +232,34 @@ export function buildRetainerReminderHtml(
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
   </div>
   ${sharedFooter}
-</div>
+  </div>
 </body>
 </html>`
+}
+
+// ---------------------------------------------------------------------------
+// Retainer received (paid in full) preview
+// ---------------------------------------------------------------------------
+
+export function buildRetainerReceivedHtml(
+  customIntro?: string | null,
+  customSubject?: string | null,
+  layout?: EmailTemplateLayoutV1 | null,
+): string {
+  const L = artistLayoutForSend(layout ?? null, customSubject, customIntro)
+  const profile = {
+    artist_name: 'DJ Luijay',
+    manager_name: 'Front Office',
+    social_handle: 'djluijay',
+    website: 'https://djluijay.com',
+    phone: null as string | null,
+  }
+  const settledFees = [
+    { month: 'February 2026', invoiced: 350, paid: 350 },
+    { month: 'March 2026', invoiced: 350, paid: 350 },
+  ]
+  const totalAcknowledged = settledFees.reduce((s, f) => s + f.paid, 0)
+  return buildRetainerReceivedEmailHtml(profile, settledFees, totalAcknowledged, L, '')
 }
 
 const PERF_PREVIEW_VENUE = 'Skyline Bar & Lounge'

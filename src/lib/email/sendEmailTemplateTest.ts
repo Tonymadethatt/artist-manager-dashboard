@@ -7,6 +7,7 @@ import type { CustomEmailTemplateRow } from '@/hooks/useCustomEmailTemplates'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
+  buildRetainerReceivedPayload,
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
@@ -191,6 +192,26 @@ export async function sendEmailTemplateTest(
           profile: reportProfileForSend(profile),
           unpaidFees,
           totalOutstanding,
+          custom_subject: null,
+          custom_intro: null,
+          layout: layoutNorm,
+          testOnly: true,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'retainer_received') {
+      const inputs = await fetchReportInputsForUser(supabase, user.id)
+      const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
+      const res = await fetch('/.netlify/functions/send-retainer-received', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: reportProfileForSend(profile),
+          settledFees,
+          totalAcknowledged,
           custom_subject: null,
           custom_intro: null,
           layout: layoutNorm,

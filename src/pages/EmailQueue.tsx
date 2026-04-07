@@ -32,6 +32,7 @@ import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
+  buildRetainerReceivedPayload,
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
@@ -333,7 +334,7 @@ export default function EmailQueue() {
             + `Outstanding: ${report.retainer.feeOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + `<p style="margin:0;color:#666;font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,
           )
-        } else {
+        } else if (email.email_type === 'retainer_reminder') {
           const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
           const { data: rrTmpl } = await supabase
             .from('email_templates')
@@ -355,6 +356,30 @@ export default function EmailQueue() {
             + `<p style="color:#888;font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${totalOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + rows
             + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
+          )
+        } else {
+          const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
+          const { data: rxTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject')
+            .eq('user_id', user.id)
+            .eq('email_type', 'retainer_received')
+            .maybeSingle()
+          const firstName = (profile.artist_name ?? 'Artist').split(/\s+/)[0] || 'Artist'
+          const subj = (rxTmpl?.custom_subject as string | null)?.trim() || `${firstName}, retainer received — thank you`
+          setPreviewSubject(subj)
+          const toe = esc(profile.artist_email ?? '')
+          const rows = settledFees.length === 0
+            ? `<p style="color:#86efac">No settled invoice rows in Earnings yet — live email still sends a short thank-you.</p>`
+            : `<ul style="margin:0;padding-left:18px">${settledFees.map(f =>
+              `<li>${esc(f.month)}: ${f.paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} paid (invoiced ${f.invoiced.toLocaleString('en-US', { style: 'currency', currency: 'USD' })})</li>`,
+            ).join('')}</ul>`
+          setPreviewHtml(
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            + `<div style="padding:24px;max-width:560px;margin:0 auto">`
+            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Retainer received preview · total acknowledged ${totalAcknowledged.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · sent to <strong>${toe}</strong></p>`
+            + rows
+            + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
           )
         }
         setPreviewLoading(false)
@@ -574,7 +599,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
-        } else {
+        } else if (email.email_type === 'retainer_reminder') {
           const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
           if (unpaidFees.length === 0) {
             throw new Error('No outstanding retainer balance')
@@ -592,6 +617,27 @@ export default function EmailQueue() {
               profile: profileForArtistSend,
               unpaidFees,
               totalOutstanding,
+              custom_subject: tmpl?.custom_subject ?? null,
+              custom_intro: tmpl?.custom_intro ?? null,
+              layout: tmpl?.layout ?? null,
+            }),
+          })
+          if (!res.ok) throw new Error(await parseErr(res))
+        } else {
+          const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
+          const { data: tmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro, layout')
+            .eq('user_id', user.id)
+            .eq('email_type', 'retainer_received')
+            .maybeSingle()
+          const res = await fetch('/.netlify/functions/send-retainer-received', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile: profileForArtistSend,
+              settledFees,
+              totalAcknowledged,
               custom_subject: tmpl?.custom_subject ?? null,
               custom_intro: tmpl?.custom_intro ?? null,
               layout: tmpl?.layout ?? null,

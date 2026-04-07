@@ -2,7 +2,7 @@
  * process-email-queue
  *
  * Called by an external cron job every minute.
- * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`) — buffer 0 so the next cron run can send.
+ * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`) — buffer 0 so the next cron run can send.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -25,6 +25,7 @@ import { parsePerfFormQueueNotes } from '../../src/lib/email/performanceFormQueu
 import { fetchReportInputsForUser } from '../../src/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
+  buildRetainerReceivedPayload,
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '../../src/lib/reports/buildManagementReportData'
@@ -480,7 +481,11 @@ const handler: Handler = async (event) => {
     }
 
     const builtinArtistType = email.email_type as string
-    if (builtinArtistType === 'management_report' || builtinArtistType === 'retainer_reminder') {
+    if (
+      builtinArtistType === 'management_report'
+      || builtinArtistType === 'retainer_reminder'
+      || builtinArtistType === 'retainer_received'
+    ) {
       const row = profileByUser.get(email.user_id) as Record<string, unknown> | undefined
       if (!row?.artist_email || !row.from_email) {
         await supabase
@@ -539,7 +544,7 @@ const handler: Handler = async (event) => {
               .eq('id', email.id)
             results.push({ id: email.id, result: 'failed', reason })
           }
-        } else {
+        } else if (builtinArtistType === 'retainer_reminder') {
           const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
           if (unpaidFees.length === 0) {
             await supabase
@@ -563,6 +568,36 @@ const handler: Handler = async (event) => {
               custom_subject: rrTmpl?.custom_subject ?? null,
               custom_intro: rrTmpl?.custom_intro ?? null,
               layout: rrTmpl?.layout ?? null,
+            }),
+          })
+          if (sendRes.ok) {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'sent' })
+          } else {
+            const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+            const reason = (err as { message?: string }).message ?? 'Send failed'
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason })
+          }
+        } else {
+          const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
+          const rxTmpl = templateByUserAndType.get(`${email.user_id}:retainer_received`)
+          const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-retainer-received`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              profile: sendProfile,
+              settledFees,
+              totalAcknowledged,
+              custom_subject: rxTmpl?.custom_subject ?? null,
+              custom_intro: rxTmpl?.custom_intro ?? null,
+              layout: rxTmpl?.layout ?? null,
             }),
           })
           if (sendRes.ok) {

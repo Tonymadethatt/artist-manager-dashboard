@@ -13,7 +13,11 @@ export function taskEmailAutomationHint(emailType: string): string | null {
     return 'Requires a linked venue or deal with a venue. Email goes to the venue contact (performance form link).'
   }
 
-  if (emailType === 'management_report' || emailType === 'retainer_reminder') {
+  if (
+    emailType === 'management_report'
+    || emailType === 'retainer_reminder'
+    || emailType === 'retainer_received'
+  ) {
     return 'Sent to your artist email when you complete the task. No venue required.'
   }
 

@@ -198,3 +198,26 @@ export function buildRetainerReminderPayload(fees: MonthlyFee[]): {
   const totalOutstanding = feesWithTotals.reduce((s, f) => s + f.balance, 0)
   return { unpaidFees, totalOutstanding }
 }
+
+export type RetainerReceivedFeeRow = { month: string; invoiced: number; paid: number }
+
+/** Months with a positive invoice that are paid in full (balance <= 0). */
+export function buildRetainerReceivedPayload(fees: MonthlyFee[]): {
+  settledFees: RetainerReceivedFeeRow[]
+  totalAcknowledged: number
+} {
+  const feesWithTotals = fees.map(f => {
+    const totalPaid = (f.payments ?? []).reduce((s, p) => s + p.amount, 0)
+    return { ...f, totalPaid, balance: f.amount - totalPaid }
+  })
+  const settledFees = feesWithTotals
+    .filter(f => f.amount > 0 && f.balance <= 0)
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map(f => ({
+      month: fmtReminderMonth(f.month),
+      invoiced: f.amount,
+      paid: f.totalPaid,
+    }))
+  const totalAcknowledged = settledFees.reduce((s, f) => s + f.paid, 0)
+  return { settledFees, totalAcknowledged }
+}

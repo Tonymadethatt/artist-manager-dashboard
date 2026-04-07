@@ -373,7 +373,11 @@ export type VenueEmailType =
   | 'follow_up'
   | 'rebooking_inquiry'
 
-export type ArtistEmailType = 'management_report' | 'retainer_reminder' | 'performance_report_request'
+export type ArtistEmailType =
+  | 'management_report'
+  | 'retainer_reminder'
+  | 'retainer_received'
+  | 'performance_report_request'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -392,6 +396,7 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
 export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   management_report: 'Management Report',
   retainer_reminder: 'Retainer Reminder',
+  retainer_received: 'Retainer payment received',
   performance_report_request: 'Performance Report Request',
 }
 

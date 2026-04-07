@@ -371,7 +371,7 @@ export async function queueEmailAutomationForCompletedTask(
     }
 
     const builtin = audience.builtinType
-    if (builtin === 'management_report' || builtin === 'retainer_reminder') {
+    if (builtin === 'management_report' || builtin === 'retainer_reminder' || builtin === 'retainer_received') {
       if (builtin === 'retainer_reminder') {
         const { fees } = await fetchReportInputsForUser(supabase, user.id)
         const { unpaidFees } = buildRetainerReminderPayload(fees)
