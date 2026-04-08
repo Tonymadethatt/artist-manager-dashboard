@@ -432,6 +432,24 @@ export interface PerformanceReport {
   submitted: boolean
   submitted_at: string | null
   created_at: string
+  /** V1 extended answers — see `performanceReportV1.ts` for automation mapping */
+  chase_payment_followup: 'no' | 'unsure' | 'yes' | null
+  payment_dispute: 'no' | 'yes' | null
+  production_issue_level: 'none' | 'minor' | 'serious' | null
+  production_friction_tags: string[] | null
+  rebooking_timeline: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | null
+  wants_booking_call: 'no' | 'yes' | null
+  wants_manager_venue_contact: 'no' | 'yes' | null
+  would_play_again: 'yes' | 'maybe' | 'no' | null
+  cancellation_reason:
+    | 'venue_cancelled'
+    | 'weather'
+    | 'low_turnout'
+    | 'illness'
+    | 'logistics'
+    | 'other'
+    | null
+  referral_lead: 'no' | 'yes' | null
   venue?: Pick<Venue, 'id' | 'name'> | null
   deal?: Pick<Deal, 'id' | 'description' | 'event_date'> | null
 }

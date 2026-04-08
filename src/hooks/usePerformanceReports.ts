@@ -120,7 +120,32 @@ export function usePerformanceReports() {
 
     const { data: updated, error: updateError } = await supabase
       .from('performance_reports')
-      .update({ token: newToken, token_used: false, submitted: false, submitted_at: null })
+      .update({
+        token: newToken,
+        token_used: false,
+        submitted: false,
+        submitted_at: null,
+        event_happened: null,
+        event_rating: null,
+        attendance: null,
+        artist_paid_status: null,
+        payment_amount: null,
+        venue_interest: null,
+        relationship_quality: null,
+        notes: null,
+        media_links: null,
+        commission_flagged: false,
+        chase_payment_followup: null,
+        payment_dispute: null,
+        production_issue_level: null,
+        production_friction_tags: [],
+        rebooking_timeline: null,
+        wants_booking_call: null,
+        wants_manager_venue_contact: null,
+        would_play_again: null,
+        cancellation_reason: null,
+        referral_lead: null,
+      })
       .eq('id', reportId)
       .select('*, venue:venues(id, name), deal:deals(id, description, event_date)')
       .single()

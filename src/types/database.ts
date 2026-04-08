@@ -839,6 +839,16 @@ export interface Database {
           submitted: boolean
           submitted_at: string | null
           created_at: string
+          chase_payment_followup: string | null
+          payment_dispute: string | null
+          production_issue_level: string | null
+          production_friction_tags: string[]
+          rebooking_timeline: string | null
+          wants_booking_call: string | null
+          wants_manager_venue_contact: string | null
+          would_play_again: string | null
+          cancellation_reason: string | null
+          referral_lead: string | null
         }
         Insert: {
           id?: string
@@ -860,6 +870,16 @@ export interface Database {
           submitted?: boolean
           submitted_at?: string | null
           created_at?: string
+          chase_payment_followup?: string | null
+          payment_dispute?: string | null
+          production_issue_level?: string | null
+          production_friction_tags?: string[]
+          rebooking_timeline?: string | null
+          wants_booking_call?: string | null
+          wants_manager_venue_contact?: string | null
+          would_play_again?: string | null
+          cancellation_reason?: string | null
+          referral_lead?: string | null
         }
         Update: {
           id?: string
@@ -881,6 +901,16 @@ export interface Database {
           submitted?: boolean
           submitted_at?: string | null
           created_at?: string
+          chase_payment_followup?: string | null
+          payment_dispute?: string | null
+          production_issue_level?: string | null
+          production_friction_tags?: string[]
+          rebooking_timeline?: string | null
+          wants_booking_call?: string | null
+          wants_manager_venue_contact?: string | null
+          would_play_again?: string | null
+          cancellation_reason?: string | null
+          referral_lead?: string | null
         }
         Relationships: [
           {

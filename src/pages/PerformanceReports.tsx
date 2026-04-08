@@ -3,6 +3,10 @@ import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangl
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import type { PerformanceReport } from '@/types'
+import {
+  CANCELLATION_REASON_LABELS,
+  formatFrictionTagsForNote,
+} from '@/lib/performanceReportV1'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,15 +52,36 @@ function PaidStatusBadge({ status }: { status: string | null }) {
   return <span className={`text-xs font-medium ${map[status] ?? 'text-neutral-400'}`}>{labels[status] ?? status}</span>
 }
 
+function frictionSummary(report: PerformanceReport): string | null {
+  const raw = report.production_friction_tags
+  if (!raw || !Array.isArray(raw) || raw.length === 0) return null
+  return formatFrictionTagsForNote(raw.filter((x): x is string => typeof x === 'string'))
+}
+
 function ReportDetail({ report }: { report: PerformanceReport }) {
+  const cancel =
+    report.cancellation_reason && report.event_happened !== 'yes'
+      ? CANCELLATION_REASON_LABELS[report.cancellation_reason as keyof typeof CANCELLATION_REASON_LABELS] ??
+        report.cancellation_reason
+      : null
   const fields = [
     { label: 'Did event happen', value: report.event_happened ?? '-' },
+    ...(cancel ? [{ label: 'Situation', value: cancel }] : []),
     { label: 'Rating', value: report.event_rating ? `${report.event_rating}/5` : '-' },
-    { label: 'Attendance', value: report.attendance ? `~${report.attendance}` : '-' },
+    { label: 'Attendance (est.)', value: report.attendance ? `~${report.attendance}` : '-' },
     { label: 'Artist paid', value: report.artist_paid_status ?? '-' },
     { label: 'Amount reported', value: report.payment_amount ? `$${report.payment_amount}` : '-' },
+    { label: 'Chase payment ask', value: report.chase_payment_followup ?? '-' },
+    { label: 'Payment disagreement', value: report.payment_dispute ?? '-' },
+    { label: 'Production / safety', value: report.production_issue_level ?? '-' },
+    { label: 'Friction areas', value: frictionSummary(report) ?? '-' },
     { label: 'Venue interest', value: report.venue_interest ?? '-' },
+    { label: 'Rebooking timing', value: report.rebooking_timeline?.replace(/_/g, ' ') ?? '-' },
+    { label: 'Book next call', value: report.wants_booking_call ?? '-' },
     { label: 'Relationship quality', value: report.relationship_quality ?? '-' },
+    { label: 'Play again?', value: report.would_play_again ?? '-' },
+    { label: 'Manager contact venue', value: report.wants_manager_venue_contact ?? '-' },
+    { label: 'Referral / buyer', value: report.referral_lead ?? '-' },
   ]
 
   return (

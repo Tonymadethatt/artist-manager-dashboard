@@ -1,6 +1,19 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
+import {
+  formatFrictionTagsForNote,
+  PRODUCTION_FRICTION_OPTIONS,
+  timelineToReengageDays,
+} from '../../src/lib/performanceReportV1'
+import type { CancellationReason } from '../../src/lib/performanceReportV1'
+
+const FRICTION_IDS = new Set(PRODUCTION_FRICTION_OPTIONS.map(o => o.id))
+
+function normalizeFrictionTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((x): x is string => typeof x === 'string' && FRICTION_IDS.has(x))
+}
 
 interface SubmitBody {
   token: string
@@ -13,12 +26,31 @@ interface SubmitBody {
   relationshipQuality?: 'good' | 'neutral' | 'poor'
   notes?: string | null
   mediaLinks?: string | null
+  chasePaymentFollowup?: 'no' | 'unsure' | 'yes' | null
+  paymentDispute?: 'no' | 'yes' | null
+  productionIssueLevel?: 'none' | 'minor' | 'serious' | null
+  productionFrictionTags?: string[] | null
+  rebookingTimeline?: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | null
+  wantsBookingCall?: 'no' | 'yes' | null
+  wantsManagerVenueContact?: 'no' | 'yes' | null
+  wouldPlayAgain?: 'yes' | 'maybe' | 'no' | null
+  cancellationReason?: CancellationReason | null
+  referralLead?: 'no' | 'yes' | null
 }
 
 function addDays(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
   return d.toISOString().split('T')[0]
+}
+
+function venueStatusForReport(body: SubmitBody): string {
+  const played = body.eventHappened === 'yes'
+  if (body.venueInterest === 'yes') return 'rebooking'
+  if (played && body.relationshipQuality === 'poor' && body.venueInterest === 'no') {
+    return 'closed_lost'
+  }
+  return 'post_follow_up'
 }
 
 const handler: Handler = async (event) => {
@@ -43,16 +75,14 @@ const handler: Handler = async (event) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const frictionTags = normalizeFrictionTags(body.productionFrictionTags)
 
-  // Step 0: Look up by token
   const { data: row, error: lookupError } = await supabase
     .from('performance_reports')
     .select('id, user_id, venue_id, deal_id, submitted, token_used')
     .eq('token', body.token)
     .single()
 
-  // Return success regardless of whether token was not found or already submitted
-  // This prevents token probing and gives DJ Luijay a clean experience
   if (lookupError || !row || row.submitted) {
     return {
       statusCode: 200,
@@ -63,7 +93,8 @@ const handler: Handler = async (event) => {
 
   const today = new Date().toISOString().split('T')[0]
 
-  // Step 1: Commit the submission — this must succeed before any automation
+  const played = body.eventHappened === 'yes'
+
   const { error: submitError } = await supabase
     .from('performance_reports')
     .update({
@@ -71,47 +102,44 @@ const handler: Handler = async (event) => {
       token_used: true,
       submitted_at: new Date().toISOString(),
       event_happened: body.eventHappened,
-      event_rating: body.eventRating ?? null,
-      attendance: body.attendance ?? null,
-      artist_paid_status: body.artistPaidStatus ?? null,
-      payment_amount: body.paymentAmount ?? null,
+      event_rating: played ? body.eventRating ?? null : null,
+      attendance: played ? body.attendance ?? null : null,
+      artist_paid_status: played ? body.artistPaidStatus ?? null : null,
+      payment_amount: played ? body.paymentAmount ?? null : null,
       venue_interest: body.venueInterest ?? null,
       relationship_quality: body.relationshipQuality ?? null,
       notes: body.notes ?? null,
       media_links: body.mediaLinks ?? null,
+      chase_payment_followup: played ? body.chasePaymentFollowup ?? null : null,
+      payment_dispute: played ? body.paymentDispute ?? null : null,
+      production_issue_level: played ? body.productionIssueLevel ?? null : null,
+      production_friction_tags: frictionTags,
+      rebooking_timeline: body.rebookingTimeline ?? null,
+      wants_booking_call: body.wantsBookingCall ?? null,
+      wants_manager_venue_contact: body.wantsManagerVenueContact ?? null,
+      would_play_again: body.wouldPlayAgain ?? null,
+      cancellation_reason: !played ? body.cancellationReason ?? null : null,
+      referral_lead: body.referralLead ?? null,
     })
     .eq('id', row.id)
 
   if (submitError) {
-    // If we can't save the submission, surface the error so DJ Luijay can retry
     return { statusCode: 500, body: JSON.stringify({ message: 'Failed to save report. Please try again.' }) }
   }
 
-  // All remaining steps are best-effort — failures are logged but don't affect DJ Luijay's response
-
-  // Step 2: Get venue name for log entries
   let venueName = 'venue'
   try {
     const { data: venue } = await supabase.from('venues').select('name').eq('id', row.venue_id).single()
     if (venue) venueName = venue.name
   } catch { /* non-critical */ }
 
-  // Step 3: Update venue status
   try {
-    let newStatus: string
-    if (body.venueInterest === 'yes') {
-      newStatus = 'rebooking'
-    } else if (body.relationshipQuality === 'poor' && body.venueInterest === 'no') {
-      newStatus = 'closed_lost'
-    } else {
-      newStatus = 'post_follow_up'
-    }
+    const newStatus = venueStatusForReport(body)
     await supabase.from('venues').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', row.venue_id)
   } catch (e) {
-    console.error('[submit-performance-report] Step 3 venue status update failed:', e)
+    console.error('[submit-performance-report] Venue status update failed:', e)
   }
 
-  // Step 4: Log event attendance metric
   if (body.attendance && body.attendance > 0) {
     try {
       await supabase.from('metrics').insert({
@@ -123,20 +151,18 @@ const handler: Handler = async (event) => {
         description: `Reported via performance form for ${venueName}`,
       })
     } catch (e) {
-      console.error('[submit-performance-report] Step 4 metric insert failed:', e)
+      console.error('[submit-performance-report] Metric insert failed:', e)
     }
   }
 
-  // Step 5: Update deal if artist was fully paid
   if (body.artistPaidStatus === 'yes' && row.deal_id) {
     try {
       await supabase.from('deals').update({ artist_paid: true, artist_paid_date: today }).eq('id', row.deal_id)
     } catch (e) {
-      console.error('[submit-performance-report] Step 5 deal update (full paid) failed:', e)
+      console.error('[submit-performance-report] Deal full paid update failed:', e)
     }
   }
 
-  // Step 6: Append partial payment note to deal
   if (body.artistPaidStatus === 'partial' && row.deal_id) {
     try {
       const { data: deal } = await supabase.from('deals').select('notes').eq('id', row.deal_id).single()
@@ -145,23 +171,22 @@ const handler: Handler = async (event) => {
       const newNotes = existingNotes ? `${existingNotes}\n${appendNote}` : appendNote
       await supabase.from('deals').update({ notes: newNotes }).eq('id', row.deal_id)
     } catch (e) {
-      console.error('[submit-performance-report] Step 6 deal partial payment note failed:', e)
+      console.error('[submit-performance-report] Deal partial note failed:', e)
     }
   }
 
-  // Step 7: Flag commission if artist reported payment
   if (body.artistPaidStatus === 'yes' || body.artistPaidStatus === 'partial') {
     try {
       await supabase.from('performance_reports').update({ commission_flagged: true }).eq('id', row.id)
     } catch (e) {
-      console.error('[submit-performance-report] Step 7 commission flag failed:', e)
+      console.error('[submit-performance-report] Commission flag failed:', e)
     }
   }
 
-  // Step 8: Rebooking actions (if venue showed interest)
+  const reengageDays = timelineToReengageDays(body.rebookingTimeline)
+
   if (body.venueInterest === 'yes') {
     try {
-      // Try to find a contact email for the venue
       const { data: contact } = await supabase
         .from('contacts')
         .select('email')
@@ -171,7 +196,6 @@ const handler: Handler = async (event) => {
         .single()
 
       if (contact?.email) {
-        // Queue rebooking inquiry email to venue contact
         await supabase.from('venue_emails').insert({
           user_id: row.user_id,
           venue_id: row.venue_id,
@@ -183,7 +207,6 @@ const handler: Handler = async (event) => {
           notes: 'Auto-queued from performance report submission.',
         })
       } else {
-        // No email on file — create a task to add it and send manually
         await supabase.from('tasks').insert({
           user_id: row.user_id,
           title: `Find contact email and send rebooking inquiry to ${venueName}`,
@@ -195,10 +218,9 @@ const handler: Handler = async (event) => {
         })
       }
     } catch (e) {
-      console.error('[submit-performance-report] Step 8 rebooking email/task failed:', e)
+      console.error('[submit-performance-report] Rebooking email/contact task failed:', e)
     }
 
-    // Create a rebooking follow-up task
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
@@ -206,29 +228,156 @@ const handler: Handler = async (event) => {
         venue_id: row.venue_id,
         deal_id: row.deal_id ?? null,
         priority: 'high',
+        due_date: addDays(reengageDays),
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Re-engage task failed:', e)
+    }
+  }
+
+  if (body.wantsBookingCall === 'yes') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Schedule rebooking call — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'high',
+        due_date: addDays(2),
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Booking call task failed:', e)
+    }
+  }
+
+  if (played && body.chasePaymentFollowup === 'yes') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Chase payment — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'high',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Chase payment task failed:', e)
+    }
+  }
+
+  if (played && body.paymentDispute === 'yes') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Payment discrepancy — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'medium',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Payment dispute task failed:', e)
+    }
+  }
+
+  if (played && body.productionIssueLevel === 'serious') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Production / safety follow-up — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'high',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Production follow-up task failed:', e)
+    }
+  }
+
+  if (body.wantsManagerVenueContact === 'yes') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Artist asked you to contact ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'medium',
         due_date: addDays(3),
         recurrence: 'none',
         completed: false,
       })
     } catch (e) {
-      console.error('[submit-performance-report] Step 8 rebooking task failed:', e)
+      console.error('[submit-performance-report] Manager contact task failed:', e)
     }
   }
 
-  // Step 9: Log performance report summary as outreach note
+  if (body.referralLead === 'yes') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Capture referral lead — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'medium',
+        due_date: addDays(5),
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Referral task failed:', e)
+    }
+  }
+
+  const cancellationLabels: Record<string, string> = {
+    venue_cancelled: 'Venue cancelled',
+    weather: 'Weather',
+    low_turnout: 'Low turnout',
+    illness: 'Illness/emergency',
+    logistics: 'Logistics',
+    other: 'Other',
+  }
+
   try {
+    const frictionLine = frictionTags.length ? formatFrictionTagsForNote(frictionTags) : null
     const parts = [
       `Performance report submitted (${today}).`,
       body.eventHappened === 'no' ? 'Event did not happen.' : body.eventHappened === 'postponed' ? 'Event was postponed.' : null,
+      body.cancellationReason && !played
+        ? `Cancellation/postpone reason: ${cancellationLabels[body.cancellationReason] ?? body.cancellationReason}.`
+        : null,
       body.eventRating ? `Rating: ${body.eventRating}/5.` : null,
       body.attendance ? `Attendance: approx. ${body.attendance} people.` : null,
       body.artistPaidStatus === 'yes' ? 'Artist confirmed full payment received.' :
         body.artistPaidStatus === 'partial' ? `Artist reported partial payment of $${body.paymentAmount ?? '?'}.` :
         body.artistPaidStatus === 'no' ? 'Artist reported no payment received.' : null,
+      played && body.chasePaymentFollowup === 'yes' ? 'Artist asked manager to chase payment.' : null,
+      played && body.paymentDispute === 'yes' ? 'Artist reported a payment amount dispute.' : null,
+      played && body.productionIssueLevel && body.productionIssueLevel !== 'none'
+        ? `Production/safety: ${body.productionIssueLevel}.`
+        : null,
+      frictionLine ? `Friction areas: ${frictionLine}.` : null,
       body.venueInterest === 'yes' ? 'Venue expressed interest in rebooking.' :
         body.venueInterest === 'no' ? 'Venue not interested in rebooking.' :
         body.venueInterest === 'unsure' ? 'Venue unsure about rebooking.' : null,
+      body.rebookingTimeline && body.venueInterest === 'yes'
+        ? `Rebooking timeline hint: ${body.rebookingTimeline.replace(/_/g, ' ')}.`
+        : null,
       body.relationshipQuality ? `Relationship quality: ${body.relationshipQuality}.` : null,
+      body.wouldPlayAgain ? `Would play again: ${body.wouldPlayAgain}.` : null,
+      body.wantsBookingCall === 'yes' ? 'Wants manager to schedule next booking conversation.' : null,
+      body.wantsManagerVenueContact === 'yes' ? 'Wants manager to contact venue on their behalf.' : null,
+      body.referralLead === 'yes' ? 'Referral / another buyer mentioned.' : null,
       body.notes ? `Notes: ${body.notes}` : null,
       body.mediaLinks ? `Media links: ${body.mediaLinks}` : null,
     ].filter(Boolean)
@@ -240,23 +389,25 @@ const handler: Handler = async (event) => {
       category: 'other',
     })
   } catch (e) {
-    console.error('[submit-performance-report] Step 9 outreach note failed:', e)
+    console.error('[submit-performance-report] Outreach note failed:', e)
   }
 
-  // Step 10: Create post-show follow-up task
-  try {
-    await supabase.from('tasks').insert({
-      user_id: row.user_id,
-      title: `Post-show follow-up: ${venueName}`,
-      venue_id: row.venue_id,
-      deal_id: row.deal_id ?? null,
-      priority: 'medium',
-      due_date: addDays(7),
-      recurrence: 'none',
-      completed: false,
-    })
-  } catch (e) {
-    console.error('[submit-performance-report] Step 10 follow-up task failed:', e)
+  if (body.venueInterest !== 'yes') {
+    try {
+      const due = played ? 7 : 3
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Performance report follow-up: ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'medium',
+        due_date: addDays(due),
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Generic follow-up task failed:', e)
+    }
   }
 
   return {
