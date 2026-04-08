@@ -37,7 +37,7 @@ export function usePerformanceReports() {
     // Insert row via authenticated client
     const { data: row, error: insertError } = await supabase
       .from('performance_reports')
-      .insert({ user_id: user.id, venue_id: venueId, deal_id: dealId })
+      .insert({ user_id: user.id, venue_id: venueId, deal_id: dealId, creation_source: 'artist_email' })
       .select('*, venue:venues(id, name), deal:deals(id, description, event_date)')
       .single()
 
@@ -105,6 +105,36 @@ export function usePerformanceReports() {
   }
 
   /**
+   * Creates a pending report row **without** emailing the artist (manager completes manually or copies link later).
+   */
+  const createReportWithoutEmail = async (
+    venueId: string,
+    dealId: string | null,
+  ): Promise<{ report?: PerformanceReport; error?: string }> => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Not authenticated' }
+
+    const { data: row, error: insertError } = await supabase
+      .from('performance_reports')
+      .insert({
+        user_id: user.id,
+        venue_id: venueId,
+        deal_id: dealId,
+        creation_source: 'manager_dashboard',
+      })
+      .select('*, venue:venues(id, name), deal:deals(id, description, event_date)')
+      .single()
+
+    if (insertError || !row) {
+      return { error: insertError?.message ?? 'Failed to create report' }
+    }
+
+    const report = row as PerformanceReport
+    setReports(prev => [report, ...prev])
+    return { report }
+  }
+
+  /**
    * Resets an existing pending report with a new token and re-sends the email.
    * Old link becomes invalid. New link is sent to the artist.
    */
@@ -145,6 +175,8 @@ export function usePerformanceReports() {
         would_play_again: null,
         cancellation_reason: null,
         referral_lead: null,
+        submitted_by: null,
+        creation_source: 'artist_email',
       })
       .eq('id', reportId)
       .select('*, venue:venues(id, name), deal:deals(id, description, event_date)')
@@ -228,5 +260,13 @@ export function usePerformanceReports() {
     return {}
   }
 
-  return { reports, loading, refetch: fetchReports, createReport, resendReport, deleteReport }
+  return {
+    reports,
+    loading,
+    refetch: fetchReports,
+    createReport,
+    createReportWithoutEmail,
+    resendReport,
+    deleteReport,
+  }
 }

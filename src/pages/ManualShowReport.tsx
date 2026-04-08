@@ -1,0 +1,36 @@
+import { useLocation, useNavigate } from 'react-router-dom'
+import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
+
+export type ManualShowReportLocationState = {
+  token: string
+  context: ShowReportFormContext
+}
+
+export default function ManualShowReport() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const state = location.state as ManualShowReportLocationState | null
+
+  if (!state?.token || !state.context) {
+    return (
+      <div className="p-6 max-w-lg mx-auto text-neutral-400 text-sm">
+        Nothing to show. Open <button type="button" className="text-white underline" onClick={() => navigate('/performance-reports')}>Show Reports</button> and start a manual report.
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-[calc(100dvh-6rem)] bg-[#0d0d0d] text-white">
+      <div className="max-w-md mx-auto px-4 py-6">
+        <ShowReportWizard
+          token={state.token}
+          embeddedContext={state.context}
+          submittedBy="manager_dashboard"
+          footerMode="embedded"
+          onSuccess={() => navigate('/performance-reports')}
+          onCancel={() => navigate('/performance-reports')}
+        />
+      </div>
+    </div>
+  )
+}

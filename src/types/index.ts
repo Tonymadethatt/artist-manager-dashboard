@@ -450,6 +450,8 @@ export interface PerformanceReport {
     | 'other'
     | null
   referral_lead: 'no' | 'yes' | null
+  creation_source: 'task_automation' | 'artist_email' | 'manager_dashboard' | null
+  submitted_by: 'artist_link' | 'manager_dashboard' | null
   venue?: Pick<Venue, 'id' | 'name'> | null
   deal?: Pick<Deal, 'id' | 'description' | 'event_date'> | null
 }

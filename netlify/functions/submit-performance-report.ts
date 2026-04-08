@@ -36,6 +36,8 @@ interface SubmitBody {
   wouldPlayAgain?: 'yes' | 'maybe' | 'no' | null
   cancellationReason?: CancellationReason | null
   referralLead?: 'no' | 'yes' | null
+  /** Who submitted: public form vs manager dashboard manual entry */
+  submittedBy?: 'artist_link' | 'manager_dashboard'
 }
 
 function addDays(days: number): string {
@@ -76,6 +78,8 @@ const handler: Handler = async (event) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const frictionTags = normalizeFrictionTags(body.productionFrictionTags)
+  const submittedBy =
+    body.submittedBy === 'manager_dashboard' ? 'manager_dashboard' : 'artist_link'
 
   const { data: row, error: lookupError } = await supabase
     .from('performance_reports')
@@ -120,6 +124,7 @@ const handler: Handler = async (event) => {
       would_play_again: body.wouldPlayAgain ?? null,
       cancellation_reason: !played ? body.cancellationReason ?? null : null,
       referral_lead: body.referralLead ?? null,
+      submitted_by: submittedBy,
     })
     .eq('id', row.id)
 
@@ -167,7 +172,11 @@ const handler: Handler = async (event) => {
     try {
       const { data: deal } = await supabase.from('deals').select('notes').eq('id', row.deal_id).single()
       const existingNotes = deal?.notes || ''
-      const appendNote = `${today}: Partial payment of $${body.paymentAmount ?? '?'} reported by artist via performance form.`
+      const partialNote =
+        submittedBy === 'manager_dashboard'
+          ? `${today}: Partial payment of $${body.paymentAmount ?? '?'} recorded by manager via performance form.`
+          : `${today}: Partial payment of $${body.paymentAmount ?? '?'} reported by artist via performance form.`
+      const appendNote = partialNote
       const newNotes = existingNotes ? `${existingNotes}\n${appendNote}` : appendNote
       await supabase.from('deals').update({ notes: newNotes }).eq('id', row.deal_id)
     } catch (e) {
@@ -350,19 +359,42 @@ const handler: Handler = async (event) => {
 
   try {
     const frictionLine = frictionTags.length ? formatFrictionTagsForNote(frictionTags) : null
+    const mgrNote =
+      submittedBy === 'manager_dashboard'
+        ? 'Submitted by manager from dashboard (on behalf of artist).'
+        : null
     const parts = [
       `Performance report submitted (${today}).`,
+      mgrNote,
       body.eventHappened === 'no' ? 'Event did not happen.' : body.eventHappened === 'postponed' ? 'Event was postponed.' : null,
       body.cancellationReason && !played
         ? `Cancellation/postpone reason: ${cancellationLabels[body.cancellationReason] ?? body.cancellationReason}.`
         : null,
       body.eventRating ? `Rating: ${body.eventRating}/5.` : null,
       body.attendance ? `Attendance: approx. ${body.attendance} people.` : null,
-      body.artistPaidStatus === 'yes' ? 'Artist confirmed full payment received.' :
-        body.artistPaidStatus === 'partial' ? `Artist reported partial payment of $${body.paymentAmount ?? '?'}.` :
-        body.artistPaidStatus === 'no' ? 'Artist reported no payment received.' : null,
-      played && body.chasePaymentFollowup === 'yes' ? 'Artist asked manager to chase payment.' : null,
-      played && body.paymentDispute === 'yes' ? 'Artist reported a payment amount dispute.' : null,
+      body.artistPaidStatus === 'yes'
+        ? submittedBy === 'manager_dashboard'
+          ? 'Report indicates full payment received.'
+          : 'Artist confirmed full payment received.'
+        : body.artistPaidStatus === 'partial'
+          ? submittedBy === 'manager_dashboard'
+            ? `Report indicates partial payment of $${body.paymentAmount ?? '?'}.`
+            : `Artist reported partial payment of $${body.paymentAmount ?? '?'}.`
+        : body.artistPaidStatus === 'no'
+          ? submittedBy === 'manager_dashboard'
+            ? 'Report indicates no payment received yet.'
+            : 'Artist reported no payment received.'
+        : null,
+      played && body.chasePaymentFollowup === 'yes'
+        ? submittedBy === 'manager_dashboard'
+          ? 'Chase payment follow-up noted on report.'
+          : 'Artist asked manager to chase payment.'
+        : null,
+      played && body.paymentDispute === 'yes'
+        ? submittedBy === 'manager_dashboard'
+          ? 'Payment amount disagreement noted on report.'
+          : 'Artist reported a payment amount dispute.'
+        : null,
       played && body.productionIssueLevel && body.productionIssueLevel !== 'none'
         ? `Production/safety: ${body.productionIssueLevel}.`
         : null,

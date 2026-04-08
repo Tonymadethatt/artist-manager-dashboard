@@ -849,6 +849,8 @@ export interface Database {
           would_play_again: string | null
           cancellation_reason: string | null
           referral_lead: string | null
+          creation_source: string | null
+          submitted_by: string | null
         }
         Insert: {
           id?: string
@@ -880,6 +882,8 @@ export interface Database {
           would_play_again?: string | null
           cancellation_reason?: string | null
           referral_lead?: string | null
+          creation_source?: string | null
+          submitted_by?: string | null
         }
         Update: {
           id?: string
@@ -911,6 +915,8 @@ export interface Database {
           would_play_again?: string | null
           cancellation_reason?: string | null
           referral_lead?: string | null
+          creation_source?: string | null
+          submitted_by?: string | null
         }
         Relationships: [
           {

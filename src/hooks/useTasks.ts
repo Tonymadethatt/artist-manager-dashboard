@@ -239,13 +239,14 @@ export function useTasks() {
             venueIdForCleanup = (dr as { venue_id: string } | null)?.venue_id ?? null
           }
           const dealKey = task.deal_id ?? null
-          if (venueIdForCleanup) {
+            if (venueIdForCleanup) {
             let qPerf = supabase
               .from('performance_reports')
               .delete()
               .eq('user_id', user.id)
               .eq('venue_id', venueIdForCleanup)
               .eq('submitted', false)
+              .eq('creation_source', 'task_automation')
               .gte('created_at', twoHoursAgo)
             qPerf = dealKey ? qPerf.eq('deal_id', dealKey) : qPerf.is('deal_id', null)
             await qPerf

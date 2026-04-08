@@ -283,7 +283,7 @@ export async function queueEmailAutomationForCompletedTask(
     try {
       const { data: reportRow, error: insErr } = await supabase
         .from('performance_reports')
-        .insert({ user_id: user.id, venue_id: v.id, deal_id: dealKey })
+        .insert({ user_id: user.id, venue_id: v.id, deal_id: dealKey, creation_source: 'task_automation' })
         .select('token')
         .single()
       if (insErr || !reportRow?.token) {
