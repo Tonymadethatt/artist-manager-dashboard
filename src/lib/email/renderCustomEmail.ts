@@ -5,6 +5,7 @@ import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
 import { applyMergeToText, resolveMergeKey, type CustomEmailMergeContext, type CustomMergeAudience } from './customEmailMerge'
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
+import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE } from './venueEmailCtaStyles'
 
 export type { CustomEmailMergeContext }
 
@@ -238,7 +239,7 @@ function venueFooter(
 
   const mailtoHref = `mailto:${escapeHtmlPlain(replyTo)}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent('Hi,\n\n')}`
   const replyBlock = showReply
-    ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
+    ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:500;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
     : ''
   return `
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
@@ -303,10 +304,10 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
   </div>`
 
   const captureTrim = opts.audience === 'venue' ? (opts.captureUrl?.trim() || '') : ''
-  const captureCtaLabel = opts.captureCTALabel?.trim() || 'Respond here'
+  const captureCtaLabel = opts.captureCTALabel?.trim() || 'Respond'
   const captureCtaHtml = captureTrim
     ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
-        <a href="${escapeHtmlPlain(captureTrim)}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);color:#000000;font-size:15px;font-weight:800;padding:14px 32px;border-radius:50px;text-decoration:none;letter-spacing:0.1px;line-height:1.2;">${escapeHtmlPlain(captureCtaLabel)}</a>
+        <a href="${escapeHtmlPlain(captureTrim)}" style="${VENUE_EMAIL_CAPTURE_BUTTON_STYLE}">${escapeHtmlPlain(captureCtaLabel)}</a>
         <p style="font-size:11px;color:#555555;margin-top:10px;">Secure one-time link &mdash; takes less than a minute</p>
       </div>`
     : ''
@@ -322,8 +323,9 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
 
   let footerHtml: string
   if (opts.audience === 'venue') {
-    const showReply = opts.showReplyButton !== false
-    const replyLabel = opts.replyButtonLabel?.trim() || 'Reply to This Email'
+    const hasCaptureCta = Boolean(captureTrim)
+    const showReply = opts.showReplyButton !== false && !hasCaptureCta
+    const replyLabel = opts.replyButtonLabel?.trim() || 'Reply'
     footerHtml = venueFooter(opts.profile, subject, showReply, replyLabel, igUrl)
   } else {
     footerHtml = artistStaticFooter(igUrl)

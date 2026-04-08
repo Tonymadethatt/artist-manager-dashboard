@@ -11,6 +11,15 @@ function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** Match live artist transactional emails: prefer given name when billing as "DJ …". */
+function artistEmailPreviewGreetingName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2 && /^DJ\.?$/i.test(parts[0] ?? '')) {
+    return parts.slice(1).join(' ') || fullName.trim()
+  }
+  return parts[0] ?? fullName.trim()
+}
+
 const logoUrl = '/dj-luijay-logo-email.png'
 const igIconUrl = '/icons/icon-ig.png'
 
@@ -69,6 +78,9 @@ const sharedStyles = `
     .email-body { padding: 22px 18px !important; }
     .hero-val { font-size: 36px !important; }
   }`
+
+const PERF_PREVIEW_VENUE = 'Skyline Bar & Lounge'
+const PERF_PREVIEW_ARTIST = 'DJ Luijay'
 
 // ---------------------------------------------------------------------------
 // Management Report preview
@@ -130,7 +142,7 @@ export function buildManagementReportHtml(
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey DJ Luijay,<br><br>${opener}</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${escapeHtmlPlain(artistEmailPreviewGreetingName(PERF_PREVIEW_ARTIST))},<br><br>${opener}</p>
     <div style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:26px 20px;margin-bottom:22px;">
       <div class="hero-val" style="font-size:44px;font-weight:800;color:#22c55e;letter-spacing:-1.5px;line-height:1;">1</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888888;margin-top:10px;">Booking Confirmed</div>
@@ -192,7 +204,7 @@ export function buildRetainerReminderHtml(
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:20px;">Hey DJ Luijay,</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:20px;">Hey ${escapeHtmlPlain(artistEmailPreviewGreetingName(PERF_PREVIEW_ARTIST))},</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${recapLine}</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer. There is a balance that has not cleared yet. Here is where things stand:</p>
 
@@ -262,9 +274,6 @@ export function buildRetainerReceivedHtml(
   return buildRetainerReceivedEmailHtml(profile, settledFees, totalAcknowledged, L, '')
 }
 
-const PERF_PREVIEW_VENUE = 'Skyline Bar & Lounge'
-const PERF_PREVIEW_ARTIST = 'DJ Luijay'
-
 export function buildPerformanceReportRequestHtml(
   customIntro?: string | null,
   customSubject?: string | null,
@@ -274,7 +283,7 @@ export function buildPerformanceReportRequestHtml(
   const formUrl = '#'
   const venueName = PERF_PREVIEW_VENUE
   const artistFull = PERF_PREVIEW_ARTIST
-  const firstName = artistFull.split(/\s+/)[0] || artistFull
+  const firstName = artistEmailPreviewGreetingName(artistFull)
   const subjectRaw = L.subject?.trim()
   const subject = subjectRaw
     ? applyPerformanceReportPlaceholders(subjectRaw, venueName, artistFull)
@@ -301,12 +310,12 @@ export function buildPerformanceReportRequestHtml(
 <div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
-    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey ${firstName},</p>
+    <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey ${escapeHtmlPlain(firstName)},</p>
     <p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">Skyline Bar &amp; Lounge</strong> &mdash; April 4, 2026</p>
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:20px 22px;margin-bottom:24px;">
       ${cardInner}
-      <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
+      <a href="${formUrl}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:600;padding:13px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">Complete Your Show Report</a>
     </div>
 
     ${renderAppendBlocksHtml(L.appendBlocks)}

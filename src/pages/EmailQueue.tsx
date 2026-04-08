@@ -26,7 +26,10 @@ import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
 import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
 import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
-import { buildArtistTransactionalEmailHtml } from '@/lib/email/artistTransactionalEmailDocument'
+import {
+  artistTransactionalGreetingFirstName,
+  buildArtistTransactionalEmailHtml,
+} from '@/lib/email/artistTransactionalEmailDocument'
 import {
   EMAIL_QUEUE_BUFFER_OPTIONS,
   clampEmailQueueBufferMinutes,
@@ -458,12 +461,15 @@ export default function EmailQueue() {
               venueName: txn.venueName,
               eventDate: txn.eventDate,
               managerName: profile.manager_name?.trim() || 'Management',
+              website: profile.website ?? null,
+              social_handle: profile.social_handle ?? null,
+              phone: profile.phone ?? null,
             },
             L,
             site,
           )
           setPreviewHtml(html)
-          const firstName = (profile.artist_name ?? 'Artist').split(/\s+/)[0] || 'Artist'
+          const firstName = artistTransactionalGreetingFirstName(profile.artist_name ?? '') || 'Artist'
           const defaultSubj = txn.kind === 'gig_week_reminder'
             ? `${firstName}, gig week — ${txn.venueName}`
             : `${firstName}, we received your show check-in`

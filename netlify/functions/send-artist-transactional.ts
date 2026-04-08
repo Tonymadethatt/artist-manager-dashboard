@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import {
+  artistTransactionalGreetingFirstName,
   buildArtistTransactionalEmailHtml,
   type ArtistTransactionalKind,
 } from '../../src/lib/email/artistTransactionalEmailDocument'
@@ -80,12 +81,15 @@ const handler: Handler = async (event) => {
       venueName: venueName || 'venue',
       eventDate: eventDate ?? null,
       managerName,
+      website: profile.website ?? null,
+      social_handle: profile.social_handle ?? null,
+      phone: profile.phone ?? null,
     },
     L,
     siteUrl,
   )
 
-  const firstName = profile.artist_name.split(/\s+/)[0] || 'there'
+  const firstName = artistTransactionalGreetingFirstName(profile.artist_name ?? '') || 'there'
   const defaultSubjects: Record<ArtistTransactionalKind, string> = {
     performance_report_received: `${firstName}, we received your show check-in`,
     gig_week_reminder: `${firstName}, gig week — ${venueName || 'upcoming show'}`,

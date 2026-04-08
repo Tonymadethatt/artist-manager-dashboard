@@ -37,7 +37,10 @@ import {
   buildRetainerReceivedHtml,
   buildPerformanceReportRequestHtml,
 } from '@/lib/buildArtistEmailHtml'
-import { buildArtistTransactionalEmailHtml } from '@/lib/email/artistTransactionalEmailDocument'
+import {
+  artistTransactionalGreetingFirstName,
+  buildArtistTransactionalEmailHtml,
+} from '@/lib/email/artistTransactionalEmailDocument'
 import type { EmailTemplateAppendBlock, EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import {
   artistLayoutForSend,
@@ -171,21 +174,21 @@ const CLIENT_ORDER: VenueEmailType[] = [
 ]
 
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
-  management_report:          'Weekly or custom-range report sent to DJ Luijay. Shows outreach, deals, retainer, and impact.',
+  management_report:          'Weekly or custom-range report sent to the artist. Shows outreach, deals, retainer, and impact.',
   retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
   retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
-  performance_report_request: 'Sent to DJ Luijay after a show. Links to the post-show report form.',
+  performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_week_reminder:          'Operational nudge before a booked date (from a task with venue + deal).',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   management_report:          'Management Update - {start} to {end}',
-  retainer_reminder:          'Hey DJ, quick note from management',
-  retainer_received:          'DJ, retainer received — thank you',
+  retainer_reminder:          'Hey {firstName}, quick note from management',
+  retainer_received:          '{firstName}, retainer received — thank you',
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
-  performance_report_received: 'We received your show check-in',
-  gig_week_reminder:          'Gig week reminder — {venue}',
+  performance_report_received: '{firstName}, we received your show check-in',
+  gig_week_reminder:          '{firstName}, gig week reminder — {venue}',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = [
@@ -364,9 +367,18 @@ export default function EmailTemplates() {
     handleGroupSwitch(g)
   }
 
-  const defaultSubject = activeGroup === 'client'
-    ? CLIENT_DEFAULT_SUBJECTS[selectedType as VenueEmailType]
-    : ARTIST_DEFAULT_SUBJECTS[selectedType as ArtistEmailType]
+  const defaultSubject = useMemo(() => {
+    if (activeGroup === 'client') {
+      return CLIENT_DEFAULT_SUBJECTS[selectedType as VenueEmailType]
+    }
+    const raw = ARTIST_DEFAULT_SUBJECTS[selectedType as ArtistEmailType]
+    const fn = artistTransactionalGreetingFirstName(PREVIEW_MOCK_PROFILE.artist_name)
+    return raw
+      .replace(/\{firstName\}/gi, fn)
+      .replace(/\{venue\}/gi, PREVIEW_MOCK_VENUE.name)
+      .replace(/\{start\}/gi, 'Mar 28, 2026')
+      .replace(/\{end\}/gi, 'Apr 4, 2026')
+  }, [activeGroup, selectedType])
 
   const typeLabel = selectedCustomRow
     ? selectedCustomRow.name
@@ -463,6 +475,9 @@ export default function EmailTemplates() {
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: null,
             managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
+            website: PREVIEW_MOCK_PROFILE.website,
+            social_handle: PREVIEW_MOCK_PROFILE.social_handle,
+            phone: PREVIEW_MOCK_PROFILE.phone,
           },
           layout,
           '',
@@ -476,6 +491,9 @@ export default function EmailTemplates() {
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: PREVIEW_MOCK_DEAL.event_date,
             managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
+            website: PREVIEW_MOCK_PROFILE.website,
+            social_handle: PREVIEW_MOCK_PROFILE.social_handle,
+            phone: PREVIEW_MOCK_PROFILE.phone,
           },
           layout,
           '',

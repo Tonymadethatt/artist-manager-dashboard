@@ -83,30 +83,30 @@ export const EMAIL_CAPTURE_KIND_LABELS: Record<EmailCaptureKind, string> = {
 export function captureLinkLabel(kind: EmailCaptureKind): string {
   switch (kind) {
     case 'pre_event_checkin':
-      return 'Share event logistics'
+      return 'Logistics form'
     case 'first_outreach':
     case 'follow_up':
-      return 'Respond here'
+      return 'Respond'
     case 'show_cancelled_or_postponed':
-      return 'Confirm update'
+      return 'Send update'
     case 'agreement_followup':
     case 'agreement_ready':
-      return 'Agreement update'
+      return 'Agreement reply'
     case 'booking_confirmation':
     case 'booking_confirmed':
-      return 'Confirm booking details'
+      return 'Confirm details'
     case 'invoice_sent':
-      return 'Invoice receipt'
+      return 'Confirm invoice'
     case 'post_show_thanks':
-      return 'Quick follow-up'
+      return 'Send feedback'
     case 'pass_for_now':
       return 'Acknowledge'
     case 'rebooking_inquiry':
-      return 'Share availability'
+      return 'Share dates'
     case 'payment_reminder_ack':
       return 'Payment status'
     case 'payment_receipt':
-      return 'Share rebooking interest'
+      return 'Next steps'
     default:
       return 'Open form'
   }

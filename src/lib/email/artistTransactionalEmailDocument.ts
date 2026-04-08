@@ -3,6 +3,17 @@ import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
 
 export type ArtistTransactionalKind = 'performance_report_received' | 'gig_week_reminder'
 
+export type ArtistTransactionalEmailInput = {
+  artistName: string
+  venueName: string
+  eventDate: string | null
+  managerName: string
+  /** Footer links row (optional); when empty, footer shows manager line + tagline only. */
+  website?: string | null
+  social_handle?: string | null
+  phone?: string | null
+}
+
 /** Human-readable date for email copy when `eventDate` is ISO `yyyy-mm-dd`. */
 function formatEventDateForEmail(isoOrLabel: string | null): string | null {
   if (!isoOrLabel?.trim()) return null
@@ -16,27 +27,68 @@ function formatEventDateForEmail(isoOrLabel: string | null): string | null {
   return `${months[mo]} ${day}, ${m[1]}`
 }
 
+/** Prefer a real first name when the artist bills as "DJ …". */
+export function artistTransactionalGreetingFirstName(artistName: string): string {
+  const parts = artistName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2 && /^DJ\.?$/i.test(parts[0] ?? '')) {
+    return parts.slice(1).join(' ') || artistName.trim()
+  }
+  return parts[0] ?? artistName.trim()
+}
+
 function logoUrls(base: string) {
   const prefix = base.replace(/\/$/, '')
   return {
     logo: prefix ? `${prefix}/dj-luijay-logo-email.png` : '/dj-luijay-logo-email.png',
+    ig: prefix ? `${prefix}/icons/icon-ig.png` : '/icons/icon-ig.png',
   }
 }
 
+function buildFooterLinksHtml(
+  igUrl: string,
+  website: string | null | undefined,
+  socialHandle: string | null | undefined,
+  phone: string | null | undefined,
+): string {
+  const handle = socialHandle ? socialHandle.replace(/^@/, '') : ''
+  const footerLinks = [
+    website
+      ? `<a href="${escapeHtmlPlain(website)}" style="color:#888888;text-decoration:none;font-size:11px;">${escapeHtmlPlain(website.replace(/^https?:\/\//, ''))}</a>`
+      : '',
+    handle
+      ? `<a href="https://instagram.com/${escapeHtmlPlain(handle)}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${escapeHtmlPlain(handle)}</span></a>`
+      : '',
+    phone ? `<span style="font-size:11px;color:#888888;">${escapeHtmlPlain(phone)}</span>` : '',
+  ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')
+
+  return footerLinks
+    ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${footerLinks}</div>`
+    : ''
+}
+
+const mobileStyles = `
+  @media only screen and (max-width: 600px) {
+    .wrapper { margin: 0 !important; border-radius: 0 !important; }
+    .email-body { padding: 22px 18px !important; }
+  }`
+
 export function buildArtistTransactionalEmailHtml(
   kind: ArtistTransactionalKind,
-  input: {
-    artistName: string
-    venueName: string
-    eventDate: string | null
-    managerName: string
-  },
+  input: ArtistTransactionalEmailInput,
   L: EmailTemplateLayoutV1,
   logoBaseUrl: string,
 ): string {
-  const { artistName, venueName, eventDate, managerName } = input
-  const firstName = artistName.split(/\s+/)[0] || artistName
-  const { logo: logoUrl } = logoUrls(logoBaseUrl)
+  const {
+    artistName,
+    venueName,
+    eventDate,
+    managerName,
+    website,
+    social_handle: socialHandle,
+    phone,
+  } = input
+  const firstName = artistTransactionalGreetingFirstName(artistName)
+  const { logo: logoUrl, ig: igUrl } = logoUrls(logoBaseUrl)
 
   const defaultGreeting = `Hi ${escapeHtmlPlain(firstName)},`
   let defaultIntro: string
@@ -45,7 +97,7 @@ export function buildArtistTransactionalEmailHtml(
   if (kind === 'performance_report_received') {
     defaultIntro =
       `Thanks for submitting the post-show check-in for <strong>${escapeHtmlPlain(venueName)}</strong>. `
-      + `<strong>${escapeHtmlPlain(managerName)}</strong> has your notes and will follow up as needed.`
+      + `What you shared goes to <strong>${escapeHtmlPlain(managerName)}</strong> and the management team — it helps us support you behind the scenes and is <strong>not</strong> sent to the venue automatically.`
     defaultClosing = 'If anything else comes to mind, just reply to this email.'
   } else {
     const dateLabel = formatEventDateForEmail(eventDate)
@@ -70,8 +122,6 @@ export function buildArtistTransactionalEmailHtml(
     ? escapeHtmlPlain(closingRaw).replace(/\n/g, '<br/>')
     : defaultClosing
 
-  const companyName = artistName
-
   const appendHtml = renderAppendBlocksHtml(L.appendBlocks)
 
   const roleBanner = kind === 'performance_report_received'
@@ -82,6 +132,8 @@ export function buildArtistTransactionalEmailHtml(
     ? `<div style="background:#161616;border:1px solid #252525;border-radius:8px;padding:14px 18px;margin-bottom:22px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#888888;margin-bottom:10px;">Quick prep</p><ul style="font-size:13px;color:#c4c4c4;line-height:1.65;padding-left:18px;margin:0;"><li style="margin-bottom:6px;">Travel, parking, and load-in window</li><li style="margin-bottom:6px;">Promo or holding assets if the venue needs them</li><li>Any open logistics questions for the booker</li></ul></div>`
     : ''
 
+  const footerLinksHtml = buildFooterLinksHtml(igUrl, website, socialHandle, phone)
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,18 +142,20 @@ export function buildArtistTransactionalEmailHtml(
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
+${mobileStyles}
 </style>
 </head>
 <body>
-<div style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
+<div class="wrapper" style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
   <div style="padding:28px 32px 0 32px;">
-    <img src="${logoUrl}" alt="" style="display:block;max-width:100px;width:100px;height:auto;" />
+    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
       <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
-  <div style="padding:28px 32px;">
+  <div class="email-body" style="padding:28px 32px;">
     ${roleBanner}
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">${greeting}</p>
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${intro}</p>
@@ -110,7 +164,9 @@ export function buildArtistTransactionalEmailHtml(
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-top:8px;">${closing}</p>
   </div>
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
+    <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(managerName)}</div>
+    <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${footerLinksHtml}
   </div>
 </div>
 </body>

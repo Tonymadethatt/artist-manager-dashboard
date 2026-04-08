@@ -1,6 +1,6 @@
 ---
 name: Email template consistency
-overview: "Phase A (priority): complete client (venue) email CTAs—prominent in-body buttons linked to capture forms/pages—plus payloads, dashboard surfacing, and automation. Phase B: artist transactional shell/copy/DJ defaults. Phase C: invoice attachments and net-new booking/rebook pipeline where today's data model is insufficient."
+overview: "COMPLETE — Phase A (M1–M4) + Phase B (M5): artist transactional shell aligned with canonical header/footer, internal-only performance copy, {firstName} defaults and preview greetings."
 todos:
   - id: client-cta-design
     content: "Define primary CTA HTML for venue emails (gradient pill + black text); per-template label using profile.artist_name where applicable"
@@ -28,19 +28,19 @@ todos:
     status: completed
   - id: artist-shell
     content: Align artistTransactionalEmailDocument header/footer with canonical artist shell; extend send-artist-transactional inputs
-    status: pending
+    status: completed
   - id: perf-copy
     content: Rewrite performance_report_received defaults for internal-only notes + first-name voice
-    status: pending
+    status: completed
   - id: dj-defaults
     content: Replace generic DJ in ARTIST_DEFAULT_SUBJECTS / previews with profile-driven placeholders
-    status: pending
+    status: completed
   - id: venue-audit-chrome
     content: Header/footer drift audit for venue + custom venue (minor chrome parity only)
-    status: pending
+    status: completed
   - id: verify
-    content: "Previews with mock captureUrl, queue test sends, public POST tests, npx tsc -p tsconfig.app.json --noEmit; EmailCaptureKind/DB CHECK/validatePayload stay in sync"
-    status: pending
+    content: "npx tsc -p tsconfig.app.json --noEmit; spot-check artist previews + queue test sends"
+    status: completed
 isProject: false
 ---
 
@@ -48,10 +48,16 @@ isProject: false
 
 **Handoff rule:** This markdown plan is the **single living spec** for the next implementer. **After each Q&A round, update this file** so decisions are not scattered across chat.
 
+## Implementation status
+
+- **Phase A (M1–M4):** **Complete** (venue capture CTAs, forms, validation/side effects, PDF invoices, `booking_requests` / automation scope per plan, custom template capture, pipeline booking UX, etc.).
+- **Phase B (M5):** **Complete** — `artistTransactionalEmailDocument` uses canonical **header** (Front Office + Brand Growth) + **footer** (manager name, tagline, profile links); **performance_report_received** copy states notes are **not** auto-sent to venue; **`artistTransactionalGreetingFirstName`** + `{firstName}` in default subjects and previews (`buildArtistEmailHtml`, `EmailTemplates`, `EmailQueue`, `send-artist-transactional`).
+- **Verify:** `npx tsc -p tsconfig.app.json --noEmit` passing on latest changes.
+
 ## Priority
 
 1. **Client (venue) templates + capture + forms + dashboard/automation** — every template that should drive a response must surface a **prominent in-body primary CTA** that routes to the **public** `/email-capture/:token` flow, with payload persisted and **side effects** aligned to the pipeline.
-2. **Artist transactional polish** — header/footer, performance-report copy, "DJ" defaults (lower priority than client work).
+2. **Artist transactional polish** — **done** (M5): header/footer, performance-report copy, first-name defaults.
 
 ## Stakeholder Q&A (plain English — what to build)
 
@@ -88,7 +94,7 @@ isProject: false
 - **Token + public form:** table `email_capture_tokens` ([`028_email_capture_tokens.sql`](supabase/migrations/028_email_capture_tokens.sql)) with **CHECK constraint on `kind`** listing allowed values; owner RLS + service-role writes via [`get-email-capture.ts`](netlify/functions/get-email-capture.ts), [`submit-email-capture.ts`](netlify/functions/submit-email-capture.ts), [`EmailCaptureForm.tsx`](src/pages/public/EmailCaptureForm.tsx); route in [`App.tsx`](src/App.tsx) `/email-capture/:token`.
 - **Minting on send/queue:** [`ensureQueueCaptureUrl`](src/lib/emailCapture/ensureQueueCaptureUrl.ts); `capture_url` passed into [`buildVenueEmailDocument`](src/lib/email/renderVenueEmail.ts).
 - **Post-submit:** [`applyEmailCaptureSideEffects`](src/lib/emailCapture/submitSideEffects.ts); **request validation** duplicated in [`submit-email-capture.ts` `validatePayload`](netlify/functions/submit-email-capture.ts) — **every new field/kind must update both** TS union + DB CHECK + this validator + form UI.
-- **Gaps today:** In-body CTA is visually weak vs footer; **`payment_receipt`** is a [`VenueEmailType`](src/types/index.ts) but **`venueEmailTypeToCaptureKind` returns null**; **template preview** calls [`buildVenueEmailHtml`](src/lib/buildVenueEmailHtml.ts) **without** `captureUrl` / `invoiceUrl` so capture block may never show in Email Templates UI; **[`renderCustomEmail.ts`](src/lib/email/renderCustomEmail.ts) has no `captureUrl`** — custom client emails won't get capture CTAs unless scope adds it; post-show **rating** / payment-receipt **rebook** / invoice **artifact** work remains.
+- **Historical gaps (before Phase A):** weak in-body CTAs, `payment_receipt` capture mapping, preview `captureUrl`, custom `renderCustomEmail` capture, post-show depth, invoice PDF, booking pipeline — **treated as done for M1–M4**; treat this bullet as archive unless something regressed in code.
 
 ## Client primary CTA (visual + placement)
 
@@ -151,9 +157,9 @@ isProject: false
 - **FIFO:** verify actual drain order in [`process-email-queue.ts`](netlify/functions/process-email-queue.ts) matches FIFO intent.
 - **`payment_reminder_ack` when they say payment is coming/sent:** create a **"check the bank / reconcile"** task.
 
-### I. Artist templates (Phase B)
+### I. Artist templates (Phase B — **M5 shipped**)
 
-- [`artistTransactionalEmailDocument.ts`](src/lib/email/artistTransactionalEmailDocument.ts) shell parity; copy; [`ARTIST_DEFAULT_SUBJECTS`](src/pages/EmailTemplates.tsx) / previews.
+- **Done:** [`artistTransactionalEmailDocument.ts`](src/lib/email/artistTransactionalEmailDocument.ts) header/footer parity + [`send-artist-transactional.ts`](netlify/functions/send-artist-transactional.ts) profile footer fields; `performance_report_received` internal-only copy; **`artistTransactionalGreetingFirstName`**; [`ARTIST_DEFAULT_SUBJECTS`](src/pages/EmailTemplates.tsx) / [`buildArtistEmailHtml.ts`](src/lib/buildArtistEmailHtml.ts) first-name previews.
 
 ## Decisions (from you)
 

@@ -3,6 +3,7 @@ import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { effectiveTemplateLayout } from '../emailLayout'
 import { captureLinkLabel, venueEmailTypeToCaptureKind } from '../emailCapture/kinds'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE, VENUE_EMAIL_DOC_BUTTON_STYLE } from './venueEmailCtaStyles'
 
 function hrefAttr(u: string): string {
   return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -98,19 +99,19 @@ function applyGreetingTemplate(greeting: string, firstName: string): string {
 }
 
 const replyMap: Record<VenueRenderEmailType, { label: string; bodyText: string }> = {
-  follow_up:            { label: 'Reply to This Email',          bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
-  booking_confirmation: { label: 'Reply to Booking',             bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
-  agreement_ready:      { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
-  payment_reminder:     { label: 'Confirm Payment',              bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
-  payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
-  rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
-  first_outreach:       { label: 'Reply About Booking',          bodyText: 'Hi,\n\nThanks for your note. Here is more about the booking opportunity:\n\n' },
-  pre_event_checkin:    { label: 'Reply — Event logistics',      bodyText: 'Hi,\n\nHere are details on load-in, settlement, and our onsite contact:\n\n' },
-  post_show_thanks:     { label: 'Reply',                        bodyText: 'Hi,\n\nThank you — glad the show went well. Notes:\n\n' },
-  agreement_followup:   { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nFollowing up on the agreement — here is our update:\n\n' },
-  invoice_sent:         { label: 'Reply About Invoice',          bodyText: 'Hi,\n\nRegarding the invoice — here is our note:\n\n' },
+  follow_up:            { label: 'Reply',               bodyText: 'Hi,\n\nThanks for reaching out. Here is my update on the potential booking:\n\n' },
+  booking_confirmation: { label: 'Reply',               bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
+  agreement_ready:      { label: 'Reply',               bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
+  payment_reminder:     { label: 'Reply',               bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
+  payment_receipt:      { label: 'Reply',               bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
+  rebooking_inquiry:    { label: 'Reply',               bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
+  first_outreach:       { label: 'Reply',               bodyText: 'Hi,\n\nThanks for your note. Here is more about the booking opportunity:\n\n' },
+  pre_event_checkin:    { label: 'Reply',               bodyText: 'Hi,\n\nHere are details on load-in, settlement, and our onsite contact:\n\n' },
+  post_show_thanks:     { label: 'Reply',               bodyText: 'Hi,\n\nThank you — glad the show went well. Notes:\n\n' },
+  agreement_followup:   { label: 'Reply',               bodyText: 'Hi,\n\nFollowing up on the agreement — here is our update:\n\n' },
+  invoice_sent:         { label: 'Reply',               bodyText: 'Hi,\n\nRegarding the invoice — here is our note:\n\n' },
   show_cancelled_or_postponed: { label: 'Reply', bodyText: 'Hi,\n\nThanks for the update on the date change / cancellation. Here is our side:\n\n' },
-  pass_for_now:         { label: 'Reply',                        bodyText: 'Hi,\n\nThank you for the clear note. Here is our reply:\n\n' },
+  pass_for_now:         { label: 'Reply',               bodyText: 'Hi,\n\nThank you for the clear note. Here is our reply:\n\n' },
 }
 
 function logoUrls(base: string) {
@@ -209,7 +210,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       subject = `Agreement Ready for Review - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
       intro = `The agreement for your upcoming event with ${artistName} is ready for your review.`
-      const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">The agreement document will be shared with you directly.</p>`}</div>`
+      const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">The agreement document will be shared with you directly.</p>`}</div>`
       bodyCards = card('Agreement', agreementContent, '#22c55e')
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Please review and reply to this email with any questions or concerns. Once both parties have agreed to the terms, we will proceed with the booking confirmation.</p></div>`
       closing = `Thank you for your time. We look forward to working with you.`
@@ -277,7 +278,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `Circling back on the agreement for ${artistName}${venue ? ` at ${venueName}` : ''}. When you have a moment, a quick status on review or signature would help us keep the date on track.`
       const agreeUrl = deal?.agreement_url
-      const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">If you need the document resent, reply to this email.</p>`}</div>`
+      const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">If you need the document resent, reply to this email.</p>`}</div>`
       bodyCards = card('Agreement', agreementContent, '#60a5fa')
       closing = `Happy to adjust language if anything needs clarification.`
       break
@@ -288,7 +289,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `Please find the invoice / billing summary for ${artistName} for the engagement at ${venueName}.`
       const inv = invoiceUrlOpt?.trim()
-      const invoiceContent = `<div style="padding:14px 0;">${inv ? `<a href="${inv}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View invoice</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${inv}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">The document will be shared separately if no link is on file yet.</p>`}</div>`
+      const invoiceContent = `<div style="padding:14px 0;">${inv ? `<a href="${inv}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open invoice</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${inv}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">The document will be shared separately if no link is on file yet.</p>`}</div>`
       bodyCards = card('Billing', invoiceContent, '#22c55e')
       const invRows = [
         deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
@@ -347,28 +348,33 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   /** CTA label: hire/follow-up types use artist name; others use generic copy. */
   function captureCtaLabel(kind: ReturnType<typeof venueEmailTypeToCaptureKind>, name: string): string {
     if (!kind) return 'Open form'
+    const disp = (name || '').trim()
     switch (kind) {
       case 'first_outreach':
-        return `I'm interested in booking ${name}`
       case 'follow_up':
-        return `Book ${name} — reply here`
+        return disp ? `Book ${disp} now` : 'Book now'
       case 'rebooking_inquiry':
-        return `Book ${name} again`
+        return disp ? `Rebook ${disp}` : 'Rebook'
       case 'post_show_thanks':
-        return 'Share your feedback'
+        return 'Send feedback'
       case 'pre_event_checkin':
-        return 'Share event details'
+        return 'Logistics form'
       case 'payment_reminder_ack':
-        return 'Confirm payment status'
+        return 'Payment status'
       case 'payment_receipt':
-        return 'Share rebooking interest'
+        return 'Next steps'
       case 'booking_confirmation':
       case 'booking_confirmed':
-        return 'Confirm booking details'
+        return 'Confirm details'
       case 'invoice_sent':
-        return 'Confirm receipt'
+        return 'Confirm invoice'
       case 'show_cancelled_or_postponed':
-        return 'Send your update'
+        return 'Send update'
+      case 'agreement_ready':
+      case 'agreement_followup':
+        return 'Agreement reply'
+      case 'pass_for_now':
+        return 'Acknowledge'
       default:
         return captureLinkLabel(kind)
     }
@@ -376,14 +382,15 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
 
   const captureCtaHtml = captureTrim && capKind
     ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
-        <a href="${hrefAttr(captureTrim)}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);color:#000000;font-size:15px;font-weight:800;padding:14px 32px;border-radius:50px;text-decoration:none;letter-spacing:0.1px;line-height:1.2;">${escapeHtmlPlain(captureCtaLabel(capKind, artistName))}</a>
+        <a href="${hrefAttr(captureTrim)}" style="${VENUE_EMAIL_CAPTURE_BUTTON_STYLE}">${escapeHtmlPlain(captureCtaLabel(capKind, artistName))}</a>
         <p style="font-size:11px;color:#555555;margin-top:10px;">Secure one-time link &mdash; takes less than a minute</p>
       </div>`
     : ''
 
   const { label: defaultReplyLabel, bodyText: replyBody } = replyMap[type]
   const replyLabel = layout.footer?.replyButtonLabel?.trim() || defaultReplyLabel
-  const showReply = layout.footer?.showReplyButton !== false
+  const hasPrimaryCaptureCta = Boolean(captureTrim && capKind)
+  const showReply = layout.footer?.showReplyButton !== false && !hasPrimaryCaptureCta
   const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`
 
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
@@ -394,7 +401,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')
 
   const replyBlock = showReply
-    ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
+    ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:500;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
     : ''
 
   const mobileStyles = responsiveClasses ? `
