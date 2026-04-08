@@ -59,11 +59,10 @@ export default function FormPreviews() {
         Walk through real form UI without saving. Mock data only.
       </p>
 
-      <div className="flex flex-col-reverse lg:flex-row gap-4 flex-1 min-h-0 lg:min-h-[480px]">
+      <div className="flex flex-1 min-h-0 flex-row gap-4">
         <div
           className={cn(
-            'flex flex-col min-h-0 border border-neutral-800 rounded-lg bg-neutral-900/50 overflow-hidden',
-            'max-h-[min(320px,42svh)] lg:max-h-none lg:w-[280px] lg:shrink-0',
+            'flex min-h-0 min-w-[11rem] flex-[2] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/50',
           )}
         >
           <div className="px-3 py-2 border-b border-neutral-800 shrink-0">
@@ -107,8 +106,7 @@ export default function FormPreviews() {
 
         <div
           className={cn(
-            'flex flex-col flex-1 min-h-0 min-w-0 border border-neutral-800 rounded-lg overflow-hidden bg-neutral-900',
-            'min-h-[min(520px,62svh)] lg:min-h-0',
+            'flex min-h-0 min-w-0 flex-[3] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900',
           )}
         >
           <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0">
