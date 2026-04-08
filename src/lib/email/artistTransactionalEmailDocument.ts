@@ -1,5 +1,11 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import {
+  EMAIL_BODY_SECONDARY,
+  EMAIL_FOOTER_MUTED,
+  EMAIL_LABEL,
+  EMAIL_META_TAGLINE,
+} from './emailDarkSurfacePalette'
 import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 
 export type ArtistTransactionalKind = 'performance_report_received' | 'gig_week_reminder'
@@ -104,11 +110,11 @@ export function buildArtistTransactionalEmailHtml(
   const appendHtml = renderAppendBlocksHtml(L.appendBlocks)
 
   const roleBanner = kind === 'performance_report_received'
-    ? `<div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#a3a3a3;vertical-align:middle;">Post-show check-in</span></div>`
-    : `<div style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#a3a3a3;vertical-align:middle;">Gig week</span></div>`
+    ? `<div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">Post-show check-in</span></div>`
+    : `<div style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">Gig week</span></div>`
 
   const gigPrepBlock = kind === 'gig_week_reminder'
-    ? `<div style="background:#161616;border:1px solid #252525;border-radius:8px;padding:14px 18px;margin-bottom:22px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#888888;margin-bottom:10px;">Quick prep</p><ul style="font-size:13px;color:#c4c4c4;line-height:1.65;padding-left:18px;margin:0;"><li style="margin-bottom:6px;">Travel, parking, and load-in window</li><li style="margin-bottom:6px;">Promo or holding assets if the venue needs them</li><li>Any open logistics questions for the booker</li></ul></div>`
+    ? `<div style="background:#161616;border:1px solid #252525;border-radius:8px;padding:14px 18px;margin-bottom:22px;"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};margin-bottom:10px;">Quick prep</p><ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.65;padding-left:18px;margin:0;"><li style="margin-bottom:6px;">Travel, parking, and load-in window</li><li style="margin-bottom:6px;">Promo or holding assets if the venue needs them</li><li>Any open logistics questions for the booker</li></ul></div>`
     : ''
 
   const footerLinksHtml = buildProfileFooterLinksRowHtml(igUrl, website, socialHandle, phone)
@@ -129,22 +135,22 @@ ${mobileStyles}
   <div style="padding:28px 32px 0 32px;">
     <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
-      <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
-      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+      <div style="font-size:11px;font-weight:700;color:${EMAIL_LABEL};text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:11px;font-weight:500;color:${EMAIL_META_TAGLINE};letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
   <div class="email-body" style="padding:28px 32px;">
     ${roleBanner}
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">${greeting}</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${intro}</p>
+    <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:20px;">${intro}</p>
     ${gigPrepBlock}
     ${appendHtml}
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-top:8px;">${closing}</p>
+    <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-top:8px;">${closing}</p>
   </div>
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(managerName)}</div>
-    <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
     ${footerLinksHtml}
   </div>
 </div>

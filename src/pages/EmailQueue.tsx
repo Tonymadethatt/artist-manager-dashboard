@@ -25,6 +25,7 @@ import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUr
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import { EMAIL_FOOTER_MUTED, EMAIL_HINT, EMAIL_LABEL } from '@/lib/email/emailDarkSurfacePalette'
 import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
 import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
 import {
@@ -380,9 +381,9 @@ export default function EmailQueue() {
           setPreviewSubject(subj)
           const toe = esc(profile.artist_email ?? '')
           setPreviewHtml(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Summary preview (rolling 7 days through today) · sent to <strong>${toe}</strong></p>`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Summary preview (rolling 7 days through today) · sent to <strong>${toe}</strong></p>`
             + `<p style="margin:0 0 12px"><strong>Outreach</strong><br/>`
             + `New venues: ${report.outreach.venuesContacted} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
             + `<p style="margin:0 0 12px"><strong>Artist earnings</strong><br/>`
@@ -391,7 +392,7 @@ export default function EmailQueue() {
             + `On new deals in window: ${report.deals.totalCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Outstanding: ${report.deals.allOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + `<p style="margin:0 0 12px"><strong>Retainer</strong><br/>`
             + `Outstanding: ${report.retainer.feeOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
-            + `<p style="margin:0;color:#666;font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,
+            + `<p style="margin:0;color:${EMAIL_HINT};font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,
           )
         } else if (email.email_type === 'retainer_reminder') {
           const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
@@ -410,11 +411,11 @@ export default function EmailQueue() {
               `<li>${esc(f.month)}: balance ${f.balance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</li>`,
             ).join('')}</ul>`
           setPreviewHtml(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${totalOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${totalOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + rows
-            + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
+            + `<p style="margin:16px 0 0;color:${EMAIL_HINT};font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
           )
         } else if (email.email_type === 'retainer_received') {
           const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
@@ -434,11 +435,11 @@ export default function EmailQueue() {
               `<li>${esc(f.month)}: ${f.paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} paid (invoiced ${f.invoiced.toLocaleString('en-US', { style: 'currency', currency: 'USD' })})</li>`,
             ).join('')}</ul>`
           setPreviewHtml(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-            + `<p style="color:#888;font-size:11px;margin:0 0 16px">Retainer received preview · total acknowledged ${totalAcknowledged.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · sent to <strong>${toe}</strong></p>`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer received preview · total acknowledged ${totalAcknowledged.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · sent to <strong>${toe}</strong></p>`
             + rows
-            + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
+            + `<p style="margin:16px 0 0;color:${EMAIL_HINT};font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
           )
         } else if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
           const txn = parseArtistTxnQueueNotes(email.notes)
@@ -476,7 +477,7 @@ export default function EmailQueue() {
             : `${firstName}, we received your show check-in`
           setPreviewSubject(L.subject?.trim() || defaultSubj)
         } else {
-          setPreviewHtml('<div style="padding:40px;color:#888;text-align:center;">Preview not available for this email type.</div>')
+          setPreviewHtml(`<div style="padding:40px;color:${EMAIL_HINT};text-align:center;">Preview not available for this email type.</div>`)
         }
         setPreviewLoading(false)
         return
@@ -503,15 +504,15 @@ export default function EmailQueue() {
         const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const toe = esc(profile.artist_email ?? email.recipient_email)
         const ev = perfPayload.eventDate
-          ? `<p style="margin:0 0 12px;color:#a3a3a3">Show: ${esc(perfPayload.eventDate)}</p>` : ''
+          ? `<p style="margin:0 0 12px;color:${EMAIL_LABEL}">Show: ${esc(perfPayload.eventDate)}</p>` : ''
         setPreviewHtml(
-          `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e5e5e5;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
-          + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-          + `<p style="color:#888;font-size:11px;margin:0 0 16px">Performance form · to <strong>${toe}</strong></p>`
+          `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
+            + `<div style="padding:24px;max-width:560px;margin:0 auto">`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Performance form · to <strong>${toe}</strong></p>`
           + `<p style="margin:0 0 8px">Venue: <strong>${esc(perfPayload.venueName)}</strong></p>`
           + ev
           + `<p style="margin:16px 0 8px;word-break:break-all"><a href="${formUrl}" style="color:#93c5fd">${esc(formUrl)}</a></p>`
-          + `<p style="margin:0;color:#666;font-size:11px">Real send uses your template layout from Email templates.</p></div></body></html>`,
+          + `<p style="margin:0;color:${EMAIL_HINT};font-size:11px">Real send uses your template layout from Email templates.</p></div></body></html>`,
         )
         setPreviewLoading(false)
         return
@@ -556,7 +557,7 @@ export default function EmailQueue() {
           .maybeSingle()
 
         if (!row) {
-          setPreviewHtml('<div style="padding:40px;color:#888;text-align:center;">Template not found</div>')
+          setPreviewHtml(`<div style="padding:40px;color:${EMAIL_HINT};text-align:center;">Template not found</div>`)
           setPreviewLoading(false)
           return
         }

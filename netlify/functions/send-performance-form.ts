@@ -1,6 +1,14 @@
 import type { Handler } from '@netlify/functions'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
+import {
+  EMAIL_BODY_SECONDARY,
+  EMAIL_FOOTER_MUTED,
+  EMAIL_HINT,
+  EMAIL_LABEL,
+  EMAIL_META_TAGLINE,
+  EMAIL_ROW_LABEL,
+} from '../../src/lib/email/emailDarkSurfacePalette'
 
 interface RequestBody {
   token: string
@@ -43,12 +51,12 @@ function buildPerformanceCardInner(
   const defaultP = 'Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.'
   const raw = customIntro?.trim()
   if (!raw) {
-    return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${defaultP}</p>`
+    return `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:16px;">${defaultP}</p>`
   }
   const applied = applyPerformanceReportPlaceholders(raw, venueName, artistName)
   if (applied.includes('<')) return applied
   const withBreaks = escapeHtml(applied).replace(/\n/g, '<br/>')
-  return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${withBreaks}</p>`
+  return `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:16px;">${withBreaks}</p>`
 }
 
 const handler: Handler = async (event) => {
@@ -87,8 +95,8 @@ const handler: Handler = async (event) => {
   }
 
   const eventDateLine = body.eventDate
-    ? `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${fmtDate(body.eventDate)}</p>`
-    : `<p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong></p>`
+    ? `<p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${fmtDate(body.eventDate)}</p>`
+    : `<p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong></p>`
 
   const L = artistLayoutForSend(body.layout, body.custom_subject, body.custom_intro)
   const subjectRaw = L.subject?.trim()
@@ -99,7 +107,7 @@ const handler: Handler = async (event) => {
   const cardInner = buildPerformanceCardInner(L.intro ?? body.custom_intro, body.venueName, body.artistName)
   const appendHtml = renderAppendBlocksHtml(L.appendBlocks)
   const closingExtra = L.closing?.trim()
-    ? `<p style="font-size:13px;color:#d1d1d1;line-height:1.7;margin-bottom:12px;">${escapeHtmlEnt(L.closing).replace(/\n/g, '<br/>')}</p>`
+    ? `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;margin-bottom:12px;">${escapeHtmlEnt(L.closing).replace(/\n/g, '<br/>')}</p>`
     : ''
 
   const html = `<!DOCTYPE html>
@@ -125,8 +133,8 @@ const handler: Handler = async (event) => {
   <div style="padding:28px 32px 0 32px;">
     <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
-      <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
-      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+      <div style="font-size:11px;font-weight:700;color:${EMAIL_LABEL};text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:11px;font-weight:500;color:${EMAIL_META_TAGLINE};letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
@@ -143,13 +151,13 @@ const handler: Handler = async (event) => {
     ${appendHtml}
     ${closingExtra}
 
-    <p style="font-size:13px;color:#555555;line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
+    <p style="font-size:13px;color:${EMAIL_HINT};line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>
 
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${body.managerName.toUpperCase()}</div>
-    <div style="font-size:11px;color:#555555;margin-bottom:8px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    <a href="mailto:${body.replyToEmail}?subject=${encodeURIComponent('Re: ' + subject)}" style="display:inline-block;background:#1e1e1e;color:#d1d1d1;font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;">Reply to This Email</a>
+    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-bottom:8px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <a href="mailto:${body.replyToEmail}?subject=${encodeURIComponent('Re: ' + subject)}" style="display:inline-block;background:#1e1e1e;color:${EMAIL_BODY_SECONDARY};font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;">Reply to This Email</a>
   </div>
 
 </div>

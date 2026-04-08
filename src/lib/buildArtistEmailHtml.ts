@@ -5,6 +5,15 @@ import { applyPerformanceReportPlaceholders } from '@/lib/performanceReportEmail
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { artistLayoutForSend } from '@/lib/emailLayout'
 import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
+import {
+  EMAIL_BODY_SECONDARY,
+  EMAIL_FOOTER_MUTED,
+  EMAIL_HINT,
+  EMAIL_LABEL,
+  EMAIL_META_TAGLINE,
+  EMAIL_ROW_LABEL,
+  EMAIL_TEXT_PRIMARY,
+} from '@/lib/email/emailDarkSurfacePalette'
 import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
 
 function escapeHtmlPlain(s: string): string {
@@ -35,23 +44,23 @@ function fmtDate(iso: string) {
 }
 
 function rows(items: Array<[string, string, string?]>): string {
-  return items.map(([label, value, valueColor = '#ffffff'], i, arr) => {
+  return items.map(([label, value, valueColor = EMAIL_TEXT_PRIMARY], i, arr) => {
     const isLast = i === arr.length - 1
     const border = isLast ? '' : 'border-bottom:1px solid #222222;'
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;${border}"><span style="font-size:13px;color:#888888;line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${value}</span></div>`
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;${border}"><span style="font-size:13px;color:${EMAIL_ROW_LABEL};line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${value}</span></div>`
   }).join('')
 }
 
 function sectionCard(title: string, content: string, accentColor = '#60a5fa'): string {
-  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
+  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
 const sharedHeader = `
   <div style="padding:28px 32px 0 32px;">
     <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
-      <div style="font-size:10px;font-weight:700;color:#888888;text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
-      <div style="font-size:8px;font-weight:500;color:#555555;letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+      <div style="font-size:11px;font-weight:700;color:${EMAIL_LABEL};text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
+      <div style="font-size:11px;font-weight:500;color:${EMAIL_META_TAGLINE};letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
@@ -59,13 +68,13 @@ const sharedHeader = `
 const sharedFooter = `
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">Front Office</div>
-    <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
     <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">
-      <a href="https://djluijay.com" style="color:#888888;text-decoration:none;font-size:11px;">djluijay.com</a>
-      <span style="color:#444444;margin:0 8px;">|</span>
+      <a href="https://djluijay.com" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">djluijay.com</a>
+      <span style="color:#6a6a6a;margin:0 8px;">|</span>
       <a href="https://instagram.com/djluijay" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;">
-        <img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" />
-        <span style="font-size:11px;color:#888888;">@djluijay</span>
+        <img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" />
+        <span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@djluijay</span>
       </a>
     </div>
   </div>`
@@ -116,9 +125,9 @@ export function buildManagementReportHtml(
 
   const balanceCallout = `
 <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:20px 22px;margin-bottom:14px;">
-  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;margin-bottom:10px;">Outstanding Balance</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:10px;">Outstanding Balance</div>
   <div style="font-size:30px;font-weight:800;color:#ef4444;letter-spacing:-1px;line-height:1;margin-bottom:8px;">$200.00</div>
-  <div style="font-size:13px;color:#d1d1d1;line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
+  <div style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
 </div>`
 
   const introRaw = L.intro?.trim()
@@ -145,15 +154,15 @@ export function buildManagementReportHtml(
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:26px;">Hey ${escapeHtmlPlain(artistEmailPreviewGreetingName(PERF_PREVIEW_ARTIST))},<br><br>${opener}</p>
     <div style="text-align:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:26px 20px;margin-bottom:22px;">
       <div class="hero-val" style="font-size:44px;font-weight:800;color:#22c55e;letter-spacing:-1.5px;line-height:1;">1</div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#888888;margin-top:10px;">Booking Confirmed</div>
-      <div style="font-size:12px;color:#d1d1d1;margin-top:5px;">New venue secured this period</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:${EMAIL_LABEL};margin-top:10px;">Booking Confirmed</div>
+      <div style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin-top:5px;">New venue secured this period</div>
     </div>
     ${outreachSection}
     ${dealsSection}
     ${retainerSection}
     ${balanceCallout}
     ${renderAppendBlocksHtml(L.appendBlocks)}
-    <p style="font-size:13px;color:#888888;line-height:1.75;margin-top:10px;">${closer}</p>
+    <p style="font-size:13px;color:${EMAIL_FOOTER_MUTED};line-height:1.75;margin-top:10px;">${closer}</p>
   </div>
   ${sharedFooter}
 </div>
@@ -205,22 +214,22 @@ export function buildRetainerReminderHtml(
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:20px;">Hey ${escapeHtmlPlain(artistEmailPreviewGreetingName(PERF_PREVIEW_ARTIST))},</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${recapLine}</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer. There is a balance that has not cleared yet. Here is where things stand:</p>
+    <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:20px;">${recapLine}</p>
+    <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:28px;">Wanted to do a quick check-in on the management retainer. There is a balance that has not cleared yet. Here is where things stand:</p>
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;">
         <span style="display:inline-block;width:6px;height:6px;background:#ef4444;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">Retainer Balance</span>
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">Retainer Balance</span>
       </div>
       <div style="padding:0 18px;">
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Month</th>
-              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Invoiced</th>
-              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Paid</th>
-              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888888;padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Balance</th>
+              <th style="text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${EMAIL_LABEL};padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Month</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${EMAIL_LABEL};padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Invoiced</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${EMAIL_LABEL};padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Paid</th>
+              <th style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${EMAIL_LABEL};padding:10px 0 6px;border-bottom:1px solid #2a2a2a;">Balance</th>
             </tr>
           </thead>
           <tbody>${feeRows}</tbody>
@@ -229,19 +238,19 @@ export function buildRetainerReminderHtml(
     </div>
 
     <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:16px;">
-      <p style="font-size:13px;color:#d1d1d1;line-height:1.6;">Partial payments already received are reflected above, thank you for those.</p>
+      <p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.6;">Partial payments already received are reflected above, thank you for those.</p>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:18px 22px;margin-bottom:24px;">
-      <div style="font-size:13px;color:#d1d1d1;">Total outstanding</div>
+      <div style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">Total outstanding</div>
       <div style="font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.5px;">${money(900)}</div>
     </div>
 
     ${renderAppendBlocksHtml(L.appendBlocks)}
     ${L.closing?.trim()
-    ? `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
-    : `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
+    ? `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
+    : `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
+    <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
   </div>
   ${sharedFooter}
   </div>
@@ -289,13 +298,13 @@ export function buildPerformanceReportRequestHtml(
     ? applyPerformanceReportPlaceholders(subjectRaw, venueName, artistFull)
     : `Quick check-in: How did the show go at ${venueName}?`
 
-  const defaultCardBody = `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>`
+  const defaultCardBody = `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:16px;">Quick check-in on how everything went. The form takes less than a minute and helps us keep your momentum going - tracking opportunities, payments, and next steps all in one place.</p>`
   const cardInner = (() => {
     const raw = L.intro?.trim()
     if (!raw) return defaultCardBody
     const applied = applyPerformanceReportPlaceholders(raw, venueName, artistFull)
     if (applied.includes('<')) return applied
-    return `<p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:16px;">${escapeHtmlPlain(applied).replace(/\n/g, '<br/>')}</p>`
+    return `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:16px;">${escapeHtmlPlain(applied).replace(/\n/g, '<br/>')}</p>`
   })()
 
   return `<!DOCTYPE html>
@@ -311,7 +320,7 @@ export function buildPerformanceReportRequestHtml(
   ${sharedHeader}
   <div class="email-body" style="padding:28px 32px;">
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">Hey ${escapeHtmlPlain(firstName)},</p>
-    <p style="font-size:13px;color:#888888;margin-bottom:24px;">Show at <strong style="color:#ffffff;">Skyline Bar &amp; Lounge</strong> &mdash; April 4, 2026</p>
+    <p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">Skyline Bar &amp; Lounge</strong> &mdash; April 4, 2026</p>
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:20px 22px;margin-bottom:24px;">
       ${cardInner}
@@ -320,10 +329,10 @@ export function buildPerformanceReportRequestHtml(
 
     ${renderAppendBlocksHtml(L.appendBlocks)}
     ${L.closing?.trim()
-    ? `<p style="font-size:13px;color:#d1d1d1;line-height:1.7;margin-bottom:12px;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
+    ? `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;margin-bottom:12px;">${escapeHtmlPlain(L.closing).replace(/\n/g, '<br/>')}</p>`
     : ''}
 
-    <p style="font-size:13px;color:#555555;line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
+    <p style="font-size:13px;color:${EMAIL_HINT};line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>
   ${sharedFooter}
 </div>
