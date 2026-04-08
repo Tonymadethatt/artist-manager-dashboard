@@ -7,7 +7,6 @@ export type VenueRenderEmailType =
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
-  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
   | 'first_outreach'
@@ -95,7 +94,6 @@ const replyMap: Record<VenueRenderEmailType, { label: string; bodyText: string }
   booking_confirmation: { label: 'Reply to Booking',             bodyText: 'Hi,\n\nThank you for the booking confirmation. Here are my notes:\n\n' },
   agreement_ready:      { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nI have reviewed the agreement. Here is my response:\n\n' },
   payment_reminder:     { label: 'Confirm Payment',              bodyText: 'Hi,\n\nI am writing to confirm payment for the upcoming event.\n\n' },
-  booking_confirmed:    { label: 'Reply to Confirmation',        bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
   payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
   rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
   first_outreach:       { label: 'Reply About Booking',          bodyText: 'Hi,\n\nThanks for your note. Here is more about the booking opportunity:\n\n' },
@@ -150,7 +148,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
     case 'booking_confirmation': {
       subject = `Booking Confirmation - ${artistNameUpper} at ${venueName}`
       greeting = `Hi ${firstName},`
-      intro = `We are excited to confirm the booking details for ${artistName}. Please review the summary below. A formal agreement will follow shortly.`
+      intro = `We are excited to confirm the booking for ${artistName} at ${venueName}. Please review the summary below. A formal agreement will follow shortly.`
       const dealRows = [
         deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
@@ -202,31 +200,10 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       subject = `Agreement Ready for Review - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
       intro = `The agreement for your upcoming event with ${artistName} is ready for your review.`
-      const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${deal.agreement_url}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">The agreement document will be shared with you directly.</p>`}</div>`
+      const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">The agreement document will be shared with you directly.</p>`}</div>`
       bodyCards = card('Agreement', agreementContent, '#22c55e')
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Please review and reply to this email with any questions or concerns. Once both parties have agreed to the terms, we will proceed with the booking confirmation.</p></div>`
       closing = `Thank you for your time. We look forward to working with you.`
-      break
-    }
-
-    case 'booking_confirmed': {
-      subject = `Booking Confirmed - ${artistNameUpper} | ${venueName}`
-      greeting = `Hi ${firstName},`
-      intro = `We are happy to confirm that the booking for ${artistName} at ${venueName} is officially confirmed.`
-      const confirmedRows = [
-        deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
-        row('Venue', venueName, '#ffffff'),
-        deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
-        row('Status', 'Confirmed', '#ffffff'),
-      ].filter(Boolean).join('')
-      bodyCards = card('Booking Details', confirmedRows, '#22c55e')
-      const stepsContent = [
-        '<li style="margin-bottom:8px;">You will receive a formal agreement to sign if not already completed.</li>',
-        '<li style="margin-bottom:8px;">Payment details will be outlined per the agreed terms.</li>',
-        `<li>For any questions, reach us at <strong>${replyTo}</strong>.</li>`,
-      ].join('')
-      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;margin-bottom:12px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>What Comes Next</p><ul style="font-size:13px;color:#d1d1d1;line-height:1.7;padding-left:16px;">${stepsContent}</ul></div>`
-      closing = `Thank you for making this happen. We are excited to bring a great show to your venue.`
       break
     }
 
@@ -291,7 +268,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `Circling back on the agreement for ${artistName}${venue ? ` at ${venueName}` : ''}. When you have a moment, a quick status on review or signature would help us keep the date on track.`
       const agreeUrl = deal?.agreement_url
-      const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${agreeUrl}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">If you need the document resent, reply to this email.</p>`}</div>`
+      const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a>` : `<p style="font-size:13px;color:#d1d1d1;">If you need the document resent, reply to this email.</p>`}</div>`
       bodyCards = card('Agreement', agreementContent, '#60a5fa')
       closing = `Happy to adjust language if anything needs clarification.`
       break

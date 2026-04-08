@@ -18,7 +18,6 @@ import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
   'booking_confirmation',
-  'booking_confirmed',
   'agreement_ready',
   'agreement_followup',
   'payment_reminder',

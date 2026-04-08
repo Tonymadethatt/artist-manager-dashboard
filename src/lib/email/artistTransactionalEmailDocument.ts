@@ -3,6 +3,19 @@ import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
 
 export type ArtistTransactionalKind = 'performance_report_received' | 'gig_week_reminder'
 
+/** Human-readable date for email copy when `eventDate` is ISO `yyyy-mm-dd`. */
+function formatEventDateForEmail(isoOrLabel: string | null): string | null {
+  if (!isoOrLabel?.trim()) return null
+  const t = isoOrLabel.trim()
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t)
+  if (!m) return t
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
+  const mo = parseInt(m[2], 10) - 1
+  const day = parseInt(m[3], 10)
+  return `${months[mo]} ${day}, ${m[1]}`
+}
+
 function logoUrls(base: string) {
   const prefix = base.replace(/\/$/, '')
   return {
@@ -35,8 +48,9 @@ export function buildArtistTransactionalEmailHtml(
       + `<strong>${escapeHtmlPlain(managerName)}</strong> has your notes and will follow up as needed.`
     defaultClosing = 'If anything else comes to mind, just reply to this email.'
   } else {
-    const when = eventDate
-      ? ` on <strong>${escapeHtmlPlain(eventDate)}</strong>`
+    const dateLabel = formatEventDateForEmail(eventDate)
+    const when = dateLabel
+      ? ` on <strong>${escapeHtmlPlain(dateLabel)}</strong>`
       : ''
     defaultIntro =
       `Quick heads-up: you have <strong>${escapeHtmlPlain(venueName)}</strong>${when} on the calendar. `
@@ -60,6 +74,14 @@ export function buildArtistTransactionalEmailHtml(
 
   const appendHtml = renderAppendBlocksHtml(L.appendBlocks)
 
+  const roleBanner = kind === 'performance_report_received'
+    ? `<div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#a3a3a3;vertical-align:middle;">Post-show check-in</span></div>`
+    : `<div style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:10px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#a3a3a3;vertical-align:middle;">Gig week</span></div>`
+
+  const gigPrepBlock = kind === 'gig_week_reminder'
+    ? `<div style="background:#161616;border:1px solid #252525;border-radius:8px;padding:14px 18px;margin-bottom:22px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#888888;margin-bottom:10px;">Quick prep</p><ul style="font-size:13px;color:#c4c4c4;line-height:1.65;padding-left:18px;margin:0;"><li style="margin-bottom:6px;">Travel, parking, and load-in window</li><li style="margin-bottom:6px;">Promo or holding assets if the venue needs them</li><li>Any open logistics questions for the booker</li></ul></div>`
+    : ''
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,8 +102,10 @@ export function buildArtistTransactionalEmailHtml(
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>
   <div style="padding:28px 32px;">
+    ${roleBanner}
     <p style="font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;">${greeting}</p>
-    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:24px;">${intro}</p>
+    <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:20px;">${intro}</p>
+    ${gigPrepBlock}
     ${appendHtml}
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-top:8px;">${closing}</p>
   </div>

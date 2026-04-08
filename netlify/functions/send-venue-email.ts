@@ -10,7 +10,6 @@ type VenueEmailType =
   | 'payment_receipt'
   | 'payment_reminder'
   | 'agreement_ready'
-  | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
   | 'first_outreach'
@@ -87,7 +86,6 @@ const VENUE_TYPES = new Set<string>([
   'payment_receipt',
   'payment_reminder',
   'agreement_ready',
-  'booking_confirmed',
   'follow_up',
   'rebooking_inquiry',
   'first_outreach',
@@ -223,7 +221,6 @@ const handler: Handler = async (event) => {
         payment_receipt: `Payment Received - Thank You | ${artistNameUpper}`,
         payment_reminder: `Payment Reminder - ${artistNameUpper}`,
         agreement_ready: `Agreement Ready for Review - ${artistNameUpper}`,
-        booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
         follow_up: `Following Up - ${artistNameUpper}`,
         rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
         first_outreach: `${artistNameUpper} — booking inquiry | ${venueName}`,

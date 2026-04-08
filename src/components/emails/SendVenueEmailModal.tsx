@@ -47,7 +47,6 @@ const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
   'first_outreach',
   'follow_up',
   'booking_confirmation',
-  'booking_confirmed',
   'agreement_ready',
   'agreement_followup',
   'pre_event_checkin',
@@ -73,9 +72,7 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
   const venue = venueName || 'the venue'
   switch (type) {
     case 'booking_confirmation':
-      return `Confirms the booking details with ${venue}: event date, agreed amount, and next steps including agreement.`
-    case 'booking_confirmed':
-      return `Officially confirms the booking with ${venue}: event summary and what happens next.`
+      return `Confirms the booking with ${venue}: event date, agreed amount, and next steps including agreement.`
     case 'agreement_ready':
       return `Notifies ${venue} that the agreement is ready for review${
         deal?.agreement_url?.trim() || deal?.agreement_generated_file_id ? ' and includes the link' : ''
@@ -178,7 +175,6 @@ export function SendVenueEmailModal({
     const vName = venue?.name || 'your venue'
     const subjectMap: Record<VenueEmailType, string> = {
       booking_confirmation: `Booking Confirmation - ${companyName} at ${vName}`,
-      booking_confirmed: `Booking Confirmed - ${companyName} | ${vName}`,
       payment_receipt: `Payment Received - Thank You | ${companyName}`,
       payment_reminder: `Payment Reminder - ${companyName}`,
       agreement_ready: `Agreement Ready for Review - ${companyName}`,

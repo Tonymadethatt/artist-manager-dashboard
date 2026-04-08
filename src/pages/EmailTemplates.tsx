@@ -36,6 +36,7 @@ import {
   buildRetainerReceivedHtml,
   buildPerformanceReportRequestHtml,
 } from '@/lib/buildArtistEmailHtml'
+import { buildArtistTransactionalEmailHtml } from '@/lib/email/artistTransactionalEmailDocument'
 import type { EmailTemplateAppendBlock, EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import {
   artistLayoutForSend,
@@ -121,11 +122,10 @@ function customBlocksSemanticallyEqual(a: CustomEmailBlocksDoc, b: CustomEmailBl
 // ── Client email metadata ──────────────────────────────────────────────────
 
 const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
-  booking_confirmation: 'Confirms booking details with the venue (initial summary or final confirmation).',
+  booking_confirmation: 'Confirms the booking with the venue: details, agreed amount, and next steps.',
   agreement_ready:      'Notifies venue the agreement is ready, includes the link.',
   payment_reminder:     'Friendly reminder about an outstanding payment.',
   payment_receipt:      'Confirms payment has been received.',
-  booking_confirmed:    'Final confirmed notice with event details and next steps.',
   follow_up:            "Check-in to venues that haven't responded.",
   rebooking_inquiry:    'Sent after a positive post-show report. Asks venue about booking again.',
   first_outreach:       'Cold first touch: introduces the artist and asks about booking interest.',
@@ -139,7 +139,6 @@ const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
 
 const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
   booking_confirmation: 'Booking Confirmation - {artist} at {venue}',
-  booking_confirmed:    'Booking Confirmed - {artist} | {venue}',
   agreement_ready:      'Agreement Ready for Review - {artist}',
   payment_reminder:     'Payment Reminder - {artist}',
   payment_receipt:      'Payment Received - Thank You | {artist}',
@@ -160,7 +159,6 @@ const CLIENT_ORDER: VenueEmailType[] = [
   'booking_confirmation',
   'agreement_ready',
   'agreement_followup',
-  'booking_confirmed',
   'pre_event_checkin',
   'payment_reminder',
   'payment_receipt',
@@ -455,6 +453,32 @@ export default function EmailTemplates() {
       }
       if (selectedType === 'retainer_received') {
         return buildRetainerReceivedHtml(layout.intro ?? null, layout.subject ?? null, layout)
+      }
+      if (selectedType === 'performance_report_received') {
+        return buildArtistTransactionalEmailHtml(
+          'performance_report_received',
+          {
+            artistName: PREVIEW_MOCK_PROFILE.artist_name,
+            venueName: PREVIEW_MOCK_VENUE.name,
+            eventDate: null,
+            managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
+          },
+          layout,
+          '',
+        )
+      }
+      if (selectedType === 'gig_week_reminder') {
+        return buildArtistTransactionalEmailHtml(
+          'gig_week_reminder',
+          {
+            artistName: PREVIEW_MOCK_PROFILE.artist_name,
+            venueName: PREVIEW_MOCK_VENUE.name,
+            eventDate: PREVIEW_MOCK_DEAL.event_date,
+            managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
+          },
+          layout,
+          '',
+        )
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
     }
