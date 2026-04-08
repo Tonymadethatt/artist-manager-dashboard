@@ -1,5 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { brandingFromArtistProfileRow } from '@/lib/publicFormBranding'
 
 export type ManualShowReportLocationState = {
   token: string
@@ -10,6 +12,8 @@ export default function ManualShowReport() {
   const navigate = useNavigate()
   const location = useLocation()
   const state = location.state as ManualShowReportLocationState | null
+  const { profile } = useArtistProfile()
+  const branding = brandingFromArtistProfileRow(profile)
 
   if (!state?.token || !state.context) {
     return (
@@ -27,6 +31,7 @@ export default function ManualShowReport() {
           embeddedContext={state.context}
           submittedBy="manager_dashboard"
           footerMode="embedded"
+          branding={branding}
           onSuccess={() => navigate('/performance-reports')}
           onCancel={() => navigate('/performance-reports')}
         />

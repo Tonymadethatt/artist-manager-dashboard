@@ -2,6 +2,22 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 import { isEmailCaptureKind } from '../../src/lib/emailCapture/kinds'
+import { brandingFromArtistProfileRow } from '../../src/lib/publicFormBranding'
+
+const ARTIST_PROFILE_SELECT =
+  'company_name, artist_name, tagline, manager_name, manager_title, website, social_handle, phone, reply_to_email, from_email, manager_email'
+
+async function brandingForUser(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+) {
+  const { data: row } = await supabase
+    .from('artist_profile')
+    .select(ARTIST_PROFILE_SELECT)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return brandingFromArtistProfileRow(row)
+}
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
@@ -32,6 +48,7 @@ const handler: Handler = async (event) => {
     .from('email_capture_tokens')
     .select(`
       id,
+      user_id,
       kind,
       consumed_at,
       expires_at,
@@ -49,8 +66,11 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const userId = data.user_id as string
+
   if (data.consumed_at) {
     const venue = data.venue as { name: string } | null
+    const branding = await brandingForUser(supabase, userId)
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -59,6 +79,7 @@ const handler: Handler = async (event) => {
         submitted: true,
         kind: data.kind,
         venueName: venue?.name ?? null,
+        branding,
       }),
     }
   }
@@ -74,6 +95,7 @@ const handler: Handler = async (event) => {
 
   const venue = data.venue as { name: string } | null
   const deal = data.deal as { description: string; event_date: string | null } | null
+  const branding = await brandingForUser(supabase, userId)
 
   return {
     statusCode: 200,
@@ -85,6 +107,7 @@ const handler: Handler = async (event) => {
       venueName: venue?.name ?? null,
       dealDescription: deal?.description ?? null,
       eventDate: deal?.event_date ?? null,
+      branding,
     }),
   }
 }

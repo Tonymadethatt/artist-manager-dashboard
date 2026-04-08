@@ -7,6 +7,13 @@ import {
   PRODUCTION_FRICTION_OPTIONS,
   type CancellationReason,
 } from '@/lib/performanceReportV1'
+import { PublicFormLayout } from '@/components/public/PublicFormLayout'
+import {
+  DEFAULT_PUBLIC_FORM_BRANDING,
+  mergePublicFormBranding,
+  type PublicFormBranding,
+} from '@/lib/publicFormBranding'
+import { cn } from '@/lib/utils'
 
 type FormState = 'loading' | 'form' | 'submitting' | 'success' | 'invalid'
 
@@ -31,6 +38,8 @@ export interface ShowReportWizardProps {
   footerMode: 'viewport' | 'embedded'
   /** Dashboard form preview: no API calls; success UI only. Requires `embeddedContext`. */
   preview?: boolean
+  /** Manual dashboard / preview: not loaded from `get-performance-report`. */
+  branding?: PublicFormBranding | null
   onSuccess?: () => void
   onCancel?: () => void
 }
@@ -259,6 +268,7 @@ export function ShowReportWizard({
   submittedBy,
   footerMode,
   preview = false,
+  branding: propsBranding,
   onSuccess,
   onCancel,
 }: ShowReportWizardProps) {
@@ -276,10 +286,30 @@ export function ShowReportWizard({
   const [step, setStep] = useState(0)
   const [fieldError, setFieldError] = useState<string | null>(null)
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [brandingIn, setBrandingIn] = useState<PublicFormBranding>(() =>
+    propsBranding ? mergePublicFormBranding(propsBranding) : DEFAULT_PUBLIC_FORM_BRANDING,
+  )
+  const [successProgressPct, setSuccessProgressPct] = useState(0)
+  const [successFlash, setSuccessFlash] = useState(false)
 
   const registerRef = useCallback((key: string) => (el: HTMLElement | null) => {
     fieldRefs.current[key] = el
   }, [])
+
+  useEffect(() => {
+    if (propsBranding) setBrandingIn(mergePublicFormBranding(propsBranding))
+  }, [propsBranding])
+
+  useEffect(() => {
+    if (state !== 'success') return
+    setSuccessProgressPct(100)
+    setSuccessFlash(true)
+    const t = window.setTimeout(() => {
+      setSuccessFlash(false)
+      setSuccessProgressPct(0)
+    }, 550)
+    return () => window.clearTimeout(t)
+  }, [state])
 
   useEffect(() => {
     if (embeddedContext) {
@@ -289,6 +319,7 @@ export function ShowReportWizard({
         dealDescription: embeddedContext.dealDescription,
       })
       setState('form')
+      if (propsBranding) setBrandingIn(mergePublicFormBranding(propsBranding))
       return
     }
     if (!token) { setState('invalid'); return }
@@ -297,6 +328,7 @@ export function ShowReportWizard({
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
+        setBrandingIn(mergePublicFormBranding(data.branding))
         if (!data.valid) { setState('invalid'); return }
         if (data.submitted) { setState('success'); return }
         setContext({
@@ -501,25 +533,79 @@ export function ShowReportWizard({
     }
   }
 
-  const shellMin = preview ? 'min-h-0 min-h-[200px] flex-1' : 'min-h-screen'
+  const formProgressPct =
+    state === 'form' || state === 'submitting'
+      ? lastStepIndex <= 0
+        ? 0
+        : Math.round((step / lastStepIndex) * 100)
+      : 0
+
+  const layoutTitle =
+    submittedBy === 'manager_dashboard' ? 'Manual show report' : 'Show report'
+  const layoutDescriptor =
+    submittedBy === 'manager_dashboard'
+      ? 'On behalf of your artist'
+      : 'How it went — one short form'
+
+  const successLayoutTitle = preview
+    ? 'Preview complete'
+    : submittedBy === 'manager_dashboard'
+      ? 'Report saved'
+      : 'Thank you'
+  const successLayoutDescriptor = preview
+    ? 'Dry run — nothing saved'
+    : submittedBy === 'manager_dashboard'
+      ? 'Same automations as the artist link'
+      : 'Your manager will follow up shortly'
+
+  const venueContextNode =
+    context.venueName || context.eventDate ? (
+      <p className="text-sm text-neutral-400">
+        {context.venueName}
+        {context.eventDate ? (
+          <span className="text-neutral-600"> · {formatDate(context.eventDate)}</span>
+        ) : null}
+      </p>
+    ) : null
+
+  const layoutRootDraft = preview
+    ? 'min-h-0 flex-1 bg-[#0d0d0d] text-neutral-100'
+    : footerMode === 'viewport'
+      ? 'min-h-screen bg-[#0d0d0d] text-neutral-100'
+      : 'min-h-0 bg-[#0d0d0d] text-neutral-100'
 
   if (state === 'loading') {
     return (
-      <div className={`${shellMin} bg-[#0d0d0d] flex items-center justify-center`}>
-        <Loader2 className="h-6 w-6 text-neutral-600 animate-spin" />
-      </div>
+      <PublicFormLayout
+        branding={brandingIn}
+        title="Loading"
+        descriptor="One moment"
+        progress={0}
+        showProgress={false}
+        rootClassName={layoutRootDraft}
+        mainClassName="flex flex-1 items-center justify-center py-16"
+      >
+        <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+      </PublicFormLayout>
     )
   }
 
   if (state === 'invalid') {
     return (
-      <div className={`${shellMin} bg-[#0d0d0d] flex items-center justify-center px-4`}>
-        <div className="max-w-sm w-full text-center">
-          <div className="w-12 h-12 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center mx-auto mb-4">
+      <div
+        className={cn(
+          preview ? 'min-h-0 flex-1' : 'min-h-screen',
+          'flex items-center justify-center bg-[#0d0d0d] px-4 text-neutral-100',
+        )}
+      >
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800">
             <ClipboardList className="h-5 w-5 text-neutral-500" />
           </div>
-          <h1 className="text-white font-semibold text-lg mb-2">Link no longer valid</h1>
-          <p className="text-neutral-500 text-sm leading-relaxed">This link has expired or is no longer active. Ask your manager to send you an updated one.</p>
+          <h1 className="mb-2 text-lg font-semibold text-white">Link no longer valid</h1>
+          <p className="text-sm leading-relaxed text-neutral-500">
+            This link has expired or is no longer active. Ask your manager to send you an updated one.
+          </p>
         </div>
       </div>
     )
@@ -527,41 +613,39 @@ export function ShowReportWizard({
 
   if (state === 'success') {
     const isDashboard = submittedBy === 'manager_dashboard'
-    const successShell = preview
-      ? 'py-8 min-h-0 flex-1'
-      : footerMode === 'viewport'
-        ? 'min-h-screen'
-        : 'py-8'
     return (
-      <div className={`${successShell} bg-[#0d0d0d] flex items-center justify-center px-4`}>
-        <div className="max-w-sm w-full text-center">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mx-auto mb-4">
+      <PublicFormLayout
+        branding={brandingIn}
+        title={successLayoutTitle}
+        descriptor={successLayoutDescriptor}
+        progress={successProgressPct}
+        progressSuccessFlash={successFlash}
+        venueContext={venueContextNode}
+        rootClassName={layoutRootDraft}
+        mainClassName="flex flex-1 flex-col items-center justify-center px-0 py-10"
+      >
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/15">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
           </div>
-          <h1 className="text-white font-semibold text-lg mb-2">
-            {preview ? 'Preview complete' : isDashboard ? 'Report saved' : 'Got it, thanks'}
-          </h1>
-          <p className="text-neutral-400 text-sm leading-relaxed">
+          <p className="text-sm leading-relaxed text-neutral-400">
             {preview
               ? 'Nothing was saved. Pick another form in the dashboard to keep testing.'
               : isDashboard
                 ? 'Submitted with the same automations as the artist link (tasks, venue status, notes).'
-                : 'Your show report has been received. Your manager will follow up shortly.'}
+                : 'Your show report has been received.'}
           </p>
-          {context.venueName && (
-            <p className="text-neutral-600 text-xs mt-3">{context.venueName}{context.eventDate ? ` - ${formatDate(context.eventDate)}` : ''}</p>
-          )}
-          {!preview && isDashboard && onSuccess && (
+          {!preview && isDashboard && onSuccess ? (
             <button
               type="button"
               onClick={onSuccess}
-              className="mt-6 w-full min-h-[48px] rounded-lg bg-white hover:bg-neutral-100 text-black font-semibold text-sm"
+              className="mt-6 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
             >
               Back to Show Reports
             </button>
-          )}
+          ) : null}
         </div>
-      </div>
+      </PublicFormLayout>
     )
   }
 
@@ -575,54 +659,33 @@ export function ShowReportWizard({
 
   const footerClass =
     footerMode === 'viewport'
-      ? 'fixed bottom-0 left-0 right-0 p-4 bg-[#0d0d0d]/95 border-t border-neutral-800 backdrop-blur-sm z-10'
-      : 'sticky bottom-0 mt-8 -mx-4 px-4 py-4 bg-[#0d0d0d] border-t border-neutral-800 z-10'
-
-  const formShell = preview
-    ? 'min-h-0 py-6 px-4 pb-8'
-    : `${footerMode === 'viewport' ? 'min-h-screen' : ''} py-6 px-4 ${footerMode === 'viewport' ? 'pb-28' : 'pb-8'}`
+      ? 'fixed bottom-0 left-0 right-0 z-10 border-t border-neutral-800 bg-[#0d0d0d]/95 p-4 backdrop-blur-sm'
+      : 'sticky bottom-0 z-10 mt-8 -mx-4 border-t border-neutral-800 bg-[#0d0d0d] px-4 py-4'
 
   return (
-    <div className={`${formShell} bg-[#0d0d0d]`}>
-      <div className="max-w-md mx-auto">
-        <header ref={registerRef('header')} className="mb-5">
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-sm text-neutral-500 hover:text-neutral-300 mb-4"
-            >
-              ← Cancel
-            </button>
-          )}
-          <div className="flex items-start gap-3 mb-3">
-            <img src="/dj-luijay-logo.png" alt="" className="h-8 w-auto shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <p className="text-[10px] text-neutral-600 uppercase tracking-widest font-medium leading-tight">Show report · Front Office</p>
-              <h1 className="text-white font-semibold text-lg leading-snug">
-                {submittedBy === 'manager_dashboard' ? 'Manual show report (on behalf of artist)' : 'Tell your manager how it went'}
-              </h1>
-            </div>
-          </div>
-          {context.venueName && (
-            <p className="text-neutral-400 text-sm border-t border-neutral-800 pt-3 mt-1">
-              {context.venueName}
-              {context.eventDate && <span className="text-neutral-600"> · {formatDate(context.eventDate)}</span>}
-            </p>
-          )}
-        </header>
+    <PublicFormLayout
+      branding={brandingIn}
+      title={layoutTitle}
+      descriptor={layoutDescriptor}
+      progress={formProgressPct}
+      progressSuccessFlash={false}
+      venueContext={venueContextNode}
+      rootClassName={layoutRootDraft}
+      mainClassName={cn('pt-2', footerMode === 'viewport' ? 'pb-32' : 'pb-24')}
+    >
+      <div ref={registerRef('header')} className="max-w-md mx-auto w-full">
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mb-4 text-sm text-neutral-500 hover:text-neutral-300"
+          >
+            ← Cancel
+          </button>
+        ) : null}
+      </div>
 
-        <div className="flex items-center gap-2 mb-6" aria-hidden>
-          {Array.from({ length: totalSteps }, (_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-white' : 'bg-neutral-800'}`}
-            />
-          ))}
-          <span className="text-[10px] text-neutral-600 shrink-0 tabular-nums ml-1">{step + 1}/{totalSteps}</span>
-        </div>
-
-        <form onSubmit={isLastStep ? handleSubmit : (e) => { e.preventDefault(); handleNext() }}>
+        <form className="max-w-md mx-auto w-full" onSubmit={isLastStep ? handleSubmit : (e) => { e.preventDefault(); handleNext() }}>
           {step === 0 && (
             <div ref={registerRef('event')}>
               <SelectField
@@ -989,14 +1052,13 @@ export function ShowReportWizard({
           </div>
         </form>
 
-        <p className="text-center text-xs text-neutral-700 mt-4 pb-4">
+        <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs text-neutral-700">
           {preview
             ? 'Preview only — answers are not submitted.'
             : submittedBy === 'manager_dashboard'
               ? 'Same automations apply as when the artist submits the public link.'
               : 'One-time link. Your answers go to your manager only.'}
         </p>
-      </div>
-    </div>
+    </PublicFormLayout>
   )
 }

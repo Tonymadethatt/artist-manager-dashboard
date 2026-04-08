@@ -3,7 +3,21 @@ import { Monitor, Eye } from 'lucide-react'
 import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
 import { EmailCaptureFormPreviewBody } from '@/pages/public/EmailCaptureForm'
 import { EMAIL_CAPTURE_KIND_LABELS, type EmailCaptureKind } from '@/lib/emailCapture/kinds'
+import { mergePublicFormBranding, type PublicFormBranding } from '@/lib/publicFormBranding'
 import { cn } from '@/lib/utils'
+
+const MOCK_PUBLIC_FORM_BRANDING: PublicFormBranding = mergePublicFormBranding({
+  company_name: 'DJ Luijay LLC',
+  artist_name: 'DJ Luijay',
+  manager_name: 'Alex',
+  manager_title: 'Management',
+  website: 'djluijay.live',
+  social_handle: '@djluijay',
+  phone: '(555) 010-0199',
+  reply_to_email: 'management@djluijay.live',
+  from_email: 'management@djluijay.live',
+  tagline: 'House · open format · club energy',
+})
 
 const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   venueName: 'Skyline Bar',
@@ -134,6 +148,7 @@ export default function FormPreviews() {
                   submittedBy="artist_link"
                   footerMode="embedded"
                   preview
+                  branding={MOCK_PUBLIC_FORM_BRANDING}
                 />
               </div>
             ) : (
@@ -143,6 +158,7 @@ export default function FormPreviews() {
                   venueName={MOCK_VENUE_CAPTURE.venueName}
                   dealDescription={MOCK_VENUE_CAPTURE.dealDescription}
                   eventDate={MOCK_VENUE_CAPTURE.eventDate}
+                  branding={MOCK_PUBLIC_FORM_BRANDING}
                 />
               </div>
             )}

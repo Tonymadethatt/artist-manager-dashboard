@@ -1,12 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import type { DependencyList } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import type { EmailCaptureKind } from '@/lib/emailCapture/kinds'
-import { isEmailCaptureKind } from '@/lib/emailCapture/kinds'
+import {
+  isEmailCaptureKind,
+  EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS,
+  EMAIL_CAPTURE_KIND_FORM_TITLES,
+} from '@/lib/emailCapture/kinds'
+import { PublicFormLayout } from '@/components/public/PublicFormLayout'
+import {
+  DEFAULT_PUBLIC_FORM_BRANDING,
+  mergePublicFormBranding,
+  type PublicFormBranding,
+} from '@/lib/publicFormBranding'
 
 type PreflightOk =
   | { valid: false }
-  | { valid: true; submitted: true; kind: EmailCaptureKind; venueName: string | null }
+  | { valid: true; submitted: true; kind: EmailCaptureKind; venueName: string | null; branding: PublicFormBranding }
   | {
       valid: true
       submitted: false
@@ -14,7 +25,20 @@ type PreflightOk =
       venueName: string | null
       dealDescription: string | null
       eventDate: string | null
+      branding: PublicFormBranding
     }
+
+type CaptureProgressCtx = { setProgressPct: (n: number) => void }
+const EmailCaptureProgressContext = createContext<CaptureProgressCtx | null>(null)
+
+function useEmailCaptureProgressEstimate(calc: () => number, deps: DependencyList) {
+  const ctx = useContext(EmailCaptureProgressContext)
+  useEffect(() => {
+    if (!ctx) return
+    ctx.setProgressPct(Math.max(0, Math.min(100, Math.round(calc()))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror field completion only
+  }, deps)
+}
 
 export function formatEmailCaptureEventDate(iso: string | null): string | null {
   if (!iso) return null
@@ -56,6 +80,8 @@ export default function EmailCaptureForm() {
   const [preflight, setPreflight] = useState<PreflightOk>({ valid: false })
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [progressPct, setProgressPct] = useState(0)
+  const [progressSuccessFlash, setProgressSuccessFlash] = useState(false)
 
   const load = useCallback(async () => {
     if (!token) {
@@ -68,12 +94,14 @@ export default function EmailCaptureForm() {
       const res = await fetch(`/.netlify/functions/get-email-capture?token=${encodeURIComponent(token)}`)
       const data = await res.json()
       if (data?.valid && isEmailCaptureKind(String(data.kind))) {
+        const branding = mergePublicFormBranding(data.branding)
         if (data.submitted) {
           setPreflight({
             valid: true,
             submitted: true,
             kind: data.kind,
             venueName: data.venueName ?? null,
+            branding,
           })
         } else {
           setPreflight({
@@ -83,7 +111,10 @@ export default function EmailCaptureForm() {
             venueName: data.venueName ?? null,
             dealDescription: data.dealDescription ?? null,
             eventDate: data.eventDate ?? null,
+            branding,
           })
+          setProgressPct(0)
+          setProgressSuccessFlash(false)
         }
       } else {
         setPreflight({ valid: false })
@@ -112,6 +143,13 @@ export default function EmailCaptureForm() {
         setErr(typeof data.message === 'string' ? data.message : 'Could not save. Try again.')
         return
       }
+      setProgressPct(100)
+      setProgressSuccessFlash(true)
+      await new Promise<void>(resolve => {
+        window.setTimeout(resolve, 520)
+      })
+      setProgressSuccessFlash(false)
+      setProgressPct(0)
       await load()
     } catch {
       setErr('Network error. Try again.')
@@ -130,9 +168,16 @@ export default function EmailCaptureForm() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-neutral-500 animate-spin" />
-      </div>
+      <PublicFormLayout
+        branding={DEFAULT_PUBLIC_FORM_BRANDING}
+        title="Quick response"
+        descriptor="Loading…"
+        progress={0}
+        showProgress={false}
+        mainClassName="flex flex-1 flex-col items-center justify-center py-24"
+      >
+        <Loader2 className="h-8 w-8 text-neutral-500 animate-spin" aria-hidden />
+      </PublicFormLayout>
     )
   }
 
@@ -146,43 +191,60 @@ export default function EmailCaptureForm() {
 
   if (preflight.submitted) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center px-6 text-center">
-        <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-        <h1 className="text-lg font-semibold text-white mb-2">Thank you</h1>
+      <PublicFormLayout
+        branding={preflight.branding}
+        title="Thank you"
+        descriptor="Response received"
+        progress={0}
+        mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center"
+      >
+        <CheckCircle2 className="h-12 w-12 text-green-500 mb-4 shrink-0" aria-hidden />
         <p className="text-sm text-neutral-400 max-w-sm">
           Your response was received{preflight.venueName ? ` for ${preflight.venueName}` : ''}. You can close this page.
         </p>
-      </div>
+      </PublicFormLayout>
     )
   }
 
   const ctx = preflight
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 pb-24">
-      <div className="max-w-lg mx-auto px-4 pt-10">
-        <h1 className="text-lg font-semibold text-white mb-1">Quick response</h1>
-        {(ctx.venueName || ctx.dealDescription) && (
-          <p className="text-sm text-neutral-400 mb-6">
-            {ctx.venueName && <span className="text-neutral-300">{ctx.venueName}</span>}
-            {ctx.eventDate && (
-              <span className="text-neutral-500"> · {formatEmailCaptureEventDate(ctx.eventDate)}</span>
-            )}
-            {ctx.dealDescription && !ctx.venueName && (
-              <span className="text-neutral-300">{ctx.dealDescription}</span>
-            )}
-          </p>
-        )}
-
-        {err && (
-          <div className="mb-4 text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
-            {err}
-          </div>
-        )}
-
-        <EmailCaptureKindForm kind={ctx.kind} submitting={submitting} onSubmit={submit} />
-      </div>
+  const venueContext = (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Quick response</p>
+      {(ctx.venueName || ctx.dealDescription) ? (
+        <p className="text-sm text-neutral-400">
+          {ctx.venueName ? <span className="text-neutral-300">{ctx.venueName}</span> : null}
+          {ctx.eventDate ? (
+            <span className="text-neutral-500"> · {formatEmailCaptureEventDate(ctx.eventDate)}</span>
+          ) : null}
+          {ctx.dealDescription && !ctx.venueName ? (
+            <span className="text-neutral-300">{ctx.dealDescription}</span>
+          ) : null}
+        </p>
+      ) : null}
     </div>
+  )
+
+  return (
+    <PublicFormLayout
+      branding={ctx.branding}
+      title={EMAIL_CAPTURE_KIND_FORM_TITLES[ctx.kind]}
+      descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[ctx.kind]}
+      progress={progressPct}
+      progressSuccessFlash={progressSuccessFlash}
+      venueContext={venueContext}
+      mainClassName="pb-44 pt-6"
+    >
+      {err ? (
+        <div className="mb-4 text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">
+          {err}
+        </div>
+      ) : null}
+
+      <EmailCaptureProgressContext.Provider value={{ setProgressPct }}>
+        <EmailCaptureKindForm kind={ctx.kind} submitting={submitting} onSubmit={submit} />
+      </EmailCaptureProgressContext.Provider>
+    </PublicFormLayout>
   )
 }
 
@@ -310,6 +372,18 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const [dayOfContactEmail, setEmail] = useState('')
   const [parkingNotes, setPark] = useState('')
   const [riderOrTechUrl, setRider] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = 10
+    if (loadInOrSoundcheck.trim()) p += 18
+    if (settlementMethod.trim()) p += 18
+    const contacts = [dayOfContactName, dayOfContactPhone, dayOfContactEmail].filter(s => s.trim()).length
+    if (contacts > 0) p += Math.min(28, contacts * 9)
+    if (parkingNotes.trim()) p += 10
+    if (riderOrTechUrl.trim()) p += 10
+    return Math.min(96, p)
+  }, [loadInOrSoundcheck, settlementMethod, dayOfContactName, dayOfContactPhone, dayOfContactEmail, parkingNotes, riderOrTechUrl])
+
   return (
     <form
       onSubmit={e => {
@@ -346,6 +420,14 @@ function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSu
   const [intent, setIntent] = useState<'interested' | 'not_now' | 'wrong_person' | ''>('')
   const [note, setNote] = useState('')
   const [alternateEmail, setAlt] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = intent ? 52 : 14
+    if (note.trim()) p += 18
+    if (alternateEmail.trim()) p += 18
+    return Math.min(96, p)
+  }, [intent, note, alternateEmail])
+
   return (
     <form
       onSubmit={e => {
@@ -368,6 +450,13 @@ function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSu
 function FollowUpForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [status, setStatus] = useState<'interested' | 'need_info' | 'pass' | ''>('')
   const [note, setNote] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = status ? 58 : 14
+    if (note.trim()) p += 28
+    return Math.min(96, p)
+  }, [status, note])
+
   return (
     <form
       onSubmit={e => {
@@ -390,6 +479,14 @@ function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
   const [resolution, setRes] = useState<'new_date' | 'refund' | 'release' | 'other' | ''>('')
   const [newEventDate, setDate] = useState('')
   const [note, setNote] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = resolution ? 48 : 14
+    if (resolution === 'new_date' && newEventDate.trim()) p += 24
+    if (note.trim()) p += 20
+    return Math.min(96, p)
+  }, [resolution, newEventDate, note])
+
   return (
     <form
       onSubmit={e => {
@@ -420,6 +517,14 @@ function AgreementFollowupForm({ submitting, onSubmit }: { submitting: boolean; 
   const [status, setSt] = useState<'signed' | 'in_review' | 'needs_changes' | ''>('')
   const [note, setNote] = useState('')
   const [documentUrl, setUrl] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = status ? 55 : 14
+    if (note.trim()) p += 18
+    if (documentUrl.trim()) p += 18
+    return Math.min(96, p)
+  }, [status, note, documentUrl])
+
   return (
     <form
       onSubmit={e => {
@@ -442,6 +547,13 @@ function AgreementFollowupForm({ submitting, onSubmit }: { submitting: boolean; 
 function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [ack, setAck] = useState(false)
   const [note, setNote] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = ack ? 72 : 18
+    if (note.trim()) p += 18
+    return Math.min(96, p)
+  }, [ack, note])
+
   return (
     <form
       onSubmit={e => {
@@ -463,6 +575,13 @@ function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onS
 function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [aligned, setAligned] = useState<boolean | null>(null)
   const [corrections, setCorr] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    if (aligned === null) return 14
+    if (aligned === true) return 88
+    return corrections.trim() ? 92 : 58
+  }, [aligned, corrections])
+
   return (
     <form
       onSubmit={e => {
@@ -483,6 +602,13 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
 function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [received, setRec] = useState<boolean | null>(null)
   const [note, setNote] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = received === null ? 14 : 72
+    if (note.trim()) p += 18
+    return Math.min(96, p)
+  }, [received, note])
+
   return (
     <form
       onSubmit={e => {
@@ -523,6 +649,15 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const [nothing, setN] = useState<boolean | null>(null)
   const [detail, setD] = useState('')
   const [comments, setComments] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = rating > 0 ? 32 : 10
+    if (nothing !== null) p += 34
+    if (nothing === false && detail.trim()) p += 18
+    if (comments.trim()) p += 12
+    return Math.min(96, p)
+  }, [rating, nothing, detail, comments])
+
   return (
     <form
       onSubmit={e => {
@@ -554,6 +689,8 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 }
 
 function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  useEmailCaptureProgressEstimate(() => 90, [])
+
   return (
     <form
       onSubmit={e => {
@@ -570,6 +707,9 @@ function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
 
 function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [availability, setA] = useState('')
+
+  useEmailCaptureProgressEstimate(() => (availability.trim() ? 88 : 22), [availability])
+
   return (
     <form
       onSubmit={e => {
@@ -587,6 +727,13 @@ function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
 function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [submitted, setS] = useState<boolean | null>(null)
   const [reference, setR] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = submitted === null ? 14 : 70
+    if (reference.trim()) p += 16
+    return Math.min(96, p)
+  }, [submitted, reference])
+
   return (
     <form
       onSubmit={e => {
@@ -609,6 +756,17 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
   const [preferredDates, setDates] = useState('')
   const [budgetNote, setBudget] = useState('')
   const [note, setNote] = useState('')
+
+  useEmailCaptureProgressEstimate(() => {
+    let p = rebookInterest ? 46 : 14
+    if (rebookInterest === 'yes' || rebookInterest === 'maybe') {
+      if (preferredDates.trim()) p += 16
+      if (budgetNote.trim()) p += 16
+    }
+    if (note.trim()) p += 12
+    return Math.min(96, p)
+  }, [rebookInterest, preferredDates, budgetNote, note])
+
   return (
     <form
       onSubmit={e => {
@@ -644,6 +802,7 @@ export interface EmailCaptureFormPreviewBodyProps {
   venueName: string | null
   dealDescription: string | null
   eventDate: string | null
+  branding?: PublicFormBranding
 }
 
 /** Dashboard: exercise capture UI without token or Netlify calls. */
@@ -652,52 +811,80 @@ export function EmailCaptureFormPreviewBody({
   venueName,
   dealDescription,
   eventDate,
+  branding: brandingProp,
 }: EmailCaptureFormPreviewBodyProps) {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const [progressPct, setProgressPct] = useState(0)
+  const [progressFlash, setProgressFlash] = useState(false)
+  const branding = mergePublicFormBranding(brandingProp)
 
   const handleSubmit = (_payload: Record<string, unknown>) => {
     setSubmitting(true)
+    setProgressPct(100)
+    setProgressFlash(true)
     window.setTimeout(() => {
+      setProgressFlash(false)
+      setProgressPct(0)
       setSubmitting(false)
       setDone(true)
-    }, 200)
+    }, 520)
   }
+
+  const venueContext = (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Quick response · preview</p>
+      {(venueName || dealDescription) ? (
+        <p className="text-sm text-neutral-400">
+          {venueName ? <span className="text-neutral-300">{venueName}</span> : null}
+          {eventDate ? (
+            <span className="text-neutral-500"> · {formatEmailCaptureEventDate(eventDate)}</span>
+          ) : null}
+          {dealDescription && !venueName ? (
+            <span className="text-neutral-300">{dealDescription}</span>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  )
 
   if (done) {
     return (
-      <div className="py-10 flex flex-col items-center justify-center px-4 text-center">
-        <CheckCircle2 className="h-10 w-10 text-emerald-500 mb-3" />
-        <h2 className="text-lg font-semibold text-white mb-2">Preview complete</h2>
+      <PublicFormLayout
+        branding={branding}
+        title="Preview complete"
+        descriptor="Nothing was saved"
+        progress={0}
+        rootClassName="bg-neutral-950 text-neutral-100 min-h-0 flex-1 flex flex-col"
+        mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center"
+      >
+        <CheckCircle2 className="h-10 w-10 text-emerald-500 mb-3 shrink-0" aria-hidden />
         <p className="text-sm text-neutral-400 max-w-sm">
-          Nothing was saved. Choose another form in the sidebar to keep testing.
+          Choose another form in the sidebar to keep testing.
         </p>
-      </div>
+      </PublicFormLayout>
     )
   }
 
   return (
-    <div className="text-neutral-100 pb-4">
-      <div className="max-w-lg mx-auto px-4 pt-6">
-        <h1 className="text-lg font-semibold text-white mb-1">Quick response</h1>
-        {(venueName || dealDescription) ? (
-          <p className="text-sm text-neutral-400 mb-6">
-            {venueName ? <span className="text-neutral-300">{venueName}</span> : null}
-            {eventDate ? (
-              <span className="text-neutral-500"> · {formatEmailCaptureEventDate(eventDate)}</span>
-            ) : null}
-            {dealDescription && !venueName ? (
-              <span className="text-neutral-300">{dealDescription}</span>
-            ) : null}
-          </p>
-        ) : null}
+    <PublicFormLayout
+      branding={branding}
+      title={EMAIL_CAPTURE_KIND_FORM_TITLES[kind]}
+      descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[kind]}
+      progress={progressPct}
+      progressSuccessFlash={progressFlash}
+      venueContext={venueContext}
+      rootClassName="bg-neutral-950 text-neutral-100 min-h-0 flex-1 flex flex-col"
+      mainClassName="pb-36 pt-4"
+    >
+      <EmailCaptureProgressContext.Provider value={{ setProgressPct }}>
         <EmailCaptureKindForm
           kind={kind}
           submitting={submitting}
           onSubmit={handleSubmit}
           footerVariant="embedded"
         />
-      </div>
-    </div>
+      </EmailCaptureProgressContext.Provider>
+    </PublicFormLayout>
   )
 }
