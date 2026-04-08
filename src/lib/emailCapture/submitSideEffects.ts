@@ -186,9 +186,20 @@ export async function applyEmailCaptureSideEffects(
       break
     }
     case 'post_show_thanks': {
+      const rating = Number(payload.rating)
       const nothing = payload.nothingPending === true
       const detail = String(payload.detail ?? '').trim()
-      const block = [`[Post-show ${today}]`, `Nothing pending: ${nothing ? 'yes' : 'no'}`, detail && `Open items: ${detail}`].filter(Boolean).join('\n')
+      const comments = String(payload.comments ?? '').trim()
+      const stars = Number.isInteger(rating) && rating >= 1 && rating <= 5
+        ? `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)} (${rating}/5)`
+        : ''
+      const block = [
+        `[Post-show ${today}]`,
+        stars && `Rating: ${stars}`,
+        comments && `Comments: ${comments}`,
+        `Nothing pending: ${nothing ? 'yes' : 'no'}`,
+        detail && `Open items: ${detail}`,
+      ].filter(Boolean).join('\n')
       if (dealId) await appendDealNote(supabase, dealId, block)
       if (!nothing && detail && userId) {
         await supabase.from('tasks').insert({
@@ -231,6 +242,28 @@ export async function applyEmailCaptureSideEffects(
           category: 'email_capture',
         })
       }
+      // Create booking request record
+      if (availability) {
+        await supabase.from('booking_requests').insert({
+          user_id: userId,
+          venue_id: venueId,
+          deal_id: dealId,
+          capture_token_id: row.id,
+          source_kind: 'rebooking_inquiry',
+          note: availability,
+          raw_payload: payload,
+        })
+        await supabase.from('tasks').insert({
+          user_id: userId,
+          title: `Rebook follow-up — venue responded`,
+          venue_id: venueId,
+          deal_id: dealId,
+          priority: 'medium',
+          due_date: today,
+          recurrence: 'none',
+          completed: false,
+        })
+      }
       break
     }
     case 'payment_reminder_ack': {
@@ -245,6 +278,55 @@ export async function applyEmailCaptureSideEffects(
           venue_id: venueId,
           deal_id: dealId,
           priority: 'high',
+          due_date: today,
+          recurrence: 'none',
+          completed: false,
+        })
+      }
+      break
+    }
+    case 'payment_receipt': {
+      const interest = String(payload.rebookInterest ?? '').trim()
+      const dates = String(payload.preferredDates ?? '').trim()
+      const budget = String(payload.budgetNote ?? '').trim()
+      const note = String(payload.note ?? '').trim()
+      const block = [
+        `[Payment receipt — rebook interest ${today}]`,
+        `Interest: ${interest}`,
+        dates && `Preferred dates: ${dates}`,
+        budget && `Budget note: ${budget}`,
+        note && `Note: ${note}`,
+      ].filter(Boolean).join('\n')
+      if (dealId) await appendDealNote(supabase, dealId, block)
+      else if (venueId && block) {
+        await supabase.from('outreach_notes').insert({
+          user_id: userId,
+          venue_id: venueId,
+          note: block,
+          category: 'email_capture',
+        })
+      }
+      // Create booking request record for rebook interest
+      if (interest === 'yes' || interest === 'maybe') {
+        await supabase.from('booking_requests').insert({
+          user_id: userId,
+          venue_id: venueId,
+          deal_id: dealId,
+          capture_token_id: row.id,
+          source_kind: 'payment_receipt',
+          rebook_interest: interest,
+          preferred_dates: dates || null,
+          budget_note: budget || null,
+          note: note || null,
+          raw_payload: payload,
+        })
+        // Auto-task: follow up on rebook
+        await supabase.from('tasks').insert({
+          user_id: userId,
+          title: `Rebook follow-up${dates ? ` — ${dates}` : ''}`,
+          venue_id: venueId,
+          deal_id: dealId,
+          priority: 'medium',
           due_date: today,
           recurrence: 'none',
           completed: false,

@@ -56,6 +56,8 @@ function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown
       return null
     }
     case 'post_show_thanks': {
+      const r = Number(payload.rating)
+      if (!Number.isInteger(r) || r < 1 || r > 5) return 'Select a star rating'
       if (payload.nothingPending !== true && payload.nothingPending !== false) return 'Select whether anything is pending'
       if (payload.nothingPending === false && !String(payload.detail ?? '').trim()) return 'Describe what is pending'
       return null
@@ -66,6 +68,11 @@ function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown
     }
     case 'payment_reminder_ack': {
       if (payload.submittedPayment !== true && payload.submittedPayment !== false) return 'Select payment status'
+      return null
+    }
+    case 'payment_receipt': {
+      const i = String(payload.rebookInterest ?? '')
+      if (!['yes', 'maybe', 'no'].includes(i)) return 'Select rebooking interest'
       return null
     }
     case 'pass_for_now':

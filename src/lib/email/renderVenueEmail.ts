@@ -343,11 +343,41 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
 
   const capKind = venueEmailTypeToCaptureKind(type as VenueEmailType)
   const captureTrim = captureUrlOpt?.trim() || ''
+
+  /** CTA label: hire/follow-up types use artist name; others use generic copy. */
+  function captureCtaLabel(kind: ReturnType<typeof venueEmailTypeToCaptureKind>, name: string): string {
+    if (!kind) return 'Open form'
+    switch (kind) {
+      case 'first_outreach':
+        return `I'm interested in booking ${name}`
+      case 'follow_up':
+        return `Book ${name} — reply here`
+      case 'rebooking_inquiry':
+        return `Book ${name} again`
+      case 'post_show_thanks':
+        return 'Share your feedback'
+      case 'pre_event_checkin':
+        return 'Share event details'
+      case 'payment_reminder_ack':
+        return 'Confirm payment status'
+      case 'payment_receipt':
+        return 'Share rebooking interest'
+      case 'booking_confirmation':
+      case 'booking_confirmed':
+        return 'Confirm booking details'
+      case 'invoice_sent':
+        return 'Confirm receipt'
+      case 'show_cancelled_or_postponed':
+        return 'Send your update'
+      default:
+        return captureLinkLabel(kind)
+    }
+  }
+
   const captureCtaHtml = captureTrim && capKind
-    ? `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px 20px;margin-bottom:20px;">
-        <p style="font-size:10px;font-weight:700;color:#888888;margin-bottom:12px;text-transform:uppercase;letter-spacing:1.4px;">Quick response</p>
-        <p style="font-size:13px;color:#d1d1d1;line-height:1.65;margin-bottom:14px;">Use the secure link below instead of typing a long reply—it only takes a moment.</p>
-        <a href="${hrefAttr(captureTrim)}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">${escapeHtmlPlain(captureLinkLabel(capKind))}</a>
+    ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
+        <a href="${hrefAttr(captureTrim)}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);color:#000000;font-size:15px;font-weight:800;padding:14px 32px;border-radius:50px;text-decoration:none;letter-spacing:0.1px;line-height:1.2;">${escapeHtmlPlain(captureCtaLabel(capKind, artistName))}</a>
+        <p style="font-size:11px;color:#555555;margin-top:10px;">Secure one-time link &mdash; takes less than a minute</p>
       </div>`
     : ''
 

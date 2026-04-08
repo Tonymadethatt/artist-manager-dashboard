@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckC
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
+import { useBookingRequests } from '@/hooks/useBookingRequests'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
@@ -608,6 +609,7 @@ export default function Earnings() {
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
   const { fees } = useMonthlyFees()
+  const { requests: bookingRequests, loading: bookingRequestsLoading, deleteRequest: deleteBookingRequest } = useBookingRequests()
   const [dealsPage, setDealsPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
@@ -1224,6 +1226,66 @@ export default function Earnings() {
         venueId={sendEmailDeal?.venue_id ?? null}
       />
       </div>
+
+      {/* ── Booking requests ─────────────────────────────────────────────── */}
+      {(bookingRequestsLoading || bookingRequests.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest shrink-0">Booking Requests</h2>
+            <div className="flex-1 min-w-[1rem] h-px bg-neutral-800" />
+            <p className="text-xs text-neutral-500 tabular-nums shrink-0">{bookingRequests.length} request{bookingRequests.length !== 1 ? 's' : ''}</p>
+          </div>
+          {bookingRequestsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bookingRequests.map(req => (
+                <div key={req.id} className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {req.venue && (
+                          <span className="text-sm font-medium text-neutral-200">{req.venue.name}</span>
+                        )}
+                        {req.rebook_interest && (
+                          <span className={cn(
+                            'text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded',
+                            req.rebook_interest === 'yes' ? 'bg-emerald-900/60 text-emerald-400' :
+                            req.rebook_interest === 'maybe' ? 'bg-yellow-900/60 text-yellow-400' :
+                            'bg-neutral-800 text-neutral-500'
+                          )}>
+                            {req.rebook_interest === 'yes' ? 'Interested' : req.rebook_interest === 'maybe' ? 'Maybe' : 'Not now'}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-neutral-600 uppercase tracking-wide">{req.source_kind.replace(/_/g, ' ')}</span>
+                      </div>
+                      {req.preferred_dates && (
+                        <p className="text-xs text-neutral-400">Dates: {req.preferred_dates}</p>
+                      )}
+                      {req.budget_note && (
+                        <p className="text-xs text-neutral-400">Budget: {req.budget_note}</p>
+                      )}
+                      {req.note && (
+                        <p className="text-xs text-neutral-500 leading-relaxed">{req.note}</p>
+                      )}
+                      <p className="text-[10px] text-neutral-700">{new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                    <button
+                      onClick={() => deleteBookingRequest(req.id)}
+                      className="shrink-0 text-neutral-700 hover:text-red-400 transition-colors p-1"
+                      title="Remove request"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Monthly retainer ─────────────────────────────────────────────── */}
       <RetainerTab hideSummary />

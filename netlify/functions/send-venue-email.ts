@@ -58,6 +58,7 @@ interface CustomVenueTemplatePayload {
   blocks: unknown
   show_reply_button?: boolean
   reply_button_label?: string | null
+  capture_cta_label?: string | null
 }
 
 interface CustomArtistTemplatePayload {
@@ -175,6 +176,7 @@ const handler: Handler = async (event) => {
     } else if (custom_venue_template) {
       const supabaseUrl = process.env.SUPABASE_URL || ''
       const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
+      const captureUrl = typeof rawCaptureUrl === 'string' ? rawCaptureUrl.trim() || null : null
       const built = buildCustomEmailDocument({
         audience: 'venue',
         subjectTemplate: custom_venue_template.subject_template ?? '',
@@ -192,6 +194,7 @@ const handler: Handler = async (event) => {
         showReplyButton: custom_venue_template.show_reply_button !== false,
         replyButtonLabel: custom_venue_template.reply_button_label ?? null,
         ...(attachment ? { attachment } : {}),
+        ...(captureUrl ? { captureUrl, captureCTALabel: custom_venue_template.capture_cta_label ?? null } : {}),
       })
       html = built.html
       subject = built.subject
@@ -254,6 +257,35 @@ const handler: Handler = async (event) => {
     cc.push(profile.manager_email)
   }
 
+  // For invoice_sent: attempt to fetch the PDF and attach it server-side.
+  // Resend limit is 40 MB total; we cap at 8 MB to stay safe.
+  const INVOICE_ATTACH_MAX_BYTES = 8 * 1024 * 1024
+  type ResendAttachment = { filename: string; content: string }
+  const attachments: ResendAttachment[] = []
+  const invoiceUrlToAttach = type === 'invoice_sent'
+    ? (typeof rawInvoiceUrl === 'string' ? rawInvoiceUrl.trim() || null : null)
+    : null
+
+  if (invoiceUrlToAttach) {
+    try {
+      const pdfRes = await fetch(invoiceUrlToAttach, { redirect: 'follow' })
+      if (pdfRes.ok) {
+        const buf = await pdfRes.arrayBuffer()
+        if (buf.byteLength <= INVOICE_ATTACH_MAX_BYTES) {
+          const b64 = Buffer.from(buf).toString('base64')
+          const filename = invoiceUrlToAttach.split('/').pop()?.split('?')[0] || 'invoice.pdf'
+          attachments.push({ filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`, content: b64 })
+        } else {
+          console.warn(`[send-venue-email] invoice PDF too large (${buf.byteLength} bytes), skipping attachment`)
+        }
+      } else {
+        console.warn(`[send-venue-email] invoice PDF fetch failed: ${pdfRes.status} ${invoiceUrlToAttach}`)
+      }
+    } catch (fetchErr) {
+      console.warn('[send-venue-email] invoice PDF fetch error:', fetchErr instanceof Error ? fetchErr.message : fetchErr)
+    }
+  }
+
   try {
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -268,6 +300,7 @@ const handler: Handler = async (event) => {
         reply_to: [replyTo],
         subject,
         html,
+        ...(attachments.length > 0 ? { attachments } : {}),
       }),
     })
 

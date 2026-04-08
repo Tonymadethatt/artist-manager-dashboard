@@ -30,6 +30,7 @@ import {
   PREVIEW_MOCK_DEAL,
   type PreviewEmailType,
 } from '@/lib/buildVenueEmailHtml'
+import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
 import {
   buildManagementReportHtml,
   buildRetainerReminderHtml,
@@ -482,6 +483,12 @@ export default function EmailTemplates() {
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
     }
+    const previewCaptureUrl = venueEmailTypeToCaptureKind(selectedType as VenueEmailType)
+      ? 'https://preview.example.com/email-capture/mock-preview-token'
+      : null
+    const previewInvoiceUrl = selectedType === 'invoice_sent'
+      ? 'https://preview.example.com/invoice/mock.pdf'
+      : null
     return buildVenueEmailHtml(
       selectedType as PreviewEmailType,
       PREVIEW_MOCK_PROFILE,
@@ -491,6 +498,8 @@ export default function EmailTemplates() {
       layout.intro ?? null,
       layout.subject ?? null,
       layout,
+      previewInvoiceUrl,
+      previewCaptureUrl,
     )
   }, [
     activeGroup,

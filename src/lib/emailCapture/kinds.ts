@@ -15,6 +15,7 @@ export type EmailCaptureKind =
   | 'rebooking_inquiry'
   | 'agreement_ready'
   | 'payment_reminder_ack'
+  | 'payment_receipt'
 
 const CAPTURE_KIND_SET = new Set<string>([
   'pre_event_checkin',
@@ -30,6 +31,7 @@ const CAPTURE_KIND_SET = new Set<string>([
   'rebooking_inquiry',
   'agreement_ready',
   'payment_reminder_ack',
+  'payment_receipt',
 ])
 
 export function isEmailCaptureKind(s: string): s is EmailCaptureKind {
@@ -41,6 +43,8 @@ export function venueEmailTypeToCaptureKind(t: VenueEmailType): EmailCaptureKind
   switch (t) {
     case 'payment_reminder':
       return 'payment_reminder_ack'
+    case 'payment_receipt':
+      return 'payment_receipt'
     case 'pre_event_checkin':
     case 'first_outreach':
     case 'follow_up':
@@ -73,6 +77,7 @@ export const EMAIL_CAPTURE_KIND_LABELS: Record<EmailCaptureKind, string> = {
   rebooking_inquiry: 'Rebooking',
   agreement_ready: 'Agreement ready',
   payment_reminder_ack: 'Payment reminder',
+  payment_receipt: 'Payment receipt — rebook interest',
 }
 
 export function captureLinkLabel(kind: EmailCaptureKind): string {
@@ -100,6 +105,8 @@ export function captureLinkLabel(kind: EmailCaptureKind): string {
       return 'Share availability'
     case 'payment_reminder_ack':
       return 'Payment status'
+    case 'payment_receipt':
+      return 'Share rebooking interest'
     default:
       return 'Open form'
   }

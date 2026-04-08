@@ -27,10 +27,23 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
-import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import { venueEmailTypeToCaptureKind, EMAIL_CAPTURE_KIND_LABELS, type EmailCaptureKind } from '@/lib/emailCapture/kinds'
 import { appendEmailCaptureTokenNote } from '@/lib/emailCapture/tokenNotes'
 import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+
+const CUSTOM_CAPTURE_KIND_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
+  { value: 'first_outreach',              label: EMAIL_CAPTURE_KIND_LABELS.first_outreach },
+  { value: 'follow_up',                   label: EMAIL_CAPTURE_KIND_LABELS.follow_up },
+  { value: 'booking_confirmation',        label: EMAIL_CAPTURE_KIND_LABELS.booking_confirmation },
+  { value: 'pre_event_checkin',           label: EMAIL_CAPTURE_KIND_LABELS.pre_event_checkin },
+  { value: 'payment_reminder_ack',        label: EMAIL_CAPTURE_KIND_LABELS.payment_reminder_ack },
+  { value: 'payment_receipt',             label: EMAIL_CAPTURE_KIND_LABELS.payment_receipt },
+  { value: 'post_show_thanks',            label: EMAIL_CAPTURE_KIND_LABELS.post_show_thanks },
+  { value: 'rebooking_inquiry',           label: EMAIL_CAPTURE_KIND_LABELS.rebooking_inquiry },
+  { value: 'show_cancelled_or_postponed', label: EMAIL_CAPTURE_KIND_LABELS.show_cancelled_or_postponed },
+  { value: 'invoice_sent',               label: EMAIL_CAPTURE_KIND_LABELS.invoice_sent },
+]
 
 interface SendVenueEmailModalProps {
   open: boolean
@@ -134,6 +147,7 @@ export function SendVenueEmailModal({
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [customCaptureKind, setCustomCaptureKind] = useState<EmailCaptureKind | ''>('')
   /** Deal with `agreement_url` resolved from `agreement_generated_file_id` when needed (matches send payload). */
   const [dealForPreview, setDealForPreview] = useState<Deal | null>(null)
 
@@ -144,6 +158,7 @@ export function SendVenueEmailModal({
       setRecipientName(initialName)
       setStatus('idle')
       setErrorMsg('')
+      setCustomCaptureKind('')
     }
   }, [open, defaultType, deal, initialEmail, initialName])
 
@@ -257,6 +272,20 @@ export function SendVenueEmailModal({
             .maybeSingle()
           const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
           if (att) payload.attachment = att
+        }
+        // Mint capture token if sender chose a form kind
+        if (customCaptureKind) {
+          const { data: tokRow, error: capErr } = await supabase.from('email_capture_tokens').insert({
+            user_id: authUser.id,
+            kind: customCaptureKind,
+            venue_id: venueId ?? null,
+            deal_id: dealId ?? null,
+            contact_id: contactId ?? null,
+            expires_at: defaultEmailCaptureExpiresAt(),
+          }).select('token').single()
+          if (!capErr && tokRow?.token) {
+            payload.capture_url = `${publicSiteOrigin()}/email-capture/${tokRow.token as string}`
+          }
         }
       } else {
         payload.type = emailType
@@ -388,6 +417,30 @@ export function SendVenueEmailModal({
                 : getTypeDescription(emailType as VenueEmailType, dealForPreview ?? deal, venue?.name)}
             </p>
           </div>
+
+          {/* Capture kind picker for custom venue templates */}
+          {isCustomEmailType(emailType) && (
+            <div className="space-y-1.5">
+              <Label>Response form (optional)</Label>
+              <Select
+                value={customCaptureKind}
+                onValueChange={v => setCustomCaptureKind(v as EmailCaptureKind | '')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No response form" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No response form</SelectItem>
+                  {CUSTOM_CAPTURE_KIND_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-neutral-500">
+                Adds a secure one-time response button to the email. Pick the form that matches what you want the venue to fill in.
+              </p>
+            </div>
+          )}
 
           {/* Recipient */}
           <div className="space-y-1.5">

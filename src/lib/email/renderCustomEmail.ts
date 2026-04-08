@@ -214,6 +214,10 @@ export interface BuildCustomEmailOptions {
   replyButtonLabel?: string | null
   /** Optional download CTA appended after blocks (URLs must be validated server-side before send). */
   attachment?: { url: string; fileName: string }
+  /** Public one-tap response page (email capture); venue emails only. */
+  captureUrl?: string | null
+  /** Button label for the capture CTA; defaults to a generic prompt. */
+  captureCTALabel?: string | null
 }
 
 function venueFooter(
@@ -298,11 +302,21 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
 
+  const captureTrim = opts.audience === 'venue' ? (opts.captureUrl?.trim() || '') : ''
+  const captureCtaLabel = opts.captureCTALabel?.trim() || 'Respond here'
+  const captureCtaHtml = captureTrim
+    ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
+        <a href="${escapeHtmlPlain(captureTrim)}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);color:#000000;font-size:15px;font-weight:800;padding:14px 32px;border-radius:50px;text-decoration:none;letter-spacing:0.1px;line-height:1.2;">${escapeHtmlPlain(captureCtaLabel)}</a>
+        <p style="font-size:11px;color:#555555;margin-top:10px;">Secure one-time link &mdash; takes less than a minute</p>
+      </div>`
+    : ''
+
   const openingHtml = renderCustomOpeningLine(opts.audience, doc, ctx, opts.recipient)
   const mainBody = `
     <div${bodyClass} style="padding:28px 32px;">
       ${openingHtml}
       ${bodyInner}
+      ${captureCtaHtml}
       ${attachmentBlock}
     </div>`
 

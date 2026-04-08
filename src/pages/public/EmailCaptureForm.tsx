@@ -218,6 +218,8 @@ function KindForm({
       return <RebookingForm submitting={submitting} onSubmit={onSubmit} />
     case 'payment_reminder_ack':
       return <PaymentAckForm submitting={submitting} onSubmit={onSubmit} />
+    case 'payment_receipt':
+      return <PaymentReceiptForm submitting={submitting} onSubmit={onSubmit} />
     default:
       return <p className="text-sm text-neutral-500">Unsupported form type.</p>
   }
@@ -465,22 +467,55 @@ function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
   )
 }
 
+function StarRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-2 mb-1">
+      {[1, 2, 3, 4, 5].map(star => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          className={`text-3xl leading-none transition-colors ${star <= value ? 'text-yellow-400' : 'text-neutral-700 hover:text-neutral-500'}`}
+          aria-label={`${star} star${star !== 1 ? 's' : ''}`}
+        >
+          &#9733;
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [rating, setRating] = useState(0)
   const [nothing, setN] = useState<boolean | null>(null)
   const [detail, setD] = useState('')
+  const [comments, setComments] = useState('')
   return (
     <form
       onSubmit={e => {
         e.preventDefault()
-        if (nothing === null) return
-        onSubmit({ nothingPending: nothing, detail: detail.trim() })
+        if (rating === 0 || nothing === null) return
+        onSubmit({ rating, nothingPending: nothing, detail: detail.trim(), comments: comments.trim() })
       }}
-      className="pb-28 space-y-3"
+      className="pb-28 space-y-4"
     >
-      <ChoiceRow label="Nothing pending on our side" selected={nothing === true} onSelect={() => setN(true)} />
-      <ChoiceRow label="Something is still open" selected={nothing === false} onSelect={() => setN(false)} />
-      {nothing === false && <Field label="What&apos;s open?" value={detail} onChange={setD} textarea />}
-      <SubmitBar submitting={submitting} disabled={nothing === null || (nothing === false && !detail.trim())} />
+      <div>
+        <p className="text-xs font-medium text-neutral-400 mb-2">How was the show? (required)</p>
+        <StarRating value={rating} onChange={setRating} />
+        {rating > 0 && (
+          <p className="text-xs text-neutral-500 mt-1">
+            {rating === 5 ? 'Excellent' : rating === 4 ? 'Great' : rating === 3 ? 'Good' : rating === 2 ? 'Fair' : 'Poor'}
+          </p>
+        )}
+      </div>
+      <Field label="Comments (optional)" value={comments} onChange={setComments} textarea placeholder="Anything you'd like us to know about the night..." />
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-neutral-400">Anything still open?</p>
+        <ChoiceRow label="Nothing pending on our side" selected={nothing === true} onSelect={() => setN(true)} />
+        <ChoiceRow label="Something is still open" selected={nothing === false} onSelect={() => setN(false)} />
+        {nothing === false && <Field label="What&apos;s open?" value={detail} onChange={setD} textarea />}
+      </div>
+      <SubmitBar submitting={submitting} disabled={rating === 0 || nothing === null || (nothing === false && !detail.trim())} />
     </form>
   )
 }
@@ -532,6 +567,41 @@ function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmi
       <ChoiceRow label="Not sent yet" selected={submitted === false} onSelect={() => setS(false)} />
       <Field label="Reference # (optional)" value={reference} onChange={setR} />
       <SubmitBar submitting={submitting} disabled={submitted === null} />
+    </form>
+  )
+}
+
+function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [rebookInterest, setInterest] = useState<'yes' | 'maybe' | 'no' | ''>('')
+  const [preferredDates, setDates] = useState('')
+  const [budgetNote, setBudget] = useState('')
+  const [note, setNote] = useState('')
+  return (
+    <form
+      onSubmit={e => {
+        e.preventDefault()
+        if (!rebookInterest) return
+        onSubmit({
+          rebookInterest,
+          preferredDates: preferredDates.trim(),
+          budgetNote: budgetNote.trim(),
+          note: note.trim(),
+        })
+      }}
+      className="pb-28 space-y-3"
+    >
+      <p className="text-sm text-neutral-400 mb-4">Are you interested in booking again?</p>
+      <ChoiceRow label="Yes — let&apos;s plan the next one" selected={rebookInterest === 'yes'} onSelect={() => setInterest('yes')} />
+      <ChoiceRow label="Maybe — open to it" selected={rebookInterest === 'maybe'} onSelect={() => setInterest('maybe')} />
+      <ChoiceRow label="Not right now" selected={rebookInterest === 'no'} onSelect={() => setInterest('no')} />
+      {(rebookInterest === 'yes' || rebookInterest === 'maybe') && (
+        <>
+          <Field label="Preferred dates or months (optional)" value={preferredDates} onChange={setDates} placeholder="e.g. June or July 2026" />
+          <Field label="Rough budget or fee range (optional)" value={budgetNote} onChange={setBudget} placeholder="e.g. same as last time, $500–$800" />
+        </>
+      )}
+      <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea />
+      <SubmitBar submitting={submitting} disabled={!rebookInterest} />
     </form>
   )
 }
