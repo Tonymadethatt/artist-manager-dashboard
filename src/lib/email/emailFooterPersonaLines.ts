@@ -4,7 +4,7 @@ import { EMAIL_FOOTER_MUTED } from './emailDarkSurfacePalette'
 const DEFAULT_BRAND_SUBLINE_HTML = 'Front Office&#8482; Brand Growth &amp; Management'
 
 /**
- * Under the company line in venue / custom-venue footers: optional sender name + title.
+ * Venue / custom-venue footers: optional sender name + title (company name lives in header).
  */
 export function emailFooterVenueSenderAttributionHtml(
   managerName: string | null | undefined,
@@ -16,12 +16,12 @@ export function emailFooterVenueSenderAttributionHtml(
   const parts: string[] = []
   if (name) {
     parts.push(
-      `<div style="font-size:12px;font-weight:600;color:#e5e5e5;margin-top:10px;line-height:1.4;">${escapeHtmlPlain(name)}</div>`,
+      `<div style="font-size:12px;font-weight:600;color:#e5e5e5;margin-top:0;line-height:1.4;">${escapeHtmlPlain(name)}</div>`,
     )
   }
   if (title) {
     parts.push(
-      `<div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:${name ? '3' : '10'}px;line-height:1.4;letter-spacing:0.2px;">${escapeHtmlPlain(title)}</div>`,
+      `<div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:${name ? '3' : '0'}px;line-height:1.4;letter-spacing:0.2px;">${escapeHtmlPlain(title)}</div>`,
     )
   }
   return parts.join('')

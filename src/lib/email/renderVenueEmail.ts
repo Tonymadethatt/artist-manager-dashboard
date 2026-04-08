@@ -160,7 +160,6 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
 
   const artistName = profile.artist_name ?? ''
   const artistNameUpper = artistName.toUpperCase()
-  const companyName = profile.company_name || profile.artist_name || ''
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
   const firstName = (recipient.name ?? '').split(' ')[0]
@@ -467,9 +466,8 @@ ${mobileStyles}
   </div>
 
   <div${footerClass} style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
     ${senderAttribution}
-    ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
+    ${footerLinks ? `<div style="margin-top:8px;">${footerLinks}</div>` : ''}
     ${replyBlock}
   </div>
 

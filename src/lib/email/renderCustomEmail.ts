@@ -245,7 +245,6 @@ function venueFooter(
   igUrl: string,
 ) {
   const replyTo = profile.reply_to_email || profile.from_email
-  const companyName = profile.company_name || profile.artist_name || ''
   const footerLinks = buildProfileFooterLinksHtml(igUrl, profile.website, profile.social_handle, profile.phone)
   const senderAttribution = emailFooterVenueSenderAttributionHtml(
     profile.manager_name,
@@ -258,9 +257,8 @@ function venueFooter(
     : ''
   return `
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
     ${senderAttribution}
-    ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
+    ${footerLinks ? `<div style="margin-top:8px;">${footerLinks}</div>` : ''}
     ${replyBlock}
   </div>`
 }
