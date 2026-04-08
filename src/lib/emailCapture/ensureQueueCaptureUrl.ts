@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { VenueEmailType } from '@/types'
+import type { VenueEmailType } from '../../types'
 import { venueEmailTypeToCaptureKind } from './kinds'
 import { appendEmailCaptureTokenNote, parseEmailCaptureTokenFromNotes } from './tokenNotes'
 import { defaultEmailCaptureExpiresAt } from './expiry'

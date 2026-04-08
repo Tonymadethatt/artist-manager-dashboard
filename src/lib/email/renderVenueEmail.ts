@@ -1,7 +1,7 @@
-import type { VenueEmailType } from '@/types'
+import type { VenueEmailType } from '../../types'
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { effectiveTemplateLayout } from '../emailLayout'
-import { captureLinkLabel, venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import { captureLinkLabel, venueEmailTypeToCaptureKind } from '../emailCapture/kinds'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
 
 function hrefAttr(u: string): string {

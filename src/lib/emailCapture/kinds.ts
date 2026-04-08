@@ -1,4 +1,4 @@
-import type { VenueEmailType } from '@/types'
+import type { VenueEmailType } from '../../types'
 
 /** Rows in `email_capture_tokens.kind` (DB check constraint). */
 export type EmailCaptureKind =
