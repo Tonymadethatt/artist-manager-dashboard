@@ -334,8 +334,10 @@ export default function EmailQueue() {
             + `<p style="color:#888;font-size:11px;margin:0 0 16px">Summary preview (rolling 7 days through today) · sent to <strong>${toe}</strong></p>`
             + `<p style="margin:0 0 12px"><strong>Outreach</strong><br/>`
             + `New venues: ${report.outreach.venuesContacted} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
-            + `<p style="margin:0 0 12px"><strong>Deals</strong><br/>`
-            + `New: ${report.deals.count} · Gross: ${report.deals.totalGross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Commission owed to management: ${report.deals.allOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="margin:0 0 12px"><strong>Artist earnings</strong><br/>`
+            + `Booking gross: ${report.artistEarnings.grossBookedInPeriod.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Paid toggle gross: ${report.artistEarnings.grossArtistPaidInPeriod.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="margin:0 0 12px"><strong>Your commission</strong><br/>`
+            + `On new deals in window: ${report.deals.totalCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Outstanding: ${report.deals.allOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + `<p style="margin:0 0 12px"><strong>Retainer</strong><br/>`
             + `Outstanding: ${report.retainer.feeOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
             + `<p style="margin:0;color:#666;font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,

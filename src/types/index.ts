@@ -364,7 +364,7 @@ export interface Deal {
   notes: string | null
   created_at: string
   updated_at: string
-  venue?: Pick<Venue, 'id' | 'name'> | null
+  venue?: Pick<Venue, 'id' | 'name' | 'outreach_track'> | null
 }
 
 export type VenueEmailType =

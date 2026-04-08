@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions'
 import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
+import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -22,46 +23,6 @@ interface ArtistProfile {
   social_handle: string | null
   phone: string | null
   reply_to_email: string | null
-}
-
-interface ReportData {
-  outreach: {
-    venuesContacted: number
-    venuesUpdated: number
-    inDiscussion: number
-    venuesBooked: number
-  }
-  deals: {
-    count: number
-    totalGross: number
-    totalCommission: number
-    commissionEarned: number
-    commissionReceived: number
-    allOutstanding: number
-  }
-  retainer: {
-    feeTotal: number
-    feePaid: number
-    feeOutstanding: number
-    unpaidMonths: number
-  }
-  metrics: {
-    partnerships: number
-    partnershipValue: number
-    attendance: number
-    totalAttendance: number
-    press: number
-    totalReach: number
-  }
-  tasks: {
-    completedTasks: number
-  }
-  performance?: {
-    showsPerformed: number
-    rebookingLeads: number
-    avgRating: number | null
-    totalAttendance: number
-  }
 }
 
 function money(n: number) {
@@ -91,13 +52,13 @@ function sectionCard(title: string, content: string, accentColor: string = '#60a
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
-function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { start: string; end: string }, L: EmailTemplateLayoutV1): string {
+function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, dateRange: { start: string; end: string }, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
-  const { outreach, deals, retainer, metrics, tasks, performance } = report
+  const { outreach, artistEarnings, deals, retainer, metrics, tasks, performance } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = fmtDate(dateRange.start)
   const endFmt = fmtDate(dateRange.end)
@@ -110,10 +71,10 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     heroValue = String(outreach.venuesBooked)
     heroLabel = outreach.venuesBooked === 1 ? 'Booking Confirmed' : 'Bookings Confirmed'
     heroSubtext = 'New venue secured this period'
-  } else if (deals.totalGross > 0) {
-    heroValue = money(deals.totalGross)
-    heroLabel = 'In Artist Revenue'
-    heroSubtext = `Across ${deals.count} deal${deals.count !== 1 ? 's' : ''} this period`
+  } else if (artistEarnings.grossBookedInPeriod > 0) {
+    heroValue = money(artistEarnings.grossBookedInPeriod)
+    heroLabel = 'Artist Booking Gross'
+    heroSubtext = `${artistEarnings.dealsBookedInPeriod} deal${artistEarnings.dealsBookedInPeriod !== 1 ? 's' : ''} logged this period`
   } else if (outreach.inDiscussion > 0) {
     heroValue = String(outreach.inDiscussion)
     heroLabel = 'Active Conversations'
@@ -132,8 +93,8 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
   let summaryLine: string
   if (outreach.venuesBooked > 0) {
     summaryLine = `${outreach.venuesBooked === 1 ? 'A booking came through' : `${outreach.venuesBooked} bookings came through`} this period, the work is paying off.`
-  } else if (deals.totalGross > 0) {
-    summaryLine = `Revenue is moving and the pipeline is active.`
+  } else if (artistEarnings.grossBookedInPeriod > 0) {
+    summaryLine = `Show money is on the books and activity is showing up in the numbers.`
   } else if (outreach.inDiscussion > 0) {
     summaryLine = `${outreach.inDiscussion} conversation${outreach.inDiscussion !== 1 ? 's are' : ' is'} live right now, things are in motion.`
   } else if (outreach.venuesContacted > 0) {
@@ -142,20 +103,36 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
     summaryLine = `Here's a look at where things stand.`
   }
 
-  // Outreach section — blue accent, all count values blue
+  // Outreach section — blue accent
   const outreachSection = sectionCard('Outreach Activity', rows([
-    ['New venues added', String(outreach.venuesContacted), '#60a5fa'],
+    ['New venues added (total)', String(outreach.venuesContacted), '#60a5fa'],
+    ['Pipeline venues added', String(outreach.pipelineAdded), '#60a5fa'],
+    ['Community venues added', String(outreach.communityAdded), '#60a5fa'],
     ['Venues engaged', String(outreach.venuesUpdated), '#60a5fa'],
     ['Active discussions', String(outreach.inDiscussion), '#60a5fa'],
-    ['Bookings confirmed', String(outreach.venuesBooked), outreach.venuesBooked > 0 ? '#22c55e' : '#60a5fa'],
+    ['Bookings confirmed (total)', String(outreach.venuesBooked), outreach.venuesBooked > 0 ? '#22c55e' : '#60a5fa'],
+    ['Pipeline bookings', String(outreach.pipelineBooked), outreach.pipelineBooked > 0 ? '#22c55e' : '#60a5fa'],
+    ['Community bookings', String(outreach.communityBooked), outreach.communityBooked > 0 ? '#22c55e' : '#60a5fa'],
   ]), '#60a5fa')
 
-  // Deals section — green accent, commission received in green
-  const dealsSection = sectionCard('Deals and Revenue', rows([
+  const artistRows: Array<[string, string, string]> = [
+    ['New deals logged', String(artistEarnings.dealsBookedInPeriod), '#60a5fa'],
+    ['Booking gross logged (show money)', money(artistEarnings.grossBookedInPeriod), '#ffffff'],
+    ['Marked artist-paid (deals)', String(artistEarnings.dealsArtistPaidInPeriod), '#60a5fa'],
+    ['Gross on paid rows', money(artistEarnings.grossArtistPaidInPeriod), '#ffffff'],
+    ['Pipeline venues (gross)', money(artistEarnings.grossPipelineBooked), '#ffffff'],
+    ['Community venues (gross)', money(artistEarnings.grossCommunityBooked), '#ffffff'],
+  ]
+  if (artistEarnings.grossUnlinkedBooked > 0) {
+    artistRows.push(['No venue linked (gross)', money(artistEarnings.grossUnlinkedBooked), '#888888'])
+  }
+  const artistEarningsSection = sectionCard('Artist Earnings', rows(artistRows), '#22c55e')
+
+  const commissionSection = sectionCard('Management Commission', rows([
     ['New deals logged', String(deals.count), '#60a5fa'],
-    ['Total artist revenue', money(deals.totalGross), '#ffffff'],
-    ['Commission earned', money(deals.totalCommission), '#ffffff'],
-    ['Commission received', money(deals.commissionReceived), '#22c55e'],
+    ['Commission on those deals', money(deals.totalCommission), '#ffffff'],
+    ['Commission earned (artist paid)', money(deals.commissionEarned), '#ffffff'],
+    ['Commission received by management', money(deals.commissionReceived), '#22c55e'],
   ]), '#22c55e')
 
   // Retainer section — green if fully paid, red if outstanding
@@ -177,7 +154,7 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
 <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:20px 22px;margin-bottom:14px;">
   <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#888888;margin-bottom:10px;">Outstanding Balance</div>
   <div style="font-size:30px;font-weight:800;color:#ef4444;letter-spacing:-1px;line-height:1;margin-bottom:8px;">${money(outstandingTotal)}</div>
-  <div style="font-size:13px;color:#d1d1d1;line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
+  <div style="font-size:13px;color:#d1d1d1;line-height:1.65;">Outstanding management balance: your commission and retainer only (not artist booking gross). See Management Commission and Monthly Retainer above.</div>
 </div>` : ''
 
   // Brand impact section — only rendered if there is data
@@ -261,7 +238,8 @@ function buildHtml(profile: ArtistProfile, report: ReportData, dateRange: { star
 
     ${perfSection}
     ${outreachSection}
-    ${dealsSection}
+    ${artistEarningsSection}
+    ${commissionSection}
     ${retainerSection}
     ${balanceCallout}
     ${brandSection}
@@ -303,7 +281,7 @@ const handler: Handler = async (event) => {
 
   let body: {
     profile: ArtistProfile
-    report: ReportData
+    report: ManagementReportEmailData
     dateRange: { start: string; end: string }
     cc?: string[]
     testOnly?: boolean

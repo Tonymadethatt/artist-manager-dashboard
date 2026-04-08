@@ -15,7 +15,7 @@ export function useDeals() {
     setLoading(true)
     const { data, error } = await supabase
       .from('deals')
-      .select('*, venue:venues(id, name)')
+      .select('*, venue:venues(id, name, outreach_track)')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setDeals((data ?? []) as Deal[])
@@ -58,7 +58,7 @@ export function useDeals() {
         agreement_generated_file_id: deal.agreement_generated_file_id ?? null,
         notes: deal.notes,
       })
-      .select('*, venue:venues(id, name)')
+      .select('*, venue:venues(id, name, outreach_track)')
       .single()
     if (error) return { error }
     setDeals(prev => [data as Deal, ...prev])
@@ -82,7 +82,7 @@ export function useDeals() {
       .from('deals')
       .update(patch)
       .eq('id', id)
-      .select('*, venue:venues(id, name)')
+      .select('*, venue:venues(id, name, outreach_track)')
       .single()
     if (error) return { error }
     setDeals(prev => prev.map(d => d.id === id ? data as Deal : d))

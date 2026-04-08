@@ -14,14 +14,11 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { buildManagementReportData } from '@/lib/reports/buildManagementReportData'
 
 const REPORT_RESEND_CONFIRM_MS = 3 * 60 * 1000
 
 type Preset = '7d' | '30d' | 'custom'
-
-function toDate(str: string) {
-  return new Date(str + 'T00:00:00')
-}
 
 function fmtMoney(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -87,83 +84,14 @@ export default function Reports() {
     if (p === '30d') { setStartDate(minus30); setEndDate(today) }
   }
 
-  const inRange = (dateStr: string) => {
-    const d = toDate(dateStr)
-    return d >= toDate(startDate) && d <= toDate(endDate)
-  }
-
-  const report = useMemo(() => {
-    // Outreach — split by track
-    const pipelineVenues = venues.filter(v => (v.outreach_track ?? 'pipeline') === 'pipeline')
-    const communityVenues = venues.filter(v => v.outreach_track === 'community')
-    const venuesContacted = venues.filter(v => inRange(v.created_at)).length
-    const pipelineAdded = pipelineVenues.filter(v => inRange(v.created_at)).length
-    const communityAdded = communityVenues.filter(v => inRange(v.created_at)).length
-    const venuesUpdated = venues.filter(v =>
-      v.status !== 'not_contacted' && inRange(v.updated_at)
-    ).length
-    const venuesBooked = venues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
-    const pipelineBooked = pipelineVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
-    const communityBooked = communityVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
-    const inDiscussion = venues.filter(v =>
-      ['in_discussion', 'agreement_sent'].includes(v.status) && inRange(v.updated_at)
-    ).length
-
-    // Deals
-    const periodDeals = deals.filter(d => inRange(d.created_at))
-    const totalGross = periodDeals.reduce((s, d) => s + d.gross_amount, 0)
-    const totalCommission = periodDeals.reduce((s, d) => s + d.commission_amount, 0)
-    const commissionEarned = deals.filter(d => d.artist_paid && d.artist_paid_date && inRange(d.artist_paid_date))
-      .reduce((s, d) => s + d.commission_amount, 0)
-    const commissionReceived = deals.filter(d => d.manager_paid && d.manager_paid_date && inRange(d.manager_paid_date))
-      .reduce((s, d) => s + d.commission_amount, 0)
-    const allOutstanding = deals.filter(d => d.artist_paid && !d.manager_paid)
-      .reduce((s, d) => s + d.commission_amount, 0)
-
-    // Monthly retainer — use actual payment sums, not the boolean paid flag,
-    // so partial payments are correctly reflected
-    const feeTotal = fees.reduce((s, f) => s + f.amount, 0)
-    const feePaid = fees.reduce((s, f) => s + (f.payments ?? []).reduce((p, pay) => p + pay.amount, 0), 0)
-    const feeOutstanding = feeTotal - feePaid
-    const unpaidMonths = fees.filter(f => {
-      const paid = (f.payments ?? []).reduce((ps, p) => ps + p.amount, 0)
-      return paid < f.amount
-    }).length
-
-    // Metrics
-    const periodMetrics = metrics.filter(m => inRange(m.date))
-    const partnerships = periodMetrics.filter(m => m.category === 'brand_partnership')
-    const partnershipValue = partnerships.reduce((s, m) => s + (m.numeric_value ?? 0), 0)
-    const attendance = periodMetrics.filter(m => m.category === 'event_attendance')
-    const totalAttendance = attendance.reduce((s, m) => s + (m.numeric_value ?? 0), 0)
-    const press = periodMetrics.filter(m => m.category === 'press_mention')
-    const totalReach = press.reduce((s, m) => s + (m.numeric_value ?? 0), 0)
-
-    // Tasks
-    const completedTasks = tasks.filter(t =>
-      t.completed && t.completed_at && inRange(t.completed_at.split('T')[0])
-    ).length
-
-    // Performance reports
-    const perfInPeriod = perfReports.filter(r => r.submitted && r.submitted_at && inRange(r.submitted_at.split('T')[0]))
-    const showsPerformed = perfInPeriod.length
-    const rebookingLeads = perfInPeriod.filter(r => r.venue_interest === 'yes').length
-    const ratedShows = perfInPeriod.filter(r => r.event_rating !== null)
-    const avgRating = ratedShows.length > 0
-      ? Math.round((ratedShows.reduce((s, r) => s + (r.event_rating ?? 0), 0) / ratedShows.length) * 10) / 10
-      : null
-    const totalReportedAttendance = perfInPeriod.reduce((s, r) => s + (r.attendance ?? 0), 0)
-
-    return {
-      outreach: { venuesContacted, pipelineAdded, communityAdded, venuesUpdated, inDiscussion, venuesBooked, pipelineBooked, communityBooked },
-      deals: { count: periodDeals.length, totalGross, totalCommission, commissionEarned, commissionReceived, allOutstanding },
-      retainer: { feeTotal, feePaid, feeOutstanding, unpaidMonths },
-      metrics: { partnerships: partnerships.length, partnershipValue, attendance: attendance.length, totalAttendance, press: press.length, totalReach },
-      tasks: { completedTasks },
-      performance: { showsPerformed, rebookingLeads, avgRating, totalAttendance: totalReportedAttendance },
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venues, deals, metrics, fees, tasks, perfReports, startDate, endDate])
+  const report = useMemo(
+    () => buildManagementReportData(
+      { venues, deals, metrics, fees, tasks, perfReports },
+      startDate,
+      endDate,
+    ),
+    [venues, deals, metrics, fees, tasks, perfReports, startDate, endDate],
+  )
 
   const doSend = async (testOnly: boolean) => {
     if (!profile) return
@@ -290,12 +218,25 @@ export default function Reports() {
         <StatRow label="  · Community bookings" value={String(report.outreach.communityBooked)} />
       </Section>
 
-      <Section title="Deals & revenue">
-        <StatRow label="New deals logged" value={String(report.deals.count)} />
-        <StatRow label="Total artist revenue" value={fmtMoney(report.deals.totalGross)} />
-        <StatRow label="Commission generated" value={fmtMoney(report.deals.totalCommission)} />
-        <StatRow label="Commission earned (artist paid)" value={fmtMoney(report.deals.commissionEarned)} />
-        <StatRow label="Commission received by you" value={fmtMoney(report.deals.commissionReceived)} />
+      <Section title="Artist earnings (booking gross)">
+        <p className="text-[11px] text-neutral-600 mb-2 leading-snug">
+          Logged show value from deals, not your management commission. “Booked in period” uses the date the deal was logged; “Marked paid” uses when you toggled artist paid in Earnings.
+        </p>
+        <StatRow label="New deals logged (in range)" value={String(report.artistEarnings.dealsBookedInPeriod)} />
+        <StatRow label="Booking gross logged (in range)" value={fmtMoney(report.artistEarnings.grossBookedInPeriod)} />
+        <StatRow label="Deals marked artist-paid (in range)" value={String(report.artistEarnings.dealsArtistPaidInPeriod)} />
+        <StatRow label="Gross on those paid rows (in range)" value={fmtMoney(report.artistEarnings.grossArtistPaidInPeriod)} />
+        <StatRow label="  · Pipeline venues (gross booked)" value={fmtMoney(report.artistEarnings.grossPipelineBooked)} />
+        <StatRow label="  · Community venues (gross booked)" value={fmtMoney(report.artistEarnings.grossCommunityBooked)} />
+        {report.artistEarnings.grossUnlinkedBooked > 0 && (
+          <StatRow label="  · No venue linked (gross booked)" value={fmtMoney(report.artistEarnings.grossUnlinkedBooked)} />
+        )}
+      </Section>
+
+      <Section title="Your commission (management)">
+        <StatRow label="Commission on deals logged in range" value={fmtMoney(report.deals.totalCommission)} />
+        <StatRow label="Commission earned (artist paid, in range)" value={fmtMoney(report.deals.commissionEarned)} />
+        <StatRow label="Commission received by you (in range)" value={fmtMoney(report.deals.commissionReceived)} />
         <StatRow
           label="Outstanding commission balance"
           value={fmtMoney(report.deals.allOutstanding)}

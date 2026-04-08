@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Banknote } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -656,6 +656,28 @@ export default function Earnings() {
     return { invoiced, received, outstanding: invoiced - received }
   }, [fees])
 
+  const artistBookingStats = useMemo(() => {
+    const track = (d: Deal) => {
+      if (!d.venue_id || !d.venue) return 'unlinked' as const
+      return (d.venue.outreach_track ?? 'pipeline') === 'community' ? 'community' as const : 'pipeline' as const
+    }
+    const totalGrossLogged = deals.reduce((s, d) => s + d.gross_amount, 0)
+    const paidDeals = deals.filter(d => d.artist_paid)
+    const grossMarkedPaid = paidDeals.reduce((s, d) => s + d.gross_amount, 0)
+    const pipelineGross = deals.filter(d => track(d) === 'pipeline').reduce((s, d) => s + d.gross_amount, 0)
+    const communityGross = deals.filter(d => track(d) === 'community').reduce((s, d) => s + d.gross_amount, 0)
+    const unlinkedGross = deals.filter(d => track(d) === 'unlinked').reduce((s, d) => s + d.gross_amount, 0)
+    return {
+      dealCount: deals.length,
+      paidCount: paidDeals.length,
+      totalGrossLogged,
+      grossMarkedPaid,
+      pipelineGross,
+      communityGross,
+      unlinkedGross,
+    }
+  }, [deals])
+
   const previewCommission = useMemo(() => {
     const gross = parseFloat(form.gross_amount)
     if (isNaN(gross) || gross <= 0) return null
@@ -784,8 +806,38 @@ export default function Earnings() {
           </div>
         )}
 
-        {/* Two-panel summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Summary: artist bookings + your commission + retainer */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Artist booking gross — show money to the artist (case study / transparency) */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3 md:min-w-0">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-neutral-500">Artist bookings</span>
+              <Banknote className="h-3.5 w-3.5 text-neutral-700" />
+            </div>
+            <p className="text-[10px] text-neutral-600 leading-snug">
+              Show gross from logged deals, not your commission. Toggle “Artist” on each row when they have been paid.
+            </p>
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Total gross logged</p>
+                <p className="text-base font-bold text-neutral-100 tabular-nums">{fmtMoney(artistBookingStats.totalGrossLogged)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">{artistBookingStats.dealCount} deal{artistBookingStats.dealCount !== 1 ? 's' : ''}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Marked artist paid</p>
+                <p className="text-base font-bold text-emerald-400/90 tabular-nums">{fmtMoney(artistBookingStats.grossMarkedPaid)}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5">{artistBookingStats.paidCount} deal{artistBookingStats.paidCount !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="pt-1 border-t border-neutral-800 space-y-1">
+                <p className="text-[10px] text-neutral-600 uppercase tracking-wide">By venue track</p>
+                <p className="text-xs text-neutral-400 tabular-nums">Pipeline gross: {fmtMoney(artistBookingStats.pipelineGross)}</p>
+                <p className="text-xs text-neutral-400 tabular-nums">Community gross: {fmtMoney(artistBookingStats.communityGross)}</p>
+                {artistBookingStats.unlinkedGross > 0 && (
+                  <p className="text-xs text-neutral-500 tabular-nums">No venue: {fmtMoney(artistBookingStats.unlinkedGross)}</p>
+                )}
+              </div>
+            </div>
+          </div>
           {/* Commission panel */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -842,12 +894,12 @@ export default function Earnings() {
         </div>
       </div>
 
-      {/* ── Commission deals ─────────────────────────────────────────────── */}
+      {/* ── Deals (gross = artist booking; My cut = your commission) ───── */}
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <div className="flex items-center gap-2 min-w-0 sm:flex-1">
             <h2 className="text-sm font-semibold text-neutral-300 uppercase tracking-widest shrink-0">
-              Commission Deals
+              Deals
             </h2>
             <div className="hidden sm:block flex-1 min-w-[1rem] h-px bg-neutral-800" />
           </div>
@@ -870,7 +922,7 @@ export default function Earnings() {
       ) : deals.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-neutral-700 rounded-lg">
           <p className="font-medium text-neutral-400 text-sm mb-1">No deals logged yet</p>
-          <p className="text-xs text-neutral-500 mb-4">Log a booking or deal to start tracking your commission.</p>
+          <p className="text-xs text-neutral-500 mb-4">Log a booking to track artist gross and your commission (if any).</p>
           <Button variant="outline" size="sm" onClick={openAdd}>Log first deal</Button>
         </div>
       ) : (

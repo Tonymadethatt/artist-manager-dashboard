@@ -25,7 +25,7 @@ export async function fetchReportInputsForUser(
     { data: perfRaw, error: pErr },
   ] = await Promise.all([
     client.from('venues').select('*').eq('user_id', userId),
-    client.from('deals').select('*').eq('user_id', userId),
+    client.from('deals').select('*, venue:venues(id, name, outreach_track)').eq('user_id', userId),
     client.from('metrics').select('*').eq('user_id', userId),
     client.from('monthly_fees').select('*').eq('user_id', userId).order('month', { ascending: false }),
     client.from('tasks').select('*').eq('user_id', userId),

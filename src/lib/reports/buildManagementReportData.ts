@@ -7,9 +7,30 @@ export type ManagementReportEmailData = {
     venuesUpdated: number
     inDiscussion: number
     venuesBooked: number
+    pipelineAdded: number
+    communityAdded: number
+    pipelineBooked: number
+    communityBooked: number
+  }
+  /**
+   * Artist booking gross from logged deals (not manager commission).
+   * `grossBookedInPeriod` / `dealsBookedInPeriod` use deal created_at in range.
+   * `grossArtistPaidInPeriod` uses artist_paid_date in range when artist_paid (operational toggle accuracy).
+   */
+  artistEarnings: {
+    grossBookedInPeriod: number
+    dealsBookedInPeriod: number
+    grossArtistPaidInPeriod: number
+    dealsArtistPaidInPeriod: number
+    /** Period deals with linked pipeline venue (or community venue excluded from these two) */
+    grossPipelineBooked: number
+    grossCommunityBooked: number
+    /** Period deals with no venue_id / missing embed */
+    grossUnlinkedBooked: number
   }
   deals: {
     count: number
+    /** Same as artistEarnings.grossBookedInPeriod; kept for backward compatibility. */
     totalGross: number
     totalCommission: number
     commissionEarned: number
@@ -80,17 +101,36 @@ export function buildManagementReportData(
 
   const { venues, deals, metrics, fees, tasks, perfReports } = input
 
+  const pipelineVenues = venues.filter(v => (v.outreach_track ?? 'pipeline') === 'pipeline')
+  const communityVenues = venues.filter(v => v.outreach_track === 'community')
   const venuesContacted = venues.filter(v => inRange(v.created_at)).length
+  const pipelineAdded = pipelineVenues.filter(v => inRange(v.created_at)).length
+  const communityAdded = communityVenues.filter(v => inRange(v.created_at)).length
   const venuesUpdated = venues.filter(v =>
     v.status !== 'not_contacted' && inRange(v.updated_at),
   ).length
   const venuesBooked = venues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
+  const pipelineBooked = pipelineVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
+  const communityBooked = communityVenues.filter(v => v.status === 'booked' && inRange(v.updated_at)).length
   const inDiscussion = venues.filter(v =>
     ['in_discussion', 'agreement_sent'].includes(v.status) && inRange(v.updated_at),
   ).length
 
   const periodDeals = deals.filter(d => inRange(d.created_at))
   const totalGross = periodDeals.reduce((s, d) => s + d.gross_amount, 0)
+  const dealTrack = (d: Deal) => {
+    if (!d.venue_id || !d.venue) return 'unlinked' as const
+    return (d.venue.outreach_track ?? 'pipeline') === 'community' ? 'community' as const : 'pipeline' as const
+  }
+  const grossPipelineBooked = periodDeals.filter(d => dealTrack(d) === 'pipeline').reduce((s, d) => s + d.gross_amount, 0)
+  const grossCommunityBooked = periodDeals.filter(d => dealTrack(d) === 'community').reduce((s, d) => s + d.gross_amount, 0)
+  const grossUnlinkedBooked = periodDeals.filter(d => dealTrack(d) === 'unlinked').reduce((s, d) => s + d.gross_amount, 0)
+
+  const paidInPeriodDeals = deals.filter(
+    d => d.artist_paid && d.artist_paid_date && inRange(d.artist_paid_date),
+  )
+  const grossArtistPaidInPeriod = paidInPeriodDeals.reduce((s, d) => s + d.gross_amount, 0)
+
   const totalCommission = periodDeals.reduce((s, d) => s + d.commission_amount, 0)
   const commissionEarned = deals
     .filter(d => d.artist_paid && d.artist_paid_date && inRange(d.artist_paid_date))
@@ -134,7 +174,25 @@ export function buildManagementReportData(
   const totalReportedAttendance = perfInPeriod.reduce((s, r) => s + (r.attendance ?? 0), 0)
 
   const report: ManagementReportEmailData = {
-    outreach: { venuesContacted, venuesUpdated, inDiscussion, venuesBooked },
+    outreach: {
+      venuesContacted,
+      venuesUpdated,
+      inDiscussion,
+      venuesBooked,
+      pipelineAdded,
+      communityAdded,
+      pipelineBooked,
+      communityBooked,
+    },
+    artistEarnings: {
+      grossBookedInPeriod: totalGross,
+      dealsBookedInPeriod: periodDeals.length,
+      grossArtistPaidInPeriod,
+      dealsArtistPaidInPeriod: paidInPeriodDeals.length,
+      grossPipelineBooked,
+      grossCommunityBooked,
+      grossUnlinkedBooked,
+    },
     deals: {
       count: periodDeals.length,
       totalGross,
