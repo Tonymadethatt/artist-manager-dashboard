@@ -133,9 +133,18 @@ const handler: Handler = async (event) => {
   }
 
   let venueName = 'venue'
+  /** pipeline = commission on booked deals applies; community = artist network, no booking commission */
+  let venueOutreachTrack: 'pipeline' | 'community' = 'pipeline'
   try {
-    const { data: venue } = await supabase.from('venues').select('name').eq('id', row.venue_id).single()
-    if (venue) venueName = venue.name
+    const { data: venue } = await supabase
+      .from('venues')
+      .select('name, outreach_track')
+      .eq('id', row.venue_id)
+      .single()
+    if (venue) {
+      venueName = venue.name
+      venueOutreachTrack = venue.outreach_track === 'community' ? 'community' : 'pipeline'
+    }
   } catch { /* non-critical */ }
 
   try {
@@ -184,7 +193,11 @@ const handler: Handler = async (event) => {
     }
   }
 
-  if (body.artistPaidStatus === 'yes' || body.artistPaidStatus === 'partial') {
+  const commissionRelevantToManager =
+    venueOutreachTrack === 'pipeline' &&
+    (body.artistPaidStatus === 'yes' || body.artistPaidStatus === 'partial')
+
+  if (commissionRelevantToManager) {
     try {
       await supabase.from('performance_reports').update({ commission_flagged: true }).eq('id', row.id)
     } catch (e) {

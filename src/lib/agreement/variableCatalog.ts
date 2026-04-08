@@ -28,7 +28,7 @@ export const AGREEMENT_VARIABLE_CATALOG: VariableCatalogEntry[] = [
   { key: 'commission_rate_fraction', label: 'Commission rate (decimal, e.g. 0.2)', group: 'deal' },
   { key: 'commission_amount', label: 'Commission amount', group: 'deal' },
   { key: 'commission_amount_display', label: 'Commission amount (currency)', group: 'deal' },
-  { key: 'commission_tier', label: 'Commission tier', group: 'deal' },
+  { key: 'commission_tier', label: 'Commission tier (includes Artist network = no booking commission)', group: 'deal' },
   { key: 'payment_due_date', label: 'Payment due date', group: 'deal' },
   { key: 'agreement_url', label: 'Agreement URL', group: 'deal' },
   { key: 'deal_notes', label: 'Deal notes', group: 'deal' },

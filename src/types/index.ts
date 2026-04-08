@@ -66,7 +66,7 @@ export const OUTREACH_TRACK_ORDER: OutreachTrack[] = ['pipeline', 'community']
 
 export type TemplateType = 'agreement' | 'invoice'
 
-export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors'
+export type CommissionTier = 'new_doors' | 'kept_doors' | 'bigger_doors' | 'artist_network'
 
 export type PaymentMethod = 'cash' | 'paypal' | 'zelle' | 'apple_pay' | 'venmo' | 'check' | 'other'
 
@@ -108,12 +108,15 @@ export const COMMISSION_TIER_LABELS: Record<CommissionTier, string> = {
   new_doors: 'New Doors',
   kept_doors: 'Kept Doors',
   bigger_doors: 'Bigger Doors',
+  /** Community / artist existing network — gross tracked, no manager booking commission */
+  artist_network: 'Artist network',
 }
 
 export const COMMISSION_TIER_RATES: Record<CommissionTier, number> = {
   new_doors: 0.20,
   kept_doors: 0.20,
   bigger_doors: 0.10,
+  artist_network: 0,
 }
 
 export interface DealTerms {

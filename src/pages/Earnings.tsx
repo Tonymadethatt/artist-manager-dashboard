@@ -548,10 +548,11 @@ function RetainerTab(_: { hideSummary?: boolean }) {
   )
 }
 
-const TIER_BADGE_VARIANT: Record<CommissionTier, 'blue' | 'purple' | 'warning'> = {
+const TIER_BADGE_VARIANT: Record<CommissionTier, 'blue' | 'purple' | 'warning' | 'secondary'> = {
   new_doors: 'blue',
   kept_doors: 'purple',
   bigger_doors: 'warning',
+  artist_network: 'secondary',
 }
 
 const EMPTY_FORM = {
@@ -688,13 +689,11 @@ export default function Earnings() {
 
   const handleVenueSelect = (venueId: string) => {
     setField('venue_id', venueId)
-    // Only auto-set tier on new deals (not edits), and only when user hasn't changed it yet
-    if (!editDeal) {
-      const v = venues.find(vn => vn.id === venueId)
-      if (v) {
-        const defaultTier = (v.outreach_track ?? 'pipeline') === 'community' ? 'kept_doors' : 'new_doors'
-        setField('commission_tier', defaultTier)
-      }
+    const v = venues.find(vn => vn.id === venueId)
+    if (v && (v.outreach_track ?? 'pipeline') === 'community') {
+      setField('commission_tier', 'artist_network')
+    } else if (v && !editDeal) {
+      setField('commission_tier', 'new_doors')
     }
   }
 
@@ -715,12 +714,20 @@ export default function Earnings() {
         if (href) agreementUrl = href
       }
     }
+    const linkedVenue = form.venue_id ? venues.find(vn => vn.id === form.venue_id) : undefined
+    const isCommunityVenue = linkedVenue && (linkedVenue.outreach_track ?? 'pipeline') === 'community'
+    const commissionTier: CommissionTier = isCommunityVenue
+      ? 'artist_network'
+      : form.commission_tier === 'artist_network'
+        ? 'new_doors'
+        : form.commission_tier
+
     const payload = {
       description: form.description.trim(),
       venue_id: form.venue_id || null,
       event_date: form.event_date || null,
       gross_amount: gross,
-      commission_tier: form.commission_tier,
+      commission_tier: commissionTier,
       payment_due_date: form.payment_due_date || null,
       agreement_url: agreementUrl,
       agreement_generated_file_id: agreementFileId,
@@ -1051,17 +1058,34 @@ export default function Earnings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new_doors">New Doors — 20% (deal you sourced)</SelectItem>
+                  <SelectItem value="new_doors">New Doors — 20% (pipeline venue you sourced)</SelectItem>
                   <SelectItem value="kept_doors">Kept Doors — 20% (rebooking from your intro)</SelectItem>
                   <SelectItem value="bigger_doors">Bigger Doors — 10% (artist closed, new client)</SelectItem>
+                  <SelectItem value="artist_network">Artist network — 0% (community venue; gross still tracked)</SelectItem>
                 </SelectContent>
               </Select>
+              {form.venue_id && (venues.find(v => v.id === form.venue_id)?.outreach_track ?? 'pipeline') === 'community' && (
+                <p className="text-[10px] text-neutral-500 leading-snug">
+                  This venue is on the community track. Booking commission stays $0; you still log gross and payments for the artist.
+                </p>
+              )}
             </div>
 
             {previewCommission !== null && (
-              <div className="bg-neutral-800 rounded px-3 py-2 flex items-center justify-between">
-                <span className="text-xs text-neutral-400">Your commission</span>
-                <span className="text-sm font-bold text-green-400">{fmtMoney(previewCommission)}</span>
+              <div className="bg-neutral-800 rounded px-3 py-2 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-neutral-400">
+                    {form.commission_tier === 'artist_network' ? 'Booking commission (this deal)' : 'Your commission (this deal)'}
+                  </span>
+                  <span className={`text-sm font-bold tabular-nums ${form.commission_tier === 'artist_network' ? 'text-neutral-300' : 'text-green-400'}`}>
+                    {fmtMoney(previewCommission)}
+                  </span>
+                </div>
+                {form.commission_tier === 'artist_network' && (
+                  <p className="text-[10px] text-neutral-600 leading-snug">
+                    Retainers and pipeline deals are unchanged—this line is only the per-show booking commission on artist-network gigs.
+                  </p>
+                )}
               </div>
             )}
 
