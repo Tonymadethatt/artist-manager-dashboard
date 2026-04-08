@@ -8,13 +8,16 @@ import {
   EMAIL_FOOTER_MUTED,
   EMAIL_HINT,
   EMAIL_LABEL,
-  EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE, VENUE_EMAIL_DOC_BUTTON_STYLE } from './venueEmailCtaStyles'
 import { emailFooterVenueSenderAttributionHtml } from './emailFooterPersonaLines'
 import { buildProfileFooterLinksHtml } from './profileFooterLinksHtml'
+import {
+  buildVenueClientEmailHeaderBrandInnerHtml,
+  venueClientEmailLogoAlt,
+} from './venueClientEmailHeaderBrandHtml'
 
 function hrefAttr(u: string): string {
   return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -428,6 +431,8 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   const wrapperClass = responsiveClasses ? ' class="wrapper"' : ''
   const bodyClass = responsiveClasses ? ' class="email-body"' : ''
   const footerClass = responsiveClasses ? ' class="email-footer"' : ''
+  const headerBrandInner = buildVenueClientEmailHeaderBrandInnerHtml(profile)
+  const logoAlt = venueClientEmailLogoAlt(profile)
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -445,10 +450,9 @@ ${mobileStyles}
 <div${wrapperClass} style="max-width:600px;margin:24px auto;background:#111111;border-radius:10px;overflow:hidden;border:1px solid #2a2a2a;">
 
   <div style="padding:28px 32px 0 32px;">
-    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
+    <img src="${logoUrl}" alt="${escapeHtmlPlain(logoAlt)}" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
-      <div style="font-size:11px;font-weight:700;color:${EMAIL_LABEL};text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
-      <div style="font-size:11px;font-weight:500;color:${EMAIL_META_TAGLINE};letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+      ${headerBrandInner}
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>

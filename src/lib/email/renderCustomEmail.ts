@@ -3,7 +3,6 @@ import {
   EMAIL_BODY_SECONDARY,
   EMAIL_HINT,
   EMAIL_LABEL,
-  EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
@@ -19,6 +18,10 @@ import { applyMergeToText, resolveMergeKey, type CustomEmailMergeContext, type C
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE } from './venueEmailCtaStyles'
+import {
+  buildVenueClientEmailHeaderBrandInnerHtml,
+  venueClientEmailLogoAlt,
+} from './venueClientEmailHeaderBrandHtml'
 
 export type { CustomEmailMergeContext }
 
@@ -305,13 +308,14 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
   }` : ''
   const wrapperClass = responsiveClasses ? ' class="wrapper"' : ''
   const bodyClass = responsiveClasses ? ' class="email-body"' : ''
+  const headerBrandInner = buildVenueClientEmailHeaderBrandInnerHtml(opts.profile)
+  const logoAlt = venueClientEmailLogoAlt(opts.profile)
 
   const header = `
   <div style="padding:28px 32px 0 32px;">
-    <img src="${logoUrl}" alt="DJ LUIJAY" style="display:block;max-width:100px;width:100px;height:auto;" />
+    <img src="${logoUrl}" alt="${escapeHtmlPlain(logoAlt)}" style="display:block;max-width:100px;width:100px;height:auto;" />
     <div style="margin-top:10px;">
-      <div style="font-size:11px;font-weight:700;color:${EMAIL_LABEL};text-transform:uppercase;letter-spacing:2.5px;">Front Office&#8482;</div>
-      <div style="font-size:11px;font-weight:500;color:${EMAIL_META_TAGLINE};letter-spacing:0.5px;margin-top:2px;">Brand Growth &amp; Management</div>
+      ${headerBrandInner}
     </div>
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`

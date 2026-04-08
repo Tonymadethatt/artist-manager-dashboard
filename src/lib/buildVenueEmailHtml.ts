@@ -58,7 +58,8 @@ export const PREVIEW_MOCK_PROFILE: PreviewProfile = {
   website: 'https://djluijay.com',
   phone: '(305) 555-0182',
   social_handle: '@djluijay',
-  tagline: 'Brand Growth & Management',
+  /** Null so client email header preview uses default descriptor line. */
+  tagline: null,
 }
 
 export const PREVIEW_MOCK_RECIPIENT: PreviewRecipient = {
