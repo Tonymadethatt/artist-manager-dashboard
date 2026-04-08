@@ -24,8 +24,9 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
-import { buildVenueEmailDocument } from '@/lib/email/renderVenueEmail'
-import { normalizeEmailTemplateLayout } from '@/lib/emailLayout'
+import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
+import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
+import { buildArtistTransactionalEmailHtml } from '@/lib/email/artistTransactionalEmailDocument'
 import {
   EMAIL_QUEUE_BUFFER_OPTIONS,
   clampEmailQueueBufferMinutes,
@@ -34,6 +35,8 @@ import {
 } from '@/lib/emailQueueBuffer'
 import { isQueuedBuiltinArtistEmailType, isQueueBufferZeroEmailType } from '@/lib/email/queuedBuiltinArtistEmail'
 import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
+import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
+import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
@@ -61,6 +64,18 @@ function pendingNotesLine(email: VenueEmail): string | null {
     if (p) {
       const when = p.eventDate ? ` · show ${p.eventDate}` : ''
       return `Performance form · ${p.venueName}${when}`
+    }
+  }
+  if (email.email_type === 'invoice_sent') {
+    const inv = parseInvoiceQueueNotes(email.notes)
+    if (inv?.url) return 'Invoice link attached to this send'
+  }
+  if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+    const t = parseArtistTxnQueueNotes(email.notes)
+    if (t) {
+      const tag = t.kind === 'gig_week_reminder' ? 'Gig week' : 'Report received'
+      const when = t.eventDate ? ` · ${t.eventDate}` : ''
+      return `${tag} · ${t.venueName}${when}`
     }
   }
   return email.notes?.trim() || null
@@ -365,7 +380,7 @@ export default function EmailQueue() {
             + rows
             + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
           )
-        } else {
+        } else if (email.email_type === 'retainer_received') {
           const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
           const { data: rxTmpl } = await supabase
             .from('email_templates')
@@ -389,6 +404,40 @@ export default function EmailQueue() {
             + rows
             + `<p style="margin:16px 0 0;color:#666;font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
           )
+        } else if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+          const txn = parseArtistTxnQueueNotes(email.notes)
+          if (!txn || txn.kind !== email.email_type) {
+            setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Missing artist transactional payload on this row.</div>')
+            setPreviewLoading(false)
+            return
+          }
+          const { data: txTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro, layout')
+            .eq('user_id', user.id)
+            .eq('email_type', email.email_type)
+            .maybeSingle()
+          const L = artistLayoutForSend(txTmpl?.layout ?? null, txTmpl?.custom_subject ?? null, txTmpl?.custom_intro ?? null)
+          const site = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
+          const html = buildArtistTransactionalEmailHtml(
+            txn.kind,
+            {
+              artistName: profile.artist_name ?? '',
+              venueName: txn.venueName,
+              eventDate: txn.eventDate,
+              managerName: profile.manager_name?.trim() || 'Management',
+            },
+            L,
+            site,
+          )
+          setPreviewHtml(html)
+          const firstName = (profile.artist_name ?? 'Artist').split(/\s+/)[0] || 'Artist'
+          const defaultSubj = txn.kind === 'gig_week_reminder'
+            ? `${firstName}, gig week — ${txn.venueName}`
+            : `${firstName}, we received your show check-in`
+          setPreviewSubject(L.subject?.trim() || defaultSubj)
+        } else {
+          setPreviewHtml('<div style="padding:40px;color:#888;text-align:center;">Preview not available for this email type.</div>')
         }
         setPreviewLoading(false)
         return
@@ -518,8 +567,12 @@ export default function EmailQueue() {
           .maybeSingle()
 
         const layout = normalizeEmailTemplateLayout(tmpl?.layout ?? null)
+        const invoiceUrl =
+          email.email_type === 'invoice_sent'
+            ? parseInvoiceQueueNotes(email.notes)?.url ?? null
+            : null
         const html = buildVenueEmailDocument({
-          type: email.email_type as 'booking_confirmation',
+          type: email.email_type as VenueRenderEmailType,
           profile: profileForRender,
           recipient: recipientForRender,
           deal: dealForRender,
@@ -529,6 +582,7 @@ export default function EmailQueue() {
           layout,
           logoBaseUrl: '',
           responsiveClasses: false,
+          invoiceUrl,
         })
         setPreviewHtml(html)
         setPreviewSubject(email.subject || '')
@@ -631,7 +685,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
-        } else {
+        } else if (email.email_type === 'retainer_received') {
           const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
           const { data: tmpl } = await supabase
             .from('email_templates')
@@ -652,6 +706,33 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+        } else if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+          const txn = parseArtistTxnQueueNotes(email.notes)
+          if (!txn || txn.kind !== email.email_type) {
+            throw new Error('Missing artist transactional payload on this row.')
+          }
+          const { data: txTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro, layout')
+            .eq('user_id', user.id)
+            .eq('email_type', email.email_type)
+            .maybeSingle()
+          const res = await fetch('/.netlify/functions/send-artist-transactional', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind: txn.kind,
+              profile: profileForArtistSend,
+              venueName: txn.venueName,
+              eventDate: txn.eventDate,
+              custom_subject: txTmpl?.custom_subject ?? null,
+              custom_intro: txTmpl?.custom_intro ?? null,
+              layout: txTmpl?.layout ?? null,
+            }),
+          })
+          if (!res.ok) throw new Error(await parseErr(res))
+        } else {
+          throw new Error('Unsupported built-in artist email type.')
         }
 
         await updateEmailStatus(email.id, 'sent')
@@ -815,6 +896,10 @@ export default function EmailQueue() {
           payload.custom_subject = tmpl.custom_subject
           payload.custom_intro = tmpl.custom_intro
           payload.layout = tmpl.layout
+        }
+        if (email.email_type === 'invoice_sent') {
+          const inv = parseInvoiceQueueNotes(email.notes)
+          if (inv?.url) payload.invoice_url = inv.url
         }
       }
 

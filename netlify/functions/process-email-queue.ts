@@ -2,7 +2,7 @@
  * process-email-queue
  *
  * Called by an external cron job every minute.
- * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`) — buffer 0 so the next cron run can send.
+ * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`, `performance_report_received`, `gig_week_reminder`) — buffer 0 so the next cron run can send.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -22,6 +22,8 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
 import { isQueueBufferZeroEmailType, isQueuedBuiltinArtistEmailType } from '../../src/lib/email/queuedBuiltinArtistEmail'
 import { parsePerfFormQueueNotes } from '../../src/lib/email/performanceFormQueuePayload'
+import { parseInvoiceQueueNotes } from '../../src/lib/email/invoiceQueuePayload'
+import { parseArtistTxnQueueNotes } from '../../src/lib/email/artistTxnQueuePayload'
 import { fetchReportInputsForUser } from '../../src/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
@@ -56,6 +58,13 @@ type VenueEmailType =
   | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
+  | 'first_outreach'
+  | 'pre_event_checkin'
+  | 'post_show_thanks'
+  | 'agreement_followup'
+  | 'invoice_sent'
+  | 'show_cancelled_or_postponed'
+  | 'pass_for_now'
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -481,6 +490,81 @@ const handler: Handler = async (event) => {
     }
 
     const builtinArtistType = email.email_type as string
+    if (builtinArtistType === 'performance_report_received' || builtinArtistType === 'gig_week_reminder') {
+      const row = profileByUser.get(email.user_id) as Record<string, unknown> | undefined
+      if (!row?.artist_email || !row.from_email) {
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: 'Auto-send failed: artist email not configured' })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason: 'no_artist_email' })
+        continue
+      }
+
+      const txnPayload = parseArtistTxnQueueNotes(email.notes as string | null)
+      if (!txnPayload || txnPayload.kind !== builtinArtistType) {
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: 'Auto-send failed: missing artist transactional payload' })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason: 'artist_txn_payload' })
+        continue
+      }
+
+      const sendProfile = {
+        artist_name: String(row.artist_name ?? ''),
+        artist_email: String(row.artist_email ?? ''),
+        manager_name: (row.manager_name as string | null) ?? null,
+        manager_email: (row.manager_email as string | null) ?? null,
+        from_email: String(row.from_email ?? ''),
+        company_name: (row.company_name as string | null) ?? null,
+        website: (row.website as string | null) ?? null,
+        social_handle: (row.social_handle as string | null) ?? null,
+        phone: (row.phone as string | null) ?? null,
+        reply_to_email: (row.reply_to_email as string | null) ?? null,
+      }
+
+      const txTmpl = templateByUserAndType.get(`${email.user_id}:${builtinArtistType}`)
+      try {
+        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-transactional`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: txnPayload.kind,
+            profile: sendProfile,
+            venueName: txnPayload.venueName,
+            eventDate: txnPayload.eventDate,
+            custom_subject: txTmpl?.custom_subject ?? null,
+            custom_intro: txTmpl?.custom_intro ?? null,
+            layout: txTmpl?.layout ?? null,
+          }),
+        })
+        if (sendRes.ok) {
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'sent' })
+        } else {
+          const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+          const reason = (err as { message?: string }).message ?? 'Send failed'
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason })
+        }
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'Unknown error'
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason })
+      }
+      continue
+    }
+
     if (
       builtinArtistType === 'management_report'
       || builtinArtistType === 'retainer_reminder'
@@ -627,6 +711,11 @@ const handler: Handler = async (event) => {
       continue
     }
 
+    const invoiceLinkPayload = email.email_type === 'invoice_sent'
+      ? parseInvoiceQueueNotes(email.notes as string | null)
+      : null
+    const invoiceUrlForSend = invoiceLinkPayload?.url?.trim() || null
+
     const requestBody = customRow?.audience === 'venue'
       ? {
         profile: profilePayload,
@@ -652,6 +741,7 @@ const handler: Handler = async (event) => {
             layout: tmpl.layout,
           }
           : {}),
+        ...(invoiceUrlForSend ? { invoice_url: invoiceUrlForSend } : {}),
       }
 
     try {

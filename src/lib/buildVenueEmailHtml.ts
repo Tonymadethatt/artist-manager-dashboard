@@ -25,6 +25,7 @@ export function buildVenueEmailHtml(
   customIntro?: string | null,
   customSubject?: string | null,
   layout?: EmailTemplateLayoutV1 | null,
+  invoiceUrl?: string | null,
 ): string {
   return buildVenueEmailDocument({
     type,
@@ -37,6 +38,7 @@ export function buildVenueEmailHtml(
     layout,
     logoBaseUrl: '',
     responsiveClasses: false,
+    invoiceUrl: invoiceUrl ?? null,
   })
 }
 

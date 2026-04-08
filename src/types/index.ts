@@ -375,12 +375,21 @@ export type VenueEmailType =
   | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
+  | 'first_outreach'
+  | 'pre_event_checkin'
+  | 'post_show_thanks'
+  | 'agreement_followup'
+  | 'invoice_sent'
+  | 'show_cancelled_or_postponed'
+  | 'pass_for_now'
 
 export type ArtistEmailType =
   | 'management_report'
   | 'retainer_reminder'
   | 'retainer_received'
   | 'performance_report_request'
+  | 'performance_report_received'
+  | 'gig_week_reminder'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -394,6 +403,13 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   booking_confirmed: 'Booking Confirmed',
   follow_up: 'Follow-Up',
   rebooking_inquiry: 'Rebooking Inquiry',
+  first_outreach: 'First outreach',
+  pre_event_checkin: 'Pre-event check-in',
+  post_show_thanks: 'Post-show thank-you',
+  agreement_followup: 'Agreement follow-up',
+  invoice_sent: 'Invoice sent',
+  show_cancelled_or_postponed: 'Show cancelled or postponed',
+  pass_for_now: 'Pass for now (close)',
 }
 
 export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
@@ -401,6 +417,8 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   retainer_reminder: 'Retainer Reminder',
   retainer_received: 'Retainer payment received',
   performance_report_request: 'Performance Report Request',
+  performance_report_received: 'Performance report received',
+  gig_week_reminder: 'Gig week reminder',
 }
 
 export interface EmailTemplate {

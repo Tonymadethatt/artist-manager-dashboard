@@ -44,13 +44,20 @@ interface SendVenueEmailModalProps {
 }
 
 const EMAIL_TYPE_OPTIONS: VenueEmailType[] = [
+  'first_outreach',
+  'follow_up',
   'booking_confirmation',
   'booking_confirmed',
   'agreement_ready',
+  'agreement_followup',
+  'pre_event_checkin',
   'payment_reminder',
   'payment_receipt',
-  'follow_up',
+  'invoice_sent',
+  'post_show_thanks',
   'rebooking_inquiry',
+  'show_cancelled_or_postponed',
+  'pass_for_now',
 ]
 
 function getDefaultType(deal?: Deal | null): VenueEmailType {
@@ -81,6 +88,20 @@ function getTypeDescription(type: VenueEmailType, deal?: Deal | null, venueName?
       return `A soft check-in to ${venue} about the potential booking. No pressure, just keeping the conversation going.`
     case 'rebooking_inquiry':
       return `Reaches out to ${venue} about booking again based on a positive post-show report.`
+    case 'first_outreach':
+      return `Introduces the artist and opens a first conversation with ${venue} about a potential booking.`
+    case 'pre_event_checkin':
+      return `As ${venue} approaches the event date: logistics, settlement, and day-of contact.`
+    case 'post_show_thanks':
+      return `Thanks ${venue} for hosting the show without pushing a rebook hard.`
+    case 'agreement_followup':
+      return `Short nudge to ${venue} on agreement status or signature.`
+    case 'invoice_sent':
+      return `Shares billing / invoice context with ${venue}. For a live PDF link, queue from a task with a generated file or use a custom template with attachment.`
+    case 'show_cancelled_or_postponed':
+      return `Professional note to ${venue} when a show moves or is cancelled.`
+    case 'pass_for_now':
+      return `Polite pause or pass message to ${venue}.`
     default:
       return `Email to ${venue}.`
   }
@@ -154,14 +175,22 @@ export function SendVenueEmailModal({
     setStatus('idle')
 
     const companyName = profile.company_name || profile.artist_name
+    const vName = venue?.name || 'your venue'
     const subjectMap: Record<VenueEmailType, string> = {
-      booking_confirmation: `Booking Confirmation - ${companyName} at ${venue?.name || 'your venue'}`,
-      booking_confirmed: `Booking Confirmed - ${companyName} | ${venue?.name || 'your venue'}`,
+      booking_confirmation: `Booking Confirmation - ${companyName} at ${vName}`,
+      booking_confirmed: `Booking Confirmed - ${companyName} | ${vName}`,
       payment_receipt: `Payment Received - Thank You | ${companyName}`,
       payment_reminder: `Payment Reminder - ${companyName}`,
       agreement_ready: `Agreement Ready for Review - ${companyName}`,
+      agreement_followup: `Following up — agreement | ${companyName}`,
       follow_up: `Following Up - ${companyName}`,
-      rebooking_inquiry: `Rebooking Inquiry - ${companyName} at ${venue?.name || 'your venue'}`,
+      rebooking_inquiry: `Rebooking Inquiry - ${companyName} at ${vName}`,
+      first_outreach: `${companyName} — booking inquiry | ${vName}`,
+      pre_event_checkin: `Pre-event check-in — ${companyName} | ${vName}`,
+      post_show_thanks: `Thank you — ${companyName} at ${vName}`,
+      invoice_sent: `Invoice — ${companyName} | ${vName}`,
+      show_cancelled_or_postponed: `Update — date change / cancellation | ${companyName} | ${vName}`,
+      pass_for_now: `Thanks — ${companyName} | ${vName}`,
     }
 
     try {

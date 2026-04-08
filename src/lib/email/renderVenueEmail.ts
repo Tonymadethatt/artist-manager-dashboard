@@ -10,6 +10,13 @@ export type VenueRenderEmailType =
   | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
+  | 'first_outreach'
+  | 'pre_event_checkin'
+  | 'post_show_thanks'
+  | 'agreement_followup'
+  | 'invoice_sent'
+  | 'show_cancelled_or_postponed'
+  | 'pass_for_now'
 
 export interface VenueRenderProfile {
   artist_name: string
@@ -56,6 +63,8 @@ export interface BuildVenueEmailDocumentOptions {
   logoBaseUrl: string
   /** Include responsive wrapper classes (Netlify sends true) */
   responsiveClasses?: boolean
+  /** Resolved billing / invoice link for `invoice_sent` (from queue notes or send payload). */
+  invoiceUrl?: string | null
 }
 
 function money(n: number) {
@@ -89,6 +98,13 @@ const replyMap: Record<VenueRenderEmailType, { label: string; bodyText: string }
   booking_confirmed:    { label: 'Reply to Confirmation',        bodyText: 'Hi,\n\nThank you for the booking confirmation.\n\n' },
   payment_receipt:      { label: 'Reply to Receipt',             bodyText: 'Hi,\n\nThank you for confirming receipt of the payment.\n\n' },
   rebooking_inquiry:    { label: 'Reply About a Future Booking', bodyText: 'Hi,\n\nThank you for the interest in a future booking. Here are my thoughts:\n\n' },
+  first_outreach:       { label: 'Reply About Booking',          bodyText: 'Hi,\n\nThanks for your note. Here is more about the booking opportunity:\n\n' },
+  pre_event_checkin:    { label: 'Reply — Event logistics',      bodyText: 'Hi,\n\nHere are details on load-in, settlement, and our onsite contact:\n\n' },
+  post_show_thanks:     { label: 'Reply',                        bodyText: 'Hi,\n\nThank you — glad the show went well. Notes:\n\n' },
+  agreement_followup:   { label: 'Reply About the Agreement',    bodyText: 'Hi,\n\nFollowing up on the agreement — here is our update:\n\n' },
+  invoice_sent:         { label: 'Reply About Invoice',          bodyText: 'Hi,\n\nRegarding the invoice — here is our note:\n\n' },
+  show_cancelled_or_postponed: { label: 'Reply', bodyText: 'Hi,\n\nThanks for the update on the date change / cancellation. Here is our side:\n\n' },
+  pass_for_now:         { label: 'Reply',                        bodyText: 'Hi,\n\nThank you for the clear note. Here is our reply:\n\n' },
 }
 
 function logoUrls(base: string) {
@@ -111,6 +127,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
     layout: layoutRaw,
     logoBaseUrl,
     responsiveClasses = false,
+    invoiceUrl: invoiceUrlOpt = null,
   } = opts
 
   const layout = effectiveTemplateLayout(layoutRaw, customSubject, customIntro)
@@ -233,6 +250,87 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       ].filter(Boolean).join('')
       if (rebookDetails) bodyCards += card('Previous Event', rebookDetails, '#60a5fa')
       closing = `Please let us know your availability and we will make it work.`
+      break
+    }
+
+    case 'first_outreach': {
+      subject = `${artistNameUpper} — booking inquiry | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `${artistName} would love to explore a fit at ${venueName}. This is a first note from our team to see if there is interest and the right timing for a date.`
+      bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">We can share an electronic press kit, sample mixes, and availability on request. If bookings go through a buyer or agency, feel free to loop them in or point us to the right contact.</p></div>`
+      closing = `If this is not the right inbox, a quick pointer to the right person would be appreciated.`
+      break
+    }
+
+    case 'pre_event_checkin': {
+      subject = `Pre-event check-in — ${artistNameUpper} | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `As the date approaches for ${artistName} at ${venueName}, we wanted to align on logistics and any open details.`
+      const preRows = [
+        deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
+        row('Venue', venueName, '#ffffff'),
+        deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
+      ].filter(Boolean).join('')
+      bodyCards = preRows ? card('Event summary', preRows, '#60a5fa') : ''
+      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Please confirm load-in or soundcheck window, settlement method, and the best onsite day-of contact. If there is a tech rider or parking note we should have, send it over and we will match it.</p></div>`
+      closing = `Thanks for hosting the show — we are looking forward to it.`
+      break
+    }
+
+    case 'post_show_thanks': {
+      subject = `Thank you — ${artistNameUpper} at ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `Thank you for having ${artistName} at ${venueName}. We appreciate the teamwork that goes into a successful night.`
+      bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">If anything is pending on your side (final settlement paperwork, assets, or follow-up), let us know and we will close the loop quickly.</p></div>`
+      closing = `We appreciate the partnership and hope to stay in touch.`
+      break
+    }
+
+    case 'agreement_followup': {
+      subject = `Following up — agreement | ${artistNameUpper}`
+      greeting = `Hi ${firstName},`
+      intro = `Circling back on the agreement for ${artistName}${venue ? ` at ${venueName}` : ''}. When you have a moment, a quick status on review or signature would help us keep the date on track.`
+      const agreeUrl = deal?.agreement_url
+      const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View Agreement</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${agreeUrl}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">If you need the document resent, reply to this email.</p>`}</div>`
+      bodyCards = card('Agreement', agreementContent, '#60a5fa')
+      closing = `Happy to adjust language if anything needs clarification.`
+      break
+    }
+
+    case 'invoice_sent': {
+      subject = `Invoice — ${artistNameUpper} | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `Please find the invoice / billing summary for ${artistName} for the engagement at ${venueName}.`
+      const inv = invoiceUrlOpt?.trim()
+      const invoiceContent = `<div style="padding:14px 0;">${inv ? `<a href="${inv}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:700;font-size:13px;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">View invoice</a><p style="font-size:12px;color:#888888;margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${inv}</span></p>` : `<p style="font-size:13px;color:#d1d1d1;">The document will be shared separately if no link is on file yet.</p>`}</div>`
+      bodyCards = card('Billing', invoiceContent, '#22c55e')
+      const invRows = [
+        deal?.event_date ? row('Event date', fmtDate(deal.event_date), '#ffffff') : '',
+        deal?.gross_amount ? row('Amount', money(deal.gross_amount), '#ffffff') : '',
+      ].filter(Boolean).join('')
+      if (invRows) bodyCards += card('Reference', invRows, '#60a5fa')
+      closing = `If anything on the invoice needs to match your AP process, reply here and we will adjust.`
+      break
+    }
+
+    case 'show_cancelled_or_postponed': {
+      subject = `Update — date change / cancellation | ${artistNameUpper} | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `Reaching out regarding the booking for ${artistName} at ${venueName}. We understand plans can shift and want to stay aligned on timing and next steps.`
+      const noteBlock = deal?.notes?.trim()
+        ? card('Context', `<p style="font-size:13px;color:#d1d1d1;line-height:1.7;white-space:pre-wrap;">${escapeHtmlPlain(deal.notes)}</p>`, '#f59e0b')
+        : ''
+      bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">Please confirm the revised plan on your side (new date, refund path, or mutual release) so our records stay accurate. We appreciate you keeping us in the loop.</p></div>${noteBlock}`
+      closing = `Thank you for the partnership and clear communication.`
+      break
+    }
+
+    case 'pass_for_now': {
+      subject = `Thanks — ${artistNameUpper} | ${venueName}`
+      greeting = `Hi ${firstName},`
+      intro = `Thank you for the time and consideration around ${artistName} for ${venueName}. We will step back on this opportunity for now.`
+      bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:#d1d1d1;line-height:1.7;">If circumstances change or you would like to reconnect in a future season, we would be glad to hear from you.</p></div>`
+      closing = `Wishing you a strong run of shows.`
       break
     }
   }

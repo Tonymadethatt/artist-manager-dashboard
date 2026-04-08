@@ -78,5 +78,51 @@ export function getNextEmailSuggestion(
     }
   }
 
+  // 6. Performed — neutral thank-you if not sent yet
+  if (venue.status === 'performed' && !hasSent('post_show_thanks')) {
+    return {
+      type: 'post_show_thanks',
+      label: VENUE_EMAIL_TYPE_LABELS.post_show_thanks,
+      reason: 'Show is marked performed — a short thank-you keeps the relationship warm.',
+    }
+  }
+
+  // 7. Rebooking cycle — inquiry if not sent
+  if (venue.status === 'rebooking' && !hasSent('rebooking_inquiry')) {
+    return {
+      type: 'rebooking_inquiry',
+      label: VENUE_EMAIL_TYPE_LABELS.rebooking_inquiry,
+      reason: 'Venue is in rebooking — send the rebooking inquiry when timing is right.',
+    }
+  }
+
+  const agreementUnsigned =
+    venue.status === 'agreement_sent'
+    && venueDeals.some(d => d.agreement_url?.trim() || d.agreement_generated_file_id)
+  if (agreementUnsigned && !hasSent('agreement_followup')) {
+    return {
+      type: 'agreement_followup',
+      label: VENUE_EMAIL_TYPE_LABELS.agreement_followup,
+      reason: 'Agreement was sent — a light follow-up can unblock signature.',
+    }
+  }
+
+  const upcomingDeal = venueDeals.find(d => d.event_date && d.event_date >= today)
+  if (
+    venue.status === 'booked'
+    && upcomingDeal
+    && !hasSent('pre_event_checkin')
+  ) {
+    const eventD = new Date(`${upcomingDeal.event_date}T12:00:00`)
+    const diffDays = Math.ceil((eventD.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    if (diffDays <= 14 && diffDays >= 0) {
+      return {
+        type: 'pre_event_checkin',
+        label: VENUE_EMAIL_TYPE_LABELS.pre_event_checkin,
+        reason: `Event is within two weeks (${upcomingDeal.event_date}) — align logistics with the venue.`,
+      }
+    }
+  }
+
   return null
 }

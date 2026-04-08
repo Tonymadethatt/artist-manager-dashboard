@@ -36,9 +36,9 @@ const DEFAULT_NEW_ACCOUNT_PACKS: SeedPack[] = [
         days_offset: 0,
         priority: 'high',
         sort_order: 0,
-        email_type: 'follow_up',
+        email_type: 'first_outreach',
         notes:
-          'On complete: queues follow-up email to the venue\'s primary contact. Ensure the venue has a contact with email.',
+          'On complete: queues first-outreach email to the venue\'s primary contact. Ensure the venue has a contact with email.',
       },
       {
         title: 'Check in (call, DM, or second touch)',
@@ -94,8 +94,8 @@ const DEFAULT_NEW_ACCOUNT_PACKS: SeedPack[] = [
         days_offset: 14,
         priority: 'low',
         sort_order: 2,
-        email_type: null,
-        notes: 'Light touch before the show; add email type later if you want a custom client touch.',
+        email_type: 'pre_event_checkin',
+        notes: 'On complete: queues pre-event logistics email. Deal should list date and fee.',
       },
     ],
   },
@@ -164,18 +164,27 @@ const MISSING_STATUS_PACKS: SeedPack[] = [
         notes: 'Quick confirmation; no auto email (avoids duplicate "agreement" mails).',
       },
       {
-        title: 'Track signature or countersign',
-        days_offset: 3,
+        title: 'Send agreement follow-up to venue',
+        days_offset: 2,
         priority: 'medium',
         sort_order: 1,
+        email_type: 'agreement_followup',
+        notes:
+          'On complete: queues a short signature nudge. Requires agreement URL/PDF on the deal (same as agreement ready).',
+      },
+      {
+        title: 'Track signature or countersign',
+        days_offset: 5,
+        priority: 'medium',
+        sort_order: 2,
         email_type: null,
         notes: 'Internal follow-up until fully executed.',
       },
       {
         title: 'Set payment due dates on the deal (if applicable)',
-        days_offset: 7,
+        days_offset: 10,
         priority: 'low',
-        sort_order: 2,
+        sort_order: 3,
         email_type: null,
         notes:
           'Prepares the record for Booked / payment workflows. No payment_reminder here to avoid nagging before a booking is real.',
@@ -469,7 +478,7 @@ export function useTaskTemplates() {
     await supabase.from('task_template_items').insert([
       { template_id: t.id, title: 'Send performance report form', days_offset: 0, priority: 'high' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 0, email_type: 'performance_report_request' },
       { template_id: t.id, title: 'Review show notes and update deal record', days_offset: 3, priority: 'medium' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 1, email_type: null },
-      { template_id: t.id, title: 'Post-show follow-up with venue', days_offset: 7, priority: 'medium' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 2, email_type: null },
+      { template_id: t.id, title: 'Post-show thank-you to venue', days_offset: 7, priority: 'medium' as TaskPriority, recurrence: 'none' as TaskRecurrence, sort_order: 2, email_type: 'post_show_thanks' },
     ])
 
     await fetchTemplates()

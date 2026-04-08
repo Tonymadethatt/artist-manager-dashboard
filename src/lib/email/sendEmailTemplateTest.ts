@@ -20,10 +20,17 @@ const VENUE_EMAIL_TYPES = new Set<string>([
   'booking_confirmation',
   'booking_confirmed',
   'agreement_ready',
+  'agreement_followup',
   'payment_reminder',
   'payment_receipt',
   'follow_up',
   'rebooking_inquiry',
+  'first_outreach',
+  'pre_event_checkin',
+  'post_show_thanks',
+  'invoice_sent',
+  'show_cancelled_or_postponed',
+  'pass_for_now',
 ])
 
 async function errorFromResponse(res: Response): Promise<string> {
@@ -238,6 +245,25 @@ export async function sendEmailTemplateTest(
           custom_subject: layoutNorm.subject ?? null,
           custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'performance_report_received' || params.selectedType === 'gig_week_reminder') {
+      const res = await fetch('/.netlify/functions/send-artist-transactional', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: params.selectedType,
+          profile: reportProfileForSend(profile),
+          venueName: PREVIEW_MOCK_VENUE.name,
+          eventDate: params.selectedType === 'gig_week_reminder' ? PREVIEW_MOCK_DEAL.event_date : null,
+          custom_subject: layoutNorm.subject ?? null,
+          custom_intro: layoutNorm.intro ?? null,
+          layout: layoutNorm,
+          testOnly: true,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }

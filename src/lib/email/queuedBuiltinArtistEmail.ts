@@ -3,6 +3,8 @@ export function isQueuedBuiltinArtistEmailType(emailType: string): boolean {
   return emailType === 'management_report'
     || emailType === 'retainer_reminder'
     || emailType === 'retainer_received'
+    || emailType === 'performance_report_received'
+    || emailType === 'gig_week_reminder'
 }
 
 /** Pending rows that should send on the next cron tick (same as artist-custom buffer). */

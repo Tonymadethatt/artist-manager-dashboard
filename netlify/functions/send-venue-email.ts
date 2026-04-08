@@ -13,6 +13,13 @@ type VenueEmailType =
   | 'booking_confirmed'
   | 'follow_up'
   | 'rebooking_inquiry'
+  | 'first_outreach'
+  | 'pre_event_checkin'
+  | 'post_show_thanks'
+  | 'agreement_followup'
+  | 'invoice_sent'
+  | 'show_cancelled_or_postponed'
+  | 'pass_for_now'
 
 interface ArtistProfile {
   artist_name: string
@@ -72,6 +79,7 @@ interface RequestBody {
   custom_subject?: string | null
   custom_intro?: string | null
   layout?: EmailTemplateLayoutV1 | null
+  invoice_url?: string | null
 }
 
 const VENUE_TYPES = new Set<string>([
@@ -82,6 +90,13 @@ const VENUE_TYPES = new Set<string>([
   'booking_confirmed',
   'follow_up',
   'rebooking_inquiry',
+  'first_outreach',
+  'pre_event_checkin',
+  'post_show_thanks',
+  'agreement_followup',
+  'invoice_sent',
+  'show_cancelled_or_postponed',
+  'pass_for_now',
 ])
 
 const handler: Handler = async (event) => {
@@ -113,6 +128,7 @@ const handler: Handler = async (event) => {
     custom_venue_template,
     custom_artist_template,
     attachment: rawAttachment,
+    invoice_url: rawInvoiceUrl,
   } = body
 
   if (!profile?.from_email || !recipient?.email) {
@@ -183,6 +199,7 @@ const handler: Handler = async (event) => {
       const artistNameUpper = (profile.artist_name ?? '').toUpperCase()
       const venueName = venue?.name || deal?.description || 'your venue'
       const layout = normalizeEmailTemplateLayout(rawLayout)
+      const invoiceUrl = typeof rawInvoiceUrl === 'string' ? rawInvoiceUrl.trim() || null : null
       html = buildVenueEmailDocument({
         type: type!,
         profile: {
@@ -198,6 +215,7 @@ const handler: Handler = async (event) => {
         layout,
         logoBaseUrl: siteUrl,
         responsiveClasses: true,
+        invoiceUrl,
       })
 
       const subjectMap: Record<VenueEmailType, string> = {
@@ -208,6 +226,13 @@ const handler: Handler = async (event) => {
         booking_confirmed: `Booking Confirmed - ${artistNameUpper} | ${venueName}`,
         follow_up: `Following Up - ${artistNameUpper}`,
         rebooking_inquiry: `Rebooking Inquiry - ${artistNameUpper} at ${venueName}`,
+        first_outreach: `${artistNameUpper} — booking inquiry | ${venueName}`,
+        pre_event_checkin: `Pre-event check-in — ${artistNameUpper} | ${venueName}`,
+        post_show_thanks: `Thank you — ${artistNameUpper} at ${venueName}`,
+        agreement_followup: `Following up — agreement | ${artistNameUpper}`,
+        invoice_sent: `Invoice — ${artistNameUpper} | ${venueName}`,
+        show_cancelled_or_postponed: `Update — date change / cancellation | ${artistNameUpper} | ${venueName}`,
+        pass_for_now: `Thanks — ${artistNameUpper} | ${venueName}`,
       }
       subject = custom_subject?.trim() || layout?.subject?.trim() || subjectMap[type!]
     }

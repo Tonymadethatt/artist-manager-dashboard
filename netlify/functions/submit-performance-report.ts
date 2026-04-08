@@ -6,6 +6,7 @@ import {
   PRODUCTION_FRICTION_OPTIONS,
   timelineToReengageDays,
 } from '../../src/lib/performanceReportV1'
+import { serializeArtistTxnQueueNotes } from '../../src/lib/email/artistTxnQueuePayload'
 import type { CancellationReason } from '../../src/lib/performanceReportV1'
 
 const FRICTION_IDS = new Set(PRODUCTION_FRICTION_OPTIONS.map(o => o.id))
@@ -288,6 +289,27 @@ const handler: Handler = async (event) => {
         recurrence: 'none',
         completed: false,
       })
+      if (row.deal_id) {
+        const { data: chaseContact } = await supabase
+          .from('contacts')
+          .select('email')
+          .eq('venue_id', row.venue_id)
+          .not('email', 'is', null)
+          .limit(1)
+          .maybeSingle()
+        if (chaseContact?.email) {
+          await supabase.from('venue_emails').insert({
+            user_id: row.user_id,
+            venue_id: row.venue_id,
+            deal_id: row.deal_id,
+            email_type: 'payment_reminder',
+            recipient_email: chaseContact.email,
+            subject: `Payment Reminder — ${venueName}`,
+            status: 'pending',
+            notes: 'Auto-queued from performance report (chase payment).',
+          })
+        }
+      }
     } catch (e) {
       console.error('[submit-performance-report] Chase payment task failed:', e)
     }
@@ -435,6 +457,41 @@ const handler: Handler = async (event) => {
     })
   } catch (e) {
     console.error('[submit-performance-report] Outreach note failed:', e)
+  }
+
+  try {
+    const { data: ackProf } = await supabase
+      .from('artist_profile')
+      .select('artist_email')
+      .eq('user_id', row.user_id)
+      .maybeSingle()
+    if (ackProf?.artist_email) {
+      let ackEventDate: string | null = null
+      if (row.deal_id) {
+        const { data: ackDeal } = await supabase
+          .from('deals')
+          .select('event_date')
+          .eq('id', row.deal_id)
+          .maybeSingle()
+        ackEventDate = (ackDeal as { event_date?: string | null } | null)?.event_date ?? null
+      }
+      await supabase.from('venue_emails').insert({
+        user_id: row.user_id,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        email_type: 'performance_report_received',
+        recipient_email: ackProf.artist_email as string,
+        subject: `Got it — thanks for the update · ${venueName}`,
+        status: 'pending',
+        notes: serializeArtistTxnQueueNotes({
+          kind: 'performance_report_received',
+          venueName,
+          eventDate: ackEventDate,
+        }),
+      })
+    }
+  } catch (e) {
+    console.error('[submit-performance-report] Artist ack email failed:', e)
   }
 
   if (body.venueInterest !== 'yes') {

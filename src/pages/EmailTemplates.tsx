@@ -128,6 +128,13 @@ const CLIENT_DESCRIPTIONS: Record<VenueEmailType, string> = {
   booking_confirmed:    'Final confirmed notice with event details and next steps.',
   follow_up:            "Check-in to venues that haven't responded.",
   rebooking_inquiry:    'Sent after a positive post-show report. Asks venue about booking again.',
+  first_outreach:       'Cold first touch: introduces the artist and asks about booking interest.',
+  pre_event_checkin:    'Ahead of the date: logistics, settlement, load-in, and day-of contact.',
+  post_show_thanks:     'Neutral thank-you after the show (not a hard pitch for rebooking).',
+  agreement_followup:   'Short nudge on agreement review or signature without resending the full “ready” email.',
+  invoice_sent:         'Points the venue to an invoice or billing PDF (link from the completed task’s file).',
+  show_cancelled_or_postponed: 'Professional note when a date moves or a show does not happen.',
+  pass_for_now:         'Polite close when you are pausing or passing on the opportunity.',
 }
 
 const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
@@ -138,16 +145,30 @@ const CLIENT_DEFAULT_SUBJECTS: Record<VenueEmailType, string> = {
   payment_receipt:      'Payment Received - Thank You | {artist}',
   follow_up:            'Following Up - {artist}',
   rebooking_inquiry:    'Interested in Booking Again - {artist}',
+  first_outreach:       '{artist} — booking inquiry | {venue}',
+  pre_event_checkin:    'Pre-event check-in — {artist} | {venue}',
+  post_show_thanks:     'Thank you — {artist} at {venue}',
+  agreement_followup:   'Following up — agreement | {artist}',
+  invoice_sent:         'Invoice — {artist} | {venue}',
+  show_cancelled_or_postponed: 'Update — date change / cancellation | {artist} | {venue}',
+  pass_for_now:         'Thanks — {artist} | {venue}',
 }
 
 const CLIENT_ORDER: VenueEmailType[] = [
+  'first_outreach',
   'follow_up',
   'booking_confirmation',
   'agreement_ready',
+  'agreement_followup',
   'booking_confirmed',
+  'pre_event_checkin',
   'payment_reminder',
   'payment_receipt',
+  'invoice_sent',
+  'post_show_thanks',
   'rebooking_inquiry',
+  'show_cancelled_or_postponed',
+  'pass_for_now',
 ]
 
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
@@ -155,6 +176,8 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
   retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
   performance_report_request: 'Sent to DJ Luijay after a show. Links to the post-show report form.',
+  performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
+  gig_week_reminder:          'Operational nudge before a booked date (from a task with venue + deal).',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
@@ -162,6 +185,8 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   retainer_reminder:          'Hey DJ, quick note from management',
   retainer_received:          'DJ, retainer received — thank you',
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
+  performance_report_received: 'We received your show check-in',
+  gig_week_reminder:          'Gig week reminder — {venue}',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = [
@@ -169,6 +194,8 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'retainer_reminder',
   'retainer_received',
   'performance_report_request',
+  'performance_report_received',
+  'gig_week_reminder',
 ]
 
 type Group = 'client' | 'artist'

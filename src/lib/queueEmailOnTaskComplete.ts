@@ -4,11 +4,13 @@ import type { VenueEmailType } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { hasRecentPendingArtistCustomEmail, hasRecentPendingVenueEmail } from '@/lib/queueEmailsFromTemplate'
 import { serializePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
+import { serializeInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
+import { serializeArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { resolveTaskEmailAudience } from '@/lib/email/resolveTaskEmailAudience'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import { buildRetainerReminderPayload } from '@/lib/reports/buildManagementReportData'
-import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
 import {
   computeResolvedAgreement,
   dealSyncPatchFromResolution,
@@ -151,6 +153,8 @@ export function taskEmailAutomationUserMessage(reason: string): string {
       return 'Could not queue the email. Try again.'
     case 'unsupported_email_type':
       return 'This email type is not supported for task automation. Edit the task and pick a different option.'
+    case 'artist_txn_needs_venue':
+      return 'Link this task to a venue (or a deal with a venue) so this artist email can include the correct show context.'
     case 'no_artist_profile':
       return 'Complete your artist profile before sending the performance report request.'
     default:
@@ -174,6 +178,10 @@ export function taskEmailAutomationInfoMessage(reason: string): string | null {
       return 'The same email is already pending in your queue for this venue.'
     case 'agreement_ready_needs_url':
       return 'Agreement is not linked on this deal yet — add a URL or PDF in the progress panel before the agreement email can queue.'
+    case 'agreement_followup_needs_url':
+      return 'Agreement is not linked on this deal yet — add a URL or PDF before the agreement follow-up email can queue.'
+    case 'invoice_sent_needs_file':
+      return 'Link a generated PDF on this task (or regenerate the file) before the invoice email can queue.'
     default:
       return null
   }
@@ -371,6 +379,38 @@ export async function queueEmailAutomationForCompletedTask(
     }
 
     const builtin = audience.builtinType
+    if (builtin === 'performance_report_received' || builtin === 'gig_week_reminder') {
+      if (!v || !resolvedVenueId) {
+        return { ok: false, reason: 'artist_txn_needs_venue' }
+      }
+      if (await hasRecentPendingArtistCustomEmail(user.id, task.email_type, p.artist_email, 45)) {
+        return { ok: true, reason: 'dedupe_recent_pending' }
+      }
+      const label = ARTIST_EMAIL_TYPE_LABELS[builtin]
+      const eventDate = primaryDeal?.event_date ?? null
+      const txnNotes = serializeArtistTxnQueueNotes({
+        kind: builtin,
+        venueName: v.name,
+        eventDate,
+      })
+      const { error: txnErr } = await supabase.from('venue_emails').insert({
+        user_id: user.id,
+        venue_id: v.id,
+        deal_id: primaryDeal?.id ?? null,
+        contact_id: null,
+        email_type: task.email_type,
+        recipient_email: p.artist_email,
+        subject: `${label} - ${p.artist_name}`,
+        status: 'pending',
+        notes: txnNotes,
+      })
+      if (txnErr) {
+        console.error('[queueEmailOnTaskComplete] artist transactional insert failed:', txnErr.message)
+        return { ok: false, reason: 'venue_email_insert_failed' }
+      }
+      return { ok: true, reason: 'venue_email_queued' }
+    }
+
     if (builtin === 'management_report' || builtin === 'retainer_reminder' || builtin === 'retainer_received') {
       if (builtin === 'retainer_reminder') {
         const { fees } = await fetchReportInputsForUser(supabase, user.id)
@@ -451,21 +491,43 @@ export async function queueEmailAutomationForCompletedTask(
 
   const vType = task.email_type as string
 
-  if (vType === 'agreement_ready' && isVenueEmailType(vType) && !agreementResolution.url) {
-    return { ok: true, reason: 'agreement_ready_needs_url' }
+  if (
+    (vType === 'agreement_ready' || vType === 'agreement_followup')
+    && isVenueEmailType(vType)
+    && !agreementResolution.url
+  ) {
+    return {
+      ok: true,
+      reason: vType === 'agreement_followup' ? 'agreement_followup_needs_url' : 'agreement_ready_needs_url',
+    }
   }
 
   const isVenueCustomEmail = !!cid && customVenueName !== null
   if (
     primaryDeal &&
     agreementSyncPatch &&
-    ((vType === 'agreement_ready' && isVenueEmailType(vType)) || isVenueCustomEmail)
+    (((vType === 'agreement_ready' || vType === 'agreement_followup') && isVenueEmailType(vType))
+      || isVenueCustomEmail)
   ) {
     await supabase.from('deals').update(agreementSyncPatch).eq('id', primaryDeal.id)
   }
 
   if (await hasRecentPendingVenueEmail(v.id, vType, 45)) {
     return { ok: true, reason: 'dedupe_recent_pending' }
+  }
+
+  let queueNotes = `Auto-queued from task: ${task.title}`
+  if (vType === 'invoice_sent' && isVenueEmailType(vType)) {
+    const siteOrigin = publicSiteOrigin()
+    const invFile = task.generated_file_id ? await loadGeneratedFileRow(task.generated_file_id) : null
+    let invUrl: string | null = null
+    if (invFile && isGeneratedFileInScopeForTask(invFile, user.id, resolvedVenueId ?? task.venue_id, task.deal_id)) {
+      invUrl = resolvedPdfHrefFromOrigin(invFile, siteOrigin)
+    }
+    if (!invUrl) {
+      return { ok: true, reason: 'invoice_sent_needs_file' }
+    }
+    queueNotes = serializeInvoiceQueueNotes({ url: invUrl })
   }
 
   const { error } = await supabase.from('venue_emails').insert({
@@ -477,7 +539,7 @@ export async function queueEmailAutomationForCompletedTask(
     recipient_email: primaryContact.email,
     subject: `${customVenueName ?? VENUE_EMAIL_TYPE_LABELS[vType as VenueEmailType] ?? task.email_type} - ${v.name}`,
     status: 'pending',
-    notes: `Auto-queued from task: ${task.title}`,
+    notes: queueNotes,
   })
 
   if (error) {
