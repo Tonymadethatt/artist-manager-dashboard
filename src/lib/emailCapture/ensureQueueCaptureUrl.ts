@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VenueEmailType } from '../../types'
+import type { EmailCaptureKind } from './kinds'
 import { venueEmailTypeToCaptureKind } from './kinds'
 import { appendEmailCaptureTokenNote, parseEmailCaptureTokenFromNotes } from './tokenNotes'
 import { defaultEmailCaptureExpiresAt } from './expiry'
@@ -16,8 +17,12 @@ export async function ensureQueueCaptureUrl(
     notes: string | null
   },
   siteUrl: string,
+  /** When `email_type` is `custom:<uuid>`, use capture kind from saved template blocks. */
+  kindOverride?: EmailCaptureKind | null,
 ): Promise<string | null> {
-  const kind = venueEmailTypeToCaptureKind(email.email_type as VenueEmailType)
+  const kind =
+    venueEmailTypeToCaptureKind(email.email_type as VenueEmailType)
+    ?? (kindOverride ?? null)
   if (!kind) return null
 
   let tokenUuid = parseEmailCaptureTokenFromNotes(email.notes)

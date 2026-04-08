@@ -66,6 +66,7 @@ function venueProfilePayload(p: ArtistProfile) {
     company_name: p.company_name,
     from_email: p.from_email,
     reply_to_email: p.reply_to_email,
+    manager_name: p.manager_name ?? null,
     website: p.website,
     phone: p.phone,
     social_handle: p.social_handle,
@@ -157,6 +158,20 @@ export async function sendEmailTemplateTest(
         .maybeSingle()
       const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
       if (att) payload.attachment = att
+    }
+
+    if (row.audience === 'venue' && doc.captureKind) {
+      const { data: tokRow, error: capErr } = await supabase.from('email_capture_tokens').insert({
+        user_id: user.id,
+        kind: doc.captureKind,
+        venue_id: null,
+        deal_id: null,
+        contact_id: null,
+        expires_at: defaultEmailCaptureExpiresAt(),
+      }).select('token').single()
+      if (!capErr && tokRow?.token) {
+        payload.capture_url = `${publicSiteOrigin()}/email-capture/${tokRow.token as string}`
+      }
     }
 
     const res = await fetch('/.netlify/functions/send-venue-email', {

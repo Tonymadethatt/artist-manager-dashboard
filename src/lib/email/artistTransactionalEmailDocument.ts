@@ -1,5 +1,6 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 
 export type ArtistTransactionalKind = 'performance_report_received' | 'gig_week_reminder'
 
@@ -42,28 +43,6 @@ function logoUrls(base: string) {
     logo: prefix ? `${prefix}/dj-luijay-logo-email.png` : '/dj-luijay-logo-email.png',
     ig: prefix ? `${prefix}/icons/icon-ig.png` : '/icons/icon-ig.png',
   }
-}
-
-function buildFooterLinksHtml(
-  igUrl: string,
-  website: string | null | undefined,
-  socialHandle: string | null | undefined,
-  phone: string | null | undefined,
-): string {
-  const handle = socialHandle ? socialHandle.replace(/^@/, '') : ''
-  const footerLinks = [
-    website
-      ? `<a href="${escapeHtmlPlain(website)}" style="color:#888888;text-decoration:none;font-size:11px;">${escapeHtmlPlain(website.replace(/^https?:\/\//, ''))}</a>`
-      : '',
-    handle
-      ? `<a href="https://instagram.com/${escapeHtmlPlain(handle)}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" /><span style="font-size:11px;color:#888888;">@${escapeHtmlPlain(handle)}</span></a>`
-      : '',
-    phone ? `<span style="font-size:11px;color:#888888;">${escapeHtmlPlain(phone)}</span>` : '',
-  ].filter(Boolean).join('<span style="color:#444444;margin:0 8px;">|</span>')
-
-  return footerLinks
-    ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${footerLinks}</div>`
-    : ''
 }
 
 const mobileStyles = `
@@ -132,7 +111,7 @@ export function buildArtistTransactionalEmailHtml(
     ? `<div style="background:#161616;border:1px solid #252525;border-radius:8px;padding:14px 18px;margin-bottom:22px;"><p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#888888;margin-bottom:10px;">Quick prep</p><ul style="font-size:13px;color:#c4c4c4;line-height:1.65;padding-left:18px;margin:0;"><li style="margin-bottom:6px;">Travel, parking, and load-in window</li><li style="margin-bottom:6px;">Promo or holding assets if the venue needs them</li><li>Any open logistics questions for the booker</li></ul></div>`
     : ''
 
-  const footerLinksHtml = buildFooterLinksHtml(igUrl, website, socialHandle, phone)
+  const footerLinksHtml = buildProfileFooterLinksRowHtml(igUrl, website, socialHandle, phone)
 
   return `<!DOCTYPE html>
 <html lang="en">

@@ -33,6 +33,8 @@ export interface VenueRenderProfile {
   phone: string | null
   social_handle: string | null
   tagline: string | null
+  /** Artist-facing custom templates: sign-off line in footer. */
+  manager_name?: string | null
 }
 
 export interface VenueRenderDeal {

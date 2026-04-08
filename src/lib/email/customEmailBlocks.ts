@@ -1,4 +1,6 @@
 import { parseAccentColorHex } from './customEmailAccentPresets'
+import type { EmailCaptureKind } from '../emailCapture/kinds'
+import { isEmailCaptureKind } from '../emailCapture/kinds'
 
 export type CustomEmailBlock =
   | { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null }
@@ -17,6 +19,8 @@ export interface CustomEmailBlocksDoc {
   blocks: CustomEmailBlock[]
   /** Optional opening line with {{merge}} tokens. Empty/missing uses defaults (venue: Hi + contact first name; artist: Hey + profile artist name). */
   greeting?: string | null
+  /** Client (venue) custom templates only: when set, queue/modal sends mint a capture link with this kind. */
+  captureKind?: EmailCaptureKind | null
 }
 
 function isObj(x: unknown): x is Record<string, unknown> {
@@ -95,6 +99,9 @@ export function parseCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc | 
   const doc: CustomEmailBlocksDoc = { version: 1, blocks }
   if ('greeting' in raw && typeof raw.greeting === 'string' && raw.greeting.length > 0) {
     doc.greeting = raw.greeting
+  }
+  if ('captureKind' in raw && typeof raw.captureKind === 'string' && isEmailCaptureKind(raw.captureKind)) {
+    doc.captureKind = raw.captureKind
   }
   return doc
 }

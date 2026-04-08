@@ -27,6 +27,7 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { venueEmailTypeToCaptureKind, EMAIL_CAPTURE_KIND_LABELS, type EmailCaptureKind } from '@/lib/emailCapture/kinds'
 import { appendEmailCaptureTokenNote } from '@/lib/emailCapture/tokenNotes'
 import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
@@ -158,9 +159,20 @@ export function SendVenueEmailModal({
       setRecipientName(initialName)
       setStatus('idle')
       setErrorMsg('')
-      setCustomCaptureKind('')
     }
   }, [open, defaultType, deal, initialEmail, initialName])
+
+  useEffect(() => {
+    if (!open) return
+    const cr = isCustomEmailType(emailType)
+      ? customRows.find(r => customEmailTypeValue(r.id) === emailType)
+      : undefined
+    if (cr?.audience === 'venue') {
+      setCustomCaptureKind(loadCustomEmailBlocksDoc(cr.blocks).captureKind ?? '')
+    } else {
+      setCustomCaptureKind('')
+    }
+  }, [open, emailType, customRows])
 
   useEffect(() => {
     if (!open || !deal) {
@@ -235,6 +247,7 @@ export function SendVenueEmailModal({
           company_name: profile.company_name,
           from_email: profile.from_email,
           reply_to_email: profile.reply_to_email,
+          manager_name: profile.manager_name ?? null,
           website: profile.website,
           phone: profile.phone,
           social_handle: profile.social_handle,

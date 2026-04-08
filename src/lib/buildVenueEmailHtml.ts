@@ -1,6 +1,7 @@
 // Frontend preview for venue emails — uses shared renderer with relative asset URLs.
 
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import {
   buildVenueEmailDocument,
   type VenueRenderEmailType,
@@ -40,8 +41,8 @@ export function buildVenueEmailHtml(
     customIntro,
     customSubject,
     layout,
-    logoBaseUrl: '',
-    responsiveClasses: false,
+    logoBaseUrl: publicSiteOrigin(),
+    responsiveClasses: true,
     invoiceUrl: invoiceUrl ?? null,
     captureUrl: captureUrl ?? null,
   })
@@ -50,6 +51,7 @@ export function buildVenueEmailHtml(
 export const PREVIEW_MOCK_PROFILE: PreviewProfile = {
   artist_name: 'DJ Luijay',
   company_name: 'DJ Luijay LLC',
+  manager_name: 'Alex Manager',
   from_email: 'management@updates.djluijay.live',
   reply_to_email: 'management@djluijay.live',
   website: 'https://djluijay.com',

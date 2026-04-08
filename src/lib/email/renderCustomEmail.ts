@@ -1,4 +1,5 @@
 import { escapeHtmlPlain } from './appendBlocksHtml'
+import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 import { defaultAccentForBlockKind, parseAccentColorHex } from './customEmailAccentPresets'
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
@@ -249,19 +250,18 @@ function venueFooter(
   </div>`
 }
 
-function artistStaticFooter(igIconUrl: string) {
+function artistAudienceFooter(profile: VenueRenderProfile, igIconUrl: string) {
+  const line =
+    profile.manager_name?.trim()
+    || profile.company_name?.trim()
+    || profile.artist_name
+    || 'Front Office'
+  const links = buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)
   return `
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;">Front Office</div>
+    <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(line)}</div>
     <div style="font-size:11px;color:#888888;margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">
-      <a href="https://djluijay.com" style="color:#888888;text-decoration:none;font-size:11px;">djluijay.com</a>
-      <span style="color:#444444;margin:0 8px;">|</span>
-      <a href="https://instagram.com/djluijay" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;">
-        <img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.6;" />
-        <span style="font-size:11px;color:#888888;">@djluijay</span>
-      </a>
-    </div>
+    ${links}
   </div>`
 }
 
@@ -328,7 +328,7 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     const replyLabel = opts.replyButtonLabel?.trim() || 'Reply'
     footerHtml = venueFooter(opts.profile, subject, showReply, replyLabel, igUrl)
   } else {
-    footerHtml = artistStaticFooter(igUrl)
+    footerHtml = artistAudienceFooter(opts.profile, igUrl)
   }
 
   const html = `<!DOCTYPE html>

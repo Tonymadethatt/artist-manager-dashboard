@@ -30,8 +30,13 @@ import {
   PREVIEW_MOCK_VENUE,
   PREVIEW_MOCK_DEAL,
   type PreviewEmailType,
+  type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
-import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import {
+  EMAIL_CAPTURE_KIND_LABELS,
+  venueEmailTypeToCaptureKind,
+  type EmailCaptureKind,
+} from '@/lib/emailCapture/kinds'
 import {
   buildManagementReportHtml,
   buildRetainerReminderHtml,
@@ -67,6 +72,19 @@ const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
 import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
+
+const CLIENT_CUSTOM_CAPTURE_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
+  { value: 'first_outreach', label: EMAIL_CAPTURE_KIND_LABELS.first_outreach },
+  { value: 'follow_up', label: EMAIL_CAPTURE_KIND_LABELS.follow_up },
+  { value: 'booking_confirmation', label: EMAIL_CAPTURE_KIND_LABELS.booking_confirmation },
+  { value: 'pre_event_checkin', label: EMAIL_CAPTURE_KIND_LABELS.pre_event_checkin },
+  { value: 'payment_reminder_ack', label: EMAIL_CAPTURE_KIND_LABELS.payment_reminder_ack },
+  { value: 'payment_receipt', label: EMAIL_CAPTURE_KIND_LABELS.payment_receipt },
+  { value: 'post_show_thanks', label: EMAIL_CAPTURE_KIND_LABELS.post_show_thanks },
+  { value: 'rebooking_inquiry', label: EMAIL_CAPTURE_KIND_LABELS.rebooking_inquiry },
+  { value: 'show_cancelled_or_postponed', label: EMAIL_CAPTURE_KIND_LABELS.show_cancelled_or_postponed },
+  { value: 'invoice_sent', label: EMAIL_CAPTURE_KIND_LABELS.invoice_sent },
+]
 
 function draftFromSaved(t: EmailTemplate | undefined): EmailTemplateLayoutV1 {
   if (!t) return { footer: { showReplyButton: true } }
@@ -412,6 +430,20 @@ export default function EmailTemplates() {
     : draftFromSaved(getTemplate(selectedType))
 
   const previewHtml = useMemo(() => {
+    const customPreviewProfile: PreviewProfile = artistProfile
+      ? {
+        artist_name: artistProfile.artist_name ?? '',
+        company_name: artistProfile.company_name ?? null,
+        from_email: artistProfile.from_email,
+        reply_to_email: artistProfile.reply_to_email ?? null,
+        manager_name: artistProfile.manager_name ?? null,
+        website: artistProfile.website ?? null,
+        phone: artistProfile.phone ?? null,
+        social_handle: artistProfile.social_handle ?? null,
+        tagline: artistProfile.tagline ?? null,
+      }
+      : PREVIEW_MOCK_PROFILE
+
     if (selectedCustomId) {
       const row = customRows.find(r => r.id === selectedCustomId)
       const doc = sidebarMode === 'edit-custom'
@@ -433,23 +465,31 @@ export default function EmailTemplates() {
       const previewRecipient = aud === 'artist'
         ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
         : PREVIEW_MOCK_RECIPIENT
+      const previewCaptureCustom =
+        aud === 'venue' && doc.captureKind ? 'https://preview.example.com/email-capture/mock-preview-token' : undefined
       const { html } = buildCustomEmailDocument({
         audience: aud,
         subjectTemplate: subj.trim() || ' ',
         blocksRaw: doc,
-        profile: PREVIEW_MOCK_PROFILE,
+        profile: customPreviewProfile,
         recipient: previewRecipient,
         deal: PREVIEW_MOCK_DEAL,
         venue: PREVIEW_MOCK_VENUE,
-        logoBaseUrl: '',
-        responsiveClasses: false,
+        logoBaseUrl: publicSiteOrigin(),
+        responsiveClasses: true,
         showReplyButton: aud === 'venue',
         ...(attachment ? { attachment } : {}),
+        ...(previewCaptureCustom ? { captureUrl: previewCaptureCustom } : {}),
       })
       return html
     }
 
     const layout = normalizeEmailTemplateLayout(previewLayout) ?? previewLayout
+    const transactionalManagerName =
+      artistProfile?.manager_name?.trim()
+      || artistProfile?.company_name?.trim()
+      || PREVIEW_MOCK_PROFILE.company_name?.trim()
+      || 'Management'
     if (activeGroup === 'artist') {
       if (selectedType === 'management_report') {
         return buildManagementReportHtml(
@@ -472,32 +512,32 @@ export default function EmailTemplates() {
         return buildArtistTransactionalEmailHtml(
           'performance_report_received',
           {
-            artistName: PREVIEW_MOCK_PROFILE.artist_name,
+            artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: null,
-            managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
-            website: PREVIEW_MOCK_PROFILE.website,
-            social_handle: PREVIEW_MOCK_PROFILE.social_handle,
-            phone: PREVIEW_MOCK_PROFILE.phone,
+            managerName: transactionalManagerName,
+            website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+            social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+            phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
           },
           layout,
-          '',
+          publicSiteOrigin(),
         )
       }
       if (selectedType === 'gig_week_reminder') {
         return buildArtistTransactionalEmailHtml(
           'gig_week_reminder',
           {
-            artistName: PREVIEW_MOCK_PROFILE.artist_name,
+            artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: PREVIEW_MOCK_DEAL.event_date,
-            managerName: PREVIEW_MOCK_PROFILE.company_name?.trim() || 'Management',
-            website: PREVIEW_MOCK_PROFILE.website,
-            social_handle: PREVIEW_MOCK_PROFILE.social_handle,
-            phone: PREVIEW_MOCK_PROFILE.phone,
+            managerName: transactionalManagerName,
+            website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+            social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+            phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
           },
           layout,
-          '',
+          publicSiteOrigin(),
         )
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
@@ -531,6 +571,7 @@ export default function EmailTemplates() {
     customSubjectDraft,
     customAttachmentFileIdDraft,
     generatedFilesForTemplates,
+    artistProfile,
   ])
 
   const handleSendTemplateTest = useCallback(async () => {
@@ -1135,6 +1176,35 @@ export default function EmailTemplates() {
                     Optional. Same merge tokens as subject. Leave empty for the default.
                   </p>
                 </div>
+                {selectedCustomRow.audience === 'venue' && (
+                  <div>
+                    <p className={EYEBROW}>Response form (optional)</p>
+                    <Select
+                      value={customBlocksDraft.captureKind ?? '__none__'}
+                      onValueChange={v => {
+                        setCustomBlocksDraft(prev => ({
+                          ...prev,
+                          captureKind: v === '__none__' ? undefined : v as EmailCaptureKind,
+                        }))
+                      }}
+                    >
+                      <SelectTrigger className="text-sm mt-1 h-9">
+                        <SelectValue placeholder="No form link" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No form link</SelectItem>
+                        {CLIENT_CUSTOM_CAPTURE_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-neutral-600 mt-1">
+                      When set, sends and the email queue include the same capture button as built-in client templates.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className={EYEBROW}>Attachment (optional)</p>
                   <Select

@@ -27,6 +27,7 @@ interface ArtistProfile {
   reply_to_email: string | null
   artist_email?: string | null
   manager_email?: string | null
+  manager_name?: string | null
   website: string | null
   phone: string | null
   social_handle: string | null
@@ -163,6 +164,7 @@ const handler: Handler = async (event) => {
           ...profile,
           artist_name: profile.artist_name ?? '',
           company_name: profile.company_name ?? null,
+          manager_name: profile.manager_name ?? null,
         },
         recipient,
         deal,

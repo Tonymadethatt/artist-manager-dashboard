@@ -38,6 +38,7 @@ import {
 import type { GeneratedFile } from '../../src/types'
 import { buildEmailAttachmentPayloadFromFile } from '../../src/lib/files/templateEmailAttachmentPayload'
 import { ensureQueueCaptureUrl } from '../../src/lib/emailCapture/ensureQueueCaptureUrl'
+import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -239,6 +240,9 @@ const handler: Handler = async (event) => {
       company_name?: string | null
       from_email?: string
       reply_to_email?: string | null
+      artist_email?: string | null
+      manager_email?: string | null
+      manager_name?: string | null
       website?: string | null
       phone?: string | null
       social_handle?: string | null
@@ -358,6 +362,7 @@ const handler: Handler = async (event) => {
       reply_to_email: profile.reply_to_email,
       artist_email: profile.artist_email ?? null,
       manager_email: profile.manager_email ?? null,
+      manager_name: profile.manager_name ?? null,
       website: profile.website,
       phone: profile.phone,
       social_handle: profile.social_handle,
@@ -717,6 +722,10 @@ const handler: Handler = async (event) => {
     const invoiceUrlForSend = invoiceLinkPayload?.url?.trim() || null
 
     let captureUrlForSend: string | null = null
+    const customVenueCaptureKind =
+      cid && customRow?.audience === 'venue'
+        ? loadCustomEmailBlocksDoc(customRow.blocks).captureKind ?? null
+        : null
     if (!cid) {
       captureUrlForSend = await ensureQueueCaptureUrl(
         supabase,
@@ -731,6 +740,21 @@ const handler: Handler = async (event) => {
         },
         siteUrl,
       )
+    } else if (customVenueCaptureKind) {
+      captureUrlForSend = await ensureQueueCaptureUrl(
+        supabase,
+        {
+          id: email.id as string,
+          user_id: email.user_id as string,
+          venue_id: (email.venue_id as string | null) ?? null,
+          deal_id: (email.deal_id as string | null) ?? null,
+          contact_id: (email.contact_id as string | null) ?? null,
+          email_type: email.email_type as string,
+          notes: email.notes as string | null,
+        },
+        siteUrl,
+        customVenueCaptureKind,
+      )
     }
 
     const requestBody = customRow?.audience === 'venue'
@@ -744,6 +768,7 @@ const handler: Handler = async (event) => {
           blocks: customRow.blocks,
         },
         ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
+        ...(captureUrlForSend ? { capture_url: captureUrlForSend } : {}),
       }
       : {
         type: email.email_type as VenueEmailType,

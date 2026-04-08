@@ -23,6 +23,7 @@ import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
+import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
 import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
 import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
@@ -831,6 +832,7 @@ export default function EmailQueue() {
         reply_to_email: profile.reply_to_email,
         artist_email: profile.artist_email ?? null,
         manager_email: profile.manager_email ?? null,
+        manager_name: profile.manager_name ?? null,
         website: profile.website,
         phone: profile.phone,
         social_handle: profile.social_handle,
@@ -910,6 +912,24 @@ export default function EmailQueue() {
           payload.custom_venue_template = {
             subject_template: row.subject_template,
             blocks: row.blocks,
+          }
+          const capKind = loadCustomEmailBlocksDoc(row.blocks).captureKind ?? null
+          if (capKind) {
+            const capUrl = await ensureQueueCaptureUrl(
+              supabase,
+              {
+                id: email.id,
+                user_id: user.id,
+                venue_id: email.venue_id ?? null,
+                deal_id: email.deal_id ?? null,
+                contact_id: email.contact_id ?? null,
+                email_type: email.email_type,
+                notes: email.notes ?? null,
+              },
+              publicSiteOrigin(),
+              capKind,
+            )
+            if (capUrl) payload.capture_url = capUrl
           }
         } else {
           throw new Error('Custom template not found')
