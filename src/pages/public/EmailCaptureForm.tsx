@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import type { EmailCaptureKind } from '@/lib/emailCapture/kinds'
@@ -16,12 +16,15 @@ type PreflightOk =
       eventDate: string | null
     }
 
-function fmtShowDate(iso: string | null): string | null {
+export function formatEmailCaptureEventDate(iso: string | null): string | null {
   if (!iso) return null
   const [y, m, d] = iso.split('-')
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
 }
+
+type EmailCaptureFooterVariant = 'viewport' | 'embedded'
+const EmailCaptureFooterContext = createContext<EmailCaptureFooterVariant>('viewport')
 
 function ChoiceRow({
   label,
@@ -163,7 +166,7 @@ export default function EmailCaptureForm() {
           <p className="text-sm text-neutral-400 mb-6">
             {ctx.venueName && <span className="text-neutral-300">{ctx.venueName}</span>}
             {ctx.eventDate && (
-              <span className="text-neutral-500"> · {fmtShowDate(ctx.eventDate)}</span>
+              <span className="text-neutral-500"> · {formatEmailCaptureEventDate(ctx.eventDate)}</span>
             )}
             {ctx.dealDescription && !ctx.venueName && (
               <span className="text-neutral-300">{ctx.dealDescription}</span>
@@ -177,13 +180,32 @@ export default function EmailCaptureForm() {
           </div>
         )}
 
-        <KindForm kind={ctx.kind} submitting={submitting} onSubmit={submit} />
+        <EmailCaptureKindForm kind={ctx.kind} submitting={submitting} onSubmit={submit} />
       </div>
     </div>
   )
 }
 
-function KindForm({
+export function EmailCaptureKindForm({
+  kind,
+  submitting,
+  onSubmit,
+  footerVariant = 'viewport',
+}: {
+  kind: EmailCaptureKind
+  submitting: boolean
+  onSubmit: (p: Record<string, unknown>) => void
+  /** `embedded`: sticky footer inside scroll container (dashboard preview). */
+  footerVariant?: EmailCaptureFooterVariant
+}) {
+  return (
+    <EmailCaptureFooterContext.Provider value={footerVariant}>
+      <EmailCaptureKindFormInner kind={kind} submitting={submitting} onSubmit={onSubmit} />
+    </EmailCaptureFooterContext.Provider>
+  )
+}
+
+function EmailCaptureKindFormInner({
   kind,
   submitting,
   onSubmit,
@@ -253,18 +275,29 @@ function Field({
 }
 
 function SubmitBar({ submitting, disabled }: { submitting: boolean; disabled?: boolean }) {
+  const footerVariant = useContext(EmailCaptureFooterContext)
+  const bar = (
+    <div className="max-w-lg mx-auto">
+      <button
+        type="submit"
+        disabled={submitting || disabled}
+        className="w-full min-h-[48px] rounded-lg bg-white text-black text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+      >
+        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        Submit
+      </button>
+    </div>
+  )
+  if (footerVariant === 'embedded') {
+    return (
+      <div className="sticky bottom-0 z-10 mt-6 -mx-4 px-4 pt-4 pb-3 bg-neutral-950/95 border-t border-neutral-800 backdrop-blur-sm">
+        {bar}
+      </div>
+    )
+  }
   return (
     <div className="fixed bottom-0 left-0 right-0 p-4 bg-neutral-950/95 border-t border-neutral-800">
-      <div className="max-w-lg mx-auto">
-        <button
-          type="submit"
-          disabled={submitting || disabled}
-          className="w-full min-h-[48px] rounded-lg bg-white text-black text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          Submit
-        </button>
-      </div>
+      {bar}
     </div>
   )
 }
@@ -603,5 +636,68 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
       <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea />
       <SubmitBar submitting={submitting} disabled={!rebookInterest} />
     </form>
+  )
+}
+
+export interface EmailCaptureFormPreviewBodyProps {
+  kind: EmailCaptureKind
+  venueName: string | null
+  dealDescription: string | null
+  eventDate: string | null
+}
+
+/** Dashboard: exercise capture UI without token or Netlify calls. */
+export function EmailCaptureFormPreviewBody({
+  kind,
+  venueName,
+  dealDescription,
+  eventDate,
+}: EmailCaptureFormPreviewBodyProps) {
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const handleSubmit = (_payload: Record<string, unknown>) => {
+    setSubmitting(true)
+    window.setTimeout(() => {
+      setSubmitting(false)
+      setDone(true)
+    }, 200)
+  }
+
+  if (done) {
+    return (
+      <div className="py-10 flex flex-col items-center justify-center px-4 text-center">
+        <CheckCircle2 className="h-10 w-10 text-emerald-500 mb-3" />
+        <h2 className="text-lg font-semibold text-white mb-2">Preview complete</h2>
+        <p className="text-sm text-neutral-400 max-w-sm">
+          Nothing was saved. Choose another form in the sidebar to keep testing.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="text-neutral-100 pb-4">
+      <div className="max-w-lg mx-auto px-4 pt-6">
+        <h1 className="text-lg font-semibold text-white mb-1">Quick response</h1>
+        {(venueName || dealDescription) ? (
+          <p className="text-sm text-neutral-400 mb-6">
+            {venueName ? <span className="text-neutral-300">{venueName}</span> : null}
+            {eventDate ? (
+              <span className="text-neutral-500"> · {formatEmailCaptureEventDate(eventDate)}</span>
+            ) : null}
+            {dealDescription && !venueName ? (
+              <span className="text-neutral-300">{dealDescription}</span>
+            ) : null}
+          </p>
+        ) : null}
+        <EmailCaptureKindForm
+          kind={kind}
+          submitting={submitting}
+          onSubmit={handleSubmit}
+          footerVariant="embedded"
+        />
+      </div>
+    </div>
   )
 }

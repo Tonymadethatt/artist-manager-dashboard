@@ -15,6 +15,7 @@ import {
   X,
   LayoutTemplate,
   ClipboardList,
+  Eye,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -37,6 +38,12 @@ const NAV_GROUPS = [
     items: [
       { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
       { to: '/files',     label: 'Files',     icon: FolderOpen, end: false, badgeKey: null },
+    ],
+  },
+  {
+    label: 'Forms',
+    items: [
+      { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
     ],
   },
   {

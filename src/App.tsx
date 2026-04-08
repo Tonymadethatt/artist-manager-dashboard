@@ -20,6 +20,7 @@ import PerformanceReportForm from '@/pages/public/PerformanceReportForm'
 import EmailCaptureForm from '@/pages/public/EmailCaptureForm'
 import PerformanceReports from '@/pages/PerformanceReports'
 import ManualShowReport from '@/pages/ManualShowReport'
+import FormPreviews from '@/pages/FormPreviews'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/email-templates" element={<EmailTemplates />} />
           <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="/performance-reports/manual" element={<ManualShowReport />} />
+          <Route path="/forms/preview" element={<FormPreviews />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

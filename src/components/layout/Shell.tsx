@@ -21,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/email-queue':         'Email Queue',
   '/email-templates':     'Email Templates',
   '/settings':            'Settings',
+  '/forms/preview':       'Forms preview',
 }
 
 export function Shell() {
