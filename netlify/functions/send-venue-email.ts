@@ -79,6 +79,7 @@ interface RequestBody {
   custom_intro?: string | null
   layout?: EmailTemplateLayoutV1 | null
   invoice_url?: string | null
+  capture_url?: string | null
 }
 
 const VENUE_TYPES = new Set<string>([
@@ -127,6 +128,7 @@ const handler: Handler = async (event) => {
     custom_artist_template,
     attachment: rawAttachment,
     invoice_url: rawInvoiceUrl,
+    capture_url: rawCaptureUrl,
   } = body
 
   if (!profile?.from_email || !recipient?.email) {
@@ -198,6 +200,7 @@ const handler: Handler = async (event) => {
       const venueName = venue?.name || deal?.description || 'your venue'
       const layout = normalizeEmailTemplateLayout(rawLayout)
       const invoiceUrl = typeof rawInvoiceUrl === 'string' ? rawInvoiceUrl.trim() || null : null
+      const captureUrl = typeof rawCaptureUrl === 'string' ? rawCaptureUrl.trim() || null : null
       html = buildVenueEmailDocument({
         type: type!,
         profile: {
@@ -214,6 +217,7 @@ const handler: Handler = async (event) => {
         logoBaseUrl: siteUrl,
         responsiveClasses: true,
         invoiceUrl,
+        captureUrl,
       })
 
       const subjectMap: Record<VenueEmailType, string> = {

@@ -32,10 +32,15 @@ export async function recordOutboundEmail(
     status: VenueEmailStatus
     source: OutboundEmailSource
     detail?: string | null
+    notes?: string | null
   },
-): Promise<{ error: Error | null }> {
+): Promise<{ error: Error | null; id?: string }> {
   const sentAt = params.status === 'sent' ? new Date().toISOString() : null
-  const { error } = await client.from('venue_emails').insert({
+  const notesBase = formatOutboundEmailNotes(params.source, params.detail)
+  const notes = params.notes != null && params.notes.trim()
+    ? `${notesBase}\n${params.notes.trim()}`
+    : notesBase
+  const { data, error } = await client.from('venue_emails').insert({
     user_id: params.user_id,
     venue_id: params.venue_id ?? null,
     deal_id: params.deal_id ?? null,
@@ -45,7 +50,7 @@ export async function recordOutboundEmail(
     subject: params.subject,
     status: params.status,
     sent_at: sentAt,
-    notes: formatOutboundEmailNotes(params.source, params.detail),
-  })
-  return { error: error ? new Error(error.message) : null }
+    notes,
+  }).select('id').single()
+  return { error: error ? new Error(error.message) : null, id: data?.id as string | undefined }
 }

@@ -4,6 +4,7 @@ import type { VenueEmailType } from '@/types'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 import {
   computeResolvedAgreement,
   dealSyncPatchFromResolution,
@@ -149,7 +150,7 @@ export async function queueImmediateEmailsForTemplate(
     }
 
     const emailType = item.email_type
-    const { error } = await supabase.from('venue_emails').insert({
+    const { data: qRow, error } = await supabase.from('venue_emails').insert({
       user_id: user.id,
       venue_id: venueId,
       deal_id: dealId ?? null,
@@ -159,11 +160,26 @@ export async function queueImmediateEmailsForTemplate(
       subject,
       status: 'pending',
       notes: `Auto-queued from template task: ${item.title}`,
-    })
+    }).select('id, user_id, venue_id, deal_id, contact_id, email_type, notes').single()
     if (error) {
       console.error('[queueEmailsFromTemplate] insert failed:', error.message)
     } else {
       queued += 1
+      if (qRow && isVenueEmailType(emailType)) {
+        await ensureQueueCaptureUrl(
+          supabase,
+          {
+            id: qRow.id as string,
+            user_id: qRow.user_id as string,
+            venue_id: (qRow.venue_id as string | null) ?? null,
+            deal_id: (qRow.deal_id as string | null) ?? null,
+            contact_id: (qRow.contact_id as string | null) ?? null,
+            email_type: qRow.email_type as string,
+            notes: qRow.notes as string | null,
+          },
+          publicSiteOrigin(),
+        )
+      }
     }
   }
 

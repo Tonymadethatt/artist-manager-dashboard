@@ -477,6 +477,64 @@ export interface Database {
           },
         ]
       }
+      email_capture_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          token: string
+          kind: string
+          venue_id: string | null
+          deal_id: string | null
+          contact_id: string | null
+          venue_emails_id: string | null
+          expires_at: string
+          consumed_at: string | null
+          response: unknown | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token?: string
+          kind: string
+          venue_id?: string | null
+          deal_id?: string | null
+          contact_id?: string | null
+          venue_emails_id?: string | null
+          expires_at: string
+          consumed_at?: string | null
+          response?: unknown | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          token?: string
+          kind?: string
+          venue_id?: string | null
+          deal_id?: string | null
+          contact_id?: string | null
+          venue_emails_id?: string | null
+          expires_at?: string
+          consumed_at?: string | null
+          response?: unknown | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'email_capture_tokens_venue_id_fkey'
+            columns: ['venue_id']
+            referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'email_capture_tokens_deal_id_fkey'
+            columns: ['deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       metrics: {
         Row: {
           id: string

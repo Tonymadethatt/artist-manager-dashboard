@@ -1,6 +1,12 @@
+import type { VenueEmailType } from '@/types'
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { effectiveTemplateLayout } from '../emailLayout'
+import { captureLinkLabel, venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+
+function hrefAttr(u: string): string {
+  return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
 
 export type VenueRenderEmailType =
   | 'booking_confirmation'
@@ -64,6 +70,8 @@ export interface BuildVenueEmailDocumentOptions {
   responsiveClasses?: boolean
   /** Resolved billing / invoice link for `invoice_sent` (from queue notes or send payload). */
   invoiceUrl?: string | null
+  /** Public one-tap response page (email capture); GET landing + POST submit. */
+  captureUrl?: string | null
 }
 
 function money(n: number) {
@@ -126,6 +134,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
     logoBaseUrl,
     responsiveClasses = false,
     invoiceUrl: invoiceUrlOpt = null,
+    captureUrl: captureUrlOpt = null,
   } = opts
 
   const layout = effectiveTemplateLayout(layoutRaw, customSubject, customIntro)
@@ -332,6 +341,16 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
 
   const appendHtml = renderAppendBlocksHtml(layout.appendBlocks)
 
+  const capKind = venueEmailTypeToCaptureKind(type as VenueEmailType)
+  const captureTrim = captureUrlOpt?.trim() || ''
+  const captureCtaHtml = captureTrim && capKind
+    ? `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:18px 20px;margin-bottom:20px;">
+        <p style="font-size:10px;font-weight:700;color:#888888;margin-bottom:12px;text-transform:uppercase;letter-spacing:1.4px;">Quick response</p>
+        <p style="font-size:13px;color:#d1d1d1;line-height:1.65;margin-bottom:14px;">Use the secure link below instead of typing a long reply—it only takes a moment.</p>
+        <a href="${hrefAttr(captureTrim)}" style="display:inline-block;background:#ffffff;color:#000000;font-size:14px;font-weight:700;padding:12px 24px;border-radius:6px;text-decoration:none;letter-spacing:0.2px;">${escapeHtmlPlain(captureLinkLabel(capKind))}</a>
+      </div>`
+    : ''
+
   const { label: defaultReplyLabel, bodyText: replyBody } = replyMap[type]
   const replyLabel = layout.footer?.replyButtonLabel?.trim() || defaultReplyLabel
   const showReply = layout.footer?.showReplyButton !== false
@@ -388,6 +407,7 @@ ${mobileStyles}
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-bottom:24px;">${intro}</p>
     ${bodyCards}
     ${appendHtml}
+    ${captureCtaHtml}
     <p style="font-size:14px;color:#d1d1d1;line-height:1.8;margin-top:8px;">${closing}</p>
   </div>
 

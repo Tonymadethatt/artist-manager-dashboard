@@ -17,6 +17,7 @@ import {
   isGeneratedFileInScopeForDeal,
   isGeneratedFileInScopeForTask,
 } from '@/lib/resolveAgreementUrl'
+import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 
 export type QueueEmailOnTaskCompleteOptions = {
   /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
@@ -530,7 +531,7 @@ export async function queueEmailAutomationForCompletedTask(
     queueNotes = serializeInvoiceQueueNotes({ url: invUrl })
   }
 
-  const { error } = await supabase.from('venue_emails').insert({
+  const { data: qIns, error } = await supabase.from('venue_emails').insert({
     user_id: user.id,
     venue_id: v.id,
     deal_id: primaryDeal?.id ?? null,
@@ -540,11 +541,27 @@ export async function queueEmailAutomationForCompletedTask(
     subject: `${customVenueName ?? VENUE_EMAIL_TYPE_LABELS[vType as VenueEmailType] ?? task.email_type} - ${v.name}`,
     status: 'pending',
     notes: queueNotes,
-  })
+  }).select('id, user_id, venue_id, deal_id, contact_id, email_type, notes').single()
 
   if (error) {
     console.error('[queueEmailOnTaskComplete] insert failed:', error.message)
     return { ok: false, reason: 'venue_email_insert_failed' }
+  }
+
+  if (qIns && !cid && isVenueEmailType(vType)) {
+    await ensureQueueCaptureUrl(
+      supabase,
+      {
+        id: qIns.id as string,
+        user_id: qIns.user_id as string,
+        venue_id: (qIns.venue_id as string | null) ?? null,
+        deal_id: (qIns.deal_id as string | null) ?? null,
+        contact_id: (qIns.contact_id as string | null) ?? null,
+        email_type: qIns.email_type as string,
+        notes: qIns.notes as string | null,
+      },
+      publicSiteOrigin(),
+    )
   }
 
   return { ok: true, reason: 'venue_email_queued' }

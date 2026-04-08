@@ -37,6 +37,7 @@ import {
 } from '../../src/lib/resolveAgreementUrl'
 import type { GeneratedFile } from '../../src/types'
 import { buildEmailAttachmentPayloadFromFile } from '../../src/lib/files/templateEmailAttachmentPayload'
+import { ensureQueueCaptureUrl } from '../../src/lib/emailCapture/ensureQueueCaptureUrl'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -715,6 +716,23 @@ const handler: Handler = async (event) => {
       : null
     const invoiceUrlForSend = invoiceLinkPayload?.url?.trim() || null
 
+    let captureUrlForSend: string | null = null
+    if (!cid) {
+      captureUrlForSend = await ensureQueueCaptureUrl(
+        supabase,
+        {
+          id: email.id as string,
+          user_id: email.user_id as string,
+          venue_id: (email.venue_id as string | null) ?? null,
+          deal_id: (email.deal_id as string | null) ?? null,
+          contact_id: (email.contact_id as string | null) ?? null,
+          email_type: email.email_type as string,
+          notes: email.notes as string | null,
+        },
+        siteUrl,
+      )
+    }
+
     const requestBody = customRow?.audience === 'venue'
       ? {
         profile: profilePayload,
@@ -741,6 +759,7 @@ const handler: Handler = async (event) => {
           }
           : {}),
         ...(invoiceUrlForSend ? { invoice_url: invoiceUrlForSend } : {}),
+        ...(captureUrlForSend ? { capture_url: captureUrlForSend } : {}),
       }
 
     try {

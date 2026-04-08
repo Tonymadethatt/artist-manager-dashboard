@@ -38,6 +38,9 @@ import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload
 import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
+import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
+import { EMAIL_CAPTURE_KIND_LABELS, isEmailCaptureKind } from '@/lib/emailCapture/kinds'
+import { parseEmailCaptureTokenFromNotes } from '@/lib/emailCapture/tokenNotes'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
   buildManagementReportData,
@@ -59,6 +62,9 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
 }
 
 function pendingNotesLine(email: VenueEmail): string | null {
+  if (parseEmailCaptureTokenFromNotes(email.notes)) {
+    return 'Includes venue quick-response link in body when sent'
+  }
   if (email.email_type === 'performance_report_request') {
     const p = parsePerfFormQueueNotes(email.notes)
     if (p) {
@@ -255,10 +261,18 @@ function HistoryRow({ email, onPreview }: { email: VenueEmail; onPreview: (email
   )
 }
 
+type RecentCaptureRow = {
+  id: string
+  kind: string
+  consumed_at: string
+  venue: { name: string } | null
+}
+
 export default function EmailQueue() {
   const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
   const { profile, updateProfile } = useArtistProfile()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
+  const [recentCaptures, setRecentCaptures] = useState<RecentCaptureRow[]>([])
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -271,6 +285,24 @@ export default function EmailQueue() {
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
     : DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES
+
+  useEffect(() => {
+    if (activeTab !== 'history') return
+    let cancelled = false
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('email_capture_tokens')
+        .select('id, kind, consumed_at, venue:venues(name)')
+        .eq('user_id', user.id)
+        .not('consumed_at', 'is', null)
+        .order('consumed_at', { ascending: false })
+        .limit(12)
+      if (!cancelled) setRecentCaptures((data ?? []) as RecentCaptureRow[])
+    })()
+    return () => { cancelled = true }
+  }, [activeTab])
 
   const handleBufferChange = async (value: string) => {
     const n = parseInt(value, 10) as EmailQueueBufferMinutes
@@ -571,6 +603,8 @@ export default function EmailQueue() {
           email.email_type === 'invoice_sent'
             ? parseInvoiceQueueNotes(email.notes)?.url ?? null
             : null
+        const capTok = parseEmailCaptureTokenFromNotes(email.notes)
+        const captureUrl = capTok ? `${publicSiteOrigin()}/email-capture/${capTok}` : null
         const html = buildVenueEmailDocument({
           type: email.email_type as VenueRenderEmailType,
           profile: profileForRender,
@@ -583,6 +617,7 @@ export default function EmailQueue() {
           logoBaseUrl: '',
           responsiveClasses: false,
           invoiceUrl,
+          captureUrl,
         })
         setPreviewHtml(html)
         setPreviewSubject(email.subject || '')
@@ -901,6 +936,20 @@ export default function EmailQueue() {
           const inv = parseInvoiceQueueNotes(email.notes)
           if (inv?.url) payload.invoice_url = inv.url
         }
+        const capUrl = await ensureQueueCaptureUrl(
+          supabase,
+          {
+            id: email.id,
+            user_id: user.id,
+            venue_id: email.venue_id ?? null,
+            deal_id: email.deal_id ?? null,
+            contact_id: email.contact_id ?? null,
+            email_type: email.email_type,
+            notes: email.notes ?? null,
+          },
+          publicSiteOrigin(),
+        )
+        if (capUrl) payload.capture_url = capUrl
       }
 
       const res = await fetch(sendPath, {
@@ -1080,6 +1129,31 @@ export default function EmailQueue() {
       {/* History tab */}
       {activeTab === 'history' && (
         <>
+          {recentCaptures.length > 0 && (
+            <div className="mb-5 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
+                <p className="text-xs font-medium text-neutral-500">Recent venue form responses</p>
+              </div>
+              <ul className="divide-y divide-neutral-800">
+                {recentCaptures.map(row => {
+                  const label = isEmailCaptureKind(row.kind)
+                    ? EMAIL_CAPTURE_KIND_LABELS[row.kind]
+                    : row.kind
+                  const vname = row.venue?.name ?? 'Venue'
+                  return (
+                    <li key={row.id} className="px-4 py-3 text-sm">
+                      <span className="text-neutral-300">{vname}</span>
+                      <span className="text-neutral-600 mx-2">·</span>
+                      <span className="text-neutral-400">{label}</span>
+                      <span className="block text-[10px] text-neutral-600 mt-1">
+                        {fmtDate(row.consumed_at)}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />

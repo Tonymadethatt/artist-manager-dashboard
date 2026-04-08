@@ -27,6 +27,9 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import { appendEmailCaptureTokenNote } from '@/lib/emailCapture/tokenNotes'
+import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 
 interface SendVenueEmailModalProps {
@@ -190,6 +193,9 @@ export function SendVenueEmailModal({
     }
 
     try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) throw new Error('Not signed in')
+
       const customRow = isCustomEmailType(emailType)
         ? customRows.find(r => customEmailTypeValue(r.id) === emailType)
         : undefined
@@ -259,6 +265,23 @@ export function SendVenueEmailModal({
         payload.layout = tmpl?.layout ?? null
       }
 
+      let captureTokenUuid: string | null = null
+      if (!customRow && venueEmailTypeToCaptureKind(emailType as VenueEmailType)) {
+        const capKind = venueEmailTypeToCaptureKind(emailType as VenueEmailType)!
+        const { data: tokRow, error: capErr } = await supabase.from('email_capture_tokens').insert({
+          user_id: authUser.id,
+          kind: capKind,
+          venue_id: venueId ?? null,
+          deal_id: dealId ?? null,
+          contact_id: contactId ?? null,
+          expires_at: defaultEmailCaptureExpiresAt(),
+        }).select('token').single()
+        if (!capErr && tokRow?.token) {
+          captureTokenUuid = tokRow.token as string
+          payload.capture_url = `${publicSiteOrigin()}/email-capture/${captureTokenUuid}`
+        }
+      }
+
       const res = await fetch('/.netlify/functions/send-venue-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -274,19 +297,25 @@ export function SendVenueEmailModal({
         ? `${customRow.name} · ${venue?.name ?? 'venue'}`
         : subjectMap[emailType as VenueEmailType]
 
-      const { data: { user: uSend } } = await supabase.auth.getUser()
-      if (uSend) {
-        await recordOutboundEmail(supabase, {
-          user_id: uSend.id,
-          venue_id: venueId ?? null,
-          deal_id: dealId ?? null,
-          contact_id: contactId ?? null,
-          email_type: customRow ? customEmailTypeValue(customRow.id) : emailType,
-          recipient_email: recipientEmail,
-          subject: logSubject,
-          status: 'sent',
-          source: 'modal_immediate',
-        })
+      const noteCapture = captureTokenUuid ? appendEmailCaptureTokenNote(null, captureTokenUuid) : undefined
+      const logRes = await recordOutboundEmail(supabase, {
+        user_id: authUser.id,
+        venue_id: venueId ?? null,
+        deal_id: dealId ?? null,
+        contact_id: contactId ?? null,
+        email_type: customRow ? customEmailTypeValue(customRow.id) : emailType,
+        recipient_email: recipientEmail,
+        subject: logSubject,
+        status: 'sent',
+        source: 'modal_immediate',
+        notes: noteCapture,
+      })
+      if (captureTokenUuid && logRes.id && !logRes.error) {
+        await supabase
+          .from('email_capture_tokens')
+          .update({ venue_emails_id: logRes.id })
+          .eq('token', captureTokenUuid)
+          .eq('user_id', authUser.id)
       }
 
       setStatus('success')
