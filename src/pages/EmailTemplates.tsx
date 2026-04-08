@@ -437,6 +437,7 @@ export default function EmailTemplates() {
         from_email: artistProfile.from_email,
         reply_to_email: artistProfile.reply_to_email ?? null,
         manager_name: artistProfile.manager_name ?? null,
+        manager_title: artistProfile.manager_title ?? null,
         website: artistProfile.website ?? null,
         phone: artistProfile.phone ?? null,
         social_handle: artistProfile.social_handle ?? null,
@@ -516,6 +517,7 @@ export default function EmailTemplates() {
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: null,
             managerName: transactionalManagerName,
+            managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
             website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
             social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
             phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
@@ -532,6 +534,7 @@ export default function EmailTemplates() {
             venueName: PREVIEW_MOCK_VENUE.name,
             eventDate: PREVIEW_MOCK_DEAL.event_date,
             managerName: transactionalManagerName,
+            managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
             website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
             social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
             phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
@@ -550,7 +553,7 @@ export default function EmailTemplates() {
       : null
     return buildVenueEmailHtml(
       selectedType as PreviewEmailType,
-      PREVIEW_MOCK_PROFILE,
+      customPreviewProfile,
       PREVIEW_MOCK_RECIPIENT,
       PREVIEW_MOCK_DEAL,
       PREVIEW_MOCK_VENUE,
