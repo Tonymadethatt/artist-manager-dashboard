@@ -50,6 +50,7 @@ export function PublicFormLayout({
 }: PublicFormLayoutProps) {
   const primary = publicFormBrandPrimaryLine(branding)
   const secondary = publicFormBrandSecondaryLine(branding)
+  const logoAlt = primary
   const websiteUrl = normalizeWebsiteUrl(branding.website)
   const handle = branding.social_handle?.replace(/^@/, '').trim() || ''
   const phone = branding.phone?.trim() || ''
@@ -70,7 +71,10 @@ export function PublicFormLayout({
     linkBits.push({
       key: 'web',
       el: (
-        <a href={websiteUrl} className="text-neutral-500 hover:text-neutral-300 underline-offset-2 hover:underline text-[11px] break-all">
+        <a
+          href={websiteUrl}
+          className="text-[11px] text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline break-all"
+        >
           {label}
         </a>
       ),
@@ -80,7 +84,10 @@ export function PublicFormLayout({
     linkBits.push({
       key: 'ig',
       el: (
-        <a href={igHref(handle)} className="text-neutral-500 hover:text-neutral-300 underline-offset-2 hover:underline text-[11px]">
+        <a
+          href={igHref(handle)}
+          className="text-[11px] text-neutral-400 underline-offset-2 hover:text-neutral-200 hover:underline"
+        >
           @{handle}
         </a>
       ),
@@ -89,94 +96,120 @@ export function PublicFormLayout({
   if (phone) {
     linkBits.push({
       key: 'ph',
-      el: (
-        <span className="text-[11px] text-neutral-500">{phone}</span>
-      ),
+      el: <span className="text-[11px] text-neutral-500 tabular-nums">{phone}</span>,
     })
   }
 
+  const hasPersona = Boolean(branding.manager_name?.trim() || branding.manager_title?.trim())
+  const hasMetaRow = linkBits.length > 0 || Boolean(mailtoHref)
+  const footerHasUpperBlock = hasPersona || hasMetaRow
+
   return (
     <div className={cn('flex min-h-screen flex-col', rootClassName ?? 'bg-neutral-950 text-neutral-100')}>
-      <div className="shrink-0 border-b border-neutral-800/80 px-4 pt-5 pb-3">
-        <div className="mx-auto flex max-w-lg items-start gap-2">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            <img src="/dj-luijay-logo.png" alt="" className="mt-0.5 h-8 w-auto shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-semibold leading-snug text-white">{primary}</p>
-              <p className="mt-0.5 text-[10px] font-medium leading-snug text-neutral-500">{secondary}</p>
+      <header className="shrink-0 border-b border-neutral-800/90">
+        <div className="mx-auto max-w-lg px-4 pt-6 pb-4">
+          {/* Brand row: one horizontal cluster (logo + copy), not a 3-column grid fight */}
+          <div className="flex items-start gap-3">
+            <img
+              src="/dj-luijay-logo.png"
+              alt={logoAlt}
+              className="h-9 w-auto shrink-0 object-contain"
+            />
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-[13px] font-semibold leading-snug tracking-tight text-white">{primary}</p>
+              <p className="mt-1 text-[11px] font-medium leading-relaxed text-neutral-500">{secondary}</p>
             </div>
           </div>
-          <div className="min-w-0 flex-[1.4] px-1 text-center">
-            <h1 className="text-base font-semibold leading-snug text-white">{title}</h1>
-            <p className="mt-1 text-[10px] font-medium uppercase tracking-widest text-neutral-500">{descriptor}</p>
+
+          {/* Form identity: full-width band, centered — no phantom spacer column */}
+          <div className="mt-5 border-t border-neutral-800/80 pt-5 text-center">
+            <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
+            {descriptor ? (
+              <p className="mx-auto mt-2 max-w-md text-[11px] font-normal leading-snug text-neutral-500">{descriptor}</p>
+            ) : null}
           </div>
-          <div className="min-w-0 flex-1 shrink-0" aria-hidden />
-        </div>
 
-        {venueContext ? (
-          <div className="mx-auto mt-3 max-w-lg border-t border-neutral-800/80 pt-3">{venueContext}</div>
-        ) : null}
+          {venueContext ? (
+            <div className="mt-4 border-t border-neutral-800/60 pt-4 text-left">{venueContext}</div>
+          ) : null}
 
-        {showProgress ? (
-          <div
-            className={cn(
-              'mx-auto mt-3 h-1.5 w-full max-w-lg overflow-hidden rounded-full bg-neutral-800',
-              '[@media(prefers-reduced-motion:reduce)]:[&_*]:!transition-none',
-            )}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(pct)}
-          >
+          {showProgress ? (
             <div
-              className={cn('h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none')}
-              style={fillStyle}
-            />
-          </div>
-        ) : null}
-      </div>
+              className={cn(
+                'mt-4 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800/90',
+                '[@media(prefers-reduced-motion:reduce)]:[&_*]:!transition-none',
+              )}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(pct)}
+            >
+              <div
+                className={cn('h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none')}
+                style={fillStyle}
+              />
+            </div>
+          ) : null}
+        </div>
+      </header>
 
       <main className={cn('mx-auto flex w-full max-w-lg flex-1 flex-col px-4', mainClassName)}>{children}</main>
 
-      <footer className="mt-auto shrink-0 border-t border-neutral-800 bg-[#0a0a0a] px-4 py-5">
-        <div className="mx-auto max-w-lg space-y-3 text-center sm:text-left">
-          {(branding.manager_name || branding.manager_title) ? (
-            <div>
-              {branding.manager_name ? (
-                <p className="text-xs font-semibold text-neutral-200">{branding.manager_name}</p>
+      <footer className="mt-auto shrink-0 border-t border-neutral-800 bg-neutral-950">
+        <div className="mx-auto max-w-lg px-4 py-6">
+          {hasPersona ? (
+            <div className="border-b border-neutral-800/80 pb-4">
+              {branding.manager_name?.trim() ? (
+                <p className="text-[13px] font-semibold text-neutral-100">{branding.manager_name.trim()}</p>
               ) : null}
-              {branding.manager_title ? (
-                <p className="mt-0.5 text-[11px] text-neutral-500">{branding.manager_title}</p>
+              {branding.manager_title?.trim() ? (
+                <p className="mt-0.5 text-[11px] text-neutral-500">{branding.manager_title.trim()}</p>
               ) : null}
             </div>
           ) : null}
 
-          {linkBits.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
-              {linkBits.map((b, i) => (
-                <span key={b.key} className="inline-flex items-center gap-2">
-                  {i > 0 ? <span className="text-neutral-600">|</span> : null}
-                  {b.el}
-                </span>
-              ))}
+          {hasMetaRow ? (
+            <div className={cn('flex flex-col gap-3', hasPersona ? 'pt-4' : '')}>
+              {linkBits.length > 0 ? (
+                <p className="flex flex-wrap items-center gap-x-0 gap-y-1 text-left leading-relaxed">
+                  {linkBits.map((b, i) => (
+                    <span key={b.key} className="inline-flex max-w-full items-center">
+                      {i > 0 ? (
+                        <span className="px-2 text-[10px] font-medium text-neutral-600 select-none" aria-hidden>
+                          |
+                        </span>
+                      ) : null}
+                      <span className="min-w-0">{b.el}</span>
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+
+              {mailtoHref ? (
+                <p className="text-left">
+                  <a
+                    href={mailtoHref}
+                    className="text-[12px] font-medium text-neutral-300 underline decoration-neutral-600 underline-offset-4 hover:text-white hover:decoration-neutral-400"
+                  >
+                    Reply by email
+                  </a>
+                </p>
+              ) : null}
             </div>
           ) : null}
 
-          {mailtoHref ? (
-            <div>
-              <a
-                href={mailtoHref}
-                className="inline-block rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-200 hover:border-neutral-600 hover:bg-neutral-800"
-              >
-                Reply
-              </a>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[11px] text-neutral-500 sm:justify-start">
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-600',
+              footerHasUpperBlock ? 'mt-4 border-t border-neutral-800/80 pt-4' : 'pt-1',
+            )}
+          >
             <a href="/terms" className="hover:text-neutral-300 underline-offset-2 hover:underline">
               Terms
             </a>
+            <span className="text-neutral-700" aria-hidden>
+              ·
+            </span>
             <a href="/privacy" className="hover:text-neutral-300 underline-offset-2 hover:underline">
               Privacy
             </a>
