@@ -54,13 +54,18 @@ export default function FormPreviews() {
   }, [selection])
 
   return (
-    <div className="flex flex-col gap-4 h-[calc(100dvh-7.5rem)] min-h-[520px] max-w-[1600px] mx-auto">
+    <div className="flex flex-col gap-4 min-h-0 flex-1 max-w-[1600px] mx-auto md:min-h-[calc(100dvh-7.5rem)]">
       <p className="text-sm text-neutral-500 shrink-0">
         Walk through real form UI without saving. Mock data only.
       </p>
 
-      <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
-        <div className="lg:w-[280px] lg:shrink-0 flex flex-col min-h-0 border border-neutral-800 rounded-lg bg-neutral-900/50 overflow-hidden">
+      <div className="flex flex-col-reverse lg:flex-row gap-4 flex-1 min-h-0 lg:min-h-[480px]">
+        <div
+          className={cn(
+            'flex flex-col min-h-0 border border-neutral-800 rounded-lg bg-neutral-900/50 overflow-hidden',
+            'max-h-[min(320px,42svh)] lg:max-h-none lg:w-[280px] lg:shrink-0',
+          )}
+        >
           <div className="px-3 py-2 border-b border-neutral-800 shrink-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Artist</p>
           </div>
@@ -100,7 +105,12 @@ export default function FormPreviews() {
           </div>
         </div>
 
-        <div className="flex flex-col flex-1 min-h-0 min-w-0 border border-neutral-800 rounded-lg overflow-hidden bg-neutral-900">
+        <div
+          className={cn(
+            'flex flex-col flex-1 min-h-0 min-w-0 border border-neutral-800 rounded-lg overflow-hidden bg-neutral-900',
+            'min-h-[min(520px,62svh)] lg:min-h-0',
+          )}
+        >
           <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0">
             <Monitor className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
             <span className="text-xs font-medium text-neutral-400">Preview — {previewLabel}</span>
