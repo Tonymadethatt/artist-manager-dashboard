@@ -10,10 +10,15 @@ export function usePerformanceReports() {
 
   const fetchReports = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error: fetchErr } = await supabase
       .from('performance_reports')
       .select('*, venue:venues(id, name), deal:deals(id, description, event_date)')
       .order('created_at', { ascending: false })
+    // #region agent log
+    if (fetchErr) {
+      fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'dc4262' }, body: JSON.stringify({ sessionId: 'dc4262', hypothesisId: 'H1-schema-missing-vs-fetch', location: 'usePerformanceReports.ts:fetchReports', message: 'performance_reports select error', data: { code: fetchErr.code, message: fetchErr.message }, timestamp: Date.now() }) }).catch(() => {})
+    }
+    // #endregion
     setReports((data ?? []) as PerformanceReport[])
     setLoading(false)
   }, [])
@@ -42,6 +47,9 @@ export function usePerformanceReports() {
       .single()
 
     if (insertError || !row) {
+      // #region agent log
+      fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'dc4262' }, body: JSON.stringify({ sessionId: 'dc4262', hypothesisId: 'H2-insert-artist_email-path', location: 'usePerformanceReports.ts:createReport', message: 'insert failed', data: { code: insertError?.code, message: insertError?.message, details: insertError?.details }, timestamp: Date.now() }) }).catch(() => {})
+      // #endregion
       return { error: insertError?.message ?? 'Failed to create report' }
     }
 
@@ -126,11 +134,17 @@ export function usePerformanceReports() {
       .single()
 
     if (insertError || !row) {
+      // #region agent log
+      fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'dc4262' }, body: JSON.stringify({ sessionId: 'dc4262', hypothesisId: 'H3-insert-manager_dashboard-path', location: 'usePerformanceReports.ts:createReportWithoutEmail', message: 'insert failed', data: { code: insertError?.code, message: insertError?.message, details: insertError?.details }, timestamp: Date.now() }) }).catch(() => {})
+      // #endregion
       return { error: insertError?.message ?? 'Failed to create report' }
     }
 
     const report = row as PerformanceReport
     setReports(prev => [report, ...prev])
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'dc4262' }, body: JSON.stringify({ sessionId: 'dc4262', hypothesisId: 'H4-manual-insert-success', location: 'usePerformanceReports.ts:createReportWithoutEmail', message: 'insert ok', data: { reportIdPrefix: row.id?.slice(0, 8) }, timestamp: Date.now() }) }).catch(() => {})
+    // #endregion
     return { report }
   }
 
