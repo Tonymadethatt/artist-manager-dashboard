@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, TrendingUp, Clock, Briefcase, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Banknote } from 'lucide-react'
+import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -657,24 +657,11 @@ export default function Earnings() {
   }, [fees])
 
   const artistBookingStats = useMemo(() => {
-    const track = (d: Deal) => {
-      if (!d.venue_id || !d.venue) return 'unlinked' as const
-      return (d.venue.outreach_track ?? 'pipeline') === 'community' ? 'community' as const : 'pipeline' as const
-    }
-    const totalGrossLogged = deals.reduce((s, d) => s + d.gross_amount, 0)
     const paidDeals = deals.filter(d => d.artist_paid)
-    const grossMarkedPaid = paidDeals.reduce((s, d) => s + d.gross_amount, 0)
-    const pipelineGross = deals.filter(d => track(d) === 'pipeline').reduce((s, d) => s + d.gross_amount, 0)
-    const communityGross = deals.filter(d => track(d) === 'community').reduce((s, d) => s + d.gross_amount, 0)
-    const unlinkedGross = deals.filter(d => track(d) === 'unlinked').reduce((s, d) => s + d.gross_amount, 0)
     return {
       dealCount: deals.length,
-      paidCount: paidDeals.length,
-      totalGrossLogged,
-      grossMarkedPaid,
-      pipelineGross,
-      communityGross,
-      unlinkedGross,
+      totalGrossLogged: deals.reduce((s, d) => s + d.gross_amount, 0),
+      grossMarkedPaid: paidDeals.reduce((s, d) => s + d.gross_amount, 0),
     }
   }, [deals])
 
@@ -806,181 +793,73 @@ export default function Earnings() {
           </div>
         )}
 
-        {/* Financial overview — full-width panels until lg; one headline + rows (no squeezed 3-col grids) */}
-        <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 overflow-hidden shadow-sm shadow-black/20">
-          <div className="grid grid-cols-1 lg:grid-cols-3 lg:divide-x lg:divide-neutral-800/90">
-            {/* Artist bookings */}
-            <section className="min-w-0 p-5 sm:p-6 lg:py-6 lg:px-6 border-b border-neutral-800/90 lg:border-b-0">
-              <header className="flex items-start gap-3 min-w-0 mb-5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900">
-                  <Banknote className="h-4 w-4 text-neutral-400" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h3 className="text-sm font-semibold text-neutral-100 leading-snug">Artist bookings</h3>
-                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    Booking gross on logged deals. Not your management commission.
-                  </p>
-                </div>
-              </header>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Total logged gross</p>
-                <p className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-white tabular-nums break-all sm:break-normal">
-                  {fmtMoney(artistBookingStats.totalGrossLogged)}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  {artistBookingStats.dealCount} deal{artistBookingStats.dealCount !== 1 ? 's' : ''} in Earnings
-                </p>
-              </div>
-              <ul className="mt-5 space-y-3 border-t border-neutral-800/80 pt-5 text-sm">
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Marked paid (gross)</span>
-                  <span className="font-medium tabular-nums text-emerald-400/95 text-right min-w-0 break-all sm:break-normal">
-                    {fmtMoney(artistBookingStats.grossMarkedPaid)}
-                  </span>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 min-w-0 text-xs text-neutral-500">
-                  <span className="shrink-0">Deals with paid toggle</span>
-                  <span className="tabular-nums text-neutral-400">{artistBookingStats.paidCount}</span>
-                </li>
-              </ul>
-              <div className="mt-4 rounded-md border border-neutral-800/80 bg-neutral-900/50 px-3 py-2.5">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-2">By venue track</p>
-                <ul className="space-y-1.5 text-xs">
-                  <li className="flex justify-between gap-3 min-w-0">
-                    <span className="text-neutral-500 truncate">Pipeline</span>
-                    <span className="tabular-nums text-neutral-300 shrink-0">{fmtMoney(artistBookingStats.pipelineGross)}</span>
-                  </li>
-                  <li className="flex justify-between gap-3 min-w-0">
-                    <span className="text-neutral-500 truncate">Community</span>
-                    <span className="tabular-nums text-neutral-300 shrink-0">{fmtMoney(artistBookingStats.communityGross)}</span>
-                  </li>
-                  {artistBookingStats.unlinkedGross > 0 && (
-                    <li className="flex justify-between gap-3 min-w-0">
-                      <span className="text-neutral-500 truncate">No venue linked</span>
-                      <span className="tabular-nums text-neutral-400 shrink-0">{fmtMoney(artistBookingStats.unlinkedGross)}</span>
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </section>
-
-            {/* Commission */}
-            <section className="min-w-0 p-5 sm:p-6 lg:py-6 lg:px-6 border-b border-neutral-800/90 lg:border-b-0">
-              <header className="flex items-start gap-3 min-w-0 mb-5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900">
-                  <Briefcase className="h-4 w-4 text-neutral-400" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h3 className="text-sm font-semibold text-neutral-100 leading-snug">Your commission</h3>
-                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    From deals where the artist is marked paid through to you.
-                  </p>
-                </div>
-              </header>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  {stats.outstanding > 0 ? 'Outstanding' : 'Earned (uncollected if any)'}
-                </p>
-                <p
-                  className={cn(
-                    'mt-1 text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums break-all sm:break-normal',
-                    stats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-100',
-                  )}
-                >
-                  {fmtMoney(stats.outstanding > 0 ? stats.outstanding : stats.earned)}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  {stats.outstanding > 0 ? 'Owed to you after artist paid' : 'Total earned when artist has paid'}
-                </p>
-              </div>
-              <ul className="mt-5 space-y-3 border-t border-neutral-800/80 pt-5 text-sm">
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Earned</span>
-                  <span className="font-medium tabular-nums text-neutral-200 text-right min-w-0 break-all sm:break-normal">
-                    {fmtMoney(stats.earned)}
-                  </span>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Received</span>
-                  <span className="font-medium tabular-nums text-green-400 text-right min-w-0 break-all sm:break-normal">
-                    {fmtMoney(stats.received)}
-                  </span>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Owed</span>
-                  <span
-                    className={cn(
-                      'font-semibold tabular-nums text-right min-w-0 break-all sm:break-normal',
-                      stats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-500',
-                    )}
-                  >
-                    {fmtMoney(stats.outstanding)}
-                  </span>
-                </li>
-                <li className="text-xs text-neutral-600 pt-1">
-                  {stats.count} deal{stats.count !== 1 ? 's' : ''} logged
-                </li>
-              </ul>
-            </section>
-
-            {/* Retainer */}
-            <section className="min-w-0 p-5 sm:p-6 lg:py-6 lg:px-6">
-              <header className="flex items-start gap-3 min-w-0 mb-5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900">
-                  <TrendingUp className="h-4 w-4 text-neutral-400" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <h3 className="text-sm font-semibold text-neutral-100 leading-snug">Monthly retainer</h3>
-                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    Management fee billing separate from show commissions.
-                  </p>
-                </div>
-              </header>
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">
-                  {retainerStats.outstanding > 0 ? 'Balance owed' : 'Received to date'}
-                </p>
-                <p
-                  className={cn(
-                    'mt-1 text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums break-all sm:break-normal',
-                    retainerStats.outstanding > 0 ? 'text-orange-400' : 'text-green-400',
-                  )}
-                >
-                  {fmtMoney(retainerStats.outstanding > 0 ? retainerStats.outstanding : retainerStats.received)}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  {retainerStats.outstanding > 0 ? 'Still due on invoiced months' : 'Total collected across months'}
-                </p>
-              </div>
-              <ul className="mt-5 space-y-3 border-t border-neutral-800/80 pt-5 text-sm">
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Invoiced</span>
-                  <span className="font-medium tabular-nums text-neutral-200 text-right min-w-0 break-all sm:break-normal">
-                    {fmtMoney(retainerStats.invoiced)}
-                  </span>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Received</span>
-                  <span className="font-medium tabular-nums text-green-400 text-right min-w-0 break-all sm:break-normal">
-                    {fmtMoney(retainerStats.received)}
-                  </span>
-                </li>
-                <li className="flex items-baseline justify-between gap-4 min-w-0">
-                  <span className="text-neutral-500 shrink-0">Owed</span>
-                  <span
-                    className={cn(
-                      'font-semibold tabular-nums text-right min-w-0 break-all sm:break-normal',
-                      retainerStats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-500',
-                    )}
-                  >
-                    {fmtMoney(retainerStats.outstanding)}
-                  </span>
-                </li>
-                <li className="text-xs text-neutral-600 pt-1">
-                  {fees.length} month{fees.length !== 1 ? 's' : ''} on file
-                </li>
-              </ul>
-            </section>
+        {/* Financial overview — compact strip; detail lives in Deals + Retainer */}
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-neutral-800">
+            <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Bookings (gross)</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-100 truncate min-w-0" title={fmtMoney(artistBookingStats.totalGrossLogged)}>
+                {fmtMoney(artistBookingStats.totalGrossLogged)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500 leading-snug tabular-nums min-w-0">
+                <span className="text-neutral-400">{artistBookingStats.dealCount}</span>
+                {' '}deal{artistBookingStats.dealCount !== 1 ? 's' : ''}
+                <span className="text-neutral-600"> · </span>
+                {fmtMoney(artistBookingStats.grossMarkedPaid)} marked paid
+              </p>
+            </div>
+            <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Commission</p>
+              <p
+                className={cn(
+                  'mt-0.5 text-lg font-semibold tabular-nums truncate min-w-0',
+                  stats.outstanding > 0 ? 'text-orange-400' : 'text-neutral-100',
+                )}
+                title={fmtMoney(stats.outstanding > 0 ? stats.outstanding : stats.earned)}
+              >
+                {fmtMoney(stats.outstanding > 0 ? stats.outstanding : stats.earned)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500 leading-snug tabular-nums min-w-0">
+                {stats.outstanding > 0 ? (
+                  <>
+                    Earned {fmtMoney(stats.earned)}
+                    <span className="text-neutral-600"> · </span>
+                    Recv {fmtMoney(stats.received)}
+                  </>
+                ) : (
+                  <>
+                    Recv {fmtMoney(stats.received)}
+                  </>
+                )}
+                <span className="text-neutral-600"> · </span>
+                {stats.count} deal{stats.count !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Retainer</p>
+              <p
+                className={cn(
+                  'mt-0.5 text-lg font-semibold tabular-nums truncate min-w-0',
+                  retainerStats.outstanding > 0 ? 'text-orange-400' : 'text-green-400/90',
+                )}
+                title={fmtMoney(retainerStats.outstanding > 0 ? retainerStats.outstanding : retainerStats.received)}
+              >
+                {fmtMoney(retainerStats.outstanding > 0 ? retainerStats.outstanding : retainerStats.received)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500 leading-snug tabular-nums min-w-0">
+                {retainerStats.outstanding > 0 ? (
+                  <>
+                    Recv {fmtMoney(retainerStats.received)}
+                    <span className="text-neutral-600"> · </span>
+                    Inv {fmtMoney(retainerStats.invoiced)}
+                  </>
+                ) : (
+                  <>Inv {fmtMoney(retainerStats.invoiced)}</>
+                )}
+                <span className="text-neutral-600"> · </span>
+                {fees.length} mo
+              </p>
+            </div>
           </div>
         </div>
       </div>
