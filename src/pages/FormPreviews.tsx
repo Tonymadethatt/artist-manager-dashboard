@@ -1,23 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Monitor, Eye } from 'lucide-react'
+import { Monitor, Eye, Loader2 } from 'lucide-react'
 import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
 import { EmailCaptureFormPreviewBody } from '@/pages/public/EmailCaptureForm'
 import { EMAIL_CAPTURE_KIND_LABELS, type EmailCaptureKind } from '@/lib/emailCapture/kinds'
-import { mergePublicFormBranding, type PublicFormBranding } from '@/lib/publicFormBranding'
+import { brandingFromArtistProfileRow } from '@/lib/publicFormBranding'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { cn } from '@/lib/utils'
-
-const MOCK_PUBLIC_FORM_BRANDING: PublicFormBranding = mergePublicFormBranding({
-  company_name: 'DJ Luijay LLC',
-  artist_name: 'DJ Luijay',
-  manager_name: 'Alex',
-  manager_title: 'Management',
-  website: 'djluijay.live',
-  social_handle: '@djluijay',
-  phone: '(555) 010-0199',
-  reply_to_email: 'management@djluijay.live',
-  from_email: 'management@djluijay.live',
-  tagline: 'House · open format · club energy',
-})
 
 const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   venueName: 'Skyline Bar',
@@ -61,6 +49,8 @@ export default function FormPreviews() {
     scope: 'artist',
     id: 'show_report',
   })
+  const { profile, loading: profileLoading } = useArtistProfile()
+  const previewBranding = useMemo(() => brandingFromArtistProfileRow(profile), [profile])
 
   const previewLabel = useMemo(() => {
     if (selection.scope === 'artist') return 'Show report (artist link)'
@@ -70,7 +60,8 @@ export default function FormPreviews() {
   return (
     <div className="flex flex-col gap-4 min-h-0 flex-1 max-w-[1600px] mx-auto md:min-h-[calc(100dvh-7.5rem)]">
       <p className="text-sm text-neutral-500 shrink-0">
-        Walk through real form UI without saving. Mock data only.
+        Walk through form UI without saving. Sample venue and deal text only; header and footer use your live{' '}
+        <span className="text-neutral-400">Settings → Artist profile</span> (company name, tagline, links, manager).
       </p>
 
       <div className="flex flex-1 min-h-0 flex-row gap-4">
@@ -127,7 +118,7 @@ export default function FormPreviews() {
             <Monitor className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
             <span className="text-xs font-medium text-neutral-400">Preview — {previewLabel}</span>
             <span className="text-[10px] text-neutral-600">
-              Mock data · nothing saved
+              Sample venue/deal · nothing saved
             </span>
             <span className="text-[10px] text-neutral-600 min-[480px]:ml-auto flex items-center gap-1">
               <Eye className="h-3 w-3 opacity-70" />
@@ -140,7 +131,12 @@ export default function FormPreviews() {
               selection.scope === 'artist' ? 'bg-[#0d0d0d]' : 'bg-neutral-950',
             )}
           >
-            {selection.scope === 'artist' ? (
+            {profileLoading ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-neutral-500">
+                <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+                <p className="text-xs">Loading profile for preview…</p>
+              </div>
+            ) : selection.scope === 'artist' ? (
               <div key={selectionKey(selection)} className="flex flex-col flex-1 min-h-0">
                 <ShowReportWizard
                   token="__preview__"
@@ -148,7 +144,7 @@ export default function FormPreviews() {
                   submittedBy="artist_link"
                   footerMode="embedded"
                   preview
-                  branding={MOCK_PUBLIC_FORM_BRANDING}
+                  branding={previewBranding}
                 />
               </div>
             ) : (
@@ -158,7 +154,7 @@ export default function FormPreviews() {
                   venueName={MOCK_VENUE_CAPTURE.venueName}
                   dealDescription={MOCK_VENUE_CAPTURE.dealDescription}
                   eventDate={MOCK_VENUE_CAPTURE.eventDate}
-                  branding={MOCK_PUBLIC_FORM_BRANDING}
+                  branding={previewBranding}
                 />
               </div>
             )}
