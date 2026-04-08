@@ -8,7 +8,7 @@ import {
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
-import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
+import { buildProfileFooterLinksHtml, buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 import { defaultAccentForBlockKind, parseAccentColorHex } from './customEmailAccentPresets'
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
@@ -35,7 +35,7 @@ function nlToBr(s: string): string {
 function titledContentCard(sectionTitle: string, content: string, accentColor: string): string {
   const showHeader = sectionTitle.trim().length > 0
   const header = showHeader
-    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;display:flex;align-items:center;gap:10px;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;flex-shrink:0;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};">${escapeHtmlPlain(sectionTitle.trim())}</span></div>`
+    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(sectionTitle.trim())}</span></div>`
     : ''
   const bodyPad = showHeader ? 'padding:6px 18px 14px;' : 'padding:14px 18px;'
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;">${header}<div style="${bodyPad}">${content}</div></div>`
@@ -101,7 +101,7 @@ const EMAIL_PROSE_SCOPED_CSS = `
 `
 
 function rowKv(label: string, value: string, valueColor = EMAIL_TEXT_PRIMARY): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #222222;"><span style="font-size:13px;color:${EMAIL_ROW_LABEL};">${escapeHtmlPlain(label)}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${escapeHtmlPlain(value)}</span></div>`
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:13px;color:${EMAIL_ROW_LABEL};border-bottom:1px solid #222222;vertical-align:middle;">${escapeHtmlPlain(label)}</td><td style="padding:10px 0;font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;border-bottom:1px solid #222222;vertical-align:middle;">${escapeHtmlPlain(value)}</td></tr></table>`
 }
 
 const OPENING_LINE_P_STYLE = 'font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;'
@@ -240,12 +240,7 @@ function venueFooter(
 ) {
   const replyTo = profile.reply_to_email || profile.from_email
   const companyName = profile.company_name || profile.artist_name || ''
-  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
-  const footerLinks = [
-    profile.website ? `<a href="${escapeHtmlPlain(profile.website)}" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">${escapeHtmlPlain(profile.website.replace(/^https?:\/\//, ''))}</a>` : '',
-    handle ? `<a href="https://instagram.com/${escapeHtmlPlain(handle)}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" /><span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@${escapeHtmlPlain(handle)}</span></a>` : '',
-    profile.phone ? `<span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">${escapeHtmlPlain(profile.phone)}</span>` : '',
-  ].filter(Boolean).join('<span style="color:#6a6a6a;margin:0 8px;">|</span>')
+  const footerLinks = buildProfileFooterLinksHtml(igUrl, profile.website, profile.social_handle, profile.phone)
 
   const mailtoHref = `mailto:${escapeHtmlPlain(replyTo)}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent('Hi,\n\n')}`
   const replyBlock = showReply

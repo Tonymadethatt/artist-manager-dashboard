@@ -10,6 +10,7 @@ import {
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from '../../src/lib/email/emailDarkSurfacePalette'
+import { buildProfileFooterLinksRowHtml } from '../../src/lib/email/profileFooterLinksHtml'
 import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
 
 function escapeHtmlEnt(s: string): string {
@@ -51,7 +52,7 @@ function rows(items: Array<[string, string, string?]>): string {
   return items.map(([label, value, valueColor = EMAIL_TEXT_PRIMARY], i, arr) => {
     const isLast = i === arr.length - 1
     const border = isLast ? '' : 'border-bottom:1px solid #222222;'
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;${border}"><span style="font-size:13px;color:${EMAIL_ROW_LABEL};line-height:1.4;">${label}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${value}</span></div>`
+    return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:11px 0;font-size:13px;color:${EMAIL_ROW_LABEL};line-height:1.4;${border}vertical-align:middle;">${label}</td><td style="padding:11px 0;font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;${border}vertical-align:middle;">${value}</td></tr></table>`
   }).join('')
 }
 
@@ -65,7 +66,6 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
-  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const { outreach, artistEarnings, deals, retainer, metrics, tasks, performance } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = fmtDate(dateRange.start)
@@ -265,11 +265,7 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
     <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    ${(profile.website || handle || profile.phone) ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${[
-      profile.website ? `<a href="${profile.website}" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
-      handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" /><span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@${handle}</span></a>` : '',
-      profile.phone ? `<span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">${profile.phone}</span>` : '',
-    ].filter(Boolean).join('<span style="color:#6a6a6a;margin:0 8px;">|</span>')}</div>` : ''}
+    ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
   </div>
 
 </div>

@@ -6,6 +6,7 @@ import {
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
+import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -42,7 +43,6 @@ export function buildRetainerReceivedEmailHtml(
   const managerName = profile.manager_name || 'Management'
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
-  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
 
   const defaultRecap =
     'Just confirming on our side: your management retainer payment is accounted for. Thank you for staying on top of it.'
@@ -78,10 +78,12 @@ export function buildRetainerReceivedEmailHtml(
 
   const totalCallout = settledFees.length > 0
     ? `
-    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:18px 22px;margin:4px 0 24px;">
-      <div style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">Total acknowledged</div>
-      <div style="font-size:22px;font-weight:800;color:#22c55e;letter-spacing:-0.5px;">${money(totalAcknowledged)}</div>
-    </div>`
+    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;margin:4px 0 24px;border-collapse:collapse;">
+      <tr>
+        <td style="padding:18px 22px;font-size:13px;color:${EMAIL_BODY_SECONDARY};vertical-align:middle;">Total acknowledged</td>
+        <td style="padding:18px 22px;font-size:22px;font-weight:800;color:#22c55e;letter-spacing:-0.5px;text-align:right;vertical-align:middle;">${money(totalAcknowledged)}</td>
+      </tr>
+    </table>`
     : ''
 
   return `<!DOCTYPE html>
@@ -135,11 +137,7 @@ export function buildRetainerReceivedEmailHtml(
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlEnt(managerName)}</div>
     <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    ${(profile.website || handle || profile.phone) ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${[
-      profile.website ? `<a href="${escapeHtmlEnt(profile.website)}" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">${escapeHtmlEnt(profile.website.replace(/^https?:\/\//, ''))}</a>` : '',
-      handle ? `<a href="https://instagram.com/${escapeHtmlEnt(handle)}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" /><span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@${escapeHtmlEnt(handle)}</span></a>` : '',
-      profile.phone ? `<span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">${escapeHtmlEnt(profile.phone)}</span>` : '',
-    ].filter(Boolean).join('<span style="color:#6a6a6a;margin:0 8px;">|</span>')}</div>` : ''}
+    ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
   </div>
 
 </div>

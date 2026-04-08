@@ -13,6 +13,7 @@ import {
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE, VENUE_EMAIL_DOC_BUTTON_STYLE } from './venueEmailCtaStyles'
+import { buildProfileFooterLinksHtml } from './profileFooterLinksHtml'
 
 function hrefAttr(u: string): string {
   return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -98,7 +99,7 @@ function fmtDate(iso: string) {
 }
 
 function row(label: string, value: string, valueColor = EMAIL_TEXT_PRIMARY): string {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #222222;"><span style="font-size:13px;color:${EMAIL_ROW_LABEL};">${label}</span><span style="font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;">${value}</span></div>`
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:13px;color:${EMAIL_ROW_LABEL};border-bottom:1px solid #222222;vertical-align:middle;">${label}</td><td style="padding:10px 0;font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;border-bottom:1px solid #222222;vertical-align:middle;">${value}</td></tr></table>`
 }
 
 function card(title: string, content: string, accentColor = '#60a5fa'): string {
@@ -404,12 +405,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   const showReply = layout.footer?.showReplyButton !== false && !hasPrimaryCaptureCta
   const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`
 
-  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
-  const footerLinks = [
-    profile.website ? `<a href="${profile.website}" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
-    handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" /><span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@${handle}</span></a>` : '',
-    profile.phone ? `<span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">${profile.phone}</span>` : '',
-  ].filter(Boolean).join('<span style="color:#6a6a6a;margin:0 8px;">|</span>')
+  const footerLinks = buildProfileFooterLinksHtml(igUrl, profile.website, profile.social_handle, profile.phone)
 
   const replyBlock = showReply
     ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:${EMAIL_BODY_SECONDARY};font-size:12px;font-weight:500;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
@@ -460,7 +456,7 @@ ${mobileStyles}
   </div>
 
   <div${footerClass} style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${companyName.toUpperCase()}</div>
+    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
     ${replyBlock}
   </div>

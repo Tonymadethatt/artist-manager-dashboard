@@ -8,6 +8,7 @@ import {
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from '../../src/lib/email/emailDarkSurfacePalette'
+import { buildProfileFooterLinksRowHtml } from '../../src/lib/email/profileFooterLinksHtml'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -46,7 +47,6 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
-  const handle = profile.social_handle ? profile.social_handle.replace(/^@/, '') : ''
   const monthCount = unpaidFees.length
   const hasPartials = unpaidFees.some(f => f.paid > 0)
 
@@ -138,10 +138,12 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
     ${partialNote}
 
     <!-- Total outstanding callout — red tint -->
-    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:18px 22px;margin:${hasPartials ? '16px' : '4px'} 0 24px;">
-      <div style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">Total outstanding</div>
-      <div style="font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.5px;">${money(totalOutstanding)}</div>
-    </div>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin:${hasPartials ? '16px' : '4px'} 0 24px;border-collapse:collapse;">
+      <tr>
+        <td style="padding:18px 22px;font-size:13px;color:${EMAIL_BODY_SECONDARY};vertical-align:middle;">Total outstanding</td>
+        <td style="padding:18px 22px;font-size:22px;font-weight:800;color:#ef4444;letter-spacing:-0.5px;text-align:right;vertical-align:middle;">${money(totalOutstanding)}</td>
+      </tr>
+    </table>
 
     ${renderAppendBlocksHtml(L.appendBlocks)}
 
@@ -157,11 +159,7 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
     <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    ${(profile.website || handle || profile.phone) ? `<div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">${[
-      profile.website ? `<a href="${profile.website}" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">${profile.website.replace(/^https?:\/\//, '')}</a>` : '',
-      handle ? `<a href="https://instagram.com/${handle}" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;"><img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" /><span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@${handle}</span></a>` : '',
-      profile.phone ? `<span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">${profile.phone}</span>` : '',
-    ].filter(Boolean).join('<span style="color:#6a6a6a;margin:0 8px;">|</span>')}</div>` : ''}
+    ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
   </div>
 
 </div>
