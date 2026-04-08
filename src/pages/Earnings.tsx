@@ -808,32 +808,29 @@ export default function Earnings() {
 
         {/* Summary: artist bookings + your commission + retainer */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Artist booking gross — show money to the artist (case study / transparency) */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3 md:min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-widest text-neutral-500">Artist bookings</span>
-              <Banknote className="h-3.5 w-3.5 text-neutral-700" />
+          {/* Artist booking gross */}
+          <div className=”bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3”>
+            <div className=”flex items-center justify-between”>
+              <span className=”text-xs font-semibold uppercase tracking-widest text-neutral-500”>Artist bookings</span>
+              <Banknote className=”h-3.5 w-3.5 text-neutral-700” />
             </div>
-            <p className="text-[10px] text-neutral-600 leading-snug">
-              Show gross from logged deals, not your commission. Toggle “Artist” on each row when they have been paid.
-            </p>
-            <div className="grid grid-cols-1 gap-2">
+            <div className=”grid grid-cols-3 gap-2”>
               <div>
-                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Total gross logged</p>
-                <p className="text-base font-bold text-neutral-100 tabular-nums">{fmtMoney(artistBookingStats.totalGrossLogged)}</p>
-                <p className="text-[10px] text-neutral-600 mt-0.5">{artistBookingStats.dealCount} deal{artistBookingStats.dealCount !== 1 ? 's' : ''}</p>
+                <p className=”text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide”>Total gross</p>
+                <p className=”text-base font-bold text-neutral-100 tabular-nums”>{fmtMoney(artistBookingStats.totalGrossLogged)}</p>
+                <p className=”text-[10px] text-neutral-600 mt-0.5”>{artistBookingStats.dealCount} deal{artistBookingStats.dealCount !== 1 ? 's' : ''}</p>
               </div>
               <div>
-                <p className="text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide">Marked artist paid</p>
-                <p className="text-base font-bold text-emerald-400/90 tabular-nums">{fmtMoney(artistBookingStats.grossMarkedPaid)}</p>
-                <p className="text-[10px] text-neutral-600 mt-0.5">{artistBookingStats.paidCount} deal{artistBookingStats.paidCount !== 1 ? 's' : ''}</p>
+                <p className=”text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide”>Artist paid</p>
+                <p className=”text-base font-bold text-emerald-400/90 tabular-nums”>{fmtMoney(artistBookingStats.grossMarkedPaid)}</p>
+                <p className=”text-[10px] text-neutral-600 mt-0.5”>{artistBookingStats.paidCount} deal{artistBookingStats.paidCount !== 1 ? 's' : ''}</p>
               </div>
-              <div className="pt-1 border-t border-neutral-800 space-y-1">
-                <p className="text-[10px] text-neutral-600 uppercase tracking-wide">By venue track</p>
-                <p className="text-xs text-neutral-400 tabular-nums">Pipeline gross: {fmtMoney(artistBookingStats.pipelineGross)}</p>
-                <p className="text-xs text-neutral-400 tabular-nums">Community gross: {fmtMoney(artistBookingStats.communityGross)}</p>
+              <div>
+                <p className=”text-[10px] text-neutral-600 mb-0.5 uppercase tracking-wide”>By track</p>
+                <p className=”text-xs text-neutral-400 tabular-nums”>Pipeline: {fmtMoney(artistBookingStats.pipelineGross)}</p>
+                <p className=”text-xs text-neutral-500 tabular-nums mt-0.5”>Community: {fmtMoney(artistBookingStats.communityGross)}</p>
                 {artistBookingStats.unlinkedGross > 0 && (
-                  <p className="text-xs text-neutral-500 tabular-nums">No venue: {fmtMoney(artistBookingStats.unlinkedGross)}</p>
+                  <p className=”text-xs text-neutral-600 tabular-nums mt-0.5”>No venue: {fmtMoney(artistBookingStats.unlinkedGross)}</p>
                 )}
               </div>
             </div>
