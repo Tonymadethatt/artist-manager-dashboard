@@ -108,13 +108,15 @@ const EMPTY: FormAnswers = {
 }
 
 function SelectField({
-  label, value, onChange, options, required,
+  label, value, onChange, options, required, onPick,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   required?: boolean
+  /** Guided flow: after a choice is committed */
+  onPick?: () => void
 }) {
   return (
     <div className="mb-5">
@@ -126,7 +128,10 @@ function SelectField({
           <button
             key={o.value}
             type="button"
-            onClick={() => onChange(o.value)}
+            onClick={() => {
+              onChange(o.value)
+              onPick?.()
+            }}
             className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
               value === o.value
                 ? 'bg-white text-black border-white font-medium'
@@ -153,7 +158,16 @@ const RATING_ROWS: { n: number; hint: string }[][] = [
   ],
 ]
 
-function RatingField({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
+function RatingField({
+  value,
+  onChange,
+  onSkip,
+}: {
+  value: number | null
+  onChange: (v: number) => void
+  /** One-question flow: skip without choosing a score */
+  onSkip?: () => void
+}) {
   return (
     <div className="mb-5">
       <label className="block text-sm font-medium text-white mb-2">
@@ -180,6 +194,15 @@ function RatingField({ value, onChange }: { value: number | null; onChange: (v: 
           </div>
         ))}
       </div>
+      {onSkip ? (
+        <button
+          type="button"
+          onClick={onSkip}
+          className="mt-3 text-sm text-neutral-500 hover:text-neutral-300"
+        >
+          Skip for now
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -194,13 +217,14 @@ const ATTENDANCE_BANDS = [
 ] as const
 
 function ChipGrid({
-  label, value, onChange, options, optional,
+  label, value, onChange, options, optional, onPick,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   optional?: boolean
+  onPick?: () => void
 }) {
   return (
     <div className="mb-5">
@@ -213,7 +237,10 @@ function ChipGrid({
           <button
             key={o.value}
             type="button"
-            onClick={() => onChange(o.value)}
+            onClick={() => {
+              onChange(o.value)
+              onPick?.()
+            }}
             className={`min-h-[44px] px-3 py-2.5 rounded-lg border text-sm text-center transition-all ${
               value === o.value
                 ? 'bg-white text-black border-white font-medium'
@@ -284,6 +311,25 @@ export function ShowReportWizard({
   )
   const [answers, setAnswers] = useState<FormAnswers>(EMPTY)
   const [step, setStep] = useState(0)
+  /** Step 0: event vs cancellation question (one screen each). */
+  const [phase0, setPhase0] = useState<'event' | 'cancellation'>('event')
+  /** Step 1 (event happened): single-question phases. */
+  const [phase1, setPhase1] = useState<
+    'rating' | 'attendance' | 'paid' | 'partial' | 'chase' | 'dispute' | 'production' | 'friction'
+  >('rating')
+  /** Final step (venue / notes / media) — step 2 if event happened, else step 1. */
+  const [phaseVenue, setPhaseVenue] = useState<
+    | 'venue_int'
+    | 'rel'
+    | 'timeline'
+    | 'booking_call'
+    | 'play'
+    | 'mgr'
+    | 'referral'
+    | 'notes'
+    | 'media'
+    | 'done'
+  >('venue_int')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({})
   const [brandingIn, setBrandingIn] = useState<PublicFormBranding>(() =>
@@ -351,7 +397,18 @@ export function ShowReportWizard({
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [step])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [phase0, phase1, phaseVenue])
+
   const showEventSections = answers.eventHappened === 'yes'
+
+  useEffect(() => {
+    if (step === 0) setPhase0('event')
+    if (step === 1 && showEventSections) setPhase1('rating')
+    if (step === 1 && !showEventSections) setPhaseVenue('venue_int')
+    if (step === 2) setPhaseVenue('venue_int')
+  }, [step, showEventSections])
   const totalSteps = showEventSections ? 3 : 2
 
   useEffect(() => {
@@ -425,15 +482,15 @@ export function ShowReportWizard({
     return { ok: true }
   }
 
-  function handleNext() {
-    const v = validateStep(step)
+  function finishEventStep1ToVenue() {
+    const v = validateStep(1)
     if (!v.ok) {
-      setFieldError(v.message ?? 'Check highlighted step.')
+      setFieldError(v.message ?? 'Finish this section first.')
       if (v.field) scrollToField(v.field)
       return
     }
     setFieldError(null)
-    if (step < lastStepIndex) setStep(step + 1)
+    setStep(2)
   }
 
   function handleBack() {
@@ -650,6 +707,10 @@ export function ShowReportWizard({
   }
 
   const showPaymentChip = showEventSections && answers.artistPaidStatus === 'partial'
+
+  const isVenueStep = (!showEventSections && step === 1) || (showEventSections && step === 2)
+  const isEventPaymentStep = Boolean(showEventSections && step === 1)
+  const showFooterBar = step > 0 && !isEventPaymentStep && (!isVenueStep || phaseVenue === 'done')
   const venueInterestLabel = showEventSections
     ? 'Did the venue express interest in booking you again?'
     : 'Does this venue still seem interested in working with you in the future?'
@@ -685,15 +746,20 @@ export function ShowReportWizard({
         ) : null}
       </div>
 
-        <form className="max-w-md mx-auto w-full" onSubmit={isLastStep ? handleSubmit : (e) => { e.preventDefault(); handleNext() }}>
-          {step === 0 && (
+        <form className="max-w-md mx-auto w-full" onSubmit={handleSubmit}>
+          {step === 0 && phase0 === 'event' ? (
             <div ref={registerRef('event')}>
               <SelectField
                 label="Did the event happen as planned?"
                 value={answers.eventHappened}
                 onChange={v => {
                   set('eventHappened', v as FormAnswers['eventHappened'])
-                  if (v === 'yes') set('cancellationReason', '')
+                  if (v === 'yes') {
+                    set('cancellationReason', '')
+                    setStep(1)
+                  } else {
+                    setPhase0('cancellation')
+                  }
                 }}
                 required
                 options={[
@@ -702,53 +768,77 @@ export function ShowReportWizard({
                   { value: 'postponed', label: 'It was postponed' },
                 ]}
               />
-              {answers.eventHappened !== 'yes' && answers.eventHappened !== '' && (
-                <div ref={registerRef('cancellation')}>
+            </div>
+          ) : null}
+
+          {step === 0 && phase0 === 'cancellation' ? (
+            <div ref={registerRef('cancellation')}>
+              <SelectField
+                label="What best describes the situation?"
+                value={answers.cancellationReason}
+                onChange={v => {
+                  set('cancellationReason', v as CancellationReason)
+                  setStep(1)
+                }}
+                required
+                options={Object.entries(CANCELLATION_REASON_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+              />
+            </div>
+          ) : null}
+
+          {showEventSections && step === 1 ? (
+            <>
+              {phase1 === 'rating' ? (
+                <RatingField
+                  value={answers.eventRating}
+                  onChange={v => {
+                    set('eventRating', v)
+                    setPhase1('attendance')
+                  }}
+                  onSkip={() => setPhase1('attendance')}
+                />
+              ) : null}
+
+              {phase1 === 'attendance' ? (
+                <ChipGrid
+                  label="About how many people attended?"
+                  value={answers.attendanceBand}
+                  onChange={v => set('attendanceBand', v)}
+                  options={[...ATTENDANCE_BANDS]}
+                  optional
+                  onPick={() => setPhase1('paid')}
+                />
+              ) : null}
+
+              {phase1 === 'paid' ? (
+                <div ref={registerRef('paid')}>
                   <SelectField
-                    label="What best describes the situation?"
-                    value={answers.cancellationReason}
-                    onChange={v => set('cancellationReason', v as CancellationReason)}
+                    label="Did you receive payment from the venue?"
+                    value={answers.artistPaidStatus}
+                    onChange={v => {
+                      set('artistPaidStatus', v as FormAnswers['artistPaidStatus'])
+                      if (v !== 'partial') {
+                        set('paymentPreset', '')
+                        set('paymentAmount', '')
+                      }
+                      if (v === 'yes') setPhase1('dispute')
+                      else if (v === 'partial') setPhase1('partial')
+                      else setPhase1('chase')
+                    }}
                     required
-                    options={Object.entries(CANCELLATION_REASON_LABELS).map(([value, label]) => ({
-                      value,
-                      label,
-                    }))}
+                    options={[
+                      { value: 'yes', label: 'Yes, full payment' },
+                      { value: 'partial', label: 'Partial payment' },
+                      { value: 'no', label: 'Not yet / no' },
+                    ]}
                   />
                 </div>
-              )}
-            </div>
-          )}
+              ) : null}
 
-          {showEventSections && step === 1 && (
-            <>
-              <RatingField value={answers.eventRating} onChange={v => set('eventRating', v)} />
-              <ChipGrid
-                label="About how many people attended?"
-                value={answers.attendanceBand}
-                onChange={v => set('attendanceBand', v)}
-                options={[...ATTENDANCE_BANDS]}
-                optional
-              />
-              <div ref={registerRef('paid')}>
-                <SelectField
-                  label="Did you receive payment from the venue?"
-                  value={answers.artistPaidStatus}
-                  onChange={v => {
-                    set('artistPaidStatus', v as FormAnswers['artistPaidStatus'])
-                    if (v !== 'partial') {
-                      set('paymentPreset', '')
-                      set('paymentAmount', '')
-                    }
-                  }}
-                  required
-                  options={[
-                    { value: 'yes', label: 'Yes, full payment' },
-                    { value: 'partial', label: 'Partial payment' },
-                    { value: 'no', label: 'Not yet / no' },
-                  ]}
-                />
-              </div>
-              {showPaymentChip && (
+              {phase1 === 'partial' && showPaymentChip ? (
                 <div ref={registerRef('partial_amt')}>
                   <label className="block text-sm font-medium text-white mb-2">About how much did you receive? ($)</label>
                   <div className="grid grid-cols-2 gap-2 mb-2">
@@ -770,7 +860,7 @@ export function ShowReportWizard({
                       </button>
                     ))}
                   </div>
-                  {answers.paymentPreset === 'other' && (
+                  {answers.paymentPreset === 'other' ? (
                     <input
                       type="number"
                       min={0}
@@ -779,17 +869,42 @@ export function ShowReportWizard({
                       value={answers.paymentAmount}
                       onChange={e => set('paymentAmount', e.target.value)}
                       placeholder="Enter amount"
-                      className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm mb-5"
+                      className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm mb-4"
                     />
-                  )}
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!answers.paymentPreset) {
+                        setFieldError('Pick about how much you received (or Other).')
+                        scrollToField('partial_amt')
+                        return
+                      }
+                      if (answers.paymentPreset === 'other' && !answers.paymentAmount.trim()) {
+                        setFieldError('Enter the partial payment amount.')
+                        scrollToField('partial_amt')
+                        return
+                      }
+                      setFieldError(null)
+                      setPhase1('chase')
+                    }}
+                    className="w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                  >
+                    Continue
+                  </button>
                 </div>
-              )}
-              {showEventSections && answers.artistPaidStatus && answers.artistPaidStatus !== 'yes' && (
+              ) : null}
+
+              {phase1 === 'chase' &&
+              showEventSections &&
+              answers.artistPaidStatus &&
+              answers.artistPaidStatus !== 'yes' ? (
                 <div ref={registerRef('chase')}>
                   <SelectField
                     label="Should your manager help chase payment from the venue?"
                     value={answers.chasePaymentFollowup}
                     onChange={v => set('chasePaymentFollowup', v as FormAnswers['chasePaymentFollowup'])}
+                    onPick={() => setPhase1('dispute')}
                     required
                     options={[
                       { value: 'no', label: 'No, I will handle it' },
@@ -798,258 +913,357 @@ export function ShowReportWizard({
                     ]}
                   />
                 </div>
-              )}
-              <div ref={registerRef('dispute')}>
-                <SelectField
-                  label="Is the amount the venue owes still what you agreed to?"
-                  value={answers.paymentDispute}
-                  onChange={v => set('paymentDispute', v as FormAnswers['paymentDispute'])}
-                  required
-                  options={[
-                    { value: 'no', label: 'Yes — matches the deal' },
-                    { value: 'yes', label: 'No — there is a disagreement' },
-                  ]}
-                />
-              </div>
-              <div ref={registerRef('production')}>
-                <SelectField
-                  label="Production, sound, and safety overall"
-                  value={answers.productionIssueLevel}
-                  onChange={v => {
-                    set('productionIssueLevel', v as FormAnswers['productionIssueLevel'])
-                    if (v === 'none') set('productionFrictionTags', [])
-                  }}
-                  required
-                  options={[
-                    { value: 'none', label: 'Smooth — no real issues' },
-                    { value: 'minor', label: 'Minor annoyances only' },
-                    { value: 'serious', label: 'Serious problem — manager should know' },
-                  ]}
-                />
-              </div>
-              <MultiFrictionField
-                tags={answers.productionFrictionTags}
-                onChange={t => set('productionFrictionTags', t)}
-                issueLevel={answers.productionIssueLevel}
-              />
-            </>
-          )}
+              ) : null}
 
-          {((!showEventSections && step === 1) || (showEventSections && step === 2)) && (
-            <>
-              <div ref={registerRef('venue_int')}>
-                <SelectField
-                  label={venueInterestLabel}
-                  value={answers.venueInterest}
-                  onChange={v => {
-                    set('venueInterest', v as FormAnswers['venueInterest'])
-                    if (v !== 'yes') {
-                      set('rebookingTimeline', '')
-                      set('wantsBookingCall', '')
-                    }
-                  }}
-                  required
-                  options={[
-                    { value: 'yes', label: 'Yes' },
-                    { value: 'unsure', label: 'Not sure yet' },
-                    { value: 'no', label: 'No / not interested' },
-                  ]}
-                />
-              </div>
-              <div ref={registerRef('rel')}>
-                <SelectField
-                  label={relationshipLabel}
-                  value={answers.relationshipQuality}
-                  onChange={v => set('relationshipQuality', v as FormAnswers['relationshipQuality'])}
-                  required
-                  options={[
-                    { value: 'good', label: 'Good — solid connection' },
-                    { value: 'neutral', label: 'Neutral — professional' },
-                    { value: 'poor', label: 'Poor — difficult' },
-                  ]}
-                />
-              </div>
-              {answers.venueInterest === 'yes' && (
-                <>
-                  <div ref={registerRef('timeline')}>
-                    <SelectField
-                      label="When did they hint at booking you again?"
-                      value={answers.rebookingTimeline}
-                      onChange={v => set('rebookingTimeline', v as FormAnswers['rebookingTimeline'])}
-                      required
-                      options={[
-                        { value: 'this_month', label: 'Soon — this month' },
-                        { value: 'this_quarter', label: 'This season / few months' },
-                        { value: 'later', label: 'Later / no rush' },
-                        { value: 'not_discussed', label: 'We did not really discuss timing' },
-                      ]}
-                    />
-                  </div>
-                  <div ref={registerRef('booking_call')}>
-                    <SelectField
-                      label="Should your manager schedule the next booking conversation?"
-                      value={answers.wantsBookingCall}
-                      onChange={v => set('wantsBookingCall', v as FormAnswers['wantsBookingCall'])}
-                      required
-                      options={[
-                        { value: 'yes', label: 'Yes — loop my manager in' },
-                        { value: 'no', label: "No — I'll handle it" },
-                      ]}
-                    />
-                  </div>
-                </>
-              )}
-              <div ref={registerRef('play_again')}>
-                <SelectField
-                  label="Would you play this venue again?"
-                  value={answers.wouldPlayAgain}
-                  onChange={v => set('wouldPlayAgain', v as FormAnswers['wouldPlayAgain'])}
-                  required
-                  options={[
-                    { value: 'yes', label: 'Yes' },
-                    { value: 'maybe', label: 'Maybe' },
-                    { value: 'no', label: 'No' },
-                  ]}
-                />
-              </div>
-              <div ref={registerRef('mgr_contact')}>
-                <SelectField
-                  label="Should your manager contact the venue on your behalf?"
-                  value={answers.wantsManagerVenueContact}
-                  onChange={v => set('wantsManagerVenueContact', v as FormAnswers['wantsManagerVenueContact'])}
-                  required
-                  options={[
-                    { value: 'no', label: 'No' },
-                    { value: 'yes', label: 'Yes' },
-                  ]}
-                />
-              </div>
-              <div ref={registerRef('referral')}>
-                <SelectField
-                  label="Did anyone else at the show express interest in booking you?"
-                  value={answers.referralLead}
-                  onChange={v => set('referralLead', v as FormAnswers['referralLead'])}
-                  required
-                  options={[
-                    { value: 'no', label: 'No' },
-                    { value: 'yes', label: 'Yes — possible referral' },
-                  ]}
-                />
-              </div>
-
-              <div className="mb-5">
-                <label className="block text-sm font-medium text-white mb-2">
-                  Quick notes for your manager <span className="text-neutral-500 font-normal">(optional)</span>
-                </label>
-                <p className="text-xs text-neutral-600 mb-2">Tap shortcuts or add a line below — no need to type unless you want.</p>
-                <div className="flex flex-col gap-2 mb-3">
-                  {NOTE_CHIP_PRESETS.map(p => {
-                    const on = answers.noteChipIds.includes(p.id)
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          set(
-                            'noteChipIds',
-                            on ? answers.noteChipIds.filter(x => x !== p.id) : [...answers.noteChipIds, p.id]
-                          )
-                        }}
-                        className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                          on ? 'bg-white text-black border-white' : 'bg-neutral-900 text-neutral-300 border-neutral-700'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    )
-                  })}
+              {phase1 === 'dispute' ? (
+                <div ref={registerRef('dispute')}>
+                  <SelectField
+                    label="Is the amount the venue owes still what you agreed to?"
+                    value={answers.paymentDispute}
+                    onChange={v => set('paymentDispute', v as FormAnswers['paymentDispute'])}
+                    onPick={() => setPhase1('production')}
+                    required
+                    options={[
+                      { value: 'no', label: 'Yes — matches the deal' },
+                      { value: 'yes', label: 'No — there is a disagreement' },
+                    ]}
+                  />
                 </div>
-                <textarea
-                  value={answers.notesExtra}
-                  onChange={e => set('notesExtra', e.target.value)}
-                  rows={2}
-                  placeholder="Anything else (optional)..."
-                  className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none"
-                />
-              </div>
+              ) : null}
 
-              <div className="mb-6" ref={registerRef('media')}>
-                <label className="block text-sm font-medium text-white mb-2">
-                  Photos, videos, or posts from the show?
-                </label>
-                <div className="flex flex-col gap-2 mb-2">
+              {phase1 === 'production' ? (
+                <div ref={registerRef('production')}>
+                  <SelectField
+                    label="Production, sound, and safety overall"
+                    value={answers.productionIssueLevel}
+                    onChange={v => {
+                      const level = v as FormAnswers['productionIssueLevel']
+                      set('productionIssueLevel', level)
+                      if (level === 'none') {
+                        set('productionFrictionTags', [])
+                        finishEventStep1ToVenue()
+                      } else {
+                        setPhase1('friction')
+                      }
+                    }}
+                    required
+                    options={[
+                      { value: 'none', label: 'Smooth — no real issues' },
+                      { value: 'minor', label: 'Minor annoyances only' },
+                      { value: 'serious', label: 'Serious problem — manager should know' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phase1 === 'friction' ? (
+                <div className="mb-5">
+                  <MultiFrictionField
+                    tags={answers.productionFrictionTags}
+                    onChange={t => set('productionFrictionTags', t)}
+                    issueLevel={answers.productionIssueLevel}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => finishEventStep1ToVenue()}
+                    className="mt-4 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                  >
+                    Continue
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {((!showEventSections && step === 1) || (showEventSections && step === 2)) ? (
+            <>
+              {phaseVenue === 'venue_int' ? (
+                <div ref={registerRef('venue_int')}>
+                  <SelectField
+                    label={venueInterestLabel}
+                    value={answers.venueInterest}
+                    onChange={v => {
+                      const nv = v as FormAnswers['venueInterest']
+                      set('venueInterest', nv)
+                      if (nv !== 'yes') {
+                        set('rebookingTimeline', '')
+                        set('wantsBookingCall', '')
+                      }
+                      setPhaseVenue('rel')
+                    }}
+                    required
+                    options={[
+                      { value: 'yes', label: 'Yes' },
+                      { value: 'unsure', label: 'Not sure yet' },
+                      { value: 'no', label: 'No / not interested' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'rel' ? (
+                <div ref={registerRef('rel')}>
+                  <SelectField
+                    label={relationshipLabel}
+                    value={answers.relationshipQuality}
+                    onChange={v => {
+                      set('relationshipQuality', v as FormAnswers['relationshipQuality'])
+                      setPhaseVenue(answers.venueInterest === 'yes' ? 'timeline' : 'play')
+                    }}
+                    required
+                    options={[
+                      { value: 'good', label: 'Good — solid connection' },
+                      { value: 'neutral', label: 'Neutral — professional' },
+                      { value: 'poor', label: 'Poor — difficult' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'timeline' && answers.venueInterest === 'yes' ? (
+                <div ref={registerRef('timeline')}>
+                  <SelectField
+                    label="When did they hint at booking you again?"
+                    value={answers.rebookingTimeline}
+                    onChange={v => {
+                      set('rebookingTimeline', v as FormAnswers['rebookingTimeline'])
+                      setPhaseVenue('booking_call')
+                    }}
+                    required
+                    options={[
+                      { value: 'this_month', label: 'Soon — this month' },
+                      { value: 'this_quarter', label: 'This season / few months' },
+                      { value: 'later', label: 'Later / no rush' },
+                      { value: 'not_discussed', label: 'We did not really discuss timing' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'booking_call' && answers.venueInterest === 'yes' ? (
+                <div ref={registerRef('booking_call')}>
+                  <SelectField
+                    label="Should your manager schedule the next booking conversation?"
+                    value={answers.wantsBookingCall}
+                    onChange={v => {
+                      set('wantsBookingCall', v as FormAnswers['wantsBookingCall'])
+                      setPhaseVenue('play')
+                    }}
+                    required
+                    options={[
+                      { value: 'yes', label: 'Yes — loop my manager in' },
+                      { value: 'no', label: "No — I'll handle it" },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'play' ? (
+                <div ref={registerRef('play_again')}>
+                  <SelectField
+                    label="Would you play this venue again?"
+                    value={answers.wouldPlayAgain}
+                    onChange={v => {
+                      set('wouldPlayAgain', v as FormAnswers['wouldPlayAgain'])
+                      setPhaseVenue('mgr')
+                    }}
+                    required
+                    options={[
+                      { value: 'yes', label: 'Yes' },
+                      { value: 'maybe', label: 'Maybe' },
+                      { value: 'no', label: 'No' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'mgr' ? (
+                <div ref={registerRef('mgr_contact')}>
+                  <SelectField
+                    label="Should your manager contact the venue on your behalf?"
+                    value={answers.wantsManagerVenueContact}
+                    onChange={v => {
+                      set('wantsManagerVenueContact', v as FormAnswers['wantsManagerVenueContact'])
+                      setPhaseVenue('referral')
+                    }}
+                    required
+                    options={[
+                      { value: 'no', label: 'No' },
+                      { value: 'yes', label: 'Yes' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'referral' ? (
+                <div ref={registerRef('referral')}>
+                  <SelectField
+                    label="Did anyone else at the show express interest in booking you?"
+                    value={answers.referralLead}
+                    onChange={v => {
+                      set('referralLead', v as FormAnswers['referralLead'])
+                      setPhaseVenue('notes')
+                    }}
+                    required
+                    options={[
+                      { value: 'no', label: 'No' },
+                      { value: 'yes', label: 'Yes — possible referral' },
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'notes' ? (
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Quick notes for your manager <span className="text-neutral-500 font-normal">(optional)</span>
+                  </label>
+                  <p className="text-xs text-neutral-600 mb-2">Tap shortcuts or add a line below — no need to type unless you want.</p>
+                  <div className="flex flex-col gap-2 mb-3">
+                    {NOTE_CHIP_PRESETS.map(p => {
+                      const on = answers.noteChipIds.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            set(
+                              'noteChipIds',
+                              on ? answers.noteChipIds.filter(x => x !== p.id) : [...answers.noteChipIds, p.id],
+                            )
+                          }}
+                          className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
+                            on ? 'bg-white text-black border-white' : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <textarea
+                    value={answers.notesExtra}
+                    onChange={e => set('notesExtra', e.target.value)}
+                    rows={2}
+                    placeholder="Anything else (optional)..."
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none"
+                  />
                   <button
                     type="button"
                     onClick={() => {
-                      set('mediaChoice', 'none')
-                      set('mediaLinks', '')
+                      setFieldError(null)
+                      setPhaseVenue('media')
                     }}
-                    className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                      answers.mediaChoice === 'none'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-neutral-900 text-neutral-300 border-neutral-700'
-                    }`}
+                    className="mt-4 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
                   >
-                    No media to share
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => set('mediaChoice', 'links')}
-                    className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                      answers.mediaChoice === 'links'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-neutral-900 text-neutral-300 border-neutral-700'
-                    }`}
-                  >
-                    I will paste link(s) below
+                    Continue
                   </button>
                 </div>
-                {answers.mediaChoice === 'links' && (
-                  <textarea
-                    value={answers.mediaLinks}
-                    onChange={e => set('mediaLinks', e.target.value)}
-                    rows={2}
-                    placeholder="Instagram, Drive, etc."
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none"
-                  />
-                )}
-              </div>
+              ) : null}
+
+              {phaseVenue === 'media' ? (
+                <div className="mb-6" ref={registerRef('media')}>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Photos, videos, or posts from the show?
+                  </label>
+                  <div className="flex flex-col gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('mediaChoice', 'none')
+                        set('mediaLinks', '')
+                        setFieldError(null)
+                        setPhaseVenue('done')
+                      }}
+                      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
+                        answers.mediaChoice === 'none'
+                          ? 'bg-white text-black border-white'
+                          : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                      }`}
+                    >
+                      No media to share
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => set('mediaChoice', 'links')}
+                      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
+                        answers.mediaChoice === 'links'
+                          ? 'bg-white text-black border-white'
+                          : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                      }`}
+                    >
+                      I will paste link(s) below
+                    </button>
+                  </div>
+                  {answers.mediaChoice === 'links' ? (
+                    <>
+                      <textarea
+                        value={answers.mediaLinks}
+                        onChange={e => set('mediaLinks', e.target.value)}
+                        rows={2}
+                        placeholder="Instagram, Drive, etc."
+                        className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none mb-4"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!answers.mediaLinks.trim()) {
+                            setFieldError('Paste at least one link, or choose “No media”.')
+                            return
+                          }
+                          setFieldError(null)
+                          setPhaseVenue('done')
+                        }}
+                        className="w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                      >
+                        Continue
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {phaseVenue === 'done' ? (
+                <p className="text-sm text-neutral-400 mb-4">
+                  You&apos;re all set — submit your report below.
+                </p>
+              ) : null}
             </>
-          )}
+          ) : null}
 
           {fieldError && (
             <p className="text-red-400 text-sm mb-4" role="alert">{fieldError}</p>
           )}
 
-          <div className={footerClass}>
-            <div className="max-w-md mx-auto flex gap-3">
-              {step > 0 && (
+          {showFooterBar ? (
+            <div className={footerClass}>
+              <div className="max-w-md mx-auto flex gap-3">
+                {step > 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="flex-1 min-h-[48px] rounded-lg border border-neutral-600 text-neutral-200 text-sm font-medium hover:bg-neutral-900"
+                  >
+                    Back
+                  </button>
+                ) : null}
                 <button
-                  type="button"
-                  onClick={handleBack}
-                  className="flex-1 min-h-[48px] rounded-lg border border-neutral-600 text-neutral-200 text-sm font-medium hover:bg-neutral-900"
+                  type="submit"
+                  disabled={state === 'submitting' || (isLastStep && isVenueStep && phaseVenue !== 'done')}
+                  className="flex-[2] min-h-[48px] bg-white hover:bg-neutral-100 text-black font-semibold text-sm rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Back
+                  {state === 'submitting' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending…
+                    </>
+                  ) : (
+                    'Submit report'
+                  )}
                 </button>
-              )}
-              <button
-                type="submit"
-                disabled={state === 'submitting'}
-                className="flex-[2] min-h-[48px] bg-white hover:bg-neutral-100 text-black font-semibold text-sm rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {state === 'submitting' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Sending…
-                  </>
-                ) : isLastStep ? (
-                  'Submit report'
-                ) : (
-                  'Continue'
-                )}
-              </button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </form>
 
         <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs text-neutral-700">

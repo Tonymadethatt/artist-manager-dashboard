@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import type { DependencyList } from 'react'
+import type { DependencyList, ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import type { EmailCaptureKind } from '@/lib/emailCapture/kinds'
@@ -14,6 +14,7 @@ import {
   mergePublicFormBranding,
   type PublicFormBranding,
 } from '@/lib/publicFormBranding'
+import { cn } from '@/lib/utils'
 
 type PreflightOk =
   | { valid: false }
@@ -49,6 +50,12 @@ export function formatEmailCaptureEventDate(iso: string | null): string | null {
 
 type EmailCaptureFooterVariant = 'viewport' | 'embedded'
 const EmailCaptureFooterContext = createContext<EmailCaptureFooterVariant>('viewport')
+
+function useScrollTopOnStepChange(step: number) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [step])
+}
 
 function ChoiceRow({
   label,
@@ -315,17 +322,19 @@ function Field({
   onChange,
   placeholder,
   textarea,
+  className,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
   textarea?: boolean
+  className?: string
 }) {
   const cls =
     'w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-500'
   return (
-    <label className="block mb-4">
+    <label className={cn('block mb-4', className)}>
       <span className="block text-xs font-medium text-neutral-400 mb-1.5">{label}</span>
       {textarea ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3} className={cls} />
@@ -334,6 +343,17 @@ function Field({
       )}
     </label>
   )
+}
+
+function captureFooterWrap(footerVariant: EmailCaptureFooterVariant, children: ReactNode) {
+  if (footerVariant === 'embedded') {
+    return (
+      <div className="sticky bottom-0 z-10 mt-8 -mx-4 px-4 pt-4 pb-3 bg-neutral-950/95 border-t border-neutral-800 backdrop-blur-sm">
+        {children}
+      </div>
+    )
+  }
+  return <div className="fixed bottom-0 left-0 right-0 p-4 bg-neutral-950/95 border-t border-neutral-800">{children}</div>
 }
 
 function SubmitBar({ submitting, disabled }: { submitting: boolean; disabled?: boolean }) {
@@ -350,21 +370,38 @@ function SubmitBar({ submitting, disabled }: { submitting: boolean; disabled?: b
       </button>
     </div>
   )
-  if (footerVariant === 'embedded') {
-    return (
-      <div className="sticky bottom-0 z-10 mt-6 -mx-4 px-4 pt-4 pb-3 bg-neutral-950/95 border-t border-neutral-800 backdrop-blur-sm">
-        {bar}
-      </div>
-    )
-  }
-  return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-neutral-950/95 border-t border-neutral-800">
-      {bar}
-    </div>
-  )
+  return captureFooterWrap(footerVariant, bar)
 }
 
+function ContinueBar({ onClick, disabled, submitting = false }: { onClick: () => void; disabled?: boolean; submitting?: boolean }) {
+  const footerVariant = useContext(EmailCaptureFooterContext)
+  const bar = (
+    <div className="max-w-lg mx-auto">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={submitting || disabled}
+        className="w-full min-h-[48px] rounded-lg bg-white text-black text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+      >
+        Continue
+      </button>
+    </div>
+  )
+  return captureFooterWrap(footerVariant, bar)
+}
+
+const PRE_EVENT_STEP_LABELS = [
+  'Load-in / soundcheck window',
+  'Settlement method',
+  'Day-of contact name',
+  'Day-of phone',
+  'Day-of email',
+  'Parking / load-in notes',
+  'Rider or tech info (link)',
+] as const
+
 function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [loadInOrSoundcheck, setLoadIn] = useState('')
   const [settlementMethod, setSettle] = useState('')
   const [dayOfContactName, setName] = useState('')
@@ -373,256 +410,433 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const [parkingNotes, setPark] = useState('')
   const [riderOrTechUrl, setRider] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = 10
-    if (loadInOrSoundcheck.trim()) p += 18
-    if (settlementMethod.trim()) p += 18
-    const contacts = [dayOfContactName, dayOfContactPhone, dayOfContactEmail].filter(s => s.trim()).length
-    if (contacts > 0) p += Math.min(28, contacts * 9)
-    if (parkingNotes.trim()) p += 10
-    if (riderOrTechUrl.trim()) p += 10
-    return Math.min(96, p)
-  }, [loadInOrSoundcheck, settlementMethod, dayOfContactName, dayOfContactPhone, dayOfContactEmail, parkingNotes, riderOrTechUrl])
+  useScrollTopOnStepChange(step)
+
+  const lastIdx = PRE_EVENT_STEP_LABELS.length - 1
+  useEmailCaptureProgressEstimate(
+    () => (lastIdx <= 0 ? 0 : Math.round((step / lastIdx) * 100)),
+    [step, lastIdx],
+  )
+
+  const canSubmit = loadInOrSoundcheck.trim() || settlementMethod.trim()
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        onSubmit({
-          loadInOrSoundcheck: loadInOrSoundcheck.trim(),
-          settlementMethod: settlementMethod.trim(),
-          dayOfContactName: dayOfContactName.trim(),
-          dayOfContactPhone: dayOfContactPhone.trim(),
-          dayOfContactEmail: dayOfContactEmail.trim(),
-          parkingNotes: parkingNotes.trim(),
-          riderOrTechUrl: riderOrTechUrl.trim(),
-        })
-      }}
-      className="pb-28"
-    >
-      <p className="text-sm text-neutral-400 mb-4">Share load-in, settlement, and day-of contact details.</p>
-      <Field label="Load-in / soundcheck window" value={loadInOrSoundcheck} onChange={setLoadIn} placeholder="e.g. 5pm load-in, 8pm soundcheck" />
-      <Field label="Settlement method" value={settlementMethod} onChange={setSettle} placeholder="Check, wire, night-of cash…" />
-      <Field label="Day-of contact name" value={dayOfContactName} onChange={setName} />
-      <Field label="Day-of phone" value={dayOfContactPhone} onChange={setPhone} />
-      <Field label="Day-of email" value={dayOfContactEmail} onChange={setEmail} />
-      <Field label="Parking / load-in notes" value={parkingNotes} onChange={setPark} textarea />
-      <Field label="Rider or tech info (link)" value={riderOrTechUrl} onChange={setRider} placeholder="https://…" />
-      <SubmitBar
-        submitting={submitting}
-        disabled={!loadInOrSoundcheck.trim() && !settlementMethod.trim()}
-      />
-    </form>
+    <div className="pb-28">
+      <p className="text-sm text-neutral-400 mb-6">
+        Share load-in, settlement, and day-of contact details — one question at a time.
+      </p>
+      {step === 0 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[0]} value={loadInOrSoundcheck} onChange={setLoadIn} placeholder="e.g. 5pm load-in, 8pm soundcheck" className="mb-6" />
+          <ContinueBar onClick={() => setStep(1)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[1]} value={settlementMethod} onChange={setSettle} placeholder="Check, wire, night-of cash…" className="mb-6" />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[2]} value={dayOfContactName} onChange={setName} className="mb-6" />
+          <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 3 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[3]} value={dayOfContactPhone} onChange={setPhone} className="mb-6" />
+          <ContinueBar onClick={() => setStep(4)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 4 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[4]} value={dayOfContactEmail} onChange={setEmail} className="mb-6" />
+          <ContinueBar onClick={() => setStep(5)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 5 ? (
+        <>
+          <Field label={PRE_EVENT_STEP_LABELS[5]} value={parkingNotes} onChange={setPark} textarea className="mb-6" />
+          <ContinueBar onClick={() => setStep(6)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 6 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            onSubmit({
+              loadInOrSoundcheck: loadInOrSoundcheck.trim(),
+              settlementMethod: settlementMethod.trim(),
+              dayOfContactName: dayOfContactName.trim(),
+              dayOfContactPhone: dayOfContactPhone.trim(),
+              dayOfContactEmail: dayOfContactEmail.trim(),
+              parkingNotes: parkingNotes.trim(),
+              riderOrTechUrl: riderOrTechUrl.trim(),
+            })
+          }}
+        >
+          <Field label={PRE_EVENT_STEP_LABELS[6]} value={riderOrTechUrl} onChange={setRider} placeholder="https://…" className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!canSubmit} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [intent, setIntent] = useState<'interested' | 'not_now' | 'wrong_person' | ''>('')
   const [note, setNote] = useState('')
   const [alternateEmail, setAlt] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = intent ? 52 : 14
-    if (note.trim()) p += 18
-    if (alternateEmail.trim()) p += 18
-    return Math.min(96, p)
-  }, [intent, note, alternateEmail])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 2 ? 100 : Math.round((step / 2) * 50)), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (!intent) return
-        onSubmit({ intent, note: note.trim(), alternateEmail: alternateEmail.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Interested — let&apos;s explore a date" selected={intent === 'interested'} onSelect={() => setIntent('interested')} />
-      <ChoiceRow label="Not for us right now" selected={intent === 'not_now'} onSelect={() => setIntent('not_now')} />
-      <ChoiceRow label="Wrong contact — point me to the right person" selected={intent === 'wrong_person'} onSelect={() => setIntent('wrong_person')} />
-      <Field label="Note (optional)" value={note} onChange={setNote} textarea />
-      <Field label="Alternate email (optional)" value={alternateEmail} onChange={setAlt} />
-      <SubmitBar submitting={submitting} disabled={!intent} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Where should we take this?</p>
+          <ChoiceRow
+            label="Interested — let&apos;s explore a date"
+            selected={intent === 'interested'}
+            onSelect={() => {
+              setIntent('interested')
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Not for us right now"
+            selected={intent === 'not_now'}
+            onSelect={() => {
+              setIntent('not_now')
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Wrong contact — point me to the right person"
+            selected={intent === 'wrong_person'}
+            onSelect={() => {
+              setIntent('wrong_person')
+              setStep(1)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={!intent} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!intent) return
+            onSubmit({ intent, note: note.trim(), alternateEmail: alternateEmail.trim() })
+          }}
+        >
+          <Field label="Alternate email (optional)" value={alternateEmail} onChange={setAlt} className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!intent} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function FollowUpForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'interested' | 'need_info' | 'pass' | ''>('')
   const [note, setNote] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = status ? 58 : 14
-    if (note.trim()) p += 28
-    return Math.min(96, p)
-  }, [status, note])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (!status) return
-        onSubmit({ status, note: note.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Still interested" selected={status === 'interested'} onSelect={() => setStatus('interested')} />
-      <ChoiceRow label="Need more info" selected={status === 'need_info'} onSelect={() => setStatus('need_info')} />
-      <ChoiceRow label="Passing for now" selected={status === 'pass'} onSelect={() => setStatus('pass')} />
-      <Field label="Note (optional)" value={note} onChange={setNote} textarea />
-      <SubmitBar submitting={submitting} disabled={!status} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Quick check-in</p>
+          <ChoiceRow
+            label="Still interested"
+            selected={status === 'interested'}
+            onSelect={() => {
+              setStatus('interested')
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Need more info"
+            selected={status === 'need_info'}
+            onSelect={() => {
+              setStatus('need_info')
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Passing for now"
+            selected={status === 'pass'}
+            onSelect={() => {
+              setStatus('pass')
+              setStep(1)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!status) return
+            onSubmit({ status, note: note.trim() })
+          }}
+        >
+          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!status} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [resolution, setRes] = useState<'new_date' | 'refund' | 'release' | 'other' | ''>('')
   const [newEventDate, setDate] = useState('')
   const [note, setNote] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = resolution ? 48 : 14
-    if (resolution === 'new_date' && newEventDate.trim()) p += 24
-    if (note.trim()) p += 20
-    return Math.min(96, p)
-  }, [resolution, newEventDate, note])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(
+    () => {
+      if (!resolution) return 0
+      if (resolution === 'new_date') return step >= 2 ? 100 : step === 0 ? 33 : 66
+      return step >= 1 ? 100 : 50
+    },
+    [step, resolution],
+  )
+
+  const pickResolution = (r: typeof resolution) => {
+    setRes(r)
+    if (r === 'new_date') setStep(1)
+    else setStep(2)
+  }
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (!resolution) return
-        onSubmit({
-          resolution,
-          newEventDate: newEventDate.trim(),
-          note: note.trim(),
-        })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="New date" selected={resolution === 'new_date'} onSelect={() => setRes('new_date')} />
-      <ChoiceRow label="Refund path" selected={resolution === 'refund'} onSelect={() => setRes('refund')} />
-      <ChoiceRow label="Mutual release" selected={resolution === 'release'} onSelect={() => setRes('release')} />
-      <ChoiceRow label="Other" selected={resolution === 'other'} onSelect={() => setRes('other')} />
-      {resolution === 'new_date' && (
-        <Field label="New event date" value={newEventDate} onChange={setDate} placeholder="YYYY-MM-DD" />
-      )}
-      <Field label="Notes" value={note} onChange={setNote} textarea />
-      <SubmitBar submitting={submitting} disabled={!resolution} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">What should we know?</p>
+          <ChoiceRow label="New date" selected={resolution === 'new_date'} onSelect={() => pickResolution('new_date')} />
+          <ChoiceRow label="Refund path" selected={resolution === 'refund'} onSelect={() => pickResolution('refund')} />
+          <ChoiceRow label="Mutual release" selected={resolution === 'release'} onSelect={() => pickResolution('release')} />
+          <ChoiceRow label="Other" selected={resolution === 'other'} onSelect={() => pickResolution('other')} />
+        </>
+      ) : null}
+      {step === 1 && resolution === 'new_date' ? (
+        <>
+          <Field label="New event date" value={newEventDate} onChange={setDate} placeholder="YYYY-MM-DD" className="mb-6" />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={!resolution} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!resolution) return
+            onSubmit({
+              resolution,
+              newEventDate: newEventDate.trim(),
+              note: note.trim(),
+            })
+          }}
+        >
+          <Field label="Notes" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!resolution} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function AgreementFollowupForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [status, setSt] = useState<'signed' | 'in_review' | 'needs_changes' | ''>('')
   const [note, setNote] = useState('')
   const [documentUrl, setUrl] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = status ? 55 : 14
-    if (note.trim()) p += 18
-    if (documentUrl.trim()) p += 18
-    return Math.min(96, p)
-  }, [status, note, documentUrl])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => Math.round((step / 2) * 100), [step])
+
+  const pick = (s: typeof status) => {
+    setSt(s)
+    setStep(1)
+  }
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (!status) return
-        onSubmit({ status, note: note.trim(), documentUrl: documentUrl.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Signed" selected={status === 'signed'} onSelect={() => setSt('signed')} />
-      <ChoiceRow label="In review" selected={status === 'in_review'} onSelect={() => setSt('in_review')} />
-      <ChoiceRow label="Needs changes" selected={status === 'needs_changes'} onSelect={() => setSt('needs_changes')} />
-      <Field label="Note (optional)" value={note} onChange={setNote} textarea />
-      <Field label="Document link (optional)" value={documentUrl} onChange={setUrl} />
-      <SubmitBar submitting={submitting} disabled={!status} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Agreement status</p>
+          <ChoiceRow label="Signed" selected={status === 'signed'} onSelect={() => pick('signed')} />
+          <ChoiceRow label="In review" selected={status === 'in_review'} onSelect={() => pick('in_review')} />
+          <ChoiceRow label="Needs changes" selected={status === 'needs_changes'} onSelect={() => pick('needs_changes')} />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={!status} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!status) return
+            onSubmit({ status, note: note.trim(), documentUrl: documentUrl.trim() })
+          }}
+        >
+          <Field label="Document link (optional)" value={documentUrl} onChange={setUrl} className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!status} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [ack, setAck] = useState(false)
   const [note, setNote] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = ack ? 72 : 18
-    if (note.trim()) p += 18
-    return Math.min(96, p)
-  }, [ack, note])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        onSubmit({ acknowledged: ack, note: note.trim() })
-      }}
-      className="pb-28 space-y-4"
-    >
-      <label className="flex items-start gap-3 cursor-pointer">
-        <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} className="mt-1 rounded border-neutral-600" />
-        <span className="text-sm text-neutral-300">I have reviewed the agreement (or the link shared by email).</span>
-      </label>
-      <Field label="Questions or comments (optional)" value={note} onChange={setNote} textarea />
-      <SubmitBar submitting={submitting} disabled={!ack} />
-    </form>
+    <div className="pb-28 space-y-4">
+      {step === 0 ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setAck(true)
+              setStep(1)
+            }}
+            className="min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-colors border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-600"
+          >
+            <span className="font-medium text-white block mb-1">I have reviewed the agreement</span>
+            <span className="text-neutral-500 text-xs">Including the link shared by email</span>
+          </button>
+        </>
+      ) : null}
+      {step === 1 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            onSubmit({ acknowledged: ack, note: note.trim() })
+          }}
+        >
+          <Field label="Questions or comments (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!ack} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [aligned, setAligned] = useState<boolean | null>(null)
   const [corrections, setCorr] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    if (aligned === null) return 14
-    if (aligned === true) return 88
-    return corrections.trim() ? 92 : 58
-  }, [aligned, corrections])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (aligned === null) return
-        onSubmit({ aligned, corrections: corrections.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Details look correct" selected={aligned === true} onSelect={() => setAligned(true)} />
-      <ChoiceRow label="Something needs a correction" selected={aligned === false} onSelect={() => setAligned(false)} />
-      {aligned === false && <Field label="What should change?" value={corrections} onChange={setCorr} textarea />}
-      <SubmitBar submitting={submitting} disabled={aligned === null || (aligned === false && !corrections.trim())} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Do the details match?</p>
+          <ChoiceRow
+            label="Details look correct"
+            selected={aligned === true}
+            onSelect={() => {
+              setAligned(true)
+              onSubmit({ aligned: true, corrections: '' })
+            }}
+          />
+          <ChoiceRow
+            label="Something needs a correction"
+            selected={aligned === false}
+            onSelect={() => {
+              setAligned(false)
+              setStep(1)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (aligned !== false) return
+            onSubmit({ aligned: false, corrections: corrections.trim() })
+          }}
+        >
+          <Field label="What should change?" value={corrections} onChange={setCorr} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={aligned !== false || !corrections.trim()} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [received, setRec] = useState<boolean | null>(null)
   const [note, setNote] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = received === null ? 14 : 72
-    if (note.trim()) p += 18
-    return Math.min(96, p)
-  }, [received, note])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (received === null) return
-        onSubmit({ receivedInAp: received, note: note.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Received in AP / accounting" selected={received === true} onSelect={() => setRec(true)} />
-      <ChoiceRow label="Not yet / issue" selected={received === false} onSelect={() => setRec(false)} />
-      <Field label="Note (optional)" value={note} onChange={setNote} textarea />
-      <SubmitBar submitting={submitting} disabled={received === null} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Invoice status</p>
+          <ChoiceRow
+            label="Received in AP / accounting"
+            selected={received === true}
+            onSelect={() => {
+              setRec(true)
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Not yet / issue"
+            selected={received === false}
+            onSelect={() => {
+              setRec(false)
+              setStep(1)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (received === null) return
+            onSubmit({ receivedInAp: received, note: note.trim() })
+          }}
+        >
+          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={received === null} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
@@ -645,51 +859,101 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 }
 
 function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [rating, setRating] = useState(0)
   const [nothing, setN] = useState<boolean | null>(null)
   const [detail, setD] = useState('')
   const [comments, setComments] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = rating > 0 ? 32 : 10
-    if (nothing !== null) p += 34
-    if (nothing === false && detail.trim()) p += 18
-    if (comments.trim()) p += 12
-    return Math.min(96, p)
-  }, [rating, nothing, detail, comments])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => Math.round((step / 4) * 100), [step])
+
+  const doSubmit = () => {
+    if (rating === 0 || nothing === null) return
+    onSubmit({ rating, nothingPending: nothing, detail: detail.trim(), comments: comments.trim() })
+  }
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (rating === 0 || nothing === null) return
-        onSubmit({ rating, nothingPending: nothing, detail: detail.trim(), comments: comments.trim() })
-      }}
-      className="pb-28 space-y-4"
-    >
-      <div>
-        <p className="text-xs font-medium text-neutral-400 mb-2">How was the show? (required)</p>
-        <StarRating value={rating} onChange={setRating} />
-        {rating > 0 && (
-          <p className="text-xs text-neutral-500 mt-1">
-            {rating === 5 ? 'Excellent' : rating === 4 ? 'Great' : rating === 3 ? 'Good' : rating === 2 ? 'Fair' : 'Poor'}
-          </p>
-        )}
-      </div>
-      <Field label="Comments (optional)" value={comments} onChange={setComments} textarea placeholder="Anything you'd like us to know about the night..." />
-      <div className="space-y-3">
-        <p className="text-xs font-medium text-neutral-400">Anything still open?</p>
-        <ChoiceRow label="Nothing pending on our side" selected={nothing === true} onSelect={() => setN(true)} />
-        <ChoiceRow label="Something is still open" selected={nothing === false} onSelect={() => setN(false)} />
-        {nothing === false && <Field label="What&apos;s open?" value={detail} onChange={setD} textarea />}
-      </div>
-      <SubmitBar submitting={submitting} disabled={rating === 0 || nothing === null || (nothing === false && !detail.trim())} />
-    </form>
+    <div className="pb-28 space-y-4">
+      {step === 0 ? (
+        <>
+          <p className="text-xs font-medium text-neutral-400 mb-2">How was the show? (required)</p>
+          <StarRating
+            value={rating}
+            onChange={v => {
+              setRating(v)
+              setStep(1)
+            }}
+          />
+          {rating > 0 ? (
+            <p className="text-xs text-neutral-500 mt-1">
+              {rating === 5 ? 'Excellent' : rating === 4 ? 'Great' : rating === 3 ? 'Good' : rating === 2 ? 'Fair' : 'Poor'}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <Field
+            label="Comments (optional)"
+            value={comments}
+            onChange={setComments}
+            textarea
+            placeholder="Anything you'd like us to know about the night..."
+            className="mb-6"
+          />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={rating === 0} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <>
+          <p className="text-xs font-medium text-neutral-400 mb-2">Anything still open?</p>
+          <ChoiceRow
+            label="Nothing pending on our side"
+            selected={nothing === true}
+            onSelect={() => {
+              setN(true)
+              setStep(4)
+            }}
+          />
+          <ChoiceRow
+            label="Something is still open"
+            selected={nothing === false}
+            onSelect={() => {
+              setN(false)
+              setStep(3)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 3 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            doSubmit()
+          }}
+        >
+          <Field label="What&apos;s open?" value={detail} onChange={setD} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={rating === 0 || nothing !== false || !detail.trim()} />
+        </form>
+      ) : null}
+      {step === 4 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            doSubmit()
+          }}
+        >
+          <p className="text-sm text-neutral-400 mb-4">Thanks — send your feedback?</p>
+          <SubmitBar submitting={submitting} disabled={rating === 0 || nothing !== true} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
-  useEmailCaptureProgressEstimate(() => 90, [])
+  useEmailCaptureProgressEstimate(() => 100, [])
 
   return (
     <form
@@ -699,7 +963,7 @@ function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
       }}
       className="pb-28"
     >
-      <p className="text-sm text-neutral-400 mb-6">Tap submit to acknowledge — no other fields needed.</p>
+      <p className="text-sm text-neutral-400 mb-6">One tap to acknowledge — nothing else required.</p>
       <SubmitBar submitting={submitting} />
     </form>
   )
@@ -725,75 +989,127 @@ function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
 }
 
 function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [submitted, setS] = useState<boolean | null>(null)
   const [reference, setR] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = submitted === null ? 14 : 70
-    if (reference.trim()) p += 16
-    return Math.min(96, p)
-  }, [submitted, reference])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (submitted === null) return
-        onSubmit({ submittedPayment: submitted, reference: reference.trim() })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <ChoiceRow label="Payment has been sent" selected={submitted === true} onSelect={() => setS(true)} />
-      <ChoiceRow label="Not sent yet" selected={submitted === false} onSelect={() => setS(false)} />
-      <Field label="Reference # (optional)" value={reference} onChange={setR} />
-      <SubmitBar submitting={submitting} disabled={submitted === null} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm text-neutral-400 mb-2">Payment status</p>
+          <ChoiceRow
+            label="Payment has been sent"
+            selected={submitted === true}
+            onSelect={() => {
+              setS(true)
+              setStep(1)
+            }}
+          />
+          <ChoiceRow
+            label="Not sent yet"
+            selected={submitted === false}
+            onSelect={() => {
+              setS(false)
+              setStep(1)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (submitted === null) return
+            onSubmit({ submittedPayment: submitted, reference: reference.trim() })
+          }}
+        >
+          <Field label="Reference # (optional)" value={reference} onChange={setR} className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={submitted === null} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
   const [rebookInterest, setInterest] = useState<'yes' | 'maybe' | 'no' | ''>('')
   const [preferredDates, setDates] = useState('')
   const [budgetNote, setBudget] = useState('')
   const [note, setNote] = useState('')
 
-  useEmailCaptureProgressEstimate(() => {
-    let p = rebookInterest ? 46 : 14
-    if (rebookInterest === 'yes' || rebookInterest === 'maybe') {
-      if (preferredDates.trim()) p += 16
-      if (budgetNote.trim()) p += 16
-    }
-    if (note.trim()) p += 12
-    return Math.min(96, p)
-  }, [rebookInterest, preferredDates, budgetNote, note])
+  useScrollTopOnStepChange(step)
+  useEmailCaptureProgressEstimate(
+    () => {
+      if (!rebookInterest) return 0
+      if (rebookInterest === 'no') return step >= 1 ? 100 : 50
+      return Math.round((step / 3) * 100)
+    },
+    [step, rebookInterest],
+  )
+
+  const pickInterest = (v: 'yes' | 'maybe' | 'no') => {
+    setInterest(v)
+    if (v === 'no') setStep(3)
+    else setStep(1)
+  }
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        if (!rebookInterest) return
-        onSubmit({
-          rebookInterest,
-          preferredDates: preferredDates.trim(),
-          budgetNote: budgetNote.trim(),
-          note: note.trim(),
-        })
-      }}
-      className="pb-28 space-y-3"
-    >
-      <p className="text-sm text-neutral-400 mb-4">Are you interested in booking again?</p>
-      <ChoiceRow label="Yes — let&apos;s plan the next one" selected={rebookInterest === 'yes'} onSelect={() => setInterest('yes')} />
-      <ChoiceRow label="Maybe — open to it" selected={rebookInterest === 'maybe'} onSelect={() => setInterest('maybe')} />
-      <ChoiceRow label="Not right now" selected={rebookInterest === 'no'} onSelect={() => setInterest('no')} />
-      {(rebookInterest === 'yes' || rebookInterest === 'maybe') && (
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
         <>
-          <Field label="Preferred dates or months (optional)" value={preferredDates} onChange={setDates} placeholder="e.g. June or July 2026" />
-          <Field label="Rough budget or fee range (optional)" value={budgetNote} onChange={setBudget} placeholder="e.g. same as last time, $500–$800" />
+          <p className="text-sm text-neutral-400 mb-4">Are you interested in booking again?</p>
+          <ChoiceRow label="Yes — let&apos;s plan the next one" selected={rebookInterest === 'yes'} onSelect={() => pickInterest('yes')} />
+          <ChoiceRow label="Maybe — open to it" selected={rebookInterest === 'maybe'} onSelect={() => pickInterest('maybe')} />
+          <ChoiceRow label="Not right now" selected={rebookInterest === 'no'} onSelect={() => pickInterest('no')} />
         </>
-      )}
-      <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea />
-      <SubmitBar submitting={submitting} disabled={!rebookInterest} />
-    </form>
+      ) : null}
+      {step === 1 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
+        <>
+          <Field
+            label="Preferred dates or months (optional)"
+            value={preferredDates}
+            onChange={setDates}
+            placeholder="e.g. June or July 2026"
+            className="mb-6"
+          />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 2 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
+        <>
+          <Field
+            label="Rough budget or fee range (optional)"
+            value={budgetNote}
+            onChange={setBudget}
+            placeholder="e.g. same as last time, $500–$800"
+            className="mb-6"
+          />
+          <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 3 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!rebookInterest) return
+            onSubmit({
+              rebookInterest,
+              preferredDates: preferredDates.trim(),
+              budgetNote: budgetNote.trim(),
+              note: note.trim(),
+            })
+          }}
+        >
+          <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!rebookInterest} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
