@@ -52,6 +52,7 @@ export const PREVIEW_MOCK_PROFILE: PreviewProfile = {
   artist_name: 'DJ Luijay',
   company_name: 'DJ Luijay LLC',
   manager_name: 'Alex Manager',
+  manager_title: 'Artist Manager',
   from_email: 'management@updates.djluijay.live',
   reply_to_email: 'management@djluijay.live',
   website: 'https://djluijay.com',

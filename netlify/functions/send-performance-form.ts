@@ -9,6 +9,7 @@ import {
   EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
 } from '../../src/lib/email/emailDarkSurfacePalette'
+import { emailFooterArtistPersonaSublineHtml } from '../../src/lib/email/emailFooterPersonaLines'
 
 interface RequestBody {
   token: string
@@ -19,6 +20,7 @@ interface RequestBody {
   fromEmail: string
   replyToEmail: string
   managerName: string
+  managerTitle?: string | null
   custom_subject?: string | null
   custom_intro?: string | null
   layout?: unknown | null
@@ -155,8 +157,9 @@ const handler: Handler = async (event) => {
   </div>
 
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${body.managerName.toUpperCase()}</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-bottom:8px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlEnt(body.managerName)}</div>
+    ${emailFooterArtistPersonaSublineHtml(body.managerTitle ?? null)}
+    <div style="font-size:0;line-height:0;height:8px;">&nbsp;</div>
     <a href="mailto:${body.replyToEmail}?subject=${encodeURIComponent('Re: ' + subject)}" style="display:inline-block;background:#1e1e1e;color:${EMAIL_BODY_SECONDARY};font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;">Reply to This Email</a>
   </div>
 

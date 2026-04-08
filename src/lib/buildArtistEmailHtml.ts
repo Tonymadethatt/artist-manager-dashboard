@@ -271,6 +271,7 @@ export function buildRetainerReceivedHtml(
   const profile = {
     artist_name: 'DJ Luijay',
     manager_name: 'Front Office',
+    manager_title: null as string | null,
     social_handle: 'djluijay',
     website: 'https://djluijay.com',
     phone: null as string | null,

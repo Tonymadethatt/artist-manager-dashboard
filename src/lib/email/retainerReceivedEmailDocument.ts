@@ -2,10 +2,10 @@ import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { renderAppendBlocksHtml } from './appendBlocksHtml'
 import {
   EMAIL_BODY_SECONDARY,
-  EMAIL_FOOTER_MUTED,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
+import { emailFooterArtistPersonaSublineHtml } from './emailFooterPersonaLines'
 import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 
 function escapeHtmlEnt(s: string): string {
@@ -23,6 +23,7 @@ function money(n: number) {
 export type RetainerReceivedProfile = {
   artist_name: string
   manager_name: string | null
+  manager_title: string | null
   social_handle: string | null
   website: string | null
   phone: string | null
@@ -41,6 +42,7 @@ export function buildRetainerReceivedEmailHtml(
   siteUrl: string,
 ): string {
   const managerName = profile.manager_name || 'Management'
+  const footerSubline = emailFooterArtistPersonaSublineHtml(profile.manager_title)
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
 
@@ -136,7 +138,7 @@ export function buildRetainerReceivedEmailHtml(
 
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlEnt(managerName)}</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${footerSubline}
     ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
   </div>
 

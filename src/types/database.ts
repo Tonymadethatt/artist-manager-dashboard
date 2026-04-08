@@ -326,6 +326,7 @@ export interface Database {
           artist_name: string
           artist_email: string
           manager_name: string | null
+          manager_title: string | null
           manager_email: string | null
           from_email: string
           company_name: string | null
@@ -343,6 +344,7 @@ export interface Database {
           artist_name?: string
           artist_email?: string
           manager_name?: string | null
+          manager_title?: string | null
           manager_email?: string | null
           from_email?: string
           company_name?: string | null
@@ -360,6 +362,7 @@ export interface Database {
           artist_name?: string
           artist_email?: string
           manager_name?: string | null
+          manager_title?: string | null
           manager_email?: string | null
           from_email?: string
           company_name?: string | null

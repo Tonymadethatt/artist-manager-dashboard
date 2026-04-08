@@ -7,6 +7,7 @@ interface ArtistProfile {
   artist_name: string
   artist_email: string
   manager_name: string | null
+  manager_title?: string | null
   manager_email: string | null
   from_email: string
   company_name: string | null
@@ -71,6 +72,7 @@ const handler: Handler = async (event) => {
   const docProfile = {
     artist_name: profile.artist_name,
     manager_name: profile.manager_name,
+    manager_title: profile.manager_title ?? null,
     social_handle: profile.social_handle,
     website: profile.website,
     phone: profile.phone,

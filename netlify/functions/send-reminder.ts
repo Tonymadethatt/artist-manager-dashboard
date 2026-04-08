@@ -8,6 +8,7 @@ import {
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from '../../src/lib/email/emailDarkSurfacePalette'
+import { emailFooterArtistPersonaSublineHtml } from '../../src/lib/email/emailFooterPersonaLines'
 import { buildProfileFooterLinksRowHtml } from '../../src/lib/email/profileFooterLinksHtml'
 
 function escapeHtmlEnt(s: string): string {
@@ -22,6 +23,7 @@ interface ArtistProfile {
   artist_name: string
   artist_email: string
   manager_name: string | null
+  manager_title?: string | null
   manager_email: string | null
   from_email: string
   company_name: string | null
@@ -44,6 +46,7 @@ function money(n: number) {
 
 function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
+  const footerPersonaSubline = emailFooterArtistPersonaSublineHtml(profile.manager_title)
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const igIconUrl = `${siteUrl}/icons/icon-ig.png`
@@ -158,7 +161,7 @@ function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], tota
   <!-- Footer -->
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${footerPersonaSubline}
     ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
   </div>
 

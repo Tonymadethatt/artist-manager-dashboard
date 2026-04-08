@@ -27,7 +27,7 @@ export function usePerformanceReports() {
   const createReport = async (
     venueId: string,
     dealId: string | null,
-    profile: Pick<ArtistProfile, 'artist_name' | 'artist_email' | 'from_email' | 'reply_to_email' | 'manager_name'>,
+    profile: Pick<ArtistProfile, 'artist_name' | 'artist_email' | 'from_email' | 'reply_to_email' | 'manager_name' | 'manager_title'>,
     venueName: string,
     eventDate: string | null,
   ): Promise<{ report?: PerformanceReport; formUrl?: string; error?: string }> => {
@@ -72,6 +72,7 @@ export function usePerformanceReports() {
           fromEmail: profile.from_email,
           replyToEmail: profile.reply_to_email || profile.from_email,
           managerName: profile.manager_name || 'Your Manager',
+          managerTitle: profile.manager_title ?? null,
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
           layout: perfTmpl?.layout ?? null,
@@ -140,7 +141,7 @@ export function usePerformanceReports() {
    */
   const resendReport = async (
     reportId: string,
-    profile: Pick<ArtistProfile, 'artist_name' | 'artist_email' | 'from_email' | 'reply_to_email' | 'manager_name'>,
+    profile: Pick<ArtistProfile, 'artist_name' | 'artist_email' | 'from_email' | 'reply_to_email' | 'manager_name' | 'manager_title'>,
   ): Promise<{ formUrl?: string; error?: string }> => {
     const { data: { user: resendUser } } = await supabase.auth.getUser()
     if (!resendUser) return { error: 'Not authenticated' }
@@ -214,6 +215,7 @@ export function usePerformanceReports() {
           fromEmail: profile.from_email,
           replyToEmail: profile.reply_to_email || profile.from_email,
           managerName: profile.manager_name || 'Your Manager',
+          managerTitle: profile.manager_title ?? null,
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
           layout: perfTmpl?.layout ?? null,

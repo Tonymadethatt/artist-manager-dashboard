@@ -1,13 +1,16 @@
 import { escapeHtmlPlain } from './appendBlocksHtml'
 import {
   EMAIL_BODY_SECONDARY,
-  EMAIL_FOOTER_MUTED,
   EMAIL_HINT,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
+import {
+  emailFooterArtistPersonaSublineHtml,
+  emailFooterVenueSenderAttributionHtml,
+} from './emailFooterPersonaLines'
 import { buildProfileFooterLinksHtml, buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 import { defaultAccentForBlockKind, parseAccentColorHex } from './customEmailAccentPresets'
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
@@ -241,6 +244,10 @@ function venueFooter(
   const replyTo = profile.reply_to_email || profile.from_email
   const companyName = profile.company_name || profile.artist_name || ''
   const footerLinks = buildProfileFooterLinksHtml(igUrl, profile.website, profile.social_handle, profile.phone)
+  const senderAttribution = emailFooterVenueSenderAttributionHtml(
+    profile.manager_name,
+    profile.manager_title,
+  )
 
   const mailtoHref = `mailto:${escapeHtmlPlain(replyTo)}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent('Hi,\n\n')}`
   const replyBlock = showReply
@@ -249,6 +256,7 @@ function venueFooter(
   return `
   <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
+    ${senderAttribution}
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
     ${replyBlock}
   </div>`
@@ -261,10 +269,11 @@ function artistAudienceFooter(profile: VenueRenderProfile, igIconUrl: string) {
     || profile.artist_name
     || 'Front Office'
   const links = buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)
+  const subline = emailFooterArtistPersonaSublineHtml(profile.manager_title)
   return `
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(line)}</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${subline}
     ${links}
   </div>`
 }

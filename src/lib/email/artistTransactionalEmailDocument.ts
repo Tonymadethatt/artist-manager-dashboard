@@ -2,10 +2,10 @@ import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
 import {
   EMAIL_BODY_SECONDARY,
-  EMAIL_FOOTER_MUTED,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
+import { emailFooterArtistPersonaSublineHtml } from './emailFooterPersonaLines'
 import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 
 export type ArtistTransactionalKind = 'performance_report_received' | 'gig_week_reminder'
@@ -15,6 +15,8 @@ export type ArtistTransactionalEmailInput = {
   venueName: string
   eventDate: string | null
   managerName: string
+  /** Second line under manager name in footer; defaults to product tagline when empty. */
+  managerTitle?: string | null
   /** Footer links row (optional); when empty, footer shows manager line + tagline only. */
   website?: string | null
   social_handle?: string | null
@@ -68,6 +70,7 @@ export function buildArtistTransactionalEmailHtml(
     venueName,
     eventDate,
     managerName,
+    managerTitle,
     website,
     social_handle: socialHandle,
     phone,
@@ -118,6 +121,7 @@ export function buildArtistTransactionalEmailHtml(
     : ''
 
   const footerLinksHtml = buildProfileFooterLinksRowHtml(igUrl, website, socialHandle, phone)
+  const footerSubline = emailFooterArtistPersonaSublineHtml(managerTitle)
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -150,7 +154,7 @@ ${mobileStyles}
   </div>
   <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(managerName)}</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
+    ${footerSubline}
     ${footerLinksHtml}
   </div>
 </div>

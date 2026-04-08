@@ -234,6 +234,8 @@ export interface ArtistProfile {
   artist_name: string
   artist_email: string
   manager_name: string | null
+  /** Shown under manager name in email footers (e.g. Artist Manager). */
+  manager_title: string | null
   manager_email: string | null
   from_email: string
   company_name: string | null
@@ -253,6 +255,7 @@ export type ProfileFieldPresetKey =
   | 'artist_name'
   | 'artist_email'
   | 'manager_name'
+  | 'manager_title'
   | 'manager_email'
   | 'from_email'
   | 'company_name'

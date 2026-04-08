@@ -28,6 +28,7 @@ interface ArtistProfile {
   artist_email?: string | null
   manager_email?: string | null
   manager_name?: string | null
+  manager_title?: string | null
   website: string | null
   phone: string | null
   social_handle: string | null

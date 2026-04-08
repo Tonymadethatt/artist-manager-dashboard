@@ -243,6 +243,7 @@ const handler: Handler = async (event) => {
       artist_email?: string | null
       manager_email?: string | null
       manager_name?: string | null
+      manager_title?: string | null
       website?: string | null
       phone?: string | null
       social_handle?: string | null
@@ -291,6 +292,7 @@ const handler: Handler = async (event) => {
             fromEmail: String(fullProf.from_email ?? ''),
             replyToEmail: (fullProf.reply_to_email as string | null) || String(fullProf.from_email ?? ''),
             managerName: (fullProf.manager_name as string | null) || 'Your Manager',
+            managerTitle: (fullProf.manager_title as string | null) ?? null,
             custom_subject: perfTmpl?.custom_subject ?? null,
             custom_intro: perfTmpl?.custom_intro ?? null,
             layout: perfTmpl?.layout ?? null,
@@ -363,6 +365,7 @@ const handler: Handler = async (event) => {
       artist_email: profile.artist_email ?? null,
       manager_email: profile.manager_email ?? null,
       manager_name: profile.manager_name ?? null,
+      manager_title: profile.manager_title ?? null,
       website: profile.website,
       phone: profile.phone,
       social_handle: profile.social_handle,
@@ -520,6 +523,7 @@ const handler: Handler = async (event) => {
         artist_name: String(row.artist_name ?? ''),
         artist_email: String(row.artist_email ?? ''),
         manager_name: (row.manager_name as string | null) ?? null,
+        manager_title: (row.manager_title as string | null) ?? null,
         manager_email: (row.manager_email as string | null) ?? null,
         from_email: String(row.from_email ?? ''),
         company_name: (row.company_name as string | null) ?? null,
@@ -589,6 +593,7 @@ const handler: Handler = async (event) => {
         artist_name: String(row.artist_name ?? ''),
         artist_email: String(row.artist_email ?? ''),
         manager_name: (row.manager_name as string | null) ?? null,
+        manager_title: (row.manager_title as string | null) ?? null,
         manager_email: (row.manager_email as string | null) ?? null,
         from_email: String(row.from_email ?? ''),
         company_name: (row.company_name as string | null) ?? null,

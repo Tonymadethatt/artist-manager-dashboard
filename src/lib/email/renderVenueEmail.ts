@@ -13,6 +13,7 @@ import {
   EMAIL_TEXT_PRIMARY,
 } from './emailDarkSurfacePalette'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE, VENUE_EMAIL_DOC_BUTTON_STYLE } from './venueEmailCtaStyles'
+import { emailFooterVenueSenderAttributionHtml } from './emailFooterPersonaLines'
 import { buildProfileFooterLinksHtml } from './profileFooterLinksHtml'
 
 function hrefAttr(u: string): string {
@@ -45,6 +46,8 @@ export interface VenueRenderProfile {
   tagline: string | null
   /** Artist-facing custom templates: sign-off line in footer. */
   manager_name?: string | null
+  /** Job title shown with manager_name in footers (client and custom venue emails). */
+  manager_title?: string | null
 }
 
 export interface VenueRenderDeal {
@@ -406,6 +409,10 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   const mailtoHref = `mailto:${replyTo}?subject=${encodeURIComponent('Re: ' + subject)}&body=${encodeURIComponent(replyBody)}`
 
   const footerLinks = buildProfileFooterLinksHtml(igUrl, profile.website, profile.social_handle, profile.phone)
+  const senderAttribution = emailFooterVenueSenderAttributionHtml(
+    profile.manager_name,
+    profile.manager_title,
+  )
 
   const replyBlock = showReply
     ? `<a href="${mailtoHref}" style="display:inline-block;background:#1e1e1e;color:${EMAIL_BODY_SECONDARY};font-size:12px;font-weight:500;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;margin-top:12px;">${escapeHtmlPlain(replyLabel)}</a>`
@@ -457,6 +464,7 @@ ${mobileStyles}
 
   <div${footerClass} style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
     <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlPlain(companyName.toUpperCase())}</div>
+    ${senderAttribution}
     ${footerLinks ? `<div style="margin-top:4px;">${footerLinks}</div>` : ''}
     ${replyBlock}
   </div>

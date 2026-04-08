@@ -10,6 +10,7 @@ type FormState = {
   artist_name: string
   artist_email: string
   manager_name: string
+  manager_title: string
   manager_email: string
   from_email: string
   company_name: string
@@ -26,6 +27,7 @@ const EMPTY_FORM: FormState = {
   artist_name: '',
   artist_email: '',
   manager_name: '',
+  manager_title: '',
   manager_email: '',
   from_email: '',
   company_name: '',
@@ -41,6 +43,7 @@ function formFromProfile(p: ArtistProfile): FormState {
     artist_name: p.artist_name,
     artist_email: p.artist_email,
     manager_name: p.manager_name ?? '',
+    manager_title: p.manager_title ?? '',
     manager_email: p.manager_email ?? '',
     from_email: p.from_email,
     company_name: p.company_name ?? '',
@@ -64,6 +67,8 @@ function buildPartial(key: FormKey, f: FormState): Partial<Omit<ArtistProfile, '
       return { from_email: t(f.from_email) }
     case 'manager_name':
       return { manager_name: t(f.manager_name) || null }
+    case 'manager_title':
+      return { manager_title: t(f.manager_title) || null }
     case 'manager_email':
       return { manager_email: t(f.manager_email) || null }
     case 'company_name':
@@ -366,6 +371,17 @@ export default function Settings() {
                 placeholder="Your name"
                 {...presetControls('manager_name')}
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Your title</Label>
+              <FieldWithPresets
+                value={form.manager_title}
+                onChange={v => setField('manager_title', v)}
+                onBlur={blur('manager_title')}
+                placeholder="Artist Manager"
+                {...presetControls('manager_title')}
+              />
+              <p className={hint}>Shown in email footers with your name so recipients know who they are talking to.</p>
             </div>
             <div className="space-y-1">
               <Label>Your email (manager)</Label>
