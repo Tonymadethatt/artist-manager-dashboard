@@ -197,7 +197,7 @@ function SelectField({
   return (
     <div className="mb-5">
       <label className="block text-sm font-medium text-white mb-2">
-        {label}{required && <span className="text-neutral-500 ml-1 font-normal">(required)</span>}
+        {label}{required && <span className="text-neutral-300 ml-1 font-normal">(required)</span>}
       </label>
       <div className="flex flex-col gap-2">
         {options.map(o => (
@@ -211,7 +211,7 @@ function SelectField({
             className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
               value === o.value
                 ? 'bg-white text-black border-white font-medium'
-                : 'bg-neutral-900 text-neutral-300 border-neutral-700 hover:border-neutral-500 hover:text-white'
+                : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white'
             }`}
           >
             {o.label}
@@ -247,7 +247,7 @@ function RatingField({
   return (
     <div className="mb-5">
       <label className="block text-sm font-medium text-white mb-2">
-        How did it go overall? <span className="text-neutral-500 font-normal">(optional)</span>
+        How did it go overall? <span className="text-neutral-300 font-normal">(optional)</span>
       </label>
       <div className="flex flex-col gap-2">
         {RATING_ROWS.map((row, ri) => (
@@ -260,7 +260,7 @@ function RatingField({
                 className={`min-h-[48px] flex-1 flex flex-col items-center justify-center rounded-lg border text-sm transition-all ${
                   value === n
                     ? 'bg-white text-black border-white font-semibold'
-                    : 'bg-neutral-900 text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'
+                    : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white'
                 }`}
               >
                 <span className="text-base leading-none">{n}</span>
@@ -274,7 +274,7 @@ function RatingField({
         <button
           type="button"
           onClick={onSkip}
-          className="mt-3 text-sm text-neutral-500 hover:text-neutral-300"
+          className="mt-3 text-sm font-medium text-neutral-200 hover:text-white"
         >
           Skip for now
         </button>
@@ -306,7 +306,7 @@ function ChipGrid({
     <div className="mb-5">
       <label className="block text-sm font-medium text-white mb-2">
         {label}
-        {optional && <span className="text-neutral-500 ml-1 font-normal">(optional)</span>}
+        {optional && <span className="text-neutral-300 ml-1 font-normal">(optional)</span>}
       </label>
       <div className="grid grid-cols-2 gap-2">
         {options.map(o => (
@@ -320,7 +320,7 @@ function ChipGrid({
             className={`min-h-[44px] px-3 py-2.5 rounded-lg border text-sm text-center transition-all ${
               value === o.value
                 ? 'bg-white text-black border-white font-medium'
-                : 'bg-neutral-900 text-neutral-300 border-neutral-700 hover:border-neutral-500'
+                : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500'
             }`}
           >
             {o.label}
@@ -342,7 +342,7 @@ function MultiFrictionField({
   return (
     <div className="mb-5">
       <label className="block text-sm font-medium text-white mb-2">
-        What was a friction point? <span className="text-neutral-500 font-normal">(tap any that apply)</span>
+        What was a friction point? <span className="text-neutral-300 font-normal">(tap any that apply)</span>
       </label>
       <div className="flex flex-col gap-2">
         {PRODUCTION_FRICTION_OPTIONS.map(o => {
@@ -353,7 +353,7 @@ function MultiFrictionField({
               type="button"
               onClick={() => onChange(on ? tags.filter(x => x !== o.id) : [...tags, o.id])}
               className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
-                on ? 'bg-white text-black border-white font-medium' : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                on ? 'bg-white text-black border-white font-medium' : 'bg-neutral-950 text-neutral-100 border-neutral-600'
               }`}
             >
               {o.label}
@@ -671,10 +671,10 @@ export function ShowReportWizard({
       : 'Your manager will follow up shortly'
 
   const layoutRootDraft = preview
-    ? 'min-h-0 flex-1 bg-[#0d0d0d] text-neutral-100'
+    ? 'min-h-0 flex-1 bg-black text-neutral-50 antialiased'
     : footerMode === 'viewport'
-      ? 'min-h-screen bg-[#0d0d0d] text-neutral-100'
-      : 'min-h-0 bg-[#0d0d0d] text-neutral-100'
+      ? 'min-h-screen bg-black text-neutral-50 antialiased'
+      : 'min-h-0 bg-black text-neutral-50 antialiased'
 
   if (state === 'loading') {
     return (
@@ -687,7 +687,7 @@ export function ShowReportWizard({
         rootClassName={layoutRootDraft}
         mainClassName="flex flex-1 items-center justify-center py-16"
       >
-        <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
       </PublicFormLayout>
     )
   }
@@ -697,15 +697,15 @@ export function ShowReportWizard({
       <div
         className={cn(
           preview ? 'min-h-0 flex-1' : 'min-h-screen',
-          'flex items-center justify-center bg-[#0d0d0d] px-4 text-neutral-100',
+          'flex items-center justify-center bg-black px-4 text-neutral-50 antialiased',
         )}
       >
         <div className="w-full max-w-sm text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-neutral-700 bg-neutral-800">
-            <ClipboardList className="h-5 w-5 text-neutral-500" />
+            <ClipboardList className="h-5 w-5 text-neutral-300" />
           </div>
           <h1 className="mb-2 text-lg font-semibold text-white">Link no longer valid</h1>
-          <p className="text-sm leading-relaxed text-neutral-500">
+          <p className="text-sm leading-relaxed text-neutral-300">
             This link has expired or is no longer active. Ask your manager to send you an updated one.
           </p>
         </div>
@@ -729,7 +729,7 @@ export function ShowReportWizard({
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/15">
             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
           </div>
-          <p className="text-sm leading-relaxed text-neutral-400">
+          <p className="text-sm leading-relaxed text-neutral-200">
             {preview
               ? 'Nothing was saved. Pick another form in the dashboard to keep testing.'
               : isDashboard
@@ -764,8 +764,8 @@ export function ShowReportWizard({
 
   const footerClass =
     footerMode === 'viewport'
-      ? 'fixed bottom-0 left-0 right-0 z-10 border-t border-neutral-800 bg-[#0d0d0d]/95 p-4 backdrop-blur-sm'
-      : 'sticky bottom-0 z-10 mt-8 -mx-4 border-t border-neutral-800 bg-[#0d0d0d] px-4 py-4'
+      ? 'fixed bottom-0 left-0 right-0 z-10 border-t border-neutral-700 bg-black/95 p-4 backdrop-blur-sm'
+      : 'sticky bottom-0 z-10 mt-8 -mx-4 border-t border-neutral-700 bg-black px-4 py-4'
 
   return (
     <PublicFormLayout
@@ -782,7 +782,7 @@ export function ShowReportWizard({
           <button
             type="button"
             onClick={onCancel}
-            className="mb-4 text-sm text-neutral-500 hover:text-neutral-300"
+            className="mb-4 text-sm font-medium text-neutral-200 hover:text-white"
           >
             ← Cancel
           </button>
@@ -896,7 +896,7 @@ export function ShowReportWizard({
                         className={`min-h-[44px] px-2 py-2 rounded-lg border text-xs sm:text-sm transition-all ${
                           answers.paymentPreset === p.value
                             ? 'bg-white text-black border-white font-medium'
-                            : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                            : 'bg-neutral-950 text-neutral-100 border-neutral-600'
                         }`}
                       >
                         {p.label}
@@ -912,7 +912,7 @@ export function ShowReportWizard({
                       value={answers.paymentAmount}
                       onChange={e => set('paymentAmount', e.target.value)}
                       placeholder="Enter amount"
-                      className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm mb-4"
+                      className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm mb-4 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
                     />
                   ) : null}
                   <button
@@ -1159,9 +1159,9 @@ export function ShowReportWizard({
               {phaseVenue === 'notes' ? (
                 <div className="mb-5">
                   <label className="block text-sm font-medium text-white mb-2">
-                    Quick notes for your manager <span className="text-neutral-500 font-normal">(optional)</span>
+                    Quick notes for your manager <span className="text-neutral-300 font-normal">(optional)</span>
                   </label>
-                  <p className="text-xs text-neutral-600 mb-2">Tap shortcuts or add a line below — no need to type unless you want.</p>
+                  <p className="text-xs font-medium text-neutral-400 mb-2">Tap shortcuts or add a line below — no need to type unless you want.</p>
                   <div className="flex flex-col gap-2 mb-3">
                     {NOTE_CHIP_PRESETS.map(p => {
                       const on = answers.noteChipIds.includes(p.id)
@@ -1176,7 +1176,7 @@ export function ShowReportWizard({
                             )
                           }}
                           className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                            on ? 'bg-white text-black border-white' : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                            on ? 'bg-white text-black border-white' : 'bg-neutral-950 text-neutral-100 border-neutral-600'
                           }`}
                         >
                           {p.label}
@@ -1189,7 +1189,7 @@ export function ShowReportWizard({
                     onChange={e => set('notesExtra', e.target.value)}
                     rows={2}
                     placeholder="Anything else (optional)..."
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none"
+                    className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm resize-none placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
                   />
                   <button
                     type="button"
@@ -1221,7 +1221,7 @@ export function ShowReportWizard({
                       className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
                         answers.mediaChoice === 'none'
                           ? 'bg-white text-black border-white'
-                          : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                          : 'bg-neutral-950 text-neutral-100 border-neutral-600'
                       }`}
                     >
                       No media to share
@@ -1232,7 +1232,7 @@ export function ShowReportWizard({
                       className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
                         answers.mediaChoice === 'links'
                           ? 'bg-white text-black border-white'
-                          : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                          : 'bg-neutral-950 text-neutral-100 border-neutral-600'
                       }`}
                     >
                       I will paste link(s) below
@@ -1245,7 +1245,7 @@ export function ShowReportWizard({
                         onChange={e => set('mediaLinks', e.target.value)}
                         rows={2}
                         placeholder="Instagram, Drive, etc."
-                        className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-4 py-3 text-white text-sm resize-none mb-4"
+                        className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm resize-none mb-4 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
                       />
                       <button
                         type="button"
@@ -1267,7 +1267,7 @@ export function ShowReportWizard({
               ) : null}
 
               {phaseVenue === 'done' ? (
-                <p className="text-sm text-neutral-400 mb-4">
+                <p className="text-sm text-neutral-200 mb-4">
                   You&apos;re all set — submit your report below.
                 </p>
               ) : null}
@@ -1309,7 +1309,7 @@ export function ShowReportWizard({
           ) : null}
         </form>
 
-        <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs text-neutral-700">
+        <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs font-medium text-neutral-400">
           {preview
             ? 'Preview only — answers are not submitted.'
             : submittedBy === 'manager_dashboard'

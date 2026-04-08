@@ -122,7 +122,7 @@ export default function FormPreviews() {
           <div
             className={cn(
               'flex-1 min-h-0 overflow-y-auto flex flex-col',
-              selection.scope === 'artist' ? 'bg-[#0d0d0d]' : 'bg-neutral-950',
+              'bg-black',
             )}
           >
             {profileLoading ? (

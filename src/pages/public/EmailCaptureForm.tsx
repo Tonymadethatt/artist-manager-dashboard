@@ -64,10 +64,10 @@ function ChoiceRow({
     <button
       type="button"
       onClick={onSelect}
-      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-colors ${
+      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
         selected
           ? 'border-white bg-neutral-800 text-white'
-          : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-600'
+          : 'border-neutral-600 bg-neutral-950 text-neutral-100 hover:border-neutral-500 hover:bg-neutral-900'
       }`}
     >
       {label}
@@ -161,7 +161,7 @@ export default function EmailCaptureForm() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center text-neutral-500 text-sm px-4">
+      <div className="min-h-screen bg-black flex items-center justify-center text-neutral-200 text-sm px-4">
         Invalid link
       </div>
     )
@@ -177,14 +177,14 @@ export default function EmailCaptureForm() {
         showProgress={false}
         mainClassName="flex flex-1 flex-col items-center justify-center py-24"
       >
-        <Loader2 className="h-8 w-8 text-neutral-500 animate-spin" aria-hidden />
+        <Loader2 className="h-8 w-8 text-neutral-300 animate-spin" aria-hidden />
       </PublicFormLayout>
     )
   }
 
   if (!preflight.valid) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center text-neutral-400 text-sm px-6 text-center max-w-md mx-auto">
+      <div className="min-h-screen bg-black flex items-center justify-center text-neutral-200 text-sm px-6 text-center max-w-md mx-auto">
         This link is invalid or has expired. If you need help, reply to the email you received.
       </div>
     )
@@ -200,7 +200,7 @@ export default function EmailCaptureForm() {
         mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center"
       >
         <CheckCircle2 className="h-12 w-12 text-green-500 mb-4 shrink-0" aria-hidden />
-        <p className="text-sm text-neutral-400 max-w-sm">
+        <p className="text-sm text-neutral-200 max-w-sm">
           Your response was received{preflight.venueName ? ` for ${preflight.venueName}` : ''}. You can close this page.
         </p>
       </PublicFormLayout>
@@ -288,7 +288,7 @@ function EmailCaptureKindFormInner({
     case 'payment_receipt':
       return <PaymentReceiptForm submitting={submitting} onSubmit={onSubmit} />
     default:
-      return <p className="text-sm text-neutral-500">Unsupported form type.</p>
+      return <p className="text-sm text-neutral-300">Unsupported form type.</p>
   }
 }
 
@@ -308,10 +308,10 @@ function Field({
   className?: string
 }) {
   const cls =
-    'w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:ring-1 focus:ring-neutral-500'
+    'w-full rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-neutral-500'
   return (
     <label className={cn('block mb-4', className)}>
-      <span className="block text-xs font-medium text-neutral-400 mb-1.5">{label}</span>
+      <span className="block text-xs font-semibold tracking-wide text-neutral-100 mb-1.5">{label}</span>
       {textarea ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3} className={cls} />
       ) : (
@@ -324,12 +324,12 @@ function Field({
 function captureFooterWrap(footerVariant: EmailCaptureFooterVariant, children: ReactNode) {
   if (footerVariant === 'embedded') {
     return (
-      <div className="sticky bottom-0 z-10 mt-8 -mx-4 px-4 pt-4 pb-3 bg-neutral-950/95 border-t border-neutral-800 backdrop-blur-sm">
+      <div className="sticky bottom-0 z-10 mt-8 -mx-4 px-4 pt-4 pb-3 bg-black/95 border-t border-neutral-700 backdrop-blur-sm">
         {children}
       </div>
     )
   }
-  return <div className="fixed bottom-0 left-0 right-0 p-4 bg-neutral-950/95 border-t border-neutral-800">{children}</div>
+  return <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/95 border-t border-neutral-700">{children}</div>
 }
 
 function SubmitBar({ submitting, disabled }: { submitting: boolean; disabled?: boolean }) {
@@ -395,7 +395,7 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 
   return (
     <div className="pb-28">
-      <p className="text-sm text-neutral-400 mb-6">
+      <p className="text-sm text-neutral-200 mb-6">
         Share load-in, settlement, and day-of contact details — one question at a time.
       </p>
       {step === 0 ? (
@@ -470,7 +470,7 @@ function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSu
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Where should we take this?</p>
+          <p className="text-sm text-neutral-200 mb-2">Where should we take this?</p>
           <ChoiceRow
             label="Interested — let&apos;s explore a date"
             selected={intent === 'interested'}
@@ -531,7 +531,7 @@ function FollowUpForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Quick check-in</p>
+          <p className="text-sm text-neutral-200 mb-2">Quick check-in</p>
           <ChoiceRow
             label="Still interested"
             selected={status === 'interested'}
@@ -596,7 +596,7 @@ function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">What should we know?</p>
+          <p className="text-sm text-neutral-200 mb-2">What should we know?</p>
           <ChoiceRow label="New date" selected={resolution === 'new_date'} onSelect={() => pickResolution('new_date')} />
           <ChoiceRow label="Refund path" selected={resolution === 'refund'} onSelect={() => pickResolution('refund')} />
           <ChoiceRow label="Mutual release" selected={resolution === 'release'} onSelect={() => pickResolution('release')} />
@@ -647,7 +647,7 @@ function AgreementFollowupForm({ submitting, onSubmit }: { submitting: boolean; 
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Agreement status</p>
+          <p className="text-sm text-neutral-200 mb-2">Agreement status</p>
           <ChoiceRow label="Signed" selected={status === 'signed'} onSelect={() => pick('signed')} />
           <ChoiceRow label="In review" selected={status === 'in_review'} onSelect={() => pick('in_review')} />
           <ChoiceRow label="Needs changes" selected={status === 'needs_changes'} onSelect={() => pick('needs_changes')} />
@@ -693,10 +693,10 @@ function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onS
               setAck(true)
               setStep(1)
             }}
-            className="min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-colors border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-600"
+            className="min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm font-medium transition-colors border-neutral-600 bg-neutral-950 text-neutral-100 hover:border-neutral-500 hover:bg-neutral-900"
           >
-            <span className="font-medium text-white block mb-1">I have reviewed the agreement</span>
-            <span className="text-neutral-500 text-xs">Including the link shared by email</span>
+            <span className="font-semibold text-white block mb-1">I have reviewed the agreement</span>
+            <span className="text-neutral-300 text-xs">Including the link shared by email</span>
           </button>
         </>
       ) : null}
@@ -729,7 +729,7 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Do the details match?</p>
+          <p className="text-sm text-neutral-200 mb-2">Do the details match?</p>
           <ChoiceRow
             label="Details look correct"
             selected={aligned === true}
@@ -776,7 +776,7 @@ function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Invoice status</p>
+          <p className="text-sm text-neutral-200 mb-2">Invoice status</p>
           <ChoiceRow
             label="Received in AP / accounting"
             selected={received === true}
@@ -819,7 +819,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
           key={star}
           type="button"
           onClick={() => onChange(star)}
-          className={`text-3xl leading-none transition-colors ${star <= value ? 'text-yellow-400' : 'text-neutral-700 hover:text-neutral-500'}`}
+          className={`text-3xl leading-none transition-colors ${star <= value ? 'text-yellow-400' : 'text-neutral-500 hover:text-neutral-300'}`}
           aria-label={`${star} star${star !== 1 ? 's' : ''}`}
         >
           &#9733;
@@ -851,7 +851,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
     <div className="pb-28 space-y-4">
       {step === 0 ? (
         <>
-          <p className="text-xs font-medium text-neutral-400 mb-2">How was the show? (required)</p>
+          <p className="text-xs font-medium text-neutral-200 mb-2">How was the show? (required)</p>
           <StarRating
             value={rating}
             onChange={v => {
@@ -860,7 +860,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
             }}
           />
           {rating > 0 ? (
-            <p className="text-xs text-neutral-500 mt-1">
+            <p className="text-xs text-neutral-300 mt-1">
               {rating === 5 ? 'Excellent' : rating === 4 ? 'Great' : rating === 3 ? 'Good' : rating === 2 ? 'Fair' : 'Poor'}
             </p>
           ) : null}
@@ -881,7 +881,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
       ) : null}
       {step === 2 ? (
         <>
-          <p className="text-xs font-medium text-neutral-400 mb-2">Anything still open?</p>
+          <p className="text-xs font-medium text-neutral-200 mb-2">Anything still open?</p>
           <ChoiceRow
             label="Nothing pending on our side"
             selected={nothing === true}
@@ -918,7 +918,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
             doSubmit()
           }}
         >
-          <p className="text-sm text-neutral-400 mb-4">Thanks — send your feedback?</p>
+          <p className="text-sm text-neutral-200 mb-4">Thanks — send your feedback?</p>
           <SubmitBar submitting={submitting} disabled={rating === 0 || nothing !== true} />
         </form>
       ) : null}
@@ -937,7 +937,7 @@ function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
       }}
       className="pb-28"
     >
-      <p className="text-sm text-neutral-400 mb-6">One tap to acknowledge — nothing else required.</p>
+      <p className="text-sm text-neutral-200 mb-6">One tap to acknowledge — nothing else required.</p>
       <SubmitBar submitting={submitting} />
     </form>
   )
@@ -974,7 +974,7 @@ function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmi
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-2">Payment status</p>
+          <p className="text-sm text-neutral-200 mb-2">Payment status</p>
           <ChoiceRow
             label="Payment has been sent"
             selected={submitted === true}
@@ -1032,7 +1032,7 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
-          <p className="text-sm text-neutral-400 mb-4">Are you interested in booking again?</p>
+          <p className="text-sm text-neutral-200 mb-4">Are you interested in booking again?</p>
           <ChoiceRow label="Yes — let&apos;s plan the next one" selected={rebookInterest === 'yes'} onSelect={() => pickInterest('yes')} />
           <ChoiceRow label="Maybe — open to it" selected={rebookInterest === 'maybe'} onSelect={() => pickInterest('maybe')} />
           <ChoiceRow label="Not right now" selected={rebookInterest === 'no'} onSelect={() => pickInterest('no')} />
@@ -1118,11 +1118,11 @@ export function EmailCaptureFormPreviewBody({
         title="Preview complete"
         descriptor="Nothing was saved"
         progress={0}
-        rootClassName="bg-neutral-950 text-neutral-100 min-h-0 flex-1 flex flex-col"
+        rootClassName="bg-black text-neutral-50 min-h-0 flex-1 flex flex-col antialiased"
         mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center"
       >
         <CheckCircle2 className="h-10 w-10 text-emerald-500 mb-3 shrink-0" aria-hidden />
-        <p className="text-sm text-neutral-400 max-w-sm">
+        <p className="text-sm text-neutral-200 max-w-sm">
           Choose another form in the sidebar to keep testing.
         </p>
       </PublicFormLayout>
@@ -1136,7 +1136,7 @@ export function EmailCaptureFormPreviewBody({
       descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[kind]}
       progress={progressPct}
       progressSuccessFlash={progressFlash}
-      rootClassName="bg-neutral-950 text-neutral-100 min-h-0 flex-1 flex flex-col"
+      rootClassName="bg-black text-neutral-50 min-h-0 flex-1 flex flex-col antialiased"
       mainClassName="pb-36 pt-4"
     >
       <EmailCaptureProgressContext.Provider value={{ setProgressPct }}>
