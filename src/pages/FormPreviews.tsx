@@ -13,12 +13,6 @@ const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   dealDescription: 'Evening DJ set — sample deal for preview',
 }
 
-const MOCK_VENUE_CAPTURE = {
-  venueName: 'Skyline Bar',
-  dealDescription: null as string | null,
-  eventDate: '2026-06-15' as string | null,
-}
-
 const VENUE_KIND_ORDER: EmailCaptureKind[] = [
   'pre_event_checkin',
   'first_outreach',
@@ -149,13 +143,7 @@ export default function FormPreviews() {
               </div>
             ) : (
               <div key={selectionKey(selection)} className="flex flex-col flex-1 min-h-0">
-                <EmailCaptureFormPreviewBody
-                  kind={selection.kind}
-                  venueName={MOCK_VENUE_CAPTURE.venueName}
-                  dealDescription={MOCK_VENUE_CAPTURE.dealDescription}
-                  eventDate={MOCK_VENUE_CAPTURE.eventDate}
-                  branding={previewBranding}
-                />
+                <EmailCaptureFormPreviewBody kind={selection.kind} branding={previewBranding} />
               </div>
             )}
           </div>

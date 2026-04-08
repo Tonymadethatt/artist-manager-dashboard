@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import type { DependencyList, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import type { EmailCaptureKind } from '@/lib/emailCapture/kinds'
@@ -32,20 +32,14 @@ type PreflightOk =
 type CaptureProgressCtx = { setProgressPct: (n: number) => void }
 const EmailCaptureProgressContext = createContext<CaptureProgressCtx | null>(null)
 
-function useEmailCaptureProgressEstimate(calc: () => number, deps: DependencyList) {
+/** Progress by questions completed vs total (each screen / choice counts as one question). */
+function useCaptureQuestionProgress(completed: number, total: number) {
   const ctx = useContext(EmailCaptureProgressContext)
   useEffect(() => {
     if (!ctx) return
-    ctx.setProgressPct(Math.max(0, Math.min(100, Math.round(calc()))))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mirror field completion only
-  }, deps)
-}
-
-export function formatEmailCaptureEventDate(iso: string | null): string | null {
-  if (!iso) return null
-  const [y, m, d] = iso.split('-')
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
+    const t = Math.max(1, total)
+    ctx.setProgressPct(Math.min(100, Math.round((Math.max(0, completed) / t) * 100)))
+  }, [ctx, completed, total])
 }
 
 type EmailCaptureFooterVariant = 'viewport' | 'embedded'
@@ -215,23 +209,6 @@ export default function EmailCaptureForm() {
 
   const ctx = preflight
 
-  const venueContext = (
-    <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Quick response</p>
-      {(ctx.venueName || ctx.dealDescription) ? (
-        <p className="text-sm text-neutral-400">
-          {ctx.venueName ? <span className="text-neutral-300">{ctx.venueName}</span> : null}
-          {ctx.eventDate ? (
-            <span className="text-neutral-500"> · {formatEmailCaptureEventDate(ctx.eventDate)}</span>
-          ) : null}
-          {ctx.dealDescription && !ctx.venueName ? (
-            <span className="text-neutral-300">{ctx.dealDescription}</span>
-          ) : null}
-        </p>
-      ) : null}
-    </div>
-  )
-
   return (
     <PublicFormLayout
       branding={ctx.branding}
@@ -239,7 +216,6 @@ export default function EmailCaptureForm() {
       descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[ctx.kind]}
       progress={progressPct}
       progressSuccessFlash={progressSuccessFlash}
-      venueContext={venueContext}
       mainClassName="pb-44 pt-6"
     >
       {err ? (
@@ -412,11 +388,8 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 
   useScrollTopOnStepChange(step)
 
-  const lastIdx = PRE_EVENT_STEP_LABELS.length - 1
-  useEmailCaptureProgressEstimate(
-    () => (lastIdx <= 0 ? 0 : Math.round((step / lastIdx) * 100)),
-    [step, lastIdx],
-  )
+  const nPreEvent = PRE_EVENT_STEP_LABELS.length
+  useCaptureQuestionProgress(step, nPreEvent)
 
   const canSubmit = loadInOrSoundcheck.trim() || settlementMethod.trim()
 
@@ -491,7 +464,7 @@ function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSu
   const [alternateEmail, setAlt] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 2 ? 100 : Math.round((step / 2) * 50)), [step])
+  useCaptureQuestionProgress(step, 3)
 
   return (
     <div className="pb-28 space-y-3">
@@ -552,7 +525,7 @@ function FollowUpForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
+  useCaptureQuestionProgress(step, 2)
 
   return (
     <div className="pb-28 space-y-3">
@@ -608,14 +581,10 @@ function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(
-    () => {
-      if (!resolution) return 0
-      if (resolution === 'new_date') return step >= 2 ? 100 : step === 0 ? 33 : 66
-      return step >= 1 ? 100 : 50
-    },
-    [step, resolution],
-  )
+  const cancelledTotal = resolution === 'new_date' ? 3 : resolution ? 2 : 3
+  const cancelledCompleted =
+    step === 0 ? 0 : resolution === 'new_date' ? Math.min(step, 2) : 1
+  useCaptureQuestionProgress(cancelledCompleted, cancelledTotal)
 
   const pickResolution = (r: typeof resolution) => {
     setRes(r)
@@ -667,7 +636,7 @@ function AgreementFollowupForm({ submitting, onSubmit }: { submitting: boolean; 
   const [documentUrl, setUrl] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => Math.round((step / 2) * 100), [step])
+  useCaptureQuestionProgress(step, 3)
 
   const pick = (s: typeof status) => {
     setSt(s)
@@ -712,7 +681,7 @@ function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onS
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
+  useCaptureQuestionProgress(step, 2)
 
   return (
     <div className="pb-28 space-y-4">
@@ -752,7 +721,9 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
   const [corrections, setCorr] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
+  const bookingProgress =
+    aligned === true ? { c: 1, t: 1 } : aligned === false ? { c: step, t: 2 } : { c: 0, t: 2 }
+  useCaptureQuestionProgress(bookingProgress.c, bookingProgress.t)
 
   return (
     <div className="pb-28 space-y-3">
@@ -799,7 +770,7 @@ function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
+  useCaptureQuestionProgress(step, 2)
 
   return (
     <div className="pb-28 space-y-3">
@@ -866,7 +837,10 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const [comments, setComments] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => Math.round((step / 4) * 100), [step])
+  const postShowTotal = nothing === false ? 5 : nothing === true ? 4 : 5
+  const postShowCompleted =
+    step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : step === 3 || step === 4 ? 3 : 0
+  useCaptureQuestionProgress(postShowCompleted, postShowTotal)
 
   const doSubmit = () => {
     if (rating === 0 || nothing === null) return
@@ -953,7 +927,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 }
 
 function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
-  useEmailCaptureProgressEstimate(() => 100, [])
+  useCaptureQuestionProgress(0, 1)
 
   return (
     <form
@@ -972,7 +946,7 @@ function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
 function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [availability, setA] = useState('')
 
-  useEmailCaptureProgressEstimate(() => (availability.trim() ? 88 : 22), [availability])
+  useCaptureQuestionProgress(availability.trim() ? 1 : 0, 1)
 
   return (
     <form
@@ -994,7 +968,7 @@ function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmi
   const [reference, setR] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(() => (step >= 1 ? 100 : 0), [step])
+  useCaptureQuestionProgress(step, 2)
 
   return (
     <div className="pb-28 space-y-3">
@@ -1043,14 +1017,10 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useEmailCaptureProgressEstimate(
-    () => {
-      if (!rebookInterest) return 0
-      if (rebookInterest === 'no') return step >= 1 ? 100 : 50
-      return Math.round((step / 3) * 100)
-    },
-    [step, rebookInterest],
-  )
+  const receiptTotal = rebookInterest === 'no' ? 2 : rebookInterest ? 4 : 4
+  const receiptCompleted =
+    rebookInterest === 'no' ? (step === 0 ? 0 : 1) : rebookInterest ? step : 0
+  useCaptureQuestionProgress(receiptCompleted, receiptTotal)
 
   const pickInterest = (v: 'yes' | 'maybe' | 'no') => {
     setInterest(v)
@@ -1115,18 +1085,12 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
 
 export interface EmailCaptureFormPreviewBodyProps {
   kind: EmailCaptureKind
-  venueName: string | null
-  dealDescription: string | null
-  eventDate: string | null
   branding?: PublicFormBranding
 }
 
 /** Dashboard: exercise capture UI without token or Netlify calls. */
 export function EmailCaptureFormPreviewBody({
   kind,
-  venueName,
-  dealDescription,
-  eventDate,
   branding: brandingProp,
 }: EmailCaptureFormPreviewBodyProps) {
   const [submitting, setSubmitting] = useState(false)
@@ -1146,23 +1110,6 @@ export function EmailCaptureFormPreviewBody({
       setDone(true)
     }, 520)
   }
-
-  const venueContext = (
-    <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Quick response · preview</p>
-      {(venueName || dealDescription) ? (
-        <p className="text-sm text-neutral-400">
-          {venueName ? <span className="text-neutral-300">{venueName}</span> : null}
-          {eventDate ? (
-            <span className="text-neutral-500"> · {formatEmailCaptureEventDate(eventDate)}</span>
-          ) : null}
-          {dealDescription && !venueName ? (
-            <span className="text-neutral-300">{dealDescription}</span>
-          ) : null}
-        </p>
-      ) : null}
-    </div>
-  )
 
   if (done) {
     return (
@@ -1189,7 +1136,6 @@ export function EmailCaptureFormPreviewBody({
       descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[kind]}
       progress={progressPct}
       progressSuccessFlash={progressFlash}
-      venueContext={venueContext}
       rootClassName="bg-neutral-950 text-neutral-100 min-h-0 flex-1 flex flex-col"
       mainClassName="pb-36 pt-4"
     >

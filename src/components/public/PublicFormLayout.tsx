@@ -28,7 +28,6 @@ export interface PublicFormLayoutProps {
   progress: number
   /** Brief green success state on the progress track */
   progressSuccessFlash?: boolean
-  venueContext?: ReactNode
   children: ReactNode
   rootClassName?: string
   mainClassName?: string
@@ -42,7 +41,6 @@ export function PublicFormLayout({
   descriptor,
   progress,
   progressSuccessFlash = false,
-  venueContext,
   children,
   rootClassName,
   mainClassName,
@@ -106,7 +104,9 @@ export function PublicFormLayout({
 
   return (
     <div className={cn('flex min-h-screen flex-col', rootClassName ?? 'bg-neutral-950 text-neutral-100')}>
-      <header className="shrink-0 border-b border-neutral-800/90">
+      <header
+        className={cn('shrink-0', !showProgress && 'border-b border-neutral-800/90')}
+      >
         <div className="mx-auto max-w-lg px-4 pt-6 pb-4">
           {/* Brand row: one horizontal cluster (logo + copy), not a 3-column grid fight */}
           <div className="flex items-start gap-3">
@@ -120,35 +120,31 @@ export function PublicFormLayout({
               <p className="mt-1 text-[11px] font-medium leading-relaxed text-neutral-500">{secondary}</p>
             </div>
           </div>
+        </div>
 
-          {/* Form identity: full-width band, centered — no phantom spacer column */}
-          <div className="mt-5 border-t border-neutral-800/80 pt-5 text-center">
-            <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
-            {descriptor ? (
-              <p className="mx-auto mt-2 max-w-md text-[11px] font-normal leading-snug text-neutral-500">{descriptor}</p>
-            ) : null}
-          </div>
-
-          {venueContext ? (
-            <div className="mt-4 border-t border-neutral-800/60 pt-4 text-left">{venueContext}</div>
-          ) : null}
-
-          {showProgress ? (
+        {/* Progress sits on the header/content seam (full width), directly under the brand block */}
+        {showProgress ? (
+          <div
+            className={cn(
+              'h-1.5 w-full overflow-hidden bg-neutral-800/90',
+              '[@media(prefers-reduced-motion:reduce)]:[&_*]:!transition-none',
+            )}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(pct)}
+          >
             <div
-              className={cn(
-                'mt-4 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800/90',
-                '[@media(prefers-reduced-motion:reduce)]:[&_*]:!transition-none',
-              )}
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(pct)}
-            >
-              <div
-                className={cn('h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none')}
-                style={fillStyle}
-              />
-            </div>
+              className={cn('h-full transition-[width] duration-300 ease-out motion-reduce:transition-none')}
+              style={fillStyle}
+            />
+          </div>
+        ) : null}
+
+        <div className="mx-auto max-w-lg px-4 pb-4 pt-5 text-center">
+          <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
+          {descriptor ? (
+            <p className="mx-auto mt-2 max-w-md text-[11px] font-normal leading-snug text-neutral-500">{descriptor}</p>
           ) : null}
         </div>
       </header>

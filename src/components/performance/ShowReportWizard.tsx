@@ -23,12 +23,6 @@ export interface ShowReportFormContext {
   dealDescription: string | null
 }
 
-interface FormContext {
-  venueName: string | null
-  eventDate: string | null
-  dealDescription: string | null
-}
-
 export interface ShowReportWizardProps {
   token: string
   /** Dashboard: skip public GET — context comes from authenticated row. */
@@ -76,12 +70,6 @@ interface FormAnswers {
   mediaLinks: string
 }
 
-function formatDate(iso: string) {
-  const [y, m, d] = iso.split('-')
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
-  return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`
-}
-
 const EMPTY: FormAnswers = {
   eventHappened: '',
   cancellationReason: '',
@@ -105,6 +93,94 @@ const EMPTY: FormAnswers = {
   notesExtra: '',
   mediaChoice: 'unset',
   mediaLinks: '',
+}
+
+type WizardPhase1 =
+  | 'rating'
+  | 'attendance'
+  | 'paid'
+  | 'partial'
+  | 'chase'
+  | 'dispute'
+  | 'production'
+  | 'friction'
+
+type WizardVenuePhase =
+  | 'venue_int'
+  | 'rel'
+  | 'timeline'
+  | 'booking_call'
+  | 'play'
+  | 'mgr'
+  | 'referral'
+  | 'notes'
+  | 'media'
+  | 'done'
+
+function buildWizardPhase1Flow(a: FormAnswers): WizardPhase1[] {
+  const flow: WizardPhase1[] = ['rating', 'attendance', 'paid']
+  if (!a.artistPaidStatus) {
+    return [...flow, 'partial', 'chase', 'dispute', 'production', 'friction']
+  }
+  if (a.artistPaidStatus === 'partial') flow.push('partial', 'chase')
+  else if (a.artistPaidStatus === 'no') flow.push('chase')
+  flow.push('dispute', 'production')
+  if (a.productionIssueLevel === 'minor' || a.productionIssueLevel === 'serious') flow.push('friction')
+  else if (!a.productionIssueLevel) flow.push('friction')
+  return flow
+}
+
+function buildWizardVenueFlow(a: FormAnswers): Exclude<WizardVenuePhase, 'done'>[] {
+  const flow: Exclude<WizardVenuePhase, 'done'>[] = ['venue_int', 'rel']
+  if (a.venueInterest === 'yes') flow.push('timeline', 'booking_call')
+  else if (!a.venueInterest) flow.push('timeline', 'booking_call')
+  flow.push('play', 'mgr', 'referral', 'notes', 'media')
+  return flow
+}
+
+function wizardStep0Segment(
+  step: number,
+  a: FormAnswers,
+  showEventSections: boolean,
+): { completed: number; segmentTotal: number } {
+  if (step > 0) {
+    return showEventSections ? { completed: 1, segmentTotal: 1 } : { completed: 2, segmentTotal: 2 }
+  }
+  if (!a.eventHappened) return { completed: 0, segmentTotal: 2 }
+  if (a.eventHappened === 'yes') return { completed: 1, segmentTotal: 1 }
+  return { completed: a.cancellationReason ? 2 : 1, segmentTotal: 2 }
+}
+
+/** Each guided question counts toward progress (not coarse step indices). */
+function computeWizardQuestionProgress(
+  step: number,
+  phase1: WizardPhase1,
+  phaseVenue: WizardVenuePhase,
+  a: FormAnswers,
+  showEventSections: boolean,
+): number {
+  const s0 = wizardStep0Segment(step, a, showEventSections)
+  const phase1Flow = buildWizardPhase1Flow(a)
+  const venueFlow = buildWizardVenueFlow(a)
+  const phase1Len = showEventSections ? phase1Flow.length : 0
+  let phase1Completed = 0
+  if (showEventSections && step >= 2) phase1Completed = phase1Flow.length
+  else if (showEventSections && step === 1) phase1Completed = Math.max(0, phase1Flow.indexOf(phase1))
+
+  const inVenue = (!showEventSections && step === 1) || (showEventSections && step === 2)
+  let venueCompleted = 0
+  if (inVenue) {
+    if (phaseVenue === 'done') venueCompleted = venueFlow.length
+    else {
+      const ix = venueFlow.indexOf(phaseVenue as Exclude<WizardVenuePhase, 'done'>)
+      venueCompleted = ix < 0 ? 0 : ix
+    }
+  }
+
+  const total = s0.segmentTotal + phase1Len + venueFlow.length
+  const completed = s0.completed + phase1Completed + venueCompleted
+  if (total <= 0) return 0
+  return Math.min(100, Math.round((completed / total) * 100))
 }
 
 function SelectField({
@@ -300,15 +376,6 @@ export function ShowReportWizard({
   onCancel,
 }: ShowReportWizardProps) {
   const [state, setState] = useState<FormState>(() => (embeddedContext ? 'form' : 'loading'))
-  const [context, setContext] = useState<FormContext>(() =>
-    embeddedContext
-      ? {
-          venueName: embeddedContext.venueName,
-          eventDate: embeddedContext.eventDate,
-          dealDescription: embeddedContext.dealDescription,
-        }
-      : { venueName: null, eventDate: null, dealDescription: null }
-  )
   const [answers, setAnswers] = useState<FormAnswers>(EMPTY)
   const [step, setStep] = useState(0)
   /** Step 0: event vs cancellation question (one screen each). */
@@ -359,11 +426,6 @@ export function ShowReportWizard({
 
   useEffect(() => {
     if (embeddedContext) {
-      setContext({
-        venueName: embeddedContext.venueName,
-        eventDate: embeddedContext.eventDate,
-        dealDescription: embeddedContext.dealDescription,
-      })
       setState('form')
       if (propsBranding) setBrandingIn(mergePublicFormBranding(propsBranding))
       return
@@ -377,11 +439,6 @@ export function ShowReportWizard({
         setBrandingIn(mergePublicFormBranding(data.branding))
         if (!data.valid) { setState('invalid'); return }
         if (data.submitted) { setState('success'); return }
-        setContext({
-          venueName: data.venueName,
-          eventDate: data.eventDate,
-          dealDescription: data.dealDescription ?? null,
-        })
         setState('form')
       })
       .catch(() => { if (!cancelled) setState('invalid') })
@@ -592,9 +649,7 @@ export function ShowReportWizard({
 
   const formProgressPct =
     state === 'form' || state === 'submitting'
-      ? lastStepIndex <= 0
-        ? 0
-        : Math.round((step / lastStepIndex) * 100)
+      ? computeWizardQuestionProgress(step, phase1, phaseVenue, answers, showEventSections)
       : 0
 
   const layoutTitle =
@@ -614,16 +669,6 @@ export function ShowReportWizard({
     : submittedBy === 'manager_dashboard'
       ? 'Same automations as the artist link'
       : 'Your manager will follow up shortly'
-
-  const venueContextNode =
-    context.venueName || context.eventDate ? (
-      <p className="text-sm text-neutral-400">
-        {context.venueName}
-        {context.eventDate ? (
-          <span className="text-neutral-600"> · {formatDate(context.eventDate)}</span>
-        ) : null}
-      </p>
-    ) : null
 
   const layoutRootDraft = preview
     ? 'min-h-0 flex-1 bg-[#0d0d0d] text-neutral-100'
@@ -677,7 +722,6 @@ export function ShowReportWizard({
         descriptor={successLayoutDescriptor}
         progress={successProgressPct}
         progressSuccessFlash={successFlash}
-        venueContext={venueContextNode}
         rootClassName={layoutRootDraft}
         mainClassName="flex flex-1 flex-col items-center justify-center px-0 py-10"
       >
@@ -730,7 +774,6 @@ export function ShowReportWizard({
       descriptor={layoutDescriptor}
       progress={formProgressPct}
       progressSuccessFlash={false}
-      venueContext={venueContextNode}
       rootClassName={layoutRootDraft}
       mainClassName={cn('pt-2', footerMode === 'viewport' ? 'pb-32' : 'pb-24')}
     >
