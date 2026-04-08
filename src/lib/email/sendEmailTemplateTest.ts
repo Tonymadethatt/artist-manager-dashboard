@@ -2,7 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ArtistProfile, AnyEmailType, VenueEmailType, GeneratedFile } from '@/types'
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { normalizeEmailTemplateLayout } from '@/lib/emailLayout'
-import { PREVIEW_MOCK_DEAL, PREVIEW_MOCK_VENUE } from '@/lib/buildVenueEmailHtml'
+import { EMAIL_TEMPLATE_PREVIEW_INVOICE_URL, PREVIEW_MOCK_DEAL, PREVIEW_MOCK_VENUE } from '@/lib/buildVenueEmailHtml'
+import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import type { CustomEmailTemplateRow } from '@/hooks/useCustomEmailTemplates'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
@@ -11,7 +14,6 @@ import {
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
-import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
@@ -270,25 +272,50 @@ export async function sendEmailTemplateTest(
     }
   }
 
-  // Client built-in venue types
+  // Client built-in venue types — same capture + invoice inputs as a live send (SendVenueEmailModal + send-venue-email).
   const vType = params.selectedType as string
   if (!VENUE_EMAIL_TYPES.has(vType)) {
     return { ok: false, message: 'This template type cannot be sent from here.' }
   }
 
+  const venuePayload: Record<string, unknown> = {
+    profile: venueProfilePayload(profile),
+    recipient: managerRecipient,
+    deal: PREVIEW_MOCK_DEAL,
+    venue: PREVIEW_MOCK_VENUE,
+    type: vType as VenueEmailType,
+    custom_subject: layoutNorm.subject ?? null,
+    custom_intro: layoutNorm.intro ?? null,
+    layout: layoutNorm,
+  }
+
+  const capKind = venueEmailTypeToCaptureKind(vType as VenueEmailType)
+  if (capKind) {
+    const { data: tokRow, error: capErr } = await supabase
+      .from('email_capture_tokens')
+      .insert({
+        user_id: user.id,
+        kind: capKind,
+        venue_id: null,
+        deal_id: null,
+        contact_id: null,
+        expires_at: defaultEmailCaptureExpiresAt(),
+      })
+      .select('token')
+      .single()
+    if (!capErr && tokRow?.token) {
+      venuePayload.capture_url = `${publicSiteOrigin()}/email-capture/${tokRow.token as string}`
+    }
+  }
+
+  if (vType === 'invoice_sent') {
+    venuePayload.invoice_url = EMAIL_TEMPLATE_PREVIEW_INVOICE_URL
+  }
+
   const res = await fetch('/.netlify/functions/send-venue-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      profile: venueProfilePayload(profile),
-      recipient: managerRecipient,
-      deal: PREVIEW_MOCK_DEAL,
-      venue: PREVIEW_MOCK_VENUE,
-      type: vType as VenueEmailType,
-      custom_subject: layoutNorm.subject ?? null,
-      custom_intro: layoutNorm.intro ?? null,
-      layout: layoutNorm,
-    }),
+    body: JSON.stringify(venuePayload),
   })
   if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
   return { ok: true }

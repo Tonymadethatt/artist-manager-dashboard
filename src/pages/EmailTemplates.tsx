@@ -24,6 +24,7 @@ import type { VenueEmailType, ArtistEmailType, AnyEmailType, EmailTemplate } fro
 import { VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import {
   buildVenueEmailHtml,
+  EMAIL_TEMPLATE_PREVIEW_INVOICE_URL,
   PREVIEW_MOCK_PROFILE,
   PREVIEW_MOCK_RECIPIENT,
   PREVIEW_MOCK_VENUE,
@@ -505,7 +506,7 @@ export default function EmailTemplates() {
       ? 'https://preview.example.com/email-capture/mock-preview-token'
       : null
     const previewInvoiceUrl = selectedType === 'invoice_sent'
-      ? 'https://preview.example.com/invoice/mock.pdf'
+      ? EMAIL_TEMPLATE_PREVIEW_INVOICE_URL
       : null
     return buildVenueEmailHtml(
       selectedType as PreviewEmailType,

@@ -16,6 +16,9 @@ export type PreviewDeal = VenueRenderDeal
 export type PreviewVenue = VenueRenderVenue
 export type PreviewRecipient = VenueRenderRecipient
 
+/** Invoice link for template preview and “Send test to myself” — matches production HTML when no real file is queued. */
+export const EMAIL_TEMPLATE_PREVIEW_INVOICE_URL = 'https://preview.example.com/invoice/mock.pdf'
+
 export function buildVenueEmailHtml(
   type: PreviewEmailType,
   profile: PreviewProfile,
