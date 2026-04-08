@@ -3,11 +3,7 @@ import type { ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import type { EmailCaptureKind } from '@/lib/emailCapture/kinds'
-import {
-  isEmailCaptureKind,
-  EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS,
-  EMAIL_CAPTURE_KIND_FORM_TITLES,
-} from '@/lib/emailCapture/kinds'
+import { isEmailCaptureKind, EMAIL_CAPTURE_KIND_FORM_TITLES } from '@/lib/emailCapture/kinds'
 import { PublicFormLayout } from '@/components/public/PublicFormLayout'
 import {
   DEFAULT_PUBLIC_FORM_BRANDING,
@@ -171,8 +167,7 @@ export default function EmailCaptureForm() {
     return (
       <PublicFormLayout
         branding={DEFAULT_PUBLIC_FORM_BRANDING}
-        title="Quick response"
-        descriptor="Loading…"
+        title="Loading…"
         progress={0}
         showProgress={false}
         mainClassName="flex flex-1 flex-col items-center justify-center py-24"
@@ -195,7 +190,6 @@ export default function EmailCaptureForm() {
       <PublicFormLayout
         branding={preflight.branding}
         title="Thank you"
-        descriptor="Response received"
         progress={0}
         mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center"
       >
@@ -213,7 +207,6 @@ export default function EmailCaptureForm() {
     <PublicFormLayout
       branding={ctx.branding}
       title={EMAIL_CAPTURE_KIND_FORM_TITLES[ctx.kind]}
-      descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[ctx.kind]}
       progress={progressPct}
       progressSuccessFlash={progressSuccessFlash}
       mainClassName="pb-44 pt-6"
@@ -851,7 +844,13 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
     <div className="pb-28 space-y-4">
       {step === 0 ? (
         <>
-          <p className="text-xs font-medium text-neutral-200 mb-2">How was the show? (required)</p>
+          <p className="text-xs font-semibold text-neutral-100 mb-2">
+            How was the show?{' '}
+            <span className="text-red-500 font-semibold" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only">(required)</span>
+          </p>
           <StarRating
             value={rating}
             onChange={v => {
@@ -1116,7 +1115,6 @@ export function EmailCaptureFormPreviewBody({
       <PublicFormLayout
         branding={branding}
         title="Preview complete"
-        descriptor="Nothing was saved"
         progress={0}
         rootClassName="bg-black text-neutral-50 min-h-0 flex-1 flex flex-col antialiased"
         mainClassName="flex flex-1 flex-col items-center justify-center px-4 py-12 text-center"
@@ -1133,7 +1131,6 @@ export function EmailCaptureFormPreviewBody({
     <PublicFormLayout
       branding={branding}
       title={EMAIL_CAPTURE_KIND_FORM_TITLES[kind]}
-      descriptor={EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS[kind]}
       progress={progressPct}
       progressSuccessFlash={progressFlash}
       rootClassName="bg-black text-neutral-50 min-h-0 flex-1 flex flex-col antialiased"

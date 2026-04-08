@@ -22,7 +22,6 @@ function igHref(handle: string): string {
 export interface PublicFormLayoutProps {
   branding: PublicFormBranding
   title: string
-  descriptor: string
   /** 0–100 */
   progress: number
   /** Brief green success state on the progress track */
@@ -37,7 +36,6 @@ export interface PublicFormLayoutProps {
 export function PublicFormLayout({
   branding,
   title,
-  descriptor,
   progress,
   progressSuccessFlash = false,
   children,
@@ -111,7 +109,7 @@ export function PublicFormLayout({
             />
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="text-[13px] font-semibold leading-snug tracking-tight text-white">{primary}</p>
-              <p className="mt-1 text-[12px] font-medium leading-relaxed text-neutral-300">{secondary}</p>
+              <p className="mt-1 text-[6px] font-medium leading-snug text-neutral-300">{secondary}</p>
             </div>
           </div>
         </div>
@@ -136,18 +134,15 @@ export function PublicFormLayout({
 
         <div className="mx-auto max-w-lg px-4 pb-4 pt-5 text-center">
           <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
-          {descriptor ? (
-            <p className="mx-auto mt-2 max-w-md text-[12px] font-medium leading-snug text-neutral-200">{descriptor}</p>
-          ) : null}
         </div>
       </header>
 
       <main className={cn('mx-auto flex w-full max-w-lg flex-1 flex-col px-4', mainClassName)}>{children}</main>
 
       <footer className="mt-auto shrink-0 border-t border-neutral-700 bg-black">
-        <div className="mx-auto max-w-lg px-4 py-3">
+        <div className="mx-auto max-w-lg px-4 py-3 text-center">
           {showUpper ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] leading-snug">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[12px] leading-snug">
               {hasPersona ? (
                 <>
                   {branding.manager_name?.trim() ? (
@@ -164,9 +159,9 @@ export function PublicFormLayout({
                 </span>
               ) : null}
               {hasLinks ? (
-                <span className="inline-flex flex-wrap items-center gap-x-0 gap-y-0.5 text-left">
+                <span className="inline-flex flex-wrap items-center justify-center gap-x-0 gap-y-0.5">
                   {linkBits.map((b, i) => (
-                    <span key={b.key} className="inline-flex max-w-full items-center">
+                    <span key={b.key} className="inline-flex max-w-full items-center justify-center">
                       {i > 0 ? (
                         <span className="mx-1.5 text-neutral-600 select-none" aria-hidden>
                           ·
@@ -182,7 +177,7 @@ export function PublicFormLayout({
 
           <div
             className={cn(
-              'flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]',
+              'flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px]',
               showUpper ? 'mt-2 border-t border-neutral-800 pt-2' : '',
             )}
           >

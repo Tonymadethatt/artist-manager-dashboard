@@ -98,24 +98,6 @@ export const EMAIL_CAPTURE_KIND_FORM_TITLES: Record<EmailCaptureKind, string> = 
   payment_receipt: 'Payment receipt',
 }
 
-/** Eyebrow / descriptor under the title. */
-export const EMAIL_CAPTURE_KIND_FORM_DESCRIPTORS: Record<EmailCaptureKind, string> = {
-  pre_event_checkin: 'Logistics for your date — takes about a minute',
-  first_outreach: 'Let the team know where things stand',
-  follow_up: 'Quick check-in on the conversation',
-  show_cancelled_or_postponed: 'What should we know about the change',
-  agreement_followup: 'Paperwork or terms follow-up',
-  agreement_ready: 'Confirm or flag anything on the agreement',
-  booking_confirmation: 'Lock in the details we sent',
-  booking_confirmed: 'Acknowledge the confirmed date',
-  invoice_sent: 'Confirm you received the invoice',
-  post_show_thanks: 'How was the night?',
-  pass_for_now: 'Acknowledge — no pressure',
-  rebooking_inquiry: 'Share timing if you want another date',
-  payment_reminder_ack: 'Update payment status',
-  payment_receipt: 'Next steps after payment',
-}
-
 export function captureLinkLabel(kind: EmailCaptureKind): string {
   switch (kind) {
     case 'pre_event_checkin':

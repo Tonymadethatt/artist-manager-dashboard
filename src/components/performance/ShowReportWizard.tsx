@@ -195,9 +195,17 @@ function SelectField({
   onPick?: () => void
 }) {
   return (
-    <div className="mb-5">
+    <div className="mb-5" role="group" aria-required={required ? true : undefined}>
       <label className="block text-sm font-medium text-white mb-2">
-        {label}{required && <span className="text-neutral-300 ml-1 font-normal">(required)</span>}
+        {label}
+        {required ? (
+          <>
+            <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only">(required)</span>
+          </>
+        ) : null}
       </label>
       <div className="flex flex-col gap-2">
         {options.map(o => (
@@ -654,21 +662,12 @@ export function ShowReportWizard({
 
   const layoutTitle =
     submittedBy === 'manager_dashboard' ? 'Manual show report' : 'Show report'
-  const layoutDescriptor =
-    submittedBy === 'manager_dashboard'
-      ? 'On behalf of your artist'
-      : 'How it went — one short form'
 
   const successLayoutTitle = preview
     ? 'Preview complete'
     : submittedBy === 'manager_dashboard'
       ? 'Report saved'
       : 'Thank you'
-  const successLayoutDescriptor = preview
-    ? 'Dry run — nothing saved'
-    : submittedBy === 'manager_dashboard'
-      ? 'Same automations as the artist link'
-      : 'Your manager will follow up shortly'
 
   const layoutRootDraft = preview
     ? 'min-h-0 flex-1 bg-black text-neutral-50 antialiased'
@@ -681,7 +680,6 @@ export function ShowReportWizard({
       <PublicFormLayout
         branding={brandingIn}
         title="Loading"
-        descriptor="One moment"
         progress={0}
         showProgress={false}
         rootClassName={layoutRootDraft}
@@ -719,7 +717,6 @@ export function ShowReportWizard({
       <PublicFormLayout
         branding={brandingIn}
         title={successLayoutTitle}
-        descriptor={successLayoutDescriptor}
         progress={successProgressPct}
         progressSuccessFlash={successFlash}
         rootClassName={layoutRootDraft}
@@ -771,7 +768,6 @@ export function ShowReportWizard({
     <PublicFormLayout
       branding={brandingIn}
       title={layoutTitle}
-      descriptor={layoutDescriptor}
       progress={formProgressPct}
       progressSuccessFlash={false}
       rootClassName={layoutRootDraft}
@@ -1309,13 +1305,13 @@ export function ShowReportWizard({
           ) : null}
         </form>
 
-        <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs font-medium text-neutral-400">
-          {preview
-            ? 'Preview only — answers are not submitted.'
-            : submittedBy === 'manager_dashboard'
+        {!preview ? (
+          <p className="mx-auto mt-4 w-full max-w-md pb-4 text-center text-xs font-medium text-neutral-400">
+            {submittedBy === 'manager_dashboard'
               ? 'Same automations apply as when the artist submits the public link.'
               : 'One-time link. Your answers go to your manager only.'}
-        </p>
+          </p>
+        ) : null}
     </PublicFormLayout>
   )
 }
