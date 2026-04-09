@@ -79,6 +79,7 @@ function htmlShellThankYou(title: string, inner: string): string {
 </div>`
   const mailBack = `<div class="mail-back">
   <button type="button" class="mail-btn" id="ack-back-mail">Back to mail</button>
+  <p id="ack-back-hint" class="mail-back-hint" hidden></p>
 </div>`
   return `<!DOCTYPE html>
 <html lang="en">
@@ -101,8 +102,9 @@ function htmlShellThankYou(title: string, inner: string): string {
   .mail-back { margin-top: 24px; text-align: center; }
   .mail-btn { width: 100%; display: block; cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 600;
     text-align: center; color: #fafafa; background: #1a1a1a; border: 1px solid #333333; border-radius: 8px; padding: 14px 16px;
-    min-height: 48px; line-height: 1.3; -webkit-tap-highlight-color: transparent; }
+    min-height: 48px; line-height: 1.3; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .mail-btn:active { background: #262626; }
+  .mail-back-hint { margin-top: 12px; font-size: 0.8rem; color: #a3a3a3; line-height: 1.45; }
 </style>
 </head>
 <body>
@@ -113,22 +115,40 @@ function htmlShellThankYou(title: string, inner: string): string {
 <script>
 (function () {
   var btn = document.getElementById('ack-back-mail')
+  var hint = document.getElementById('ack-back-hint')
   if (!btn) return
+  function showFallbackHint() {
+    if (!hint) return
+    hint.removeAttribute('hidden')
+    hint.textContent =
+      'We could not return automatically. Use your browser or app Back control, or switch back to your email.'
+  }
   btn.addEventListener('click', function () {
+    var ref = ''
+    var refOk = false
+    try {
+      ref = document.referrer || ''
+      if (ref) {
+        var u = new URL(ref)
+        refOk = u.protocol === 'http:' || u.protocol === 'https:'
+      }
+    } catch (e0) {}
     try {
       if (window.history.length > 1) {
         window.history.back()
         return
       }
-    } catch (e) {}
+    } catch (e1) {}
     try {
-      var r = document.referrer
-      if (!r) return
-      var u = new URL(r)
-      if (u.protocol === 'http:' || u.protocol === 'https:') {
-        window.location.assign(r)
+      if (refOk) {
+        window.location.assign(ref)
+        return
       }
     } catch (e2) {}
+    try {
+      window.history.back()
+    } catch (e3) {}
+    showFallbackHint()
   })
 })()
 </script>
