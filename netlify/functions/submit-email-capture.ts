@@ -25,16 +25,30 @@ function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown
     case 'first_outreach': {
       const i = String(payload.intent ?? '')
       if (!['interested', 'not_now', 'wrong_person'].includes(i)) return 'Choose a response'
+      const pcm = String(payload.preferredContactMethod ?? '')
+      if (!['email', 'phone_text', 'either'].includes(pcm)) return 'Choose how to best reach you'
       return null
     }
     case 'follow_up': {
       const s = String(payload.status ?? '')
       if (!['interested', 'need_info', 'pass'].includes(s)) return 'Choose a status'
+      if (s === 'need_info') {
+        const inf = String(payload.infoNeeded ?? '')
+        if (!['pricing', 'song_demo', 'availability_dates', 'references', 'something_else'].includes(inf)) {
+          return 'Select what info would help'
+        }
+      }
+      if (s === 'pass') {
+        const rc = String(payload.recontactPreference ?? '')
+        if (!['few_months', 'next_year', 'no_follow_up'].includes(rc)) return 'Choose whether to check back later'
+      }
       return null
     }
     case 'show_cancelled_or_postponed': {
       const r = String(payload.resolution ?? '')
       if (!['new_date', 'refund', 'release', 'other'].includes(r)) return 'Choose a resolution'
+      const fi = String(payload.futureInterest ?? '')
+      if (!['definitely', 'maybe', 'probably_not'].includes(fi)) return 'Select whether you might work together again'
       return null
     }
     case 'agreement_followup': {
@@ -49,15 +63,29 @@ function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown
     case 'booking_confirmation':
     case 'booking_confirmed': {
       if (payload.aligned !== true && payload.aligned !== false) return 'Confirm whether details are correct'
+      const ps = String(payload.paymentStructure ?? '')
+      if (!['full_after_show', 'deposit_balance', 'venue_advances', 'separate'].includes(ps)) {
+        return 'Select how payment is structured'
+      }
       return null
     }
     case 'invoice_sent': {
       if (payload.receivedInAp !== true && payload.receivedInAp !== false) return 'Select AP status'
+      if (payload.receivedInAp === false) {
+        const t = String(payload.expectedPaymentTimeline ?? '')
+        if (!['within_week', 'net_15', 'net_30', 'not_sure'].includes(t)) {
+          return 'Select when you expect payment to go out'
+        }
+      }
       return null
     }
     case 'post_show_thanks': {
       const r = Number(payload.rating)
       if (!Number.isInteger(r) || r < 1 || r > 5) return 'Select a star rating'
+      const wr = String(payload.wouldRebook ?? '')
+      if (!['absolutely', 'probably', 'not_likely'].includes(wr)) return 'Select whether you would book this artist again'
+      const tu = String(payload.venueTurnoutAssessment ?? '')
+      if (!['packed', 'solid', 'light', 'slow'].includes(tu)) return 'Select how turnout was'
       if (payload.nothingPending !== true && payload.nothingPending !== false) return 'Select whether anything is pending'
       if (payload.nothingPending === false && !String(payload.detail ?? '').trim()) return 'Describe what is pending'
       return null
@@ -68,11 +96,21 @@ function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown
     }
     case 'payment_reminder_ack': {
       if (payload.submittedPayment !== true && payload.submittedPayment !== false) return 'Select payment status'
+      if (payload.submittedPayment === false) {
+        const e = String(payload.expectedSendDate ?? '')
+        if (!['this_week', 'next_week', 'waiting_approval', 'not_sure'].includes(e)) {
+          return 'Select when payment is expected to go out'
+        }
+      }
       return null
     }
     case 'payment_receipt': {
       const i = String(payload.rebookInterest ?? '')
       if (!['yes', 'maybe', 'no'].includes(i)) return 'Select rebooking interest'
+      const we = String(payload.workingExperience ?? '')
+      if (!['great_smooth', 'good_hiccups', 'rough'].includes(we)) {
+        return 'Select how the overall experience was'
+      }
       return null
     }
     case 'pass_for_now':

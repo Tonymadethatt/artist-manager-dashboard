@@ -37,8 +37,41 @@ interface SubmitBody {
   wouldPlayAgain?: 'yes' | 'maybe' | 'no' | null
   cancellationReason?: CancellationReason | null
   referralLead?: 'no' | 'yes' | null
+  referralDetail?: string | null
+  crowdEnergy?: 'electric' | 'warm' | 'flat' | 'hostile' | null
+  supplementalIncome?: 'none' | 'under_50' | '50_150' | 'over_150' | null
+  venueDelivered?: 'yes_good' | 'mostly_off' | 'significant_gaps' | null
   /** Who submitted: public form vs manager dashboard manual entry */
   submittedBy?: 'artist_link' | 'manager_dashboard'
+}
+
+function crowdEnergyLabel(v: string): string {
+  const m: Record<string, string> = {
+    electric: 'Electric — they were into it',
+    warm: 'Warm — decent energy',
+    flat: 'Flat — tough crowd',
+    hostile: 'Hostile — rough night',
+  }
+  return m[v] ?? v
+}
+
+function supplementalIncomeLabel(v: string): string {
+  const m: Record<string, string> = {
+    none: 'None',
+    under_50: 'Under $50',
+    '50_150': '$50–$150',
+    over_150: '$150+',
+  }
+  return m[v] ?? v
+}
+
+function venueDeliveredLabel(v: string): string {
+  const m: Record<string, string> = {
+    yes_good: 'Yes — everything was good',
+    mostly_off: 'Mostly — a few things were off',
+    significant_gaps: 'No — significant gaps',
+  }
+  return m[v] ?? v
 }
 
 function addDays(days: number): string {
@@ -100,6 +133,20 @@ const handler: Handler = async (event) => {
 
   const played = body.eventHappened === 'yes'
 
+  const structuredNoteLines = [
+    played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}` : null,
+    played && body.supplementalIncome && body.supplementalIncome !== 'none'
+      ? `Tips / merch income: ${supplementalIncomeLabel(body.supplementalIncome)}`
+      : null,
+    played && body.venueDelivered
+      ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}`
+      : null,
+    body.referralLead === 'yes' && body.referralDetail?.trim()
+      ? `Referral detail: ${body.referralDetail.trim()}`
+      : null,
+  ].filter(Boolean) as string[]
+  const mergedNotes = [body.notes?.trim() || '', ...structuredNoteLines].filter(Boolean).join('\n\n') || null
+
   const { error: submitError } = await supabase
     .from('performance_reports')
     .update({
@@ -113,7 +160,7 @@ const handler: Handler = async (event) => {
       payment_amount: played ? body.paymentAmount ?? null : null,
       venue_interest: body.venueInterest ?? null,
       relationship_quality: body.relationshipQuality ?? null,
-      notes: body.notes ?? null,
+      notes: mergedNotes,
       media_links: body.mediaLinks ?? null,
       chase_payment_followup: played ? body.chasePaymentFollowup ?? null : null,
       payment_dispute: played ? body.paymentDispute ?? null : null,
@@ -371,6 +418,7 @@ const handler: Handler = async (event) => {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
         title: `Capture referral lead — ${venueName}`,
+        notes: body.referralDetail?.trim() || null,
         venue_id: row.venue_id,
         deal_id: row.deal_id ?? null,
         priority: 'medium',
@@ -380,6 +428,40 @@ const handler: Handler = async (event) => {
       })
     } catch (e) {
       console.error('[submit-performance-report] Referral task failed:', e)
+    }
+  }
+
+  if (played && body.venueDelivered === 'significant_gaps') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Address venue delivery issues — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'high',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Venue delivery task failed:', e)
+    }
+  }
+
+  if (played && body.crowdEnergy === 'hostile') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Review hostile crowd report — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'medium',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Hostile crowd task failed:', e)
     }
   }
 
@@ -407,6 +489,13 @@ const handler: Handler = async (event) => {
         : null,
       body.eventRating ? `Rating: ${body.eventRating}/5.` : null,
       body.attendance ? `Attendance: approx. ${body.attendance} people.` : null,
+      played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}.` : null,
+      played && body.supplementalIncome && body.supplementalIncome !== 'none'
+        ? `Tips/merch income: ${supplementalIncomeLabel(body.supplementalIncome)}.`
+        : null,
+      played && body.venueDelivered
+        ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}.`
+        : null,
       body.artistPaidStatus === 'yes'
         ? submittedBy === 'manager_dashboard'
           ? 'Report indicates full payment received.'
@@ -445,6 +534,9 @@ const handler: Handler = async (event) => {
       body.wantsBookingCall === 'yes' ? 'Wants manager to schedule next booking conversation.' : null,
       body.wantsManagerVenueContact === 'yes' ? 'Wants manager to contact venue on their behalf.' : null,
       body.referralLead === 'yes' ? 'Referral / another buyer mentioned.' : null,
+      body.referralLead === 'yes' && body.referralDetail?.trim()
+        ? `Referral detail: ${body.referralDetail.trim()}`
+        : null,
       body.notes ? `Notes: ${body.notes}` : null,
       body.mediaLinks ? `Media links: ${body.mediaLinks}` : null,
     ].filter(Boolean)

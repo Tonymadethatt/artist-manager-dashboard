@@ -50,13 +50,16 @@ interface FormAnswers {
   cancellationReason: CancellationReason | ''
   eventRating: number | null
   attendanceBand: string
+  crowdEnergy: 'electric' | 'warm' | 'flat' | 'hostile' | ''
   artistPaidStatus: 'yes' | 'no' | 'partial' | ''
   paymentPreset: string
   paymentAmount: string
   chasePaymentFollowup: 'no' | 'unsure' | 'yes' | ''
   paymentDispute: 'no' | 'yes' | ''
+  supplementalIncome: 'none' | 'under_50' | '50_150' | 'over_150' | ''
   productionIssueLevel: 'none' | 'minor' | 'serious' | ''
   productionFrictionTags: string[]
+  venueDelivered: 'yes_good' | 'mostly_off' | 'significant_gaps' | ''
   venueInterest: 'yes' | 'no' | 'unsure' | ''
   relationshipQuality: 'good' | 'neutral' | 'poor' | ''
   rebookingTimeline: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | ''
@@ -64,6 +67,7 @@ interface FormAnswers {
   wouldPlayAgain: 'yes' | 'maybe' | 'no' | ''
   wantsManagerVenueContact: 'no' | 'yes' | ''
   referralLead: 'no' | 'yes' | ''
+  referralDetail: string
   noteChipIds: string[]
   notesExtra: string
   mediaChoice: 'unset' | 'none' | 'links'
@@ -75,13 +79,16 @@ const EMPTY: FormAnswers = {
   cancellationReason: '',
   eventRating: null,
   attendanceBand: '',
+  crowdEnergy: '',
   artistPaidStatus: '',
   paymentPreset: '',
   paymentAmount: '',
   chasePaymentFollowup: '',
   paymentDispute: '',
+  supplementalIncome: '',
   productionIssueLevel: '',
   productionFrictionTags: [],
+  venueDelivered: '',
   venueInterest: '',
   relationshipQuality: '',
   rebookingTimeline: '',
@@ -89,20 +96,44 @@ const EMPTY: FormAnswers = {
   wouldPlayAgain: '',
   wantsManagerVenueContact: '',
   referralLead: '',
+  referralDetail: '',
   noteChipIds: [],
   notesExtra: '',
   mediaChoice: 'unset',
   mediaLinks: '',
 }
 
+const CROWD_ENERGY_OPTIONS: { value: FormAnswers['crowdEnergy']; label: string }[] = [
+  { value: 'electric', label: 'Electric — they were into it' },
+  { value: 'warm', label: 'Warm — decent energy' },
+  { value: 'flat', label: 'Flat — tough crowd' },
+  { value: 'hostile', label: 'Hostile — rough night' },
+]
+
+const SUPPLEMENTAL_INCOME_OPTIONS: { value: FormAnswers['supplementalIncome']; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'under_50', label: 'Under $50' },
+  { value: '50_150', label: '$50–$150' },
+  { value: 'over_150', label: '$150+' },
+]
+
+const VENUE_DELIVERED_OPTIONS: { value: FormAnswers['venueDelivered']; label: string }[] = [
+  { value: 'yes_good', label: 'Yes — everything was good' },
+  { value: 'mostly_off', label: 'Mostly — a few things were off' },
+  { value: 'significant_gaps', label: 'No — significant gaps' },
+]
+
 type WizardPhase1 =
   | 'rating'
   | 'attendance'
+  | 'crowd_energy'
   | 'paid'
   | 'partial'
   | 'chase'
   | 'dispute'
+  | 'supplemental_income'
   | 'production'
+  | 'venue_delivered'
   | 'friction'
 
 type WizardVenuePhase =
@@ -113,18 +144,19 @@ type WizardVenuePhase =
   | 'play'
   | 'mgr'
   | 'referral'
+  | 'referral_detail'
   | 'notes'
   | 'media'
   | 'done'
 
 function buildWizardPhase1Flow(a: FormAnswers): WizardPhase1[] {
-  const flow: WizardPhase1[] = ['rating', 'attendance', 'paid']
+  const flow: WizardPhase1[] = ['rating', 'attendance', 'crowd_energy', 'paid']
   if (!a.artistPaidStatus) {
-    return [...flow, 'partial', 'chase', 'dispute', 'production', 'friction']
+    return [...flow, 'partial', 'chase', 'dispute', 'supplemental_income', 'production', 'venue_delivered', 'friction']
   }
   if (a.artistPaidStatus === 'partial') flow.push('partial', 'chase')
   else if (a.artistPaidStatus === 'no') flow.push('chase')
-  flow.push('dispute', 'production')
+  flow.push('dispute', 'supplemental_income', 'production', 'venue_delivered')
   if (a.productionIssueLevel === 'minor' || a.productionIssueLevel === 'serious') flow.push('friction')
   else if (!a.productionIssueLevel) flow.push('friction')
   return flow
@@ -134,7 +166,9 @@ function buildWizardVenueFlow(a: FormAnswers): Exclude<WizardVenuePhase, 'done'>
   const flow: Exclude<WizardVenuePhase, 'done'>[] = ['venue_int', 'rel']
   if (a.venueInterest === 'yes') flow.push('timeline', 'booking_call')
   else if (!a.venueInterest) flow.push('timeline', 'booking_call')
-  flow.push('play', 'mgr', 'referral', 'notes', 'media')
+  flow.push('play', 'mgr', 'referral')
+  if (a.referralLead === 'yes') flow.push('referral_detail')
+  flow.push('notes', 'media')
   return flow
 }
 
@@ -389,22 +423,9 @@ export function ShowReportWizard({
   /** Step 0: event vs cancellation question (one screen each). */
   const [phase0, setPhase0] = useState<'event' | 'cancellation'>('event')
   /** Step 1 (event happened): single-question phases. */
-  const [phase1, setPhase1] = useState<
-    'rating' | 'attendance' | 'paid' | 'partial' | 'chase' | 'dispute' | 'production' | 'friction'
-  >('rating')
+  const [phase1, setPhase1] = useState<WizardPhase1>('rating')
   /** Final step (venue / notes / media) — step 2 if event happened, else step 1. */
-  const [phaseVenue, setPhaseVenue] = useState<
-    | 'venue_int'
-    | 'rel'
-    | 'timeline'
-    | 'booking_call'
-    | 'play'
-    | 'mgr'
-    | 'referral'
-    | 'notes'
-    | 'media'
-    | 'done'
-  >('venue_int')
+  const [phaseVenue, setPhaseVenue] = useState<WizardVenuePhase>('venue_int')
   const [fieldError, setFieldError] = useState<string | null>(null)
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({})
   const [brandingIn, setBrandingIn] = useState<PublicFormBranding>(() =>
@@ -502,6 +523,9 @@ export function ShowReportWizard({
     }
 
     if (showEventSections && s === 1) {
+      if (!answers.crowdEnergy) {
+        return { ok: false, field: 'crowd_energy', message: 'How was the crowd energy?' }
+      }
       if (!answers.artistPaidStatus) return { ok: false, field: 'paid', message: 'Select your payment status from the venue.' }
       if (answers.artistPaidStatus === 'partial') {
         if (answers.paymentPreset === 'other' && !answers.paymentAmount.trim()) {
@@ -515,7 +539,13 @@ export function ShowReportWizard({
         return { ok: false, field: 'chase', message: 'Let your manager know if they should help chase payment.' }
       }
       if (!answers.paymentDispute) return { ok: false, field: 'dispute', message: 'Is the amount owed still correct?' }
+      if (!answers.supplementalIncome) {
+        return { ok: false, field: 'supplemental', message: 'Any tips or merch income from the night?' }
+      }
       if (!answers.productionIssueLevel) return { ok: false, field: 'production', message: 'How were production and safety overall?' }
+      if (!answers.venueDelivered) {
+        return { ok: false, field: 'venue_delivered', message: 'Did the venue deliver on what they promised?' }
+      }
       return { ok: true }
     }
 
@@ -640,6 +670,10 @@ export function ShowReportWizard({
           ? answers.cancellationReason
           : null,
       referralLead: answers.referralLead,
+      referralDetail: answers.referralLead === 'yes' ? answers.referralDetail.trim() || null : null,
+      crowdEnergy: showEventSections ? answers.crowdEnergy : null,
+      supplementalIncome: showEventSections ? answers.supplementalIncome : null,
+      venueDelivered: showEventSections ? answers.venueDelivered : null,
       submittedBy,
     }
 
@@ -848,8 +882,21 @@ export function ShowReportWizard({
                   onChange={v => set('attendanceBand', v)}
                   options={[...ATTENDANCE_BANDS]}
                   optional
-                  onPick={() => setPhase1('paid')}
+                  onPick={() => setPhase1('crowd_energy')}
                 />
+              ) : null}
+
+              {phase1 === 'crowd_energy' ? (
+                <div ref={registerRef('crowd_energy')}>
+                  <SelectField
+                    label="How was the crowd energy?"
+                    value={answers.crowdEnergy}
+                    onChange={v => set('crowdEnergy', v as FormAnswers['crowdEnergy'])}
+                    onPick={() => setPhase1('paid')}
+                    required
+                    options={CROWD_ENERGY_OPTIONS}
+                  />
+                </div>
               ) : null}
 
               {phase1 === 'paid' ? (
@@ -960,12 +1007,25 @@ export function ShowReportWizard({
                     label="Is the amount the venue owes still what you agreed to?"
                     value={answers.paymentDispute}
                     onChange={v => set('paymentDispute', v as FormAnswers['paymentDispute'])}
-                    onPick={() => setPhase1('production')}
+                    onPick={() => setPhase1('supplemental_income')}
                     required
                     options={[
                       { value: 'no', label: 'Yes — matches the deal' },
                       { value: 'yes', label: 'No — there is a disagreement' },
                     ]}
+                  />
+                </div>
+              ) : null}
+
+              {phase1 === 'supplemental_income' ? (
+                <div ref={registerRef('supplemental')}>
+                  <SelectField
+                    label="Any tips or merch income from the night?"
+                    value={answers.supplementalIncome}
+                    onChange={v => set('supplementalIncome', v as FormAnswers['supplementalIncome'])}
+                    onPick={() => setPhase1('production')}
+                    required
+                    options={SUPPLEMENTAL_INCOME_OPTIONS}
                   />
                 </div>
               ) : null}
@@ -980,10 +1040,8 @@ export function ShowReportWizard({
                       set('productionIssueLevel', level)
                       if (level === 'none') {
                         set('productionFrictionTags', [])
-                        finishEventStep1ToVenue()
-                      } else {
-                        setPhase1('friction')
                       }
+                      setPhase1('venue_delivered')
                     }}
                     required
                     options={[
@@ -991,6 +1049,25 @@ export function ShowReportWizard({
                       { value: 'minor', label: 'Minor annoyances only' },
                       { value: 'serious', label: 'Serious problem — manager should know' },
                     ]}
+                  />
+                </div>
+              ) : null}
+
+              {phase1 === 'venue_delivered' ? (
+                <div ref={registerRef('venue_delivered')}>
+                  <SelectField
+                    label="Did the venue deliver on what they promised? (sound, green room, parking, etc.)"
+                    value={answers.venueDelivered}
+                    onChange={v => set('venueDelivered', v as FormAnswers['venueDelivered'])}
+                    onPick={() => {
+                      if (answers.productionIssueLevel === 'minor' || answers.productionIssueLevel === 'serious') {
+                        setPhase1('friction')
+                      } else {
+                        finishEventStep1ToVenue()
+                      }
+                    }}
+                    required
+                    options={VENUE_DELIVERED_OPTIONS}
                   />
                 </div>
               ) : null}
@@ -1140,8 +1217,14 @@ export function ShowReportWizard({
                     label="Did anyone else at the show express interest in booking you?"
                     value={answers.referralLead}
                     onChange={v => {
-                      set('referralLead', v as FormAnswers['referralLead'])
-                      setPhaseVenue('notes')
+                      const nv = v as FormAnswers['referralLead']
+                      set('referralLead', nv)
+                      if (nv === 'yes') {
+                        setPhaseVenue('referral_detail')
+                      } else {
+                        set('referralDetail', '')
+                        setPhaseVenue('notes')
+                      }
                     }}
                     required
                     options={[
@@ -1149,6 +1232,29 @@ export function ShowReportWizard({
                       { value: 'yes', label: 'Yes — possible referral' },
                     ]}
                   />
+                </div>
+              ) : null}
+
+              {phaseVenue === 'referral_detail' ? (
+                <div ref={registerRef('referral_detail')}>
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Who showed interest? Drop whatever you remember.{' '}
+                    <span className="text-neutral-300 font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    value={answers.referralDetail}
+                    onChange={e => set('referralDetail', e.target.value)}
+                    rows={3}
+                    placeholder="Name, venue, phone, IG — anything helps"
+                    className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm resize-none placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25 mb-4"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPhaseVenue('notes')}
+                    className="w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                  >
+                    Continue
+                  </button>
                 </div>
               ) : null}
 

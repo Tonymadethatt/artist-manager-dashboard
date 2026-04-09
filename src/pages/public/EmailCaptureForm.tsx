@@ -71,6 +71,40 @@ function ChoiceRow({
   )
 }
 
+function MultiChoiceGrid({
+  options,
+  selected,
+  onToggle,
+  className,
+}: {
+  options: { value: string; label: string }[]
+  selected: string[]
+  onToggle: (value: string) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('grid grid-cols-2 gap-2 mb-4', className)}>
+      {options.map(o => {
+        const on = selected.includes(o.value)
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onToggle(o.value)}
+            className={`min-h-[44px] px-2 py-2.5 rounded-lg border text-xs sm:text-sm text-center transition-colors ${
+              on
+                ? 'border-white bg-neutral-800 text-white font-medium'
+                : 'border-neutral-600 bg-neutral-950 text-neutral-100 hover:border-neutral-500'
+            }`}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function EmailCaptureForm() {
   const { token } = useParams<{ token: string }>()
   const [loading, setLoading] = useState(true)
@@ -359,32 +393,51 @@ function ContinueBar({ onClick, disabled, submitting = false }: { onClick: () =>
   return captureFooterWrap(footerVariant, bar)
 }
 
-const PRE_EVENT_STEP_LABELS = [
-  'Load-in / soundcheck window',
-  'Settlement method',
-  'Day-of contact name',
-  'Day-of phone',
-  'Day-of email',
-  'Parking / load-in notes',
-  'Rider or tech info (link)',
+const PRE_EVENT_CAPACITY_OPTIONS = [
+  { value: 'under_100', label: 'Under 100' },
+  { value: '100_300', label: '100–300' },
+  { value: '300_500', label: '300–500' },
+  { value: 'over_500', label: '500+' },
+  { value: 'not_sure', label: 'Not sure' },
+] as const
+
+const PRE_EVENT_GENRE_OPTIONS = [
+  { value: 'hip_hop_rnb', label: 'Hip-Hop / R&B' },
+  { value: 'latin', label: 'Latin / Reggaeton' },
+  { value: 'edm', label: 'EDM / Dance' },
+  { value: 'top_40', label: 'Top 40 / Open Format' },
+  { value: 'other_genre', label: 'Other' },
+] as const
+
+const PRE_EVENT_MEDIA_OPTIONS = [
+  { value: 'venue_provides', label: 'Yes — venue is providing one' },
+  { value: 'artist_brings', label: 'No — artist should bring their own' },
+  { value: 'not_sure', label: 'Not sure yet' },
 ] as const
 
 function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [loadInOrSoundcheck, setLoadIn] = useState('')
+  const [venueCapacity, setCap] = useState('')
+  const [genrePreference, setGenre] = useState<string[]>([])
   const [settlementMethod, setSettle] = useState('')
   const [dayOfContactName, setName] = useState('')
   const [dayOfContactPhone, setPhone] = useState('')
   const [dayOfContactEmail, setEmail] = useState('')
   const [parkingNotes, setPark] = useState('')
+  const [mediaOnSite, setMedia] = useState('')
   const [riderOrTechUrl, setRider] = useState('')
 
   useScrollTopOnStepChange(step)
 
-  const nPreEvent = PRE_EVENT_STEP_LABELS.length
+  const nPreEvent = 10
   useCaptureQuestionProgress(step, nPreEvent)
 
   const canSubmit = loadInOrSoundcheck.trim() || settlementMethod.trim()
+
+  const toggleGenre = (v: string) => {
+    setGenre(prev => (prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]))
+  }
 
   return (
     <div className="pb-28">
@@ -393,41 +446,68 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
       </p>
       {step === 0 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[0]} value={loadInOrSoundcheck} onChange={setLoadIn} placeholder="e.g. 5pm load-in, 8pm soundcheck" className="mb-6" />
+          <Field label="Load-in / soundcheck window" value={loadInOrSoundcheck} onChange={setLoadIn} placeholder="e.g. 5pm load-in, 8pm soundcheck" className="mb-6" />
           <ContinueBar onClick={() => setStep(1)} submitting={submitting} />
         </>
       ) : null}
       {step === 1 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[1]} value={settlementMethod} onChange={setSettle} placeholder="Check, wire, night-of cash…" className="mb-6" />
-          <ContinueBar onClick={() => setStep(2)} submitting={submitting} />
+          <p className="text-sm font-medium text-white mb-2">Roughly how many people does the space hold?</p>
+          <div className="flex flex-col gap-2 mb-6">
+            {PRE_EVENT_CAPACITY_OPTIONS.map(o => (
+              <ChoiceRow key={o.value} label={o.label} selected={venueCapacity === o.value} onSelect={() => { setCap(o.value); setStep(2) }} />
+            ))}
+          </div>
         </>
       ) : null}
       {step === 2 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[2]} value={dayOfContactName} onChange={setName} className="mb-6" />
+          <p className="text-sm font-medium text-white mb-2">What kind of music or vibe is the crowd into? <span className="text-neutral-400 font-normal">(optional)</span></p>
+          <MultiChoiceGrid options={[...PRE_EVENT_GENRE_OPTIONS]} selected={genrePreference} onToggle={toggleGenre} />
           <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
         </>
       ) : null}
       {step === 3 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[3]} value={dayOfContactPhone} onChange={setPhone} className="mb-6" />
+          <Field label="Settlement method" value={settlementMethod} onChange={setSettle} placeholder="Check, wire, night-of cash…" className="mb-6" />
           <ContinueBar onClick={() => setStep(4)} submitting={submitting} />
         </>
       ) : null}
       {step === 4 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[4]} value={dayOfContactEmail} onChange={setEmail} className="mb-6" />
+          <Field label="Day-of contact name" value={dayOfContactName} onChange={setName} className="mb-6" />
           <ContinueBar onClick={() => setStep(5)} submitting={submitting} />
         </>
       ) : null}
       {step === 5 ? (
         <>
-          <Field label={PRE_EVENT_STEP_LABELS[5]} value={parkingNotes} onChange={setPark} textarea className="mb-6" />
+          <Field label="Day-of phone" value={dayOfContactPhone} onChange={setPhone} className="mb-6" />
           <ContinueBar onClick={() => setStep(6)} submitting={submitting} />
         </>
       ) : null}
       {step === 6 ? (
+        <>
+          <Field label="Day-of email" value={dayOfContactEmail} onChange={setEmail} className="mb-6" />
+          <ContinueBar onClick={() => setStep(7)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 7 ? (
+        <>
+          <Field label="Parking / load-in notes" value={parkingNotes} onChange={setPark} textarea className="mb-6" />
+          <ContinueBar onClick={() => setStep(8)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 8 ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">Will there be a photographer or videographer at the event?</p>
+          <div className="flex flex-col gap-2 mb-6">
+            {PRE_EVENT_MEDIA_OPTIONS.map(o => (
+              <ChoiceRow key={o.value} label={o.label} selected={mediaOnSite === o.value} onSelect={() => { setMedia(o.value); setStep(9) }} />
+            ))}
+          </div>
+        </>
+      ) : null}
+      {step === 9 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
@@ -439,10 +519,13 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
               dayOfContactEmail: dayOfContactEmail.trim(),
               parkingNotes: parkingNotes.trim(),
               riderOrTechUrl: riderOrTechUrl.trim(),
+              venueCapacity: venueCapacity || undefined,
+              genrePreference: genrePreference.length ? genrePreference : undefined,
+              mediaOnSite: mediaOnSite || undefined,
             })
           }}
         >
-          <Field label={PRE_EVENT_STEP_LABELS[6]} value={riderOrTechUrl} onChange={setRider} placeholder="https://…" className="mb-6" />
+          <Field label="Rider or tech info (link)" value={riderOrTechUrl} onChange={setRider} placeholder="https://…" className="mb-6" />
           <SubmitBar submitting={submitting} disabled={!canSubmit} />
         </form>
       ) : null}
@@ -453,58 +536,79 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [intent, setIntent] = useState<'interested' | 'not_now' | 'wrong_person' | ''>('')
+  const [preferredContactMethod, setPref] = useState('')
   const [note, setNote] = useState('')
+  const [referralSource, setRefSrc] = useState('')
   const [alternateEmail, setAlt] = useState('')
+  const [alternateContactName, setAltName] = useState('')
 
   useScrollTopOnStepChange(step)
-  useCaptureQuestionProgress(step, 3)
+  useCaptureQuestionProgress(step, 5)
+
+  const pickIntent = (i: typeof intent) => {
+    setIntent(i)
+    setStep(1)
+  }
 
   return (
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
           <p className="text-sm text-neutral-200 mb-2">Where should we take this?</p>
-          <ChoiceRow
-            label="Interested — let&apos;s explore a date"
-            selected={intent === 'interested'}
-            onSelect={() => {
-              setIntent('interested')
-              setStep(1)
-            }}
-          />
-          <ChoiceRow
-            label="Not for us right now"
-            selected={intent === 'not_now'}
-            onSelect={() => {
-              setIntent('not_now')
-              setStep(1)
-            }}
-          />
-          <ChoiceRow
-            label="Wrong contact — point me to the right person"
-            selected={intent === 'wrong_person'}
-            onSelect={() => {
-              setIntent('wrong_person')
-              setStep(1)
-            }}
-          />
+          <ChoiceRow label="Interested — let&apos;s explore a date" selected={intent === 'interested'} onSelect={() => pickIntent('interested')} />
+          <ChoiceRow label="Not for us right now" selected={intent === 'not_now'} onSelect={() => pickIntent('not_now')} />
+          <ChoiceRow label="Wrong contact — point me to the right person" selected={intent === 'wrong_person'} onSelect={() => pickIntent('wrong_person')} />
         </>
       ) : null}
       {step === 1 ? (
         <>
-          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
-          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={!intent} />
+          <p className="text-sm font-medium text-white mb-2">What&apos;s the best way to reach you going forward?</p>
+          <ChoiceRow label="Email" selected={preferredContactMethod === 'email'} onSelect={() => { setPref('email'); setStep(2) }} />
+          <ChoiceRow label="Phone / text" selected={preferredContactMethod === 'phone_text'} onSelect={() => { setPref('phone_text'); setStep(2) }} />
+          <ChoiceRow label="Either works" selected={preferredContactMethod === 'either'} onSelect={() => { setPref('either'); setStep(2) }} />
         </>
       ) : null}
       {step === 2 ? (
+        <>
+          <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <ContinueBar onClick={() => setStep(3)} submitting={submitting} disabled={!intent || !preferredContactMethod} />
+        </>
+      ) : null}
+      {step === 3 ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">How&apos;d you first hear about the artist? <span className="text-neutral-400 font-normal">(optional)</span></p>
+          <ChoiceRow label="Instagram" selected={referralSource === 'instagram'} onSelect={() => { setRefSrc('instagram'); setStep(4) }} />
+          <ChoiceRow label="Referral" selected={referralSource === 'referral'} onSelect={() => { setRefSrc('referral'); setStep(4) }} />
+          <ChoiceRow label="Saw them perform" selected={referralSource === 'saw_perform'} onSelect={() => { setRefSrc('saw_perform'); setStep(4) }} />
+          <ChoiceRow label="Radio" selected={referralSource === 'radio'} onSelect={() => { setRefSrc('radio'); setStep(4) }} />
+          <ChoiceRow label="Other" selected={referralSource === 'other'} onSelect={() => { setRefSrc('other'); setStep(4) }} />
+          <button type="button" onClick={() => { setRefSrc(''); setStep(4) }} className="text-sm text-neutral-400 hover:text-white mt-2">
+            Skip
+          </button>
+        </>
+      ) : null}
+      {step === 4 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
             if (!intent) return
-            onSubmit({ intent, note: note.trim(), alternateEmail: alternateEmail.trim() })
+            onSubmit({
+              intent,
+              preferredContactMethod,
+              note: note.trim(),
+              referralSource: referralSource || undefined,
+              alternateEmail: alternateEmail.trim(),
+              alternateContactName: alternateContactName.trim(),
+            })
           }}
         >
-          <Field label="Alternate email (optional)" value={alternateEmail} onChange={setAlt} className="mb-6" />
+          <Field
+            label="If there&apos;s a better person to reach, drop their email here"
+            value={alternateEmail}
+            onChange={setAlt}
+            className="mb-4"
+          />
+          <Field label="Their name (optional)" value={alternateContactName} onChange={setAltName} placeholder="First and last" className="mb-6" />
           <SubmitBar submitting={submitting} disabled={!intent} />
         </form>
       ) : null}
@@ -515,52 +619,70 @@ function FirstOutreachForm({ submitting, onSubmit }: { submitting: boolean; onSu
 function FollowUpForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<'interested' | 'need_info' | 'pass' | ''>('')
+  const [infoNeeded, setInfoNeeded] = useState('')
+  const [recontactPreference, setRecontact] = useState('')
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useCaptureQuestionProgress(step, 2)
+  useCaptureQuestionProgress(step, 3)
+
+  const goAfterStatus = (s: typeof status) => {
+    setStatus(s)
+    if (s === 'need_info') setStep(1)
+    else if (s === 'pass') setStep(1)
+    else setStep(2)
+  }
 
   return (
     <div className="pb-28 space-y-3">
       {step === 0 ? (
         <>
           <p className="text-sm text-neutral-200 mb-2">Quick check-in</p>
-          <ChoiceRow
-            label="Still interested"
-            selected={status === 'interested'}
-            onSelect={() => {
-              setStatus('interested')
-              setStep(1)
-            }}
-          />
-          <ChoiceRow
-            label="Need more info"
-            selected={status === 'need_info'}
-            onSelect={() => {
-              setStatus('need_info')
-              setStep(1)
-            }}
-          />
-          <ChoiceRow
-            label="Passing for now"
-            selected={status === 'pass'}
-            onSelect={() => {
-              setStatus('pass')
-              setStep(1)
-            }}
-          />
+          <ChoiceRow label="Still interested" selected={status === 'interested'} onSelect={() => goAfterStatus('interested')} />
+          <ChoiceRow label="Need more info" selected={status === 'need_info'} onSelect={() => goAfterStatus('need_info')} />
+          <ChoiceRow label="Passing for now" selected={status === 'pass'} onSelect={() => goAfterStatus('pass')} />
         </>
       ) : null}
-      {step === 1 ? (
+      {step === 1 && status === 'need_info' ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">What info would help you decide?</p>
+          <ChoiceRow label="Pricing / rate card" selected={infoNeeded === 'pricing'} onSelect={() => { setInfoNeeded('pricing'); setStep(2) }} />
+          <ChoiceRow label="Song list or demo" selected={infoNeeded === 'song_demo'} onSelect={() => { setInfoNeeded('song_demo'); setStep(2) }} />
+          <ChoiceRow label="Availability for specific dates" selected={infoNeeded === 'availability_dates'} onSelect={() => { setInfoNeeded('availability_dates'); setStep(2) }} />
+          <ChoiceRow label="References from other venues" selected={infoNeeded === 'references'} onSelect={() => { setInfoNeeded('references'); setStep(2) }} />
+          <ChoiceRow label="Something else" selected={infoNeeded === 'something_else'} onSelect={() => { setInfoNeeded('something_else'); setStep(2) }} />
+        </>
+      ) : null}
+      {step === 1 && status === 'pass' ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">Would it help if we checked back later?</p>
+          <ChoiceRow label="Sure — try me in a few months" selected={recontactPreference === 'few_months'} onSelect={() => { setRecontact('few_months'); setStep(2) }} />
+          <ChoiceRow label="Maybe next year" selected={recontactPreference === 'next_year'} onSelect={() => { setRecontact('next_year'); setStep(2) }} />
+          <ChoiceRow label="Please don&apos;t follow up" selected={recontactPreference === 'no_follow_up'} onSelect={() => { setRecontact('no_follow_up'); setStep(2) }} />
+        </>
+      ) : null}
+      {step === 2 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
             if (!status) return
-            onSubmit({ status, note: note.trim() })
+            onSubmit({
+              status,
+              note: note.trim(),
+              ...(status === 'need_info' ? { infoNeeded } : {}),
+              ...(status === 'pass' ? { recontactPreference } : {}),
+            })
           }}
         >
           <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={!status} />
+          <SubmitBar
+            submitting={submitting}
+            disabled={
+              !status
+              || (status === 'need_info' && !infoNeeded)
+              || (status === 'pass' && !recontactPreference)
+            }
+          />
         </form>
       ) : null}
     </div>
@@ -571,12 +693,13 @@ function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
   const [step, setStep] = useState(0)
   const [resolution, setRes] = useState<'new_date' | 'refund' | 'release' | 'other' | ''>('')
   const [newEventDate, setDate] = useState('')
+  const [futureInterest, setFuture] = useState('')
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  const cancelledTotal = resolution === 'new_date' ? 3 : resolution ? 2 : 3
+  const cancelledTotal = resolution === 'new_date' ? 4 : resolution ? 3 : 3
   const cancelledCompleted =
-    step === 0 ? 0 : resolution === 'new_date' ? Math.min(step, 2) : 1
+    step === 0 ? 0 : resolution === 'new_date' ? Math.min(step, 3) : Math.min(step, 2)
   useCaptureQuestionProgress(cancelledCompleted, cancelledTotal)
 
   const pickResolution = (r: typeof resolution) => {
@@ -603,19 +726,28 @@ function CancelledForm({ submitting, onSubmit }: { submitting: boolean; onSubmit
         </>
       ) : null}
       {step === 2 ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">Regardless of what happened — would you want to work together again down the line?</p>
+          <ChoiceRow label="Definitely" selected={futureInterest === 'definitely'} onSelect={() => { setFuture('definitely'); setStep(3) }} />
+          <ChoiceRow label="Maybe — depends on timing" selected={futureInterest === 'maybe'} onSelect={() => { setFuture('maybe'); setStep(3) }} />
+          <ChoiceRow label="Probably not" selected={futureInterest === 'probably_not'} onSelect={() => { setFuture('probably_not'); setStep(3) }} />
+        </>
+      ) : null}
+      {resolution && step === 3 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
-            if (!resolution) return
+            if (!resolution || !futureInterest) return
             onSubmit({
               resolution,
               newEventDate: newEventDate.trim(),
+              futureInterest,
               note: note.trim(),
             })
           }}
         >
           <Field label="Notes" value={note} onChange={setNote} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={!resolution} />
+          <SubmitBar submitting={submitting} disabled={!resolution || !futureInterest} />
         </form>
       ) : null}
     </div>
@@ -711,12 +843,23 @@ function AgreementReadyForm({ submitting, onSubmit }: { submitting: boolean; onS
 function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [aligned, setAligned] = useState<boolean | null>(null)
+  const [paymentStructure, setPay] = useState('')
+  const [eventContext, setCtx] = useState('')
   const [corrections, setCorr] = useState('')
 
   useScrollTopOnStepChange(step)
-  const bookingProgress =
-    aligned === true ? { c: 1, t: 1 } : aligned === false ? { c: step, t: 2 } : { c: 0, t: 2 }
-  useCaptureQuestionProgress(bookingProgress.c, bookingProgress.t)
+
+  const payOpts = [
+    { value: 'full_after_show', label: 'Full payment after the show' },
+    { value: 'deposit_balance', label: 'Deposit up front, balance night-of' },
+    { value: 'venue_advances', label: 'Venue pays in advance' },
+    { value: 'separate', label: 'We will sort it out separately' },
+  ] as const
+
+  const totalQ = aligned === true ? 3 : aligned === false ? 3 : 3
+  const completedQ =
+    step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : 0
+  useCaptureQuestionProgress(aligned === null ? 0 : completedQ, totalQ)
 
   return (
     <div className="pb-28 space-y-3">
@@ -728,7 +871,7 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
             selected={aligned === true}
             onSelect={() => {
               setAligned(true)
-              onSubmit({ aligned: true, corrections: '' })
+              setStep(1)
             }}
           />
           <ChoiceRow
@@ -742,15 +885,58 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
         </>
       ) : null}
       {step === 1 ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">Is there a deposit or payment schedule to note?</p>
+          {payOpts.map(o => (
+            <ChoiceRow
+              key={o.value}
+              label={o.label}
+              selected={paymentStructure === o.value}
+              onSelect={() => {
+                setPay(o.value)
+                setStep(2)
+              }}
+            />
+          ))}
+        </>
+      ) : null}
+      {step === 2 && aligned === true ? (
         <form
           onSubmit={e => {
             e.preventDefault()
-            if (aligned !== false) return
-            onSubmit({ aligned: false, corrections: corrections.trim() })
+            if (aligned !== true || !paymentStructure) return
+            onSubmit({ aligned: true, corrections: '', paymentStructure, eventContext: eventContext.trim() })
+          }}
+        >
+          <Field
+            label="Any details about the event or crowd that would help the artist prepare? (optional)"
+            value={eventContext}
+            onChange={setCtx}
+            textarea
+            placeholder="e.g. It&apos;s a corporate holiday party, 21+ Latin night, college crowd…"
+            className="mb-6"
+          />
+          <SubmitBar submitting={submitting} disabled={!paymentStructure} />
+        </form>
+      ) : null}
+      {step === 2 && aligned === false ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (aligned !== false || !paymentStructure || !corrections.trim()) return
+            onSubmit({ aligned: false, corrections: corrections.trim(), paymentStructure, eventContext: eventContext.trim() })
           }}
         >
           <Field label="What should change?" value={corrections} onChange={setCorr} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={aligned !== false || !corrections.trim()} />
+          <Field
+            label="Any details about the event or crowd that would help the artist prepare? (optional)"
+            value={eventContext}
+            onChange={setCtx}
+            textarea
+            placeholder="e.g. It&apos;s a corporate holiday party, 21+ Latin night, college crowd…"
+            className="mb-6"
+          />
+          <SubmitBar submitting={submitting} disabled={!corrections.trim() || !paymentStructure} />
         </form>
       ) : null}
     </div>
@@ -760,10 +946,12 @@ function BookingConfirmForm({ submitting, onSubmit }: { submitting: boolean; onS
 function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [received, setRec] = useState<boolean | null>(null)
+  const [expectedPaymentTimeline, setTimeline] = useState('')
+  const [poReference, setPo] = useState('')
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  useCaptureQuestionProgress(step, 2)
+  useCaptureQuestionProgress(step, 3)
 
   return (
     <div className="pb-28 space-y-3">
@@ -775,7 +963,7 @@ function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
             selected={received === true}
             onSelect={() => {
               setRec(true)
-              setStep(1)
+              setStep(2)
             }}
           />
           <ChoiceRow
@@ -788,16 +976,40 @@ function InvoiceForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
           />
         </>
       ) : null}
-      {step === 1 ? (
+      {step === 1 && received === false ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">When do you expect payment to go out?</p>
+          <ChoiceRow label="Within a week" selected={expectedPaymentTimeline === 'within_week'} onSelect={() => { setTimeline('within_week'); setStep(2) }} />
+          <ChoiceRow label="Net 15" selected={expectedPaymentTimeline === 'net_15'} onSelect={() => { setTimeline('net_15'); setStep(2) }} />
+          <ChoiceRow label="Net 30" selected={expectedPaymentTimeline === 'net_30'} onSelect={() => { setTimeline('net_30'); setStep(2) }} />
+          <ChoiceRow label="Not sure yet" selected={expectedPaymentTimeline === 'not_sure'} onSelect={() => { setTimeline('not_sure'); setStep(2) }} />
+        </>
+      ) : null}
+      {step === 2 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
             if (received === null) return
-            onSubmit({ receivedInAp: received, note: note.trim() })
+            onSubmit({
+              receivedInAp: received,
+              expectedPaymentTimeline: received ? undefined : expectedPaymentTimeline || undefined,
+              poReference: poReference.trim(),
+              note: note.trim(),
+            })
           }}
         >
+          <Field
+            label="PO number, invoice reference, or AP ticket? (optional)"
+            value={poReference}
+            onChange={setPo}
+            placeholder="Helps us match payment when it arrives"
+            className="mb-4"
+          />
           <Field label="Note (optional)" value={note} onChange={setNote} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={received === null} />
+          <SubmitBar
+            submitting={submitting}
+            disabled={received === null || (received === false && !expectedPaymentTimeline)}
+          />
         </form>
       ) : null}
     </div>
@@ -825,19 +1037,34 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
 function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [rating, setRating] = useState(0)
+  const [wouldRebook, setWouldRebook] = useState('')
+  const [venueTurnoutAssessment, setTurnout] = useState('')
+  const [comments, setComments] = useState('')
   const [nothing, setN] = useState<boolean | null>(null)
   const [detail, setD] = useState('')
-  const [comments, setComments] = useState('')
 
   useScrollTopOnStepChange(step)
-  const postShowTotal = nothing === false ? 5 : nothing === true ? 4 : 5
-  const postShowCompleted =
-    step === 0 ? 0 : step === 1 ? 1 : step === 2 ? 2 : step === 3 || step === 4 ? 3 : 0
+  const postShowTotal = 8
+  const postShowCompleted = Math.min(step, postShowTotal - 1)
   useCaptureQuestionProgress(postShowCompleted, postShowTotal)
 
   const doSubmit = () => {
-    if (rating === 0 || nothing === null) return
-    onSubmit({ rating, nothingPending: nothing, detail: detail.trim(), comments: comments.trim() })
+    if (
+      rating === 0 ||
+      !wouldRebook ||
+      !venueTurnoutAssessment ||
+      nothing === null
+    ) {
+      return
+    }
+    onSubmit({
+      rating,
+      wouldRebook,
+      venueTurnoutAssessment,
+      comments: comments.trim(),
+      nothingPending: nothing,
+      detail: detail.trim(),
+    })
   }
 
   return (
@@ -867,18 +1094,70 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
       ) : null}
       {step === 1 ? (
         <>
-          <Field
-            label="Comments (optional)"
-            value={comments}
-            onChange={setComments}
-            textarea
-            placeholder="Anything you'd like us to know about the night..."
-            className="mb-6"
+          <p className="text-xs font-semibold text-neutral-100 mb-2">
+            Would you book this artist again?{' '}
+            <span className="text-red-500 font-semibold" aria-hidden="true">
+              *
+            </span>
+          </p>
+          <ChoiceRow
+            label="Absolutely"
+            selected={wouldRebook === 'absolutely'}
+            onSelect={() => {
+              setWouldRebook('absolutely')
+              setStep(2)
+            }}
           />
-          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={rating === 0} />
+          <ChoiceRow
+            label="Probably"
+            selected={wouldRebook === 'probably'}
+            onSelect={() => {
+              setWouldRebook('probably')
+              setStep(2)
+            }}
+          />
+          <ChoiceRow
+            label="Not likely"
+            selected={wouldRebook === 'not_likely'}
+            onSelect={() => {
+              setWouldRebook('not_likely')
+              setStep(2)
+            }}
+          />
         </>
       ) : null}
       {step === 2 ? (
+        <>
+          <p className="text-xs font-semibold text-neutral-100 mb-2">
+            How was the turnout?{' '}
+            <span className="text-red-500 font-semibold" aria-hidden="true">
+              *
+            </span>
+          </p>
+          <ChoiceRow label="Packed" selected={venueTurnoutAssessment === 'packed'} onSelect={() => { setTurnout('packed'); setStep(3) }} />
+          <ChoiceRow label="Solid" selected={venueTurnoutAssessment === 'solid'} onSelect={() => { setTurnout('solid'); setStep(3) }} />
+          <ChoiceRow label="Light" selected={venueTurnoutAssessment === 'light'} onSelect={() => { setTurnout('light'); setStep(3) }} />
+          <ChoiceRow
+            label="Slow night"
+            selected={venueTurnoutAssessment === 'slow'}
+            onSelect={() => { setTurnout('slow'); setStep(3) }}
+          />
+        </>
+      ) : null}
+      {step === 3 ? (
+        <>
+          <Field
+            label="Anything your team noticed — energy, crowd response, production? (optional)"
+            value={comments}
+            onChange={setComments}
+            textarea
+            placeholder="Good or bad — honest feedback helps us improve"
+            className="mb-6"
+          />
+          <ContinueBar onClick={() => setStep(4)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 4 ? (
         <>
           <p className="text-xs font-medium text-neutral-200 mb-2">Anything still open?</p>
           <ChoiceRow
@@ -886,7 +1165,7 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
             selected={nothing === true}
             onSelect={() => {
               setN(true)
-              setStep(4)
+              setStep(6)
             }}
           />
           <ChoiceRow
@@ -894,12 +1173,12 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
             selected={nothing === false}
             onSelect={() => {
               setN(false)
-              setStep(3)
+              setStep(5)
             }}
           />
         </>
       ) : null}
-      {step === 3 ? (
+      {step === 5 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
@@ -907,10 +1186,13 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
           }}
         >
           <Field label="What&apos;s open?" value={detail} onChange={setD} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={rating === 0 || nothing !== false || !detail.trim()} />
+          <SubmitBar
+            submitting={submitting}
+            disabled={rating === 0 || !wouldRebook || !venueTurnoutAssessment || nothing !== false || !detail.trim()}
+          />
         </form>
       ) : null}
-      {step === 4 ? (
+      {step === 6 ? (
         <form
           onSubmit={e => {
             e.preventDefault()
@@ -918,7 +1200,10 @@ function PostShowForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
           }}
         >
           <p className="text-sm text-neutral-200 mb-4">Thanks — send your feedback?</p>
-          <SubmitBar submitting={submitting} disabled={rating === 0 || nothing !== true} />
+          <SubmitBar
+            submitting={submitting}
+            disabled={rating === 0 || !wouldRebook || !venueTurnoutAssessment || nothing !== true}
+          />
         </form>
       ) : null}
     </div>
@@ -942,32 +1227,82 @@ function PassAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: 
   )
 }
 
-function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
-  const [availability, setA] = useState('')
+const REBOOKING_DAY_OPTIONS = [
+  { value: 'fri', label: 'Friday' },
+  { value: 'sat', label: 'Saturday' },
+  { value: 'sun', label: 'Sunday' },
+  { value: 'weeknight', label: 'Weeknight' },
+  { value: 'flexible', label: 'Flexible' },
+] as const
 
-  useCaptureQuestionProgress(availability.trim() ? 1 : 0, 1)
+function RebookingForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
+  const [step, setStep] = useState(0)
+  const [preferredDays, setPreferredDays] = useState<string[]>([])
+  const [availability, setA] = useState('')
+  const [budgetRange, setBudgetRange] = useState('')
+
+  useScrollTopOnStepChange(step)
+  useCaptureQuestionProgress(step, 3)
+
+  const toggleDay = (v: string) => {
+    setPreferredDays(prev => (prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]))
+  }
 
   return (
-    <form
-      onSubmit={e => {
-        e.preventDefault()
-        onSubmit({ availability: availability.trim() })
-      }}
-      className="pb-28"
-    >
-      <Field label="Availability, preferred months, or holds" value={availability} onChange={setA} textarea />
-      <SubmitBar submitting={submitting} disabled={!availability.trim()} />
-    </form>
+    <div className="pb-28 space-y-3">
+      {step === 0 ? (
+        <>
+          <p className="text-sm font-medium text-neutral-200 mb-2">Any day of the week that works best?</p>
+          <p className="text-xs text-neutral-500 mb-2">Tap any that apply — optional.</p>
+          <MultiChoiceGrid options={[...REBOOKING_DAY_OPTIONS]} selected={preferredDays} onToggle={toggleDay} />
+          <ContinueBar onClick={() => setStep(1)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 1 ? (
+        <>
+          <Field
+            label="Availability, preferred months, or holds"
+            value={availability}
+            onChange={setA}
+            textarea
+            placeholder="e.g. June 2026, or first open Saturday in Q3"
+            className="mb-4"
+          />
+          <ContinueBar onClick={() => setStep(2)} submitting={submitting} disabled={!availability.trim()} />
+        </>
+      ) : null}
+      {step === 2 ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            onSubmit({
+              preferredDays,
+              availability: availability.trim(),
+              budgetRange: budgetRange || undefined,
+            })
+          }}
+        >
+          <p className="text-sm font-medium text-neutral-200 mb-2">Roughly what budget range are you working with? (optional)</p>
+          <ChoiceRow label="Under $500" selected={budgetRange === 'under_500'} onSelect={() => setBudgetRange('under_500')} />
+          <ChoiceRow label="$500–$1,000" selected={budgetRange === '500_1000'} onSelect={() => setBudgetRange('500_1000')} />
+          <ChoiceRow label="$1,000–$2,000" selected={budgetRange === '1000_2000'} onSelect={() => setBudgetRange('1000_2000')} />
+          <ChoiceRow label="$2,000+" selected={budgetRange === 'over_2000'} onSelect={() => setBudgetRange('over_2000')} />
+          <ChoiceRow label="Let&apos;s discuss" selected={budgetRange === 'discuss'} onSelect={() => setBudgetRange('discuss')} />
+          <SubmitBar submitting={submitting} />
+        </form>
+      ) : null}
+    </div>
   )
 }
 
 function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [submitted, setS] = useState<boolean | null>(null)
+  const [expectedSendDate, setExpectedSend] = useState('')
   const [reference, setR] = useState('')
 
   useScrollTopOnStepChange(step)
-  useCaptureQuestionProgress(step, 2)
+  useCaptureQuestionProgress(step, submitted === false ? 3 : 2)
 
   return (
     <div className="pb-28 space-y-3">
@@ -992,16 +1327,40 @@ function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmi
           />
         </>
       ) : null}
-      {step === 1 ? (
+      {step === 1 && submitted === false ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">Any idea when it&apos;ll go out?</p>
+          <ChoiceRow label="This week" selected={expectedSendDate === 'this_week'} onSelect={() => { setExpectedSend('this_week'); setStep(2) }} />
+          <ChoiceRow label="Next week" selected={expectedSendDate === 'next_week'} onSelect={() => { setExpectedSend('next_week'); setStep(2) }} />
+          <ChoiceRow
+            label="Waiting on approval"
+            selected={expectedSendDate === 'waiting_approval'}
+            onSelect={() => { setExpectedSend('waiting_approval'); setStep(2) }}
+          />
+          <ChoiceRow label="Not sure" selected={expectedSendDate === 'not_sure'} onSelect={() => { setExpectedSend('not_sure'); setStep(2) }} />
+        </>
+      ) : null}
+      {step === 1 && submitted === true ? (
         <form
           onSubmit={e => {
             e.preventDefault()
-            if (submitted === null) return
-            onSubmit({ submittedPayment: submitted, reference: reference.trim() })
+            onSubmit({ submittedPayment: true, reference: reference.trim() })
           }}
         >
           <Field label="Reference # (optional)" value={reference} onChange={setR} className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={submitted === null} />
+          <SubmitBar submitting={submitting} />
+        </form>
+      ) : null}
+      {step === 2 && submitted === false ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!expectedSendDate) return
+            onSubmit({ submittedPayment: false, expectedSendDate, reference: reference.trim() })
+          }}
+        >
+          <Field label="Reference # (optional)" value={reference} onChange={setR} className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!expectedSendDate} />
         </form>
       ) : null}
     </div>
@@ -1011,21 +1370,37 @@ function PaymentAckForm({ submitting, onSubmit }: { submitting: boolean; onSubmi
 function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [rebookInterest, setInterest] = useState<'yes' | 'maybe' | 'no' | ''>('')
+  const [workingExperience, setWorking] = useState('')
   const [preferredDates, setDates] = useState('')
   const [budgetNote, setBudget] = useState('')
+  const [referralWillingness, setReferral] = useState('')
   const [note, setNote] = useState('')
 
   useScrollTopOnStepChange(step)
-  const receiptTotal = rebookInterest === 'no' ? 2 : rebookInterest ? 4 : 4
-  const receiptCompleted =
-    rebookInterest === 'no' ? (step === 0 ? 0 : 1) : rebookInterest ? step : 0
+  const receiptTotal = rebookInterest === 'no' ? 4 : 6
+  const receiptCompleted = rebookInterest === '' ? 0 : Math.min(step + 1, receiptTotal)
   useCaptureQuestionProgress(receiptCompleted, receiptTotal)
 
   const pickInterest = (v: 'yes' | 'maybe' | 'no') => {
     setInterest(v)
-    if (v === 'no') setStep(3)
-    else setStep(1)
+    setStep(1)
   }
+
+  const referralBlock = (
+    <>
+      <p className="text-sm font-medium text-white mb-2">Would you recommend us to anyone in your network? (optional)</p>
+      <ChoiceRow label="Yes — happy to" selected={referralWillingness === 'yes_happy'} onSelect={() => setReferral('yes_happy')} />
+      <ChoiceRow label="Maybe" selected={referralWillingness === 'maybe'} onSelect={() => setReferral('maybe')} />
+      <ChoiceRow label="Rather not" selected={referralWillingness === 'rather_not'} onSelect={() => setReferral('rather_not')} />
+      <button
+        type="button"
+        onClick={() => setReferral('')}
+        className="mt-2 w-full min-h-[44px] text-sm text-neutral-400 hover:text-neutral-200 border border-neutral-800 rounded-lg"
+      >
+        Prefer not to answer
+      </button>
+    </>
+  )
 
   return (
     <div className="pb-28 space-y-3">
@@ -1037,7 +1412,36 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
           <ChoiceRow label="Not right now" selected={rebookInterest === 'no'} onSelect={() => pickInterest('no')} />
         </>
       ) : null}
-      {step === 1 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
+      {step === 1 ? (
+        <>
+          <p className="text-sm font-medium text-white mb-2">How was the overall experience working with our team?</p>
+          <ChoiceRow
+            label="Great — smooth all around"
+            selected={workingExperience === 'great_smooth'}
+            onSelect={() => {
+              setWorking('great_smooth')
+              setStep(2)
+            }}
+          />
+          <ChoiceRow
+            label="Good — minor hiccups"
+            selected={workingExperience === 'good_hiccups'}
+            onSelect={() => {
+              setWorking('good_hiccups')
+              setStep(2)
+            }}
+          />
+          <ChoiceRow
+            label="Rough — some issues came up"
+            selected={workingExperience === 'rough'}
+            onSelect={() => {
+              setWorking('rough')
+              setStep(2)
+            }}
+          />
+        </>
+      ) : null}
+      {step === 2 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
         <>
           <Field
             label="Preferred dates or months (optional)"
@@ -1046,10 +1450,16 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
             placeholder="e.g. June or July 2026"
             className="mb-6"
           />
-          <ContinueBar onClick={() => setStep(2)} submitting={submitting} />
+          <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
         </>
       ) : null}
-      {step === 2 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
+      {step === 2 && rebookInterest === 'no' ? (
+        <>
+          {referralBlock}
+          <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 3 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
         <>
           <Field
             label="Rough budget or fee range (optional)"
@@ -1058,16 +1468,24 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
             placeholder="e.g. same as last time, $500–$800"
             className="mb-6"
           />
-          <ContinueBar onClick={() => setStep(3)} submitting={submitting} />
+          <ContinueBar onClick={() => setStep(4)} submitting={submitting} />
         </>
       ) : null}
-      {step === 3 ? (
+      {step === 4 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
+        <>
+          {referralBlock}
+          <ContinueBar onClick={() => setStep(5)} submitting={submitting} />
+        </>
+      ) : null}
+      {step === 5 && (rebookInterest === 'yes' || rebookInterest === 'maybe') ? (
         <form
           onSubmit={e => {
             e.preventDefault()
-            if (!rebookInterest) return
+            if (!rebookInterest || !workingExperience) return
             onSubmit({
               rebookInterest,
+              workingExperience,
+              referralWillingness: referralWillingness || undefined,
               preferredDates: preferredDates.trim(),
               budgetNote: budgetNote.trim(),
               note: note.trim(),
@@ -1075,7 +1493,26 @@ function PaymentReceiptForm({ submitting, onSubmit }: { submitting: boolean; onS
           }}
         >
           <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea className="mb-6" />
-          <SubmitBar submitting={submitting} disabled={!rebookInterest} />
+          <SubmitBar submitting={submitting} disabled={!rebookInterest || !workingExperience} />
+        </form>
+      ) : null}
+      {step === 3 && rebookInterest === 'no' ? (
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            if (!rebookInterest || !workingExperience) return
+            onSubmit({
+              rebookInterest,
+              workingExperience,
+              referralWillingness: referralWillingness || undefined,
+              preferredDates: '',
+              budgetNote: '',
+              note: note.trim(),
+            })
+          }}
+        >
+          <Field label="Anything else to add? (optional)" value={note} onChange={setNote} textarea className="mb-6" />
+          <SubmitBar submitting={submitting} disabled={!rebookInterest || !workingExperience} />
         </form>
       ) : null}
     </div>
