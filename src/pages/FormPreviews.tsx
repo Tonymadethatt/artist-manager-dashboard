@@ -135,7 +135,7 @@ export default function FormPreviews() {
               <div key={selectionKey(selection)} className="flex flex-col flex-1 min-h-0">
                 <ShowReportWizard
                   token="__preview__"
-                  embeddedContext={MOCK_SHOW_REPORT_CONTEXT}
+                  previewContext={MOCK_SHOW_REPORT_CONTEXT}
                   submittedBy="artist_link"
                   footerMode="embedded"
                   preview

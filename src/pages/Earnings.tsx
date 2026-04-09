@@ -33,6 +33,12 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { hasPendingArtistEmail } from '@/lib/queueEmailsFromTemplate'
+import {
+  SHOW_REPORT_PRESETS,
+  buildPromiseLinesDocFromUi,
+  customLabelsFromDealDoc,
+  presetToggleStateFromDealDoc,
+} from '@/lib/showReportCatalog'
 import { buildRetainerReceivedPayload } from '@/lib/reports/buildManagementReportData'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
@@ -556,6 +562,10 @@ const TIER_BADGE_VARIANT: Record<CommissionTier, 'blue' | 'purple' | 'warning' |
   artist_network: 'secondary',
 }
 
+function defaultPromisePresets(): Record<string, boolean> {
+  return Object.fromEntries(SHOW_REPORT_PRESETS.map(p => [p.id, true])) as Record<string, boolean>
+}
+
 const EMPTY_FORM = {
   description: '',
   venue_id: '',
@@ -620,6 +630,8 @@ export default function Earnings() {
   const [sendEmailDeal, setSendEmailDeal] = useState<Deal | null>(null)
   const [sendingFormDealId, setSendingFormDealId] = useState<string | null>(null)
   const [formToast, setFormToast] = useState<string | null>(null)
+  const [promisePresets, setPromisePresets] = useState<Record<string, boolean>>(defaultPromisePresets)
+  const [promiseCustomLines, setPromiseCustomLines] = useState<string[]>([''])
 
   function showFormToast(msg: string) {
     setFormToast(msg)
@@ -676,6 +688,8 @@ export default function Earnings() {
   const openAdd = () => {
     setForm(EMPTY_FORM)
     setEditDeal(null)
+    setPromisePresets(defaultPromisePresets())
+    setPromiseCustomLines([''])
     setAddOpen(true)
   }
 
@@ -691,6 +705,9 @@ export default function Earnings() {
       agreement_generated_file_id: deal.agreement_generated_file_id ?? '',
       notes: deal.notes ?? '',
     })
+    setPromisePresets(presetToggleStateFromDealDoc(deal.promise_lines ?? null))
+    const customs = customLabelsFromDealDoc(deal.promise_lines ?? null)
+    setPromiseCustomLines(customs.length ? customs : [''])
     setEditDeal(deal)
     setAddOpen(true)
   }
@@ -711,6 +728,11 @@ export default function Earnings() {
   const handleSave = async () => {
     const gross = parseFloat(form.gross_amount)
     if (!form.description.trim() || isNaN(gross) || gross <= 0) return
+    const promiseDoc = buildPromiseLinesDocFromUi(promisePresets, promiseCustomLines)
+    if (promiseDoc.lines.length === 0) {
+      showFormToast('Select at least one show-report recap line (or add a custom line).')
+      return
+    }
     setSaving(true)
     let agreementUrl: string | null = form.agreement_url.trim() || null
     const agreementFileId = form.agreement_generated_file_id.trim() || null
@@ -742,6 +764,7 @@ export default function Earnings() {
       payment_due_date: form.payment_due_date || null,
       agreement_url: agreementUrl,
       agreement_generated_file_id: agreementFileId,
+      promise_lines: promiseDoc,
       notes: form.notes || null,
     }
     if (editDeal) {
@@ -1167,6 +1190,66 @@ export default function Earnings() {
               <p className="text-[10px] text-neutral-600">
                 If both PDF and URL are set, the PDF share link wins on save unless you clear the PDF.
               </p>
+            </div>
+
+            <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-900/50 p-3">
+              <Label className="text-neutral-300">Show report recap</Label>
+              <p className="text-[10px] text-neutral-500 leading-snug">
+                Checklist on the artist post-show form. Up to 10 custom lines.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                {SHOW_REPORT_PRESETS.map(p => (
+                  <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={promisePresets[p.id] ?? false}
+                      onChange={e =>
+                        setPromisePresets(prev => ({ ...prev, [p.id]: e.target.checked }))
+                      }
+                      className="rounded border-neutral-600"
+                    />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines</span>
+                {promiseCustomLines.map((line, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      value={line}
+                      onChange={e => {
+                        const v = e.target.value
+                        setPromiseCustomLines(prev => prev.map((s, j) => (j === i ? v : s)))
+                      }}
+                      placeholder={`Custom line ${i + 1}`}
+                      className="text-sm"
+                    />
+                    {promiseCustomLines.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 px-2"
+                        onClick={() => setPromiseCustomLines(prev => prev.filter((_, j) => j !== i))}
+                      >
+                        ✕
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+                {promiseCustomLines.length < 10 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-neutral-400"
+                    onClick={() => setPromiseCustomLines(prev => [...prev, ''])}
+                  >
+                    + Add custom line
+                  </Button>
+                ) : null}
+              </div>
             </div>
 
             <div className="space-y-1">

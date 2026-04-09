@@ -10,6 +10,7 @@ import {
   CANCELLATION_REASON_LABELS,
   formatFrictionTagsForNote,
 } from '@/lib/performanceReportV1'
+import { NIGHT_MOODS } from '@/lib/showReportCatalog'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { Button } from '@/components/ui/button'
 import {
@@ -65,6 +66,20 @@ function frictionSummary(report: PerformanceReport): string | null {
   return formatFrictionTagsForNote(raw.filter((x): x is string => typeof x === 'string'))
 }
 
+function nightMoodLabel(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const r = NIGHT_MOODS.find(m => m.key === raw)
+  return r ? `${r.emoji} ${r.word}` : raw
+}
+
+function promiseResultsSummary(report: PerformanceReport): string | null {
+  const pr = report.promise_results
+  if (!pr || !Array.isArray(pr) || pr.length === 0) return null
+  const yes = pr.filter(p => p.met).length
+  const no = pr.length - yes
+  return `${yes} yes / ${no} no (${pr.length} lines)`
+}
+
 function ReportDetail({ report }: { report: PerformanceReport }) {
   const cancel =
     report.cancellation_reason && report.event_happened !== 'yes'
@@ -74,6 +89,14 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
   const fields = [
     { label: 'Did event happen', value: report.event_happened ?? '-' },
     ...(cancel ? [{ label: 'Situation', value: cancel }] : []),
+    ...(report.cancellation_freeform?.trim()
+      ? [{ label: 'What happened', value: report.cancellation_freeform.trim() }]
+      : []),
+    ...(report.rescheduled_to_date
+      ? [{ label: 'Rescheduled to', value: formatDate(report.rescheduled_to_date) }]
+      : []),
+    { label: 'Night mood', value: nightMoodLabel(report.night_mood) ?? '-' },
+    { label: 'Deal recap', value: promiseResultsSummary(report) ?? '-' },
     { label: 'Rating', value: report.event_rating ? `${report.event_rating}/5` : '-' },
     { label: 'Attendance', value: report.attendance != null ? String(report.attendance) : '-' },
     { label: 'Artist paid', value: report.artist_paid_status ?? '-' },
@@ -86,11 +109,15 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
     { label: 'Production / safety', value: report.production_issue_level ?? '-' },
     { label: 'Friction areas', value: frictionSummary(report) ?? '-' },
     { label: 'Venue interest', value: report.venue_interest ?? '-' },
-    { label: 'Rebooking timing', value: report.rebooking_timeline?.replace(/_/g, ' ') ?? '-' },
-    { label: 'Book next call', value: report.wants_booking_call ?? '-' },
+    {
+      label: 'Rebooking timing',
+      value: report.rebooking_timeline?.replace(/_/g, ' ') ?? '-',
+    },
+    ...(report.rebooking_specific_date
+      ? [{ label: 'Rebook by date', value: formatDate(report.rebooking_specific_date) }]
+      : []),
     { label: 'Relationship quality', value: report.relationship_quality ?? '-' },
     { label: 'Play again?', value: report.would_play_again ?? '-' },
-    { label: 'Manager contact venue', value: report.wants_manager_venue_contact ?? '-' },
     { label: 'Referral / buyer', value: report.referral_lead ?? '-' },
     { label: 'Submitted by', value: report.submitted_by === 'manager_dashboard' ? 'Manager (dashboard)' : report.submitted_by === 'artist_link' ? 'Artist link' : '-' },
     { label: 'Row created via', value: report.creation_source === 'task_automation' ? 'Task automation' : report.creation_source === 'artist_email' ? 'Emailed to artist' : report.creation_source === 'manager_dashboard' ? 'Manager (no email)' : '-' },
@@ -200,21 +227,10 @@ export default function PerformanceReports() {
       showToast(error ?? 'Could not create report', 'err')
       return
     }
-    const venueName = report.venue?.name ?? null
-    const eventDate = report.deal?.event_date ?? null
-    const dealDescription = report.deal?.description ?? null
-    const selectedDeal = manualDealId ? deals.find(d => d.id === manualDealId) : null
-    const dealGrossAmount =
-      selectedDeal?.gross_amount != null && Number.isFinite(Number(selectedDeal.gross_amount))
-        ? Number(selectedDeal.gross_amount)
-        : null
     setManualOpen(false)
     setManualVenueId('')
     setManualDealId('')
-    goManualWizard({
-      token: report.token,
-      context: { venueName, eventDate, dealDescription, dealGrossAmount },
-    })
+    goManualWizard({ token: report.token })
   }
 
   async function handleConfirmDelete() {
@@ -337,14 +353,7 @@ export default function PerformanceReports() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => goManualWizard({
-                          token: report.token,
-                          context: {
-                            venueName: report.venue?.name ?? null,
-                            eventDate: report.deal?.event_date ?? null,
-                            dealDescription: report.deal?.description ?? null,
-                          },
-                        })}
+                        onClick={() => goManualWizard({ token: report.token })}
                         className="p-1 text-neutral-600 hover:text-white transition-colors"
                         title="Complete manually (same as artist form)"
                       >
@@ -376,14 +385,7 @@ export default function PerformanceReports() {
                   <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => goManualWizard({
-                        token: report.token,
-                        context: {
-                          venueName: report.venue?.name ?? null,
-                          eventDate: report.deal?.event_date ?? null,
-                          dealDescription: report.deal?.description ?? null,
-                        },
-                      })}
+                      onClick={() => goManualWizard({ token: report.token })}
                       className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 rounded-md text-neutral-200 transition-all"
                     >
                       <UserPen className="h-3 w-3" />

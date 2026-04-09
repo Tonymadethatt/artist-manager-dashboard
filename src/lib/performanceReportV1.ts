@@ -19,7 +19,14 @@
 export type ChasePaymentFollowup = 'no' | 'unsure' | 'yes'
 export type YesNo = 'no' | 'yes'
 export type ProductionIssueLevel = 'none' | 'minor' | 'serious'
-export type RebookingTimeline = 'this_month' | 'this_quarter' | 'later' | 'not_discussed'
+export type RebookingTimeline =
+  | 'this_week'
+  | 'next_week'
+  | 'this_month'
+  | 'this_quarter'
+  | 'later'
+  | 'not_discussed'
+  | 'custom_date'
 export type WouldPlayAgain = 'yes' | 'maybe' | 'no'
 export type CancellationReason =
   | 'venue_cancelled'
@@ -30,11 +37,11 @@ export type CancellationReason =
   | 'other'
 
 export const PRODUCTION_FRICTION_OPTIONS = [
-  { id: 'sound', label: 'Sound / audio' },
-  { id: 'load_in', label: 'Load-in & parking' },
-  { id: 'staff', label: 'Staff & hospitality' },
-  { id: 'stage', label: 'Stage & lights' },
-  { id: 'crowd', label: 'Crowd / room energy' },
+  { id: 'sound', label: 'Sound' },
+  { id: 'load_in', label: 'Load-in' },
+  { id: 'staff', label: 'Staff' },
+  { id: 'stage', label: 'Stage' },
+  { id: 'crowd', label: 'Crowd' },
 ] as const
 
 export type ProductionFrictionId = (typeof PRODUCTION_FRICTION_OPTIONS)[number]['id']
@@ -45,18 +52,26 @@ export const ATTENDANCE_BAND_TO_NUMBER: Record<string, number> = {
   '50_150': 100,
   '150_300': 225,
   '300_500': 400,
+  /** @deprecated Use `500_plus` (matches show report UI). */
   over_500: 600,
+  '500_plus': 600,
   skip: 0,
 }
 
 export function timelineToReengageDays(t: RebookingTimeline | null | undefined): number {
   switch (t) {
+    case 'this_week':
+      return 4
+    case 'next_week':
+      return 10
     case 'this_month':
-      return 7
+      return 14
     case 'this_quarter':
       return 21
     case 'later':
       return 45
+    case 'custom_date':
+      return 3
     case 'not_discussed':
     default:
       return 3
@@ -64,12 +79,12 @@ export function timelineToReengageDays(t: RebookingTimeline | null | undefined):
 }
 
 export const CANCELLATION_REASON_LABELS: Record<CancellationReason, string> = {
-  venue_cancelled: 'Venue cancelled or pulled the show',
-  weather: 'Weather / safety',
-  low_turnout: 'Low turnout / ticket sales',
-  illness: 'Illness or emergency',
-  logistics: 'Travel or logistics',
-  other: 'Something else',
+  venue_cancelled: 'Venue cancelled',
+  weather: 'Weather',
+  low_turnout: 'Low turnout',
+  illness: 'Illness',
+  logistics: 'Logistics',
+  other: 'Other',
 }
 
 const FRICTION_LABEL_BY_ID = Object.fromEntries(

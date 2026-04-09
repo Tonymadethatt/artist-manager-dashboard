@@ -34,6 +34,7 @@ export function useDeals() {
     payment_due_date?: string | null
     agreement_url?: string | null
     agreement_generated_file_id?: string | null
+    promise_lines?: unknown | null
     notes: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -56,6 +57,7 @@ export function useDeals() {
         payment_due_date: deal.payment_due_date ?? null,
         agreement_url: deal.agreement_url ?? null,
         agreement_generated_file_id: deal.agreement_generated_file_id ?? null,
+        promise_lines: deal.promise_lines ?? null,
         notes: deal.notes,
       })
       .select('*, venue:venues(id, name, outreach_track)')

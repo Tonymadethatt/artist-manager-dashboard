@@ -21,7 +21,18 @@ function igHref(handle: string): string {
 
 export interface PublicFormLayoutProps {
   branding: PublicFormBranding
+  /** Label for img alt (when `headerText` is set) / a11y; default centered `<h1>` when neither `headerText` nor `titleContent` is set. */
   title: string
+  /**
+   * Replaces the brand primary/secondary lines beside the logo (left-aligned in the text column).
+   */
+  headerText?: ReactNode
+  /**
+   * Custom block below the progress bar.
+   * When set, replaces the default centered `<h1>{title}</h1>`.
+   * Skipped entirely when only `headerText` is set (heading lives in the top row).
+   */
+  titleContent?: ReactNode
   /** 0–100 */
   progress: number
   /** Brief green success state on the progress track */
@@ -36,6 +47,8 @@ export interface PublicFormLayoutProps {
 export function PublicFormLayout({
   branding,
   title,
+  headerText,
+  titleContent,
   progress,
   progressSuccessFlash = false,
   children,
@@ -45,7 +58,7 @@ export function PublicFormLayout({
 }: PublicFormLayoutProps) {
   const primary = publicFormBrandPrimaryLine(branding)
   const secondary = publicFormBrandSecondaryLine(branding)
-  const logoAlt = primary
+  const logoAlt = headerText != null ? title : primary
   const websiteUrl = normalizeWebsiteUrl(branding.website)
   const handle = branding.social_handle?.replace(/^@/, '').trim() || ''
   const phone = branding.phone?.trim() || ''
@@ -95,21 +108,44 @@ export function PublicFormLayout({
   const hasLinks = linkBits.length > 0
   const showUpper = hasPersona || hasLinks
 
+  const showCenteredTitleBlock = titleContent != null || headerText == null
+
   return (
     <div className={cn('flex min-h-screen flex-col', rootClassName ?? 'bg-black text-neutral-50 antialiased')}>
       <header
         className={cn('shrink-0', !showProgress && 'border-b border-neutral-700')}
       >
-        <div className="mx-auto max-w-lg px-4 pt-6 pb-4">
-          <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            'mx-auto max-w-lg px-4',
+            headerText != null ? 'pb-1.5 pt-2.5' : 'pb-2.5 pt-4',
+          )}
+        >
+          <div
+            className={cn(
+              'flex items-center gap-2',
+              headerText != null ? 'justify-between' : '',
+            )}
+          >
             <img
               src="/dj-luijay-logo.png"
               alt={logoAlt}
-              className="h-9 w-auto shrink-0 object-contain"
+              className="h-8 w-auto shrink-0 object-contain"
             />
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-[13px] font-semibold leading-snug tracking-tight text-white">{primary}</p>
-              <p className="mt-1 text-[6px] font-medium leading-snug text-neutral-300">{secondary}</p>
+            <div
+              className={cn(
+                'min-w-0 flex-1',
+                headerText != null ? 'pt-0 text-right' : 'pt-0.5 text-left',
+              )}
+            >
+              {headerText != null ? (
+                headerText
+              ) : (
+                <>
+                  <p className="text-[13px] font-semibold leading-snug tracking-tight text-white">{primary}</p>
+                  <p className="mt-0.5 text-[6px] font-medium leading-snug text-neutral-300">{secondary}</p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -117,7 +153,7 @@ export function PublicFormLayout({
         {showProgress ? (
           <div
             className={cn(
-              'h-1.5 w-full overflow-hidden bg-neutral-800',
+              'h-1 w-full overflow-hidden bg-neutral-800',
               '[@media(prefers-reduced-motion:reduce)]:[&_*]:!transition-none',
             )}
             role="progressbar"
@@ -132,9 +168,17 @@ export function PublicFormLayout({
           </div>
         ) : null}
 
-        <div className="mx-auto max-w-lg px-4 pb-4 pt-5 text-center">
-          <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
-        </div>
+        {showCenteredTitleBlock ? (
+          <div className="mx-auto max-w-lg px-4 pb-1.5 pt-1.5 text-center">
+            {titleContent != null ? (
+              <div className="space-y-0.5" aria-label={title}>
+                {titleContent}
+              </div>
+            ) : (
+              <h1 className="text-[17px] font-semibold leading-tight tracking-tight text-white sm:text-lg">{title}</h1>
+            )}
+          </div>
+        ) : null}
       </header>
 
       <main className={cn('mx-auto flex w-full max-w-lg flex-1 flex-col px-4', mainClassName)}>{children}</main>

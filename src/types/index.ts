@@ -364,6 +364,8 @@ export interface Deal {
   agreement_url: string | null
   /** Canonical agreement PDF in Files; resolved to share URL with {@link resolveAgreementUrl}. */
   agreement_generated_file_id: string | null
+  /** Show report recap lines (`DealPromiseLinesDoc` in `showReportCatalog`). */
+  promise_lines?: unknown | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -462,7 +464,7 @@ export interface PerformanceReport {
   payment_dispute: 'no' | 'yes' | null
   production_issue_level: 'none' | 'minor' | 'serious' | null
   production_friction_tags: string[] | null
-  rebooking_timeline: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | null
+  rebooking_timeline: import('@/lib/performanceReportV1').RebookingTimeline | null
   wants_booking_call: 'no' | 'yes' | null
   wants_manager_venue_contact: 'no' | 'yes' | null
   would_play_again: 'yes' | 'maybe' | 'no' | null
@@ -475,10 +477,15 @@ export interface PerformanceReport {
     | 'other'
     | null
   referral_lead: 'no' | 'yes' | null
+  promise_results?: { id: string; met: boolean }[] | null
+  night_mood?: string | null
+  rescheduled_to_date?: string | null
+  rebooking_specific_date?: string | null
+  cancellation_freeform?: string | null
   creation_source: 'task_automation' | 'artist_email' | 'manager_dashboard' | null
   submitted_by: 'artist_link' | 'manager_dashboard' | null
   venue?: Pick<Venue, 'id' | 'name'> | null
-  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount'> | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount' | 'promise_lines'> | null
 }
 
 export interface VenueEmail {

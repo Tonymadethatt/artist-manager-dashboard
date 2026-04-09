@@ -5,14 +5,89 @@ import {
   formatFrictionTagsForNote,
   PRODUCTION_FRICTION_OPTIONS,
   timelineToReengageDays,
+  type RebookingTimeline,
 } from '../../src/lib/performanceReportV1'
 import { serializeArtistTxnQueueNotes } from '../../src/lib/email/artistTxnQueuePayload'
 import type { CancellationReason } from '../../src/lib/performanceReportV1'
+import {
+  deriveVenueDelivered,
+  mapNightMoodToCrowdEnergy,
+  moodToEventRating,
+  resolvePromiseLinesForDeal,
+  NIGHT_MOODS,
+  TOP_THREE_MOOD,
+  type DealPromiseLine,
+  type ShowReportNightMood,
+} from '../../src/lib/showReportCatalog'
 import {
   formatDealGrossReconciliationNotes,
 } from '../../src/lib/dealGrossReconciliationTask'
 
 const FRICTION_IDS = new Set(PRODUCTION_FRICTION_OPTIONS.map(o => o.id))
+
+const NIGHT_MOOD_KEYS = new Set<string>([
+  'crushed',
+  'great',
+  'solid',
+  'meh',
+  'rough',
+  'disaster',
+])
+
+const ALLOWED_REBOOKING = new Set<RebookingTimeline>([
+  'this_week',
+  'next_week',
+  'this_month',
+  'this_quarter',
+  'later',
+  'not_discussed',
+  'custom_date',
+])
+
+function parseNightMood(raw: unknown): ShowReportNightMood | null {
+  if (typeof raw !== 'string' || !NIGHT_MOOD_KEYS.has(raw)) return null
+  return raw as ShowReportNightMood
+}
+
+function parseISODate(d: unknown): string | null {
+  if (typeof d !== 'string') return null
+  const t = d.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null
+  return t
+}
+
+function normalizeRebookingTimeline(raw: unknown): RebookingTimeline | null {
+  if (raw == null || raw === '') return null
+  if (typeof raw !== 'string') return null
+  const t = raw as RebookingTimeline
+  return ALLOWED_REBOOKING.has(t) ? t : null
+}
+
+function normalizePromiseResults(
+  raw: unknown,
+  lines: DealPromiseLine[],
+): { id: string; met: boolean }[] {
+  const lineIds = new Set(lines.map(l => l.id))
+  if (!Array.isArray(raw)) return []
+  const out: { id: string; met: boolean }[] = []
+  for (const x of raw) {
+    if (!x || typeof x !== 'object') continue
+    const id = (x as { id?: unknown }).id
+    const met = (x as { met?: unknown }).met
+    if (typeof id !== 'string' || !lineIds.has(id)) continue
+    out.push({ id, met: met === true })
+  }
+  return out
+}
+
+function promiseResultsComplete(
+  lines: DealPromiseLine[],
+  results: { id: string; met: boolean }[],
+): boolean {
+  if (lines.length === 0) return true
+  const m = new Map(results.map(r => [r.id, r.met]))
+  return lines.every(l => m.has(l.id))
+}
 
 function normalizeFrictionTags(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
@@ -41,7 +116,7 @@ interface SubmitBody {
   paymentDispute?: 'no' | 'yes' | null
   productionIssueLevel?: 'none' | 'minor' | 'serious' | null
   productionFrictionTags?: string[] | null
-  rebookingTimeline?: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | null
+  rebookingTimeline?: RebookingTimeline | null
   wantsBookingCall?: 'no' | 'yes' | null
   wantsManagerVenueContact?: 'no' | 'yes' | null
   wouldPlayAgain?: 'yes' | 'maybe' | 'no' | null
@@ -56,6 +131,16 @@ interface SubmitBody {
   venueDelivered?: 'yes_good' | 'mostly_off' | 'significant_gaps' | null
   /** Who submitted: public form vs manager dashboard manual entry */
   submittedBy?: 'artist_link' | 'manager_dashboard'
+  /** Smart form: mood drives crowd_energy + event_rating */
+  nightMood?: string | null
+  promiseResults?: { id: string; met: boolean }[] | null
+  rescheduledToDate?: string | null
+  rebookingSpecificDate?: string | null
+  cancellationFreeform?: string | null
+  /** When show did not run: did any money change hands? */
+  notPlayedVenuePaidAnything?: 'no' | 'yes' | null
+  /** Short free-text re non-show payment (no typed dollar fields on short path) */
+  notPlayedPaymentSummary?: string | null
 }
 
 function crowdEnergyLabel(v: string): string {
@@ -66,6 +151,11 @@ function crowdEnergyLabel(v: string): string {
     hostile: 'Hostile — rough night',
   }
   return m[v] ?? v
+}
+
+function formatNightMoodForNote(m: ShowReportNightMood): string {
+  const row = NIGHT_MOODS.find(x => x.key === m)
+  return row ? `${row.emoji} ${row.word}` : m
 }
 
 function supplementalIncomeLabel(v: string): string {
@@ -136,9 +226,9 @@ async function applyReportedGrossToDeal(
 
 function venueDeliveredLabel(v: string): string {
   const m: Record<string, string> = {
-    yes_good: 'Yes — everything was good',
-    mostly_off: 'Mostly — a few things were off',
-    significant_gaps: 'No — significant gaps',
+    yes_good: 'Yes',
+    mostly_off: 'Mostly',
+    significant_gaps: 'No',
   }
   return m[v] ?? v
 }
@@ -147,6 +237,17 @@ function addDays(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() + days)
   return d.toISOString().split('T')[0]
+}
+
+function reengageDueDate(
+  timeline: RebookingTimeline | null | undefined,
+  specificDate: string | null | undefined,
+): string {
+  if (timeline === 'custom_date') {
+    const d = parseISODate(specificDate ?? null)
+    if (d) return d
+  }
+  return addDays(timelineToReengageDays(timeline))
 }
 
 function venueStatusForReport(body: SubmitBody): string {
@@ -179,20 +280,6 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing token' }) }
   }
 
-  const playedCheck = body.eventHappened === 'yes'
-  if (playedCheck) {
-    if (!body.artistPaidStatus) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: 'artistPaidStatus is required when the event happened.' }),
-      }
-    }
-    const econ = validatePlayedEconomics(body)
-    if (!econ.ok) {
-      return { statusCode: 400, body: JSON.stringify({ message: econ.message }) }
-    }
-  }
-
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const frictionTags = normalizeFrictionTags(body.productionFrictionTags)
   const submittedBy =
@@ -200,7 +287,7 @@ const handler: Handler = async (event) => {
 
   const { data: row, error: lookupError } = await supabase
     .from('performance_reports')
-    .select('id, user_id, venue_id, deal_id, submitted, token_used')
+    .select('id, user_id, venue_id, deal_id, submitted, token_used, deals(promise_lines)')
     .eq('token', body.token)
     .single()
 
@@ -212,9 +299,87 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const played = body.eventHappened === 'yes'
+  const nightMoodParsed = parseNightMood(body.nightMood)
+  const dealPromiseDoc =
+    row.deal_id && row.deals
+      ? (row.deals as { promise_lines?: unknown } | null)?.promise_lines ?? null
+      : null
+  const promiseLines = resolvePromiseLinesForDeal(dealPromiseDoc)
+  const promiseNorm = normalizePromiseResults(body.promiseResults, promiseLines)
+  const rebookingTimelineNorm = normalizeRebookingTimeline(body.rebookingTimeline)
+
+  if (played) {
+    if (!body.artistPaidStatus) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'artistPaidStatus is required when the event happened.' }),
+      }
+    }
+    const econ = validatePlayedEconomics(body)
+    if (!econ.ok) {
+      return { statusCode: 400, body: JSON.stringify({ message: econ.message }) }
+    }
+    if (!nightMoodParsed) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Pick how the night felt.' }),
+      }
+    }
+    if (!promiseResultsComplete(promiseLines, promiseNorm)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Answer each recap line (Yes / No).' }),
+      }
+    }
+  }
+
+  if (!played) {
+    const cf = body.cancellationFreeform?.trim()
+    if (!cf) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Add a quick note about what happened.' }),
+      }
+    }
+  }
+
+  if (!played && body.eventHappened === 'postponed' && !parseISODate(body.rescheduledToDate)) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'When the show moved, pick the new date.' }),
+    }
+  }
+
+  if (
+    played &&
+    body.venueInterest === 'yes' &&
+    rebookingTimelineNorm === 'custom_date' &&
+    !parseISODate(body.rebookingSpecificDate)
+  ) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Pick the date the venue hinted for rebooking.' }),
+    }
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
-  const played = body.eventHappened === 'yes'
+  let referralLeadFinal = body.referralLead ?? null
+  let referralDetailFinal = body.referralDetail?.trim() || null
+  if (
+    referralLeadFinal === 'yes' &&
+    (!nightMoodParsed || !TOP_THREE_MOOD.has(nightMoodParsed))
+  ) {
+    referralLeadFinal = 'no'
+    referralDetailFinal = null
+  }
+
+  const venueDeliveredFinal = played ? deriveVenueDelivered(promiseNorm, promiseLines) : null
+  const crowdEnergyFinal =
+    played && nightMoodParsed ? mapNightMoodToCrowdEnergy(nightMoodParsed) : null
+  const eventRatingFinal =
+    played && nightMoodParsed ? moodToEventRating(nightMoodParsed) : null
   const feeTotalSaved = played && body.artistPaidStatus ? parseMoneyField(body.feeTotal) : null
   const amountReceivedSaved =
     played && body.artistPaidStatus
@@ -254,15 +419,18 @@ const handler: Handler = async (event) => {
       : null
 
   const structuredNoteLines = [
-    played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}` : null,
+    played && nightMoodParsed ? `How it felt: ${formatNightMoodForNote(nightMoodParsed)}` : null,
     balanceLine,
     disputeClaimLine,
     merchIncomeLine ?? legacySupplementalLine,
-    played && body.venueDelivered
-      ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}`
+    played && venueDeliveredFinal
+      ? `Venue delivered on promises: ${venueDeliveredLabel(venueDeliveredFinal)}`
       : null,
-    body.referralLead === 'yes' && body.referralDetail?.trim()
-      ? `Referral detail: ${body.referralDetail.trim()}`
+    referralLeadFinal === 'yes' && referralDetailFinal
+      ? `Referral detail: ${referralDetailFinal}`
+      : null,
+    !played && body.notPlayedVenuePaidAnything === 'yes'
+      ? `Non-show payment (artist): ${body.notPlayedPaymentSummary?.trim() || 'Yes — follow up for detail.'}`
       : null,
   ].filter(Boolean) as string[]
   const mergedNotes = [body.notes?.trim() || '', ...structuredNoteLines].filter(Boolean).join('\n\n') || null
@@ -274,7 +442,7 @@ const handler: Handler = async (event) => {
       token_used: true,
       submitted_at: new Date().toISOString(),
       event_happened: body.eventHappened,
-      event_rating: played ? body.eventRating ?? null : null,
+      event_rating: eventRatingFinal,
       attendance: played ? body.attendance ?? null : null,
       artist_paid_status: played ? body.artistPaidStatus ?? null : null,
       payment_amount: played ? amountReceivedSaved ?? null : null,
@@ -292,12 +460,25 @@ const handler: Handler = async (event) => {
       payment_dispute: played ? body.paymentDispute ?? null : null,
       production_issue_level: played ? body.productionIssueLevel ?? null : null,
       production_friction_tags: frictionTags,
-      rebooking_timeline: body.rebookingTimeline ?? null,
+      rebooking_timeline: rebookingTimelineNorm,
       wants_booking_call: body.wantsBookingCall ?? null,
       wants_manager_venue_contact: body.wantsManagerVenueContact ?? null,
       would_play_again: body.wouldPlayAgain ?? null,
       cancellation_reason: !played ? body.cancellationReason ?? null : null,
-      referral_lead: body.referralLead ?? null,
+      referral_lead: referralLeadFinal,
+      promise_results: played && promiseNorm.length ? promiseNorm : null,
+      night_mood: played ? nightMoodParsed : null,
+      rescheduled_to_date:
+        !played && body.eventHappened === 'postponed'
+          ? parseISODate(body.rescheduledToDate)
+          : null,
+      rebooking_specific_date:
+        played &&
+        body.venueInterest === 'yes' &&
+        rebookingTimelineNorm === 'custom_date'
+          ? parseISODate(body.rebookingSpecificDate)
+          : null,
+      cancellation_freeform: !played ? body.cancellationFreeform?.trim() ?? null : null,
       submitted_by: submittedBy,
     })
     .eq('id', row.id)
@@ -442,7 +623,7 @@ const handler: Handler = async (event) => {
     }
   }
 
-  const reengageDays = timelineToReengageDays(body.rebookingTimeline)
+  const reengageDue = reengageDueDate(rebookingTimelineNorm, body.rebookingSpecificDate)
 
   if (body.venueInterest === 'yes') {
     try {
@@ -487,27 +668,12 @@ const handler: Handler = async (event) => {
         venue_id: row.venue_id,
         deal_id: row.deal_id ?? null,
         priority: 'high',
-        due_date: addDays(reengageDays),
+        due_date: reengageDue,
         recurrence: 'none',
         completed: false,
       })
     } catch (e) {
       console.error('[submit-performance-report] Re-engage task failed:', e)
-    }
-
-    try {
-      await supabase.from('tasks').insert({
-        user_id: row.user_id,
-        title: `Schedule rebooking call — ${venueName}`,
-        venue_id: row.venue_id,
-        deal_id: row.deal_id ?? null,
-        priority: 'high',
-        due_date: addDays(2),
-        recurrence: 'none',
-        completed: false,
-      })
-    } catch (e) {
-      console.error('[submit-performance-report] Booking call task failed:', e)
     }
   }
 
@@ -600,12 +766,12 @@ const handler: Handler = async (event) => {
     }
   }
 
-  if (body.referralLead === 'yes') {
+  if (referralLeadFinal === 'yes') {
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
         title: `Capture referral lead — ${venueName}`,
-        notes: body.referralDetail?.trim() || null,
+        notes: referralDetailFinal || null,
         venue_id: row.venue_id,
         deal_id: row.deal_id ?? null,
         priority: 'medium',
@@ -618,7 +784,7 @@ const handler: Handler = async (event) => {
     }
   }
 
-  if (played && body.venueDelivered === 'significant_gaps') {
+  if (played && venueDeliveredFinal === 'significant_gaps') {
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
@@ -635,11 +801,17 @@ const handler: Handler = async (event) => {
     }
   }
 
-  if (played && body.crowdEnergy === 'hostile') {
+  const roughShowFlag =
+    played &&
+    (crowdEnergyFinal === 'hostile' ||
+      nightMoodParsed === 'disaster' ||
+      nightMoodParsed === 'rough' ||
+      eventRatingFinal === 1)
+  if (roughShowFlag) {
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
-        title: `Review hostile crowd report — ${venueName}`,
+        title: `Review difficult show report — ${venueName}`,
         venue_id: row.venue_id,
         deal_id: row.deal_id ?? null,
         priority: 'medium',
@@ -648,7 +820,7 @@ const handler: Handler = async (event) => {
         completed: false,
       })
     } catch (e) {
-      console.error('[submit-performance-report] Hostile crowd task failed:', e)
+      console.error('[submit-performance-report] Difficult show task failed:', e)
     }
   }
 
@@ -656,7 +828,7 @@ const handler: Handler = async (event) => {
     venue_cancelled: 'Venue cancelled',
     weather: 'Weather',
     low_turnout: 'Low turnout',
-    illness: 'Illness/emergency',
+    illness: 'Illness',
     logistics: 'Logistics',
     other: 'Other',
   }
@@ -674,11 +846,14 @@ const handler: Handler = async (event) => {
       body.cancellationReason && !played
         ? `Cancellation/postpone reason: ${cancellationLabels[body.cancellationReason] ?? body.cancellationReason}.`
         : null,
-      body.eventRating ? `Rating: ${body.eventRating}/5.` : null,
+      !played && body.cancellationFreeform?.trim()
+        ? `What happened: ${body.cancellationFreeform.trim()}`
+        : null,
+      eventRatingFinal ? `Rating: ${eventRatingFinal}/5.` : null,
       body.attendance != null
         ? `Attendance: ${body.attendance} people.`
         : null,
-      played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}.` : null,
+      played && crowdEnergyFinal ? `Crowd energy: ${crowdEnergyLabel(crowdEnergyFinal)}.` : null,
       played &&
       body.merchIncome === 'yes' &&
       body.merchIncomeAmount != null &&
@@ -688,8 +863,8 @@ const handler: Handler = async (event) => {
         : played && body.supplementalIncome && body.supplementalIncome !== 'none'
           ? `Tips/merch income: ${supplementalIncomeLabel(body.supplementalIncome)}.`
           : null,
-      played && body.venueDelivered
-        ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}.`
+      played && venueDeliveredFinal
+        ? `Venue delivered on promises: ${venueDeliveredLabel(venueDeliveredFinal)}.`
         : null,
       body.artistPaidStatus === 'yes'
         ? submittedBy === 'manager_dashboard'
@@ -722,14 +897,14 @@ const handler: Handler = async (event) => {
       body.venueInterest === 'yes' ? 'Venue expressed interest in rebooking.' :
         body.venueInterest === 'no' ? 'Venue not interested in rebooking.' :
         body.venueInterest === 'unsure' ? 'Venue unsure about rebooking.' : null,
-      body.rebookingTimeline && body.venueInterest === 'yes'
-        ? `Rebooking timeline hint: ${body.rebookingTimeline.replace(/_/g, ' ')}.`
+      rebookingTimelineNorm && body.venueInterest === 'yes'
+        ? `Rebooking timeline hint: ${rebookingTimelineNorm.replace(/_/g, ' ')}.`
         : null,
       body.relationshipQuality ? `Relationship quality: ${body.relationshipQuality}.` : null,
       body.wouldPlayAgain ? `Would play again: ${body.wouldPlayAgain}.` : null,
-      body.referralLead === 'yes' ? 'Referral / another buyer mentioned.' : null,
-      body.referralLead === 'yes' && body.referralDetail?.trim()
-        ? `Referral detail: ${body.referralDetail.trim()}`
+      referralLeadFinal === 'yes' ? 'Referral / another buyer mentioned.' : null,
+      referralLeadFinal === 'yes' && referralDetailFinal
+        ? `Referral detail: ${referralDetailFinal}`
         : null,
       body.notes ? `Notes: ${body.notes}` : null,
       body.mediaLinks ? `Media links: ${body.mediaLinks}` : null,

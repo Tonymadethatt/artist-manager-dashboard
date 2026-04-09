@@ -265,6 +265,7 @@ export interface Database {
           payment_due_date: string | null
           agreement_url: string | null
           agreement_generated_file_id: string | null
+          promise_lines: unknown | null
           notes: string | null
           created_at: string
           updated_at: string
@@ -286,6 +287,7 @@ export interface Database {
           payment_due_date?: string | null
           agreement_url?: string | null
           agreement_generated_file_id?: string | null
+          promise_lines?: unknown | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -307,6 +309,7 @@ export interface Database {
           payment_due_date?: string | null
           agreement_url?: string | null
           agreement_generated_file_id?: string | null
+          promise_lines?: unknown | null
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -913,6 +916,11 @@ export interface Database {
           would_play_again: string | null
           cancellation_reason: string | null
           referral_lead: string | null
+          promise_results: unknown | null
+          night_mood: string | null
+          rescheduled_to_date: string | null
+          rebooking_specific_date: string | null
+          cancellation_freeform: string | null
           creation_source: string | null
           submitted_by: string | null
         }
@@ -949,6 +957,11 @@ export interface Database {
           would_play_again?: string | null
           cancellation_reason?: string | null
           referral_lead?: string | null
+          promise_results?: unknown | null
+          night_mood?: string | null
+          rescheduled_to_date?: string | null
+          rebooking_specific_date?: string | null
+          cancellation_freeform?: string | null
           creation_source?: string | null
           submitted_by?: string | null
         }
@@ -985,6 +998,11 @@ export interface Database {
           would_play_again?: string | null
           cancellation_reason?: string | null
           referral_lead?: string | null
+          promise_results?: unknown | null
+          night_mood?: string | null
+          rescheduled_to_date?: string | null
+          rebooking_specific_date?: string | null
+          cancellation_freeform?: string | null
           creation_source?: string | null
           submitted_by?: string | null
         }

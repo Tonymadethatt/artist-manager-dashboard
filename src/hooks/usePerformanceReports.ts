@@ -12,7 +12,7 @@ export function usePerformanceReports() {
     setLoading(true)
     const { data } = await supabase
       .from('performance_reports')
-      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount)')
+      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount, promise_lines)')
       .order('created_at', { ascending: false })
     setReports((data ?? []) as PerformanceReport[])
     setLoading(false)
@@ -38,7 +38,7 @@ export function usePerformanceReports() {
     const { data: row, error: insertError } = await supabase
       .from('performance_reports')
       .insert({ user_id: user.id, venue_id: venueId, deal_id: dealId, creation_source: 'artist_email' })
-      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount)')
+      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount, promise_lines)')
       .single()
 
     if (insertError || !row) {
@@ -123,7 +123,7 @@ export function usePerformanceReports() {
         deal_id: dealId,
         creation_source: 'manager_dashboard',
       })
-      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount)')
+      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount, promise_lines)')
       .single()
 
     if (insertError || !row) {
@@ -181,9 +181,14 @@ export function usePerformanceReports() {
         fee_total: null,
         amount_received: null,
         payment_dispute_claimed_amount: null,
+        promise_results: null,
+        night_mood: null,
+        rescheduled_to_date: null,
+        rebooking_specific_date: null,
+        cancellation_freeform: null,
       })
       .eq('id', reportId)
-      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount)')
+      .select('*, venue:venues(id, name), deal:deals(id, description, event_date, gross_amount, promise_lines)')
       .single()
 
     if (updateError || !updated) {

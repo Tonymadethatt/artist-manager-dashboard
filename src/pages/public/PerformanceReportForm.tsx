@@ -11,11 +11,6 @@ export default function PerformanceReportForm() {
     )
   }
   return (
-    <ShowReportWizard
-      token={token}
-      embeddedContext={null}
-      submittedBy="artist_link"
-      footerMode="viewport"
-    />
+    <ShowReportWizard token={token} submittedBy="artist_link" footerMode="viewport" />
   )
 }
