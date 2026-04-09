@@ -467,7 +467,7 @@ export default function EmailTemplates() {
         ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
         : PREVIEW_MOCK_RECIPIENT
       const previewCaptureCustom =
-        aud === 'venue' && doc.captureKind ? 'https://preview.example.com/email-capture/mock-preview-token' : undefined
+        aud === 'venue' && doc.captureKind ? 'https://preview.example.com/venue-email-ack/mock-preview-token' : undefined
       const { html } = buildCustomEmailDocument({
         audience: aud,
         subjectTemplate: subj.trim() || ' ',
@@ -546,7 +546,7 @@ export default function EmailTemplates() {
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
     }
     const previewCaptureUrl = venueEmailTypeToCaptureKind(selectedType as VenueEmailType)
-      ? 'https://preview.example.com/email-capture/mock-preview-token'
+      ? 'https://preview.example.com/venue-email-ack/mock-preview-token'
       : null
     const previewInvoiceUrl = selectedType === 'invoice_sent'
       ? EMAIL_TEMPLATE_PREVIEW_INVOICE_URL

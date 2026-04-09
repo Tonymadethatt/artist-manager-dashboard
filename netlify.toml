@@ -9,5 +9,11 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/venue-email-ack/*"
+  to = "/.netlify/functions/venue-email-ack?token=:splat"
+  status = 200
+  force = true
+
 [functions]
   node_bundler = "esbuild"

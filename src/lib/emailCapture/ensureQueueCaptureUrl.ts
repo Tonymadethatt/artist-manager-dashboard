@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VenueEmailType } from '../../types'
 import type { EmailCaptureKind } from './kinds'
-import { venueEmailTypeToCaptureKind } from './kinds'
+import { isVenueEmailOneTapAckKind, venueEmailAckPublicUrl, venueEmailTypeToCaptureKind } from './kinds'
 import { appendEmailCaptureTokenNote, parseEmailCaptureTokenFromNotes } from './tokenNotes'
 import { defaultEmailCaptureExpiresAt } from './expiry'
 
@@ -23,7 +23,7 @@ export async function ensureQueueCaptureUrl(
   const kind =
     venueEmailTypeToCaptureKind(email.email_type as VenueEmailType)
     ?? (kindOverride ?? null)
-  if (!kind) return null
+  if (!kind || !isVenueEmailOneTapAckKind(kind)) return null
 
   let tokenUuid = parseEmailCaptureTokenFromNotes(email.notes)
   if (!tokenUuid) {
@@ -56,6 +56,5 @@ export async function ensureQueueCaptureUrl(
       .is('venue_emails_id', null)
   }
 
-  const origin = siteUrl.replace(/\/$/, '')
-  return `${origin}/email-capture/${tokenUuid}`
+  return venueEmailAckPublicUrl(siteUrl, tokenUuid)
 }

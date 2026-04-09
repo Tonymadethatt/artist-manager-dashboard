@@ -4,6 +4,8 @@ import { normalizeEmailTemplateLayout } from '../../src/lib/emailLayout'
 import { sanitizeEmailAttachmentPayload } from '../../src/lib/email/validateAttachmentUrl'
 import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
+import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
+import { captureLinkLabel } from '../../src/lib/emailCapture/kinds'
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -180,6 +182,10 @@ const handler: Handler = async (event) => {
       const supabaseUrl = process.env.SUPABASE_URL || ''
       const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
       const captureUrl = typeof rawCaptureUrl === 'string' ? rawCaptureUrl.trim() || null : null
+      const customCtaTrim = custom_venue_template.capture_cta_label?.trim() || null
+      const captureKind = loadCustomEmailBlocksDoc(custom_venue_template.blocks).captureKind ?? null
+      const captureCTALabelResolved =
+        customCtaTrim || (captureKind ? captureLinkLabel(captureKind) : null)
       const built = buildCustomEmailDocument({
         audience: 'venue',
         subjectTemplate: custom_venue_template.subject_template ?? '',
@@ -197,7 +203,9 @@ const handler: Handler = async (event) => {
         showReplyButton: custom_venue_template.show_reply_button !== false,
         replyButtonLabel: custom_venue_template.reply_button_label ?? null,
         ...(attachment ? { attachment } : {}),
-        ...(captureUrl ? { captureUrl, captureCTALabel: custom_venue_template.capture_cta_label ?? null } : {}),
+        ...(captureUrl
+          ? { captureUrl, captureCTALabel: captureCTALabelResolved }
+          : {}),
       })
       html = built.html
       subject = built.subject

@@ -3,7 +3,11 @@ import type { ArtistProfile, AnyEmailType, VenueEmailType, GeneratedFile } from 
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { normalizeEmailTemplateLayout } from '@/lib/emailLayout'
 import { EMAIL_TEMPLATE_PREVIEW_INVOICE_URL, PREVIEW_MOCK_DEAL, PREVIEW_MOCK_VENUE } from '@/lib/buildVenueEmailHtml'
-import { venueEmailTypeToCaptureKind } from '@/lib/emailCapture/kinds'
+import {
+  venueEmailTypeToCaptureKind,
+  isVenueEmailOneTapAckKind,
+  venueEmailAckPublicUrl,
+} from '@/lib/emailCapture/kinds'
 import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import type { CustomEmailTemplateRow } from '@/hooks/useCustomEmailTemplates'
@@ -162,7 +166,7 @@ export async function sendEmailTemplateTest(
       if (att) payload.attachment = att
     }
 
-    if (row.audience === 'venue' && doc.captureKind) {
+    if (row.audience === 'venue' && doc.captureKind && isVenueEmailOneTapAckKind(doc.captureKind)) {
       const { data: tokRow, error: capErr } = await supabase.from('email_capture_tokens').insert({
         user_id: user.id,
         kind: doc.captureKind,
@@ -172,7 +176,7 @@ export async function sendEmailTemplateTest(
         expires_at: defaultEmailCaptureExpiresAt(),
       }).select('token').single()
       if (!capErr && tokRow?.token) {
-        payload.capture_url = `${publicSiteOrigin()}/email-capture/${tokRow.token as string}`
+        payload.capture_url = venueEmailAckPublicUrl(publicSiteOrigin(), tokRow.token as string)
       }
     }
 
@@ -308,7 +312,7 @@ export async function sendEmailTemplateTest(
   }
 
   const capKind = venueEmailTypeToCaptureKind(vType as VenueEmailType)
-  if (capKind) {
+  if (capKind && isVenueEmailOneTapAckKind(capKind)) {
     const { data: tokRow, error: capErr } = await supabase
       .from('email_capture_tokens')
       .insert({
@@ -322,7 +326,7 @@ export async function sendEmailTemplateTest(
       .select('token')
       .single()
     if (!capErr && tokRow?.token) {
-      venuePayload.capture_url = `${publicSiteOrigin()}/email-capture/${tokRow.token as string}`
+      venuePayload.capture_url = venueEmailAckPublicUrl(publicSiteOrigin(), tokRow.token as string)
     }
   }
 

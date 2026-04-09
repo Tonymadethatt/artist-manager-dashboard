@@ -44,7 +44,14 @@ import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
-import { EMAIL_CAPTURE_KIND_LABELS, isEmailCaptureKind } from '@/lib/emailCapture/kinds'
+import {
+  EMAIL_CAPTURE_KIND_LABELS,
+  captureLinkLabel,
+  isEmailCaptureKind,
+  isVenueEmailOneTapAckKind,
+  venueEmailAckPublicUrl,
+  venueEmailTypeToCaptureKind,
+} from '@/lib/emailCapture/kinds'
 import { parseEmailCaptureTokenFromNotes } from '@/lib/emailCapture/tokenNotes'
 import { fetchReportInputsForUser } from '@/lib/reports/fetchReportInputsForUser'
 import {
@@ -580,6 +587,15 @@ export default function EmailQueue() {
           if (att) attachment = att
         }
 
+        const customCapKind =
+          row.audience === 'venue' ? loadCustomEmailBlocksDoc(row.blocks).captureKind ?? null : null
+        const customCapTok =
+          row.audience === 'venue' ? parseEmailCaptureTokenFromNotes(email.notes) : null
+        const customCaptureUrl =
+          customCapTok && customCapKind && isVenueEmailOneTapAckKind(customCapKind)
+            ? venueEmailAckPublicUrl(publicSiteOrigin(), customCapTok)
+            : null
+
         const { html, subject } = buildCustomEmailDocument({
           audience: row.audience as 'venue' | 'artist',
           subjectTemplate: row.subject_template as string,
@@ -592,6 +608,9 @@ export default function EmailQueue() {
           responsiveClasses: false,
           showReplyButton: row.audience === 'venue',
           ...(attachment ? { attachment } : {}),
+          ...(customCaptureUrl && customCapKind
+            ? { captureUrl: customCaptureUrl, captureCTALabel: captureLinkLabel(customCapKind) }
+            : {}),
         })
         setPreviewHtml(html)
         setPreviewSubject(subject)
@@ -613,8 +632,12 @@ export default function EmailQueue() {
           email.email_type === 'invoice_sent'
             ? parseInvoiceQueueNotes(email.notes)?.url ?? null
             : null
+        const capKind = venueEmailTypeToCaptureKind(email.email_type as VenueEmailType)
         const capTok = parseEmailCaptureTokenFromNotes(email.notes)
-        const captureUrl = capTok ? `${publicSiteOrigin()}/email-capture/${capTok}` : null
+        const captureUrl =
+          capTok && capKind && isVenueEmailOneTapAckKind(capKind)
+            ? venueEmailAckPublicUrl(publicSiteOrigin(), capTok)
+            : null
         const html = buildVenueEmailDocument({
           type: email.email_type as VenueRenderEmailType,
           profile: profileForRender,

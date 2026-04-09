@@ -38,6 +38,30 @@ export function isEmailCaptureKind(s: string): s is EmailCaptureKind {
   return CAPTURE_KIND_SET.has(s)
 }
 
+/** Venue emails whose primary CTA is a single-tap ack (no multi-step public form). */
+export const VENUE_EMAIL_ONE_TAP_ACK_KINDS = [
+  'booking_confirmation',
+  'booking_confirmed',
+  'payment_reminder_ack',
+  'invoice_sent',
+] as const satisfies readonly EmailCaptureKind[]
+
+export type VenueEmailOneTapAckKind = (typeof VENUE_EMAIL_ONE_TAP_ACK_KINDS)[number]
+
+const VENUE_EMAIL_ONE_TAP_ACK_SET = new Set<string>(VENUE_EMAIL_ONE_TAP_ACK_KINDS)
+
+export function isVenueEmailOneTapAckKind(
+  kind: EmailCaptureKind | string | null | undefined,
+): kind is VenueEmailOneTapAckKind {
+  return kind != null && VENUE_EMAIL_ONE_TAP_ACK_SET.has(kind)
+}
+
+/** Public URL path for one-tap ack (served via Netlify rewrite → function, not SPA). */
+export function venueEmailAckPublicUrl(siteUrl: string, tokenUuid: string): string {
+  const origin = siteUrl.replace(/\/$/, '')
+  return `${origin}/venue-email-ack/${tokenUuid}`
+}
+
 /** Builtin venue email types that get a capture link (custom templates excluded). */
 export function venueEmailTypeToCaptureKind(t: VenueEmailType): EmailCaptureKind | null {
   switch (t) {
@@ -104,7 +128,7 @@ export function captureLinkLabel(kind: EmailCaptureKind): string {
     case 'rebooking_inquiry':
       return 'Share dates'
     case 'payment_reminder_ack':
-      return 'Payment status'
+      return 'Payment sent'
     case 'payment_receipt':
       return 'Next steps'
     default:

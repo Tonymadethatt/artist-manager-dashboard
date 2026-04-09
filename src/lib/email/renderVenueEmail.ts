@@ -377,7 +377,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       case 'pre_event_checkin':
         return 'Logistics form'
       case 'payment_reminder_ack':
-        return 'Payment status'
+        return 'Payment sent'
       case 'payment_receipt':
         return 'Next steps'
       case 'booking_confirmation':
@@ -400,7 +400,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   const captureCtaHtml = captureTrim && capKind
     ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
         <a href="${hrefAttr(captureTrim)}" style="${VENUE_EMAIL_CAPTURE_BUTTON_STYLE}">${escapeHtmlPlain(captureCtaLabel(capKind, artistName))}</a>
-        <p style="font-size:11px;color:${EMAIL_HINT};margin-top:10px;">Secure one-time link &mdash; takes less than a minute</p>
+        <p style="font-size:11px;color:${EMAIL_HINT};margin-top:10px;">One tap to confirm &mdash; no account required</p>
       </div>`
     : ''
 
