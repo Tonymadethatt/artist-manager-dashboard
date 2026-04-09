@@ -231,7 +231,7 @@ export interface BuildCustomEmailOptions {
   replyButtonLabel?: string | null
   /** Optional download CTA appended after blocks (URLs must be validated server-side before send). */
   attachment?: { url: string; fileName: string }
-  /** Public one-tap response page (email capture); venue emails only. */
+  /** Public one-tap confirmation URL (GET → server thank-you page); venue emails only. */
   captureUrl?: string | null
   /** Button label for the capture CTA; defaults to a generic prompt. */
   captureCTALabel?: string | null

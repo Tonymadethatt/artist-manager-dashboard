@@ -66,6 +66,68 @@ function htmlShell(title: string, inner: string): string {
 </html>`
 }
 
+/** Thank-you page only: countdown then try history.back(); always end with close-this-tab copy. */
+function htmlShellWithCountdown(title: string, inner: string, opts: { seconds: number }): string {
+  const seconds = Math.max(1, Math.min(30, Math.floor(opts.seconds)))
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(title)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #0d0d0d; color: #fafafa; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px; -webkit-font-smoothing: antialiased; }
+  .card { max-width: 420px; width: 100%; background: #141414; border: 1px solid #2a2a2a; border-radius: 10px; padding: 28px 24px; text-align: center; }
+  h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 14px; color: #fafafa; }
+  p { font-size: 0.9rem; color: #a3a3a3; line-height: 1.6; margin-bottom: 10px; }
+  p:last-child { margin-bottom: 0; }
+  #ack-status { margin-top: 16px; font-size: 0.9rem; color: #a3a3a3; line-height: 1.6; }
+</style>
+</head>
+<body>
+  <div class="card">${inner}
+    <p id="ack-status" role="status" aria-live="polite" aria-atomic="true"></p>
+  </div>
+<script>
+(function () {
+  var el = document.getElementById('ack-status')
+  if (!el) return
+  var total = ${seconds}
+  var reduce = false
+  try {
+    reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch (e) {}
+  var fallback = 'If nothing happened, you can close this tab and return to your email.'
+  function finish() {
+    try {
+      if (window.history.length > 1) window.history.back()
+    } catch (e) {}
+    el.textContent = fallback
+  }
+  if (reduce) {
+    finish()
+    return
+  }
+  var n = total
+  el.textContent = 'Returning to the previous page in ' + n + '…'
+  var id = window.setInterval(function () {
+    n -= 1
+    if (n < 1) {
+      window.clearInterval(id)
+      finish()
+    } else {
+      el.textContent = 'Returning to the previous page in ' + n + '…'
+    }
+  }, 1000)
+})()
+</script>
+</body>
+</html>`
+}
+
 const handler: Handler = async event => {
   if (event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD') {
     return {
@@ -117,7 +179,9 @@ const handler: Handler = async event => {
 
   const copy = oneTapAckThanksCopy(result.captureKind, result.alreadyReceived)
   const paras = copy.lines.map(l => `<p>${esc(l)}</p>`).join('')
-  const body = htmlShell(copy.heading, `<h1>${esc(copy.heading)}</h1>${paras}`)
+  const body = htmlShellWithCountdown(copy.heading, `<h1>${esc(copy.heading)}</h1>${paras}`, {
+    seconds: 5,
+  })
 
   return {
     statusCode: 200,

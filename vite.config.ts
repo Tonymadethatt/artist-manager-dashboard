@@ -18,6 +18,14 @@ export default defineConfig({
         target: process.env.VITE_NETLIFY_FUNCTIONS_URL ?? 'http://127.0.0.1:8888',
         changeOrigin: true,
       },
+      '/venue-email-ack': {
+        target: process.env.VITE_NETLIFY_FUNCTIONS_URL ?? 'http://127.0.0.1:8888',
+        changeOrigin: true,
+        rewrite: (p) => {
+          const token = p.replace(/^\/venue-email-ack\//, '').split('/')[0] ?? ''
+          return `/.netlify/functions/venue-email-ack?token=${encodeURIComponent(token)}`
+        },
+      },
     },
   },
 })

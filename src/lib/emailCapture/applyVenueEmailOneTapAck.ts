@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { EmailCaptureKind } from './kinds'
+import type { EmailCaptureKind, VenueEmailOneTapAckKind } from './kinds'
 import { isVenueEmailOneTapAckKind } from './kinds'
+import {
+  oneTapOutreachNote,
+  oneTapTaskSpec,
+  oneTapThanksForKind,
+} from './oneTapAckRegistry'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -13,43 +18,12 @@ export type VenueEmailOneTapAckPage =
   | { kind: 'error'; message: string }
   | { kind: 'thanks'; captureKind: EmailCaptureKind; alreadyReceived: boolean }
 
-/** Plain-text lines for minimal HTML thank-you pages (no user accounts). */
+/** @deprecated Use oneTapThanksForKind from oneTapAckRegistry (kept as alias for Netlify bundle imports). */
 export function oneTapAckThanksCopy(
   captureKind: EmailCaptureKind,
   alreadyReceived: boolean,
-): { heading: string; lines: string[] } {
-  if (alreadyReceived) {
-    return {
-      heading: 'Thanks',
-      lines: ['We already have your confirmation on file.', 'You can close this window.'],
-    }
-  }
-  if (captureKind === 'payment_reminder_ack') {
-    return {
-      heading: 'Thank you',
-      lines: [
-        "We've noted that payment may be on the way.",
-        "Our team will confirm receipt on our end-you don't need to do anything else here.",
-        'You can close this window.',
-      ],
-    }
-  }
-  if (captureKind === 'invoice_sent') {
-    return {
-      heading: 'Thank you',
-      lines: [
-        "We've recorded that you reviewed the invoice.",
-        'You can close this window.',
-      ],
-    }
-  }
-  return {
-    heading: 'Thank you',
-    lines: [
-      "We've received your confirmation.",
-      'You can close this window.',
-    ],
-  }
+) {
+  return oneTapThanksForKind(captureKind as VenueEmailOneTapAckKind, alreadyReceived)
 }
 
 /**
@@ -115,13 +89,25 @@ export async function runVenueEmailOneTapAck(
   try {
     await applyOneTapSideEffects(supabase, {
       user_id: updated.user_id as string,
-      kind: updated.kind as EmailCaptureKind,
+      kind: updated.kind as VenueEmailOneTapAckKind,
       venue_id: (updated.venue_id as string | null) ?? null,
       deal_id: (updated.deal_id as string | null) ?? null,
       token_id: updated.id as string,
     })
   } catch (e) {
     console.error('[runVenueEmailOneTapAck] side effects:', e)
+    const { error: revErr } = await supabase
+      .from('email_capture_tokens')
+      .update({ consumed_at: null, response: null })
+      .eq('id', updated.id as string)
+      .eq('token', token)
+    if (revErr) {
+      console.error('[runVenueEmailOneTapAck] revert consumed_at failed:', revErr.message)
+    }
+    return {
+      kind: 'error',
+      message: 'We could not complete your confirmation. Please try again in a moment, or reply to the email.',
+    }
   }
 
   return { kind: 'thanks', captureKind, alreadyReceived: false }
@@ -131,7 +117,7 @@ async function applyOneTapSideEffects(
   supabase: SupabaseClient,
   row: {
     user_id: string
-    kind: EmailCaptureKind
+    kind: VenueEmailOneTapAckKind
     venue_id: string | null
     deal_id: string | null
     token_id: string
@@ -144,7 +130,7 @@ async function applyOneTapSideEffects(
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const { title, notes, priority } = taskForAckKind(row.kind, venueName, row)
+  const { title, notes, priority } = oneTapTaskSpec(row.kind, venueName, row)
 
   await supabase.from('tasks').insert({
     user_id: row.user_id,
@@ -159,50 +145,11 @@ async function applyOneTapSideEffects(
   })
 
   if (row.venue_id) {
-    const noteText = outreachNoteForAck(row.kind, venueName)
+    const noteText = oneTapOutreachNote(row.kind, venueName)
     await supabase.from('outreach_notes').insert({
       user_id: row.user_id,
       venue_id: row.venue_id,
       note: noteText,
     })
   }
-}
-
-function taskForAckKind(
-  kind: EmailCaptureKind,
-  venueName: string,
-  row: { deal_id: string | null; token_id: string },
-): { title: string; notes: string; priority: 'low' | 'medium' | 'high' } {
-  const dealLine = row.deal_id ? `deal_id: ${row.deal_id}` : 'deal_id: (none)'
-  const baseNotes = `Created from venue email one-tap acknowledgment.\nemail_capture_token_id: ${row.token_id}\n${dealLine}\nVerify on your end — venue self-service only.`
-
-  if (kind === 'payment_reminder_ack') {
-    return {
-      title: `Verify payment — ${venueName}`,
-      notes: `${baseNotes}\n\nVenue indicated they may have sent payment — confirm receipt outside this system.`,
-      priority: 'high',
-    }
-  }
-  if (kind === 'invoice_sent') {
-    return {
-      title: `Verify invoice acknowledgment — ${venueName}`,
-      notes: `${baseNotes}\n\nVenue confirmed they reviewed the invoice.`,
-      priority: 'medium',
-    }
-  }
-  return {
-    title: `Verify booking confirmation — ${venueName}`,
-    notes: `${baseNotes}\n\nVenue confirmed details via email link.`,
-    priority: 'medium',
-  }
-}
-
-function outreachNoteForAck(kind: EmailCaptureKind, venueName: string): string {
-  if (kind === 'payment_reminder_ack') {
-    return `[Email] ${venueName} tapped "Payment sent" - verify funds.`
-  }
-  if (kind === 'invoice_sent') {
-    return `[Email] ${venueName} confirmed invoice reviewed.`
-  }
-  return `[Email] ${venueName} confirmed booking details via link.`
 }

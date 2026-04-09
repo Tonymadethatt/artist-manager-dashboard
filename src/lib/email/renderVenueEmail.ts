@@ -89,7 +89,7 @@ export interface BuildVenueEmailDocumentOptions {
   responsiveClasses?: boolean
   /** Resolved billing / invoice link for `invoice_sent` (from queue notes or send payload). */
   invoiceUrl?: string | null
-  /** Public one-tap response page (email capture); GET landing + POST submit. */
+  /** Public one-tap confirmation URL (GET → Netlify function → thank-you HTML; no form POST). */
   captureUrl?: string | null
 }
 
