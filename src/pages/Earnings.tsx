@@ -55,6 +55,14 @@ import type { GeneratedFile } from '@/types'
 
 const PAGE_SIZE = 10
 
+const DEAL_FORM_TABS = [
+  { id: 'basics' as const, label: 'Show' },
+  { id: 'terms' as const, label: 'Terms' },
+  { id: 'agreement' as const, label: 'Agreement' },
+  { id: 'recap' as const, label: 'Recap' },
+]
+type DealFormTab = (typeof DEAL_FORM_TABS)[number]['id']
+
 function Paginator({ page, total, onPage }: { page: number; total: number; onPage: (p: number) => void }) {
   const totalPages = Math.ceil(total / PAGE_SIZE)
   if (totalPages <= 1) return null
@@ -646,6 +654,7 @@ export default function Earnings() {
   const [formToast, setFormToast] = useState<string | null>(null)
   const [promisePresets, setPromisePresets] = useState<Record<string, boolean>>(defaultPromisePresets)
   const [promiseCustomLines, setPromiseCustomLines] = useState<string[]>([''])
+  const [dealFormTab, setDealFormTab] = useState<DealFormTab>('basics')
 
   function showFormToast(msg: string) {
     setFormToast(msg)
@@ -735,6 +744,7 @@ export default function Earnings() {
     setEditDeal(null)
     setPromisePresets(defaultPromisePresets())
     setPromiseCustomLines([''])
+    setDealFormTab('basics')
     setAddOpen(true)
   }
 
@@ -759,6 +769,7 @@ export default function Earnings() {
     const customs = customLabelsFromDealDoc(deal.promise_lines ?? null)
     setPromiseCustomLines(customs.length ? customs : [''])
     setEditDeal(deal)
+    setDealFormTab('basics')
     setAddOpen(true)
   }
 
@@ -781,6 +792,7 @@ export default function Earnings() {
     const promiseDoc = buildPromiseLinesDocFromUi(promisePresets, promiseCustomLines)
     if (promiseDoc.lines.length === 0) {
       showFormToast('Select at least one show-report recap line (or add a custom line).')
+      setDealFormTab('recap')
       return
     }
     setSaving(true)
@@ -1222,231 +1234,262 @@ export default function Earnings() {
       )}
       <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
 
-      {/* Add / Edit dialog */}
+      {/* Add / Edit dialog — tabbed so it fits the viewport */}
       <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex h-[min(92dvh,52rem)] max-h-[min(92dvh,52rem)] w-full max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="shrink-0 space-y-0 border-b border-neutral-800 px-6 pb-3 pt-6 pr-14">
             <DialogTitle>{editDeal ? 'Edit deal' : 'Log a deal'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Description *</Label>
-              <Input
-                value={form.description}
-                onChange={e => setField('description', e.target.value)}
-                placeholder="e.g. Private event at Blue Room"
-                autoFocus
-              />
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Gross amount ($) *</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.gross_amount}
-                  onChange={e => setField('gross_amount', e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Show date (Pacific)</Label>
-                <Input
-                  type="date"
-                  value={form.event_date}
-                  onChange={e => setField('event_date', e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Start time</Label>
-                <Input
-                  type="time"
-                  value={form.event_start_time}
-                  onChange={e => setField('event_start_time', e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>End time</Label>
-                <Input
-                  type="time"
-                  value={form.event_end_time}
-                  onChange={e => setField('event_end_time', e.target.value)}
-                />
-              </div>
-            </div>
-            <p className="text-[10px] text-neutral-600 leading-snug">
-              If end is earlier than start on the same day, end is treated as the next calendar day (overnight gig).
-            </p>
-
-            <div className="space-y-1">
-              <Label>Commission tier *</Label>
-              <Select value={form.commission_tier} onValueChange={v => setField('commission_tier', v as CommissionTier)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new_doors">New Doors — 20% (pipeline venue you sourced)</SelectItem>
-                  <SelectItem value="kept_doors">Kept Doors — 20% (rebooking from your intro)</SelectItem>
-                  <SelectItem value="bigger_doors">Bigger Doors — 10% (artist closed, new client)</SelectItem>
-                  <SelectItem value="artist_network">Artist network — 0% (community venue; gross still tracked)</SelectItem>
-                </SelectContent>
-              </Select>
-              {form.venue_id && (venues.find(v => v.id === form.venue_id)?.outreach_track ?? 'pipeline') === 'community' && (
-                <p className="text-[10px] text-neutral-500 leading-snug">
-                  This venue is on the community track. Booking commission stays $0; you still log gross and payments for the artist.
-                </p>
-              )}
-            </div>
-
-            {previewCommission !== null && (
-              <div className="bg-neutral-800 rounded px-3 py-2 space-y-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-neutral-400">
-                    {form.commission_tier === 'artist_network' ? 'Booking commission (this deal)' : 'Your commission (this deal)'}
-                  </span>
-                  <span className={`text-sm font-bold tabular-nums ${form.commission_tier === 'artist_network' ? 'text-neutral-300' : 'text-green-400'}`}>
-                    {fmtMoney(previewCommission)}
-                  </span>
-                </div>
-                {form.commission_tier === 'artist_network' && (
-                  <p className="text-[10px] text-neutral-600 leading-snug">
-                    Retainers and pipeline deals are unchanged—this line is only the per-show booking commission on artist-network gigs.
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-1">
-              <Label>Venue (optional)</Label>
-              <Select
-                value={form.venue_id || '__none__'}
-                onValueChange={v => v === '__none__' ? setField('venue_id', '') : handleVenueSelect(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Link to a venue" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No venue</SelectItem>
-                  {venues.map(v => (
-                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Payment due date</Label>
-                <Input
-                  type="date"
-                  value={form.payment_due_date}
-                  onChange={e => setField('payment_due_date', e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Agreement PDF (from Files)</Label>
-              <AgreementPdfPicker
-                value={form.agreement_generated_file_id || null}
-                onChange={id => setField('agreement_generated_file_id', id ?? '')}
-                venueId={form.venue_id || null}
-                dealId={editDeal?.id ?? null}
-                preferScoped
-              />
-              <p className="text-[10px] text-neutral-600 leading-snug">
-                Links the deal to a generated PDF; the public share URL is saved on save. Use the field below for an external link (DocuSign, Drive) instead, or clear the PDF.
-              </p>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Agreement URL (optional manual / external)</Label>
-              <Input
-                type="url"
-                value={form.agreement_url}
-                onChange={e => setField('agreement_url', e.target.value)}
-                placeholder="https://…"
-              />
-              <p className="text-[10px] text-neutral-600">
-                If both PDF and URL are set, the PDF share link wins on save unless you clear the PDF.
-              </p>
-            </div>
-
-            <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-900/50 p-3">
-              <Label className="text-neutral-300">Show report recap</Label>
-              <p className="text-[10px] text-neutral-500 leading-snug">
-                Checklist on the artist post-show form. Up to 10 custom lines.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
-                {SHOW_REPORT_PRESETS.map(p => (
-                  <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={promisePresets[p.id] ?? false}
-                      onChange={e =>
-                        setPromisePresets(prev => ({ ...prev, [p.id]: e.target.checked }))
-                      }
-                      className="rounded border-neutral-600"
-                    />
-                    {p.label}
-                  </label>
-                ))}
-              </div>
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines</span>
-                {promiseCustomLines.map((line, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input
-                      value={line}
-                      onChange={e => {
-                        const v = e.target.value
-                        setPromiseCustomLines(prev => prev.map((s, j) => (j === i ? v : s)))
-                      }}
-                      placeholder={`Custom line ${i + 1}`}
-                      className="text-sm"
-                    />
-                    {promiseCustomLines.length > 1 ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 px-2"
-                        onClick={() => setPromiseCustomLines(prev => prev.filter((_, j) => j !== i))}
-                      >
-                        ✕
-                      </Button>
-                    ) : null}
-                  </div>
-                ))}
-                {promiseCustomLines.length < 10 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs text-neutral-400"
-                    onClick={() => setPromiseCustomLines(prev => [...prev, ''])}
-                  >
-                    + Add custom line
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input
-                value={form.notes}
-                onChange={e => setField('notes', e.target.value)}
-                placeholder="Any deal notes…"
-              />
+          <div
+            className="shrink-0 border-b border-neutral-800 px-4 pt-2 pb-2"
+            role="tablist"
+            aria-label="Deal form sections"
+          >
+            <div className="flex gap-0.5 rounded-lg border border-neutral-700/90 bg-neutral-900/90 p-1">
+              {DEAL_FORM_TABS.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={dealFormTab === t.id}
+                  className={cn(
+                    'min-w-0 flex-1 rounded-md px-2 py-1.5 text-center text-[11px] font-semibold transition-colors',
+                    dealFormTab === t.id
+                      ? 'bg-neutral-600 text-white shadow-sm'
+                      : 'text-neutral-500 hover:bg-neutral-800/80 hover:text-neutral-300',
+                  )}
+                  onClick={() => setDealFormTab(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-3">
+            {dealFormTab === 'basics' && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Description *</Label>
+                  <Input
+                    value={form.description}
+                    onChange={e => setField('description', e.target.value)}
+                    placeholder="e.g. Private event at Blue Room"
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Show date (Pacific)</Label>
+                  <Input
+                    type="date"
+                    value={form.event_date}
+                    onChange={e => setField('event_date', e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Start time</Label>
+                    <Input
+                      type="time"
+                      value={form.event_start_time}
+                      onChange={e => setField('event_start_time', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>End time</Label>
+                    <Input
+                      type="time"
+                      value={form.event_end_time}
+                      onChange={e => setField('event_end_time', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-neutral-600 leading-snug">
+                  If end is earlier than start on the same day, end is treated as the next calendar day (overnight gig).
+                </p>
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <Input
+                    value={form.notes}
+                    onChange={e => setField('notes', e.target.value)}
+                    placeholder="Any deal notes…"
+                  />
+                </div>
+              </div>
+            )}
+
+            {dealFormTab === 'terms' && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Gross amount ($) *</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.gross_amount}
+                    onChange={e => setField('gross_amount', e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Commission tier *</Label>
+                  <Select value={form.commission_tier} onValueChange={v => setField('commission_tier', v as CommissionTier)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new_doors">New Doors — 20% (pipeline venue you sourced)</SelectItem>
+                      <SelectItem value="kept_doors">Kept Doors — 20% (rebooking from your intro)</SelectItem>
+                      <SelectItem value="bigger_doors">Bigger Doors — 10% (artist closed, new client)</SelectItem>
+                      <SelectItem value="artist_network">Artist network — 0% (community venue; gross still tracked)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {form.venue_id && (venues.find(v => v.id === form.venue_id)?.outreach_track ?? 'pipeline') === 'community' && (
+                    <p className="text-[10px] text-neutral-500 leading-snug">
+                      This venue is on the community track. Booking commission stays $0; you still log gross and payments for the artist.
+                    </p>
+                  )}
+                </div>
+                {previewCommission !== null && (
+                  <div className="bg-neutral-800 rounded px-3 py-2 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-neutral-400">
+                        {form.commission_tier === 'artist_network' ? 'Booking commission (this deal)' : 'Your commission (this deal)'}
+                      </span>
+                      <span className={`text-sm font-bold tabular-nums ${form.commission_tier === 'artist_network' ? 'text-neutral-300' : 'text-green-400'}`}>
+                        {fmtMoney(previewCommission)}
+                      </span>
+                    </div>
+                    {form.commission_tier === 'artist_network' && (
+                      <p className="text-[10px] text-neutral-600 leading-snug">
+                        Retainers and pipeline deals are unchanged—this line is only the per-show booking commission on artist-network gigs.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Venue (optional)</Label>
+                  <Select
+                    value={form.venue_id || '__none__'}
+                    onValueChange={v => v === '__none__' ? setField('venue_id', '') : handleVenueSelect(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Link to a venue" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No venue</SelectItem>
+                      {venues.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Payment due date</Label>
+                  <Input
+                    type="date"
+                    value={form.payment_due_date}
+                    onChange={e => setField('payment_due_date', e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {dealFormTab === 'agreement' && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Agreement PDF (from Files)</Label>
+                  <AgreementPdfPicker
+                    value={form.agreement_generated_file_id || null}
+                    onChange={id => setField('agreement_generated_file_id', id ?? '')}
+                    venueId={form.venue_id || null}
+                    dealId={editDeal?.id ?? null}
+                    preferScoped
+                  />
+                  <p className="text-[10px] text-neutral-600 leading-snug">
+                    Links the deal to a generated PDF; the public share URL is saved on save. Use the field below for an external link (DocuSign, Drive) instead, or clear the PDF.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Agreement URL (optional manual / external)</Label>
+                  <Input
+                    type="url"
+                    value={form.agreement_url}
+                    onChange={e => setField('agreement_url', e.target.value)}
+                    placeholder="https://…"
+                  />
+                  <p className="text-[10px] text-neutral-600">
+                    If both PDF and URL are set, the PDF share link wins on save unless you clear the PDF.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {dealFormTab === 'recap' && (
+              <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-900/50 p-3">
+                <Label className="text-neutral-300">Show report recap</Label>
+                <p className="text-[10px] text-neutral-500 leading-snug">
+                  Checklist on the artist post-show form. Up to 10 custom lines.
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 max-h-[min(40vh,16rem)] overflow-y-auto pr-1">
+                  {SHOW_REPORT_PRESETS.map(p => (
+                    <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={promisePresets[p.id] ?? false}
+                        onChange={e =>
+                          setPromisePresets(prev => ({ ...prev, [p.id]: e.target.checked }))
+                        }
+                        className="rounded border-neutral-600"
+                      />
+                      {p.label}
+                    </label>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines</span>
+                  {promiseCustomLines.map((line, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        value={line}
+                        onChange={e => {
+                          const v = e.target.value
+                          setPromiseCustomLines(prev => prev.map((s, j) => (j === i ? v : s)))
+                        }}
+                        placeholder={`Custom line ${i + 1}`}
+                        className="text-sm"
+                      />
+                      {promiseCustomLines.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 px-2"
+                          onClick={() => setPromiseCustomLines(prev => prev.filter((_, j) => j !== i))}
+                        >
+                          ✕
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))}
+                  {promiseCustomLines.length < 10 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-neutral-400"
+                      onClick={() => setPromiseCustomLines(prev => [...prev, ''])}
+                    >
+                      + Add custom line
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-0 shrink-0 gap-2 border-t border-neutral-800 bg-neutral-950/90 px-6 py-3 backdrop-blur-sm">
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button
               onClick={handleSave}
