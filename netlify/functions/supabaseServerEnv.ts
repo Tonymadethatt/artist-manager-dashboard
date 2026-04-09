@@ -39,3 +39,16 @@ export function getSupabaseServerEnv(): {
   const { value: serviceRoleKey, sourceKey: serviceRoleSourceKey } = pickFirstEnv(SERVICE_ROLE_ENV_KEYS)
   return { supabaseUrl, serviceRoleKey, urlSourceKey, serviceRoleSourceKey }
 }
+
+/** Anon key for JWT verification in functions (Auth getUser). */
+const ANON_ENV_KEYS = [
+  'SUPABASE_ANON_KEY',
+  'VITE_SUPABASE_ANON_KEY',
+  'supabase_anon_key',
+  'vite_supabase_anon_key',
+] as const
+
+export function getSupabaseAnonKey(): string | undefined {
+  const { value } = pickFirstEnv(ANON_ENV_KEYS)
+  return value
+}

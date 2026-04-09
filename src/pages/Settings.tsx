@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
 import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
@@ -132,6 +134,7 @@ export default function Settings() {
   const savingRef = useRef(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [icsTestSending, setIcsTestSending] = useState(false)
 
   const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -213,6 +216,41 @@ export default function Settings() {
     onApplyPreset: (v: string) => applyPreset(key, v),
     onDeletePreset: handleDeletePreset,
   })
+
+  const sendDevIcsTest = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      showToast('Sign in again to send the test.', 'err')
+      return
+    }
+    setIcsTestSending(true)
+    try {
+      const res = await fetch('/.netlify/functions/send-dev-ics-test', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      })
+      let data: { message?: string } = {}
+      try {
+        data = (await res.json()) as { message?: string }
+      } catch {
+        /* empty body */
+      }
+      if (!res.ok) {
+        const msg = typeof data.message === 'string' ? data.message : `Request failed (${res.status})`
+        showToast(msg, 'err')
+        return
+      }
+      showToast(typeof data.message === 'string' ? data.message : 'Test .ics sent.', 'ok')
+    } catch {
+      showToast('Network error. Try again.', 'err')
+    } finally {
+      setIcsTestSending(false)
+    }
+  }, [showToast])
 
   if (loading) {
     return (
@@ -411,6 +449,24 @@ export default function Settings() {
             </div>
           </div>
         </SectionCard>
+
+        {import.meta.env.VITE_ENABLE_ICS_DEV_TOOL === 'true' && (
+          <SectionCard
+            title="Developer (ICS test)"
+            description="Internal / experimental. Sends a sample calendar file to your manager email for validating Add to calendar on a real device. Requires manager email (or artist email) and a verified Send from address in Report settings."
+            className="lg:col-span-2"
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={icsTestSending}
+              onClick={() => void sendDevIcsTest()}
+            >
+              {icsTestSending ? 'Sending…' : 'Send test .ics to manager email'}
+            </Button>
+          </SectionCard>
+        )}
       </div>
     </div>
   )
