@@ -1,2 +1,3 @@
 /agreements/*  /.netlify/functions/public-agreement-pdf?slug=:splat  200
+/venue-email-ack/*  /.netlify/functions/venue-email-ack?token=:splat  200
 /* /index.html 200
