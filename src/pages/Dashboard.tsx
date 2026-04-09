@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckSquare, AlertCircle, DollarSign, Inbox,
@@ -16,6 +16,8 @@ import {
   type OutreachStatus,
   type VenueEmailType,
 } from '@/types'
+import { Button } from '@/components/ui/button'
+import { isIcsDevToolEnabled, sendDevIcsTestEmail } from '@/lib/dev/icsDevTest'
 import { cn } from '@/lib/utils'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -106,6 +108,32 @@ export default function Dashboard() {
   const { fees,   loading: l3 } = useMonthlyFees()
   const { tasks,  loading: l4 } = useTasks()
   const { emails, loading: l5 } = useVenueEmails()
+
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [icsTestSending, setIcsTestSending] = useState(false)
+
+  const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 2200)
+  }, [])
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+  }, [])
+
+  const sendDevIcsFromOverview = useCallback(async () => {
+    setIcsTestSending(true)
+    try {
+      const { ok, message } = await sendDevIcsTestEmail()
+      showToast(message, ok ? 'ok' : 'err')
+    } catch {
+      showToast('Network error. Try again.', 'err')
+    } finally {
+      setIcsTestSending(false)
+    }
+  }, [showToast])
 
   const today    = new Date().toISOString().split('T')[0]
   const weekEnd  = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
@@ -240,6 +268,45 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5 max-w-5xl">
+      {toast && (
+        <div
+          className={cn(
+            'fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border',
+            toast.type === 'ok'
+              ? 'bg-neutral-900 border-emerald-500/30 text-emerald-400'
+              : 'bg-neutral-900 border-red-500/30 text-red-400'
+          )}
+          role="status"
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      {isIcsDevToolEnabled() && (
+        <Card className="border-dashed border-neutral-700">
+          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-xs font-medium text-neutral-400">Developer — calendar test</p>
+              <p className="text-xs text-neutral-600 leading-snug max-w-xl">
+                Sends a sample <span className="text-neutral-500">.ics</span> to your manager email. Needs manager (or artist) email and verified Send from in{' '}
+                <Link to="/settings" className="text-neutral-400 hover:text-neutral-300 underline-offset-2 hover:underline">
+                  Settings
+                </Link>
+                .
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="shrink-0 w-full sm:w-auto"
+              disabled={icsTestSending}
+              onClick={() => void sendDevIcsFromOverview()}
+            >
+              {icsTestSending ? 'Sending…' : 'Send test .ics to manager email'}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* ── Row 1: Stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

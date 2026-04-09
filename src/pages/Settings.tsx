@@ -4,7 +4,7 @@ import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
 import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { supabase } from '@/lib/supabase'
+import { isIcsDevToolEnabled, sendDevIcsTestEmail } from '@/lib/dev/icsDevTest'
 import { cn } from '@/lib/utils'
 import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
@@ -218,33 +218,10 @@ export default function Settings() {
   })
 
   const sendDevIcsTest = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      showToast('Sign in again to send the test.', 'err')
-      return
-    }
     setIcsTestSending(true)
     try {
-      const res = await fetch('/.netlify/functions/send-dev-ics-test', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-      })
-      let data: { message?: string } = {}
-      try {
-        data = (await res.json()) as { message?: string }
-      } catch {
-        /* empty body */
-      }
-      if (!res.ok) {
-        const msg = typeof data.message === 'string' ? data.message : `Request failed (${res.status})`
-        showToast(msg, 'err')
-        return
-      }
-      showToast(typeof data.message === 'string' ? data.message : 'Test .ics sent.', 'ok')
+      const { ok, message } = await sendDevIcsTestEmail()
+      showToast(message, ok ? 'ok' : 'err')
     } catch {
       showToast('Network error. Try again.', 'err')
     } finally {
@@ -450,7 +427,7 @@ export default function Settings() {
           </div>
         </SectionCard>
 
-        {import.meta.env.VITE_ENABLE_ICS_DEV_TOOL === 'true' && (
+        {isIcsDevToolEnabled() && (
           <SectionCard
             title="Developer (ICS test)"
             description="Internal / experimental. Sends a sample calendar file to your manager email for validating Add to calendar on a real device. Requires manager email (or artist email) and a verified Send from address in Report settings."
