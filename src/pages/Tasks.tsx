@@ -194,6 +194,7 @@ export default function Tasks() {
     } else {
       await completeTask(task.id)
       await refreshNavBadges()
+      if (task.deal_id || task.venue_id) await refetchDeals()
     }
     setToggling(null)
   }

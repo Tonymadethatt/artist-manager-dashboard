@@ -200,17 +200,18 @@ export function useTasks() {
     const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, emailOptions ?? {})
 
     if (completedTaskRow.deal_id) {
+      // Backfill show instants inside ensureDealCalendarEmailsQueued; run before stamp so RPC sees a qualified deal.
+      await ensureDealCalendarEmailsQueued(completedTaskRow.deal_id)
       const { error: stampErr } = await supabase.rpc('ensure_deal_calendar_listing_stamp', {
         p_deal_id: completedTaskRow.deal_id,
       })
       if (stampErr) console.warn('[useTasks] ensure_deal_calendar_listing_stamp', stampErr.message)
-      await ensureDealCalendarEmailsQueued(completedTaskRow.deal_id)
     } else if (completedTaskRow.venue_id) {
+      await ensureCalendarEmailsForVenueDeals(completedTaskRow.venue_id)
       const { error: stampErr } = await supabase.rpc('ensure_calendar_listing_stamps_for_venue', {
         p_venue_id: completedTaskRow.venue_id,
       })
       if (stampErr) console.warn('[useTasks] ensure_calendar_listing_stamps_for_venue', stampErr.message)
-      await ensureCalendarEmailsForVenueDeals(completedTaskRow.venue_id)
     }
 
     if (completedTaskRow.email_type) {

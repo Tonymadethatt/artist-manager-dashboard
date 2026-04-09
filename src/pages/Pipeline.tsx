@@ -197,7 +197,7 @@ export default function Pipeline() {
     dismissEmailAutomationFeedback,
   } = useTasks()
   const { venues, updateVenue } = useVenues()
-  const { deals } = useDeals()
+  const { deals, refetch: refetchDeals } = useDeals()
   const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
   const { applyTemplate } = useTaskTemplates()
   const { rows: customEmailRows } = useCustomEmailTemplates()
@@ -384,9 +384,10 @@ export default function Pipeline() {
       return result
     }
     await refreshNavBadges()
+    if (task?.deal_id || task?.venue_id) await refetchDeals()
     showToast(task ? `"${task.title}" marked complete` : 'Task completed')
     return result
-  }, [completeTask, tasks, showToast, refreshNavBadges])
+  }, [completeTask, tasks, showToast, refreshNavBadges, refetchDeals])
 
   const handleUncompleteTask = useCallback(async (id: string) => {
     const result = await uncompleteTask(id)

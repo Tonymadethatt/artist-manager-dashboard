@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import type { Deal, Venue } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS } from '@/types'
+import { backfillDealShowInstantsIfNeeded } from '@/lib/calendar/backfillDealShowInstants'
 import { calendarQualificationFirstTouch, dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 
 type VenueStatus = Pick<Venue, 'status'> | null | undefined
@@ -105,6 +106,8 @@ export async function syncDealCalendarEmails(args: {
  * (e.g. task completion or venue status change).
  */
 export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<void> {
+  await backfillDealShowInstantsIfNeeded(dealId)
+
   const { data: dealRow, error: dErr } = await supabase
     .from('deals')
     .select('*')
