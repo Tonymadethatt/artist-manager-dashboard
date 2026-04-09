@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckSquare, AlertCircle, DollarSign, Inbox,
-  ArrowRight, Clock, Building2, Mail,
+  ArrowRight, Clock, Building2, Mail, Calendar,
 } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
@@ -17,7 +17,7 @@ import {
   type VenueEmailType,
 } from '@/types'
 import { Button } from '@/components/ui/button'
-import { isIcsDevToolEnabled, sendDevIcsTestEmail } from '@/lib/dev/icsDevTest'
+import { sendDevIcsTestEmail } from '@/lib/dev/icsDevTest'
 import { cn } from '@/lib/utils'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -258,56 +258,57 @@ export default function Dashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const toastEl = toast && (
+    <div
+      className={cn(
+        'fixed top-4 right-4 z-[200] max-w-[min(100vw-2rem,20rem)] px-4 py-2 rounded-lg text-sm font-medium shadow-lg border',
+        toast.type === 'ok'
+          ? 'bg-neutral-900 border-emerald-500/30 text-emerald-400'
+          : 'bg-neutral-900 border-red-500/30 text-red-400'
+      )}
+      role="status"
+    >
+      {toast.msg}
+    </div>
+  )
+
+  /** Fixed to viewport — outside dashboard layout. Always on Overview; server still validates session + profile. */
+  const devIcsFab = (
+    <Button
+      type="button"
+      variant="secondary"
+      className={cn(
+        'fixed bottom-4 right-4 z-[200] h-12 rounded-full px-4 shadow-lg border border-neutral-700',
+        'bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-xs font-medium',
+        'flex items-center gap-2 sm:bottom-6 sm:right-6',
+        icsTestSending && 'opacity-80 pointer-events-none'
+      )}
+      disabled={icsTestSending}
+      onClick={() => void sendDevIcsFromOverview()}
+      title="Sends a test .ics to your manager email. Needs manager (or artist) email and verified Send from in Settings."
+    >
+      <Calendar className="size-4 shrink-0 text-neutral-400" aria-hidden />
+      {icsTestSending ? 'Sending…' : 'ICS test'}
+    </Button>
+  )
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
-      </div>
+      <>
+        {toastEl}
+        {devIcsFab}
+        <div className="flex items-center justify-center py-24">
+          <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
-      {toast && (
-        <div
-          className={cn(
-            'fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border',
-            toast.type === 'ok'
-              ? 'bg-neutral-900 border-emerald-500/30 text-emerald-400'
-              : 'bg-neutral-900 border-red-500/30 text-red-400'
-          )}
-          role="status"
-        >
-          {toast.msg}
-        </div>
-      )}
-
-      {isIcsDevToolEnabled() && (
-        <Card className="border-dashed border-neutral-700">
-          <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-0.5 min-w-0">
-              <p className="text-xs font-medium text-neutral-400">Developer — calendar test</p>
-              <p className="text-xs text-neutral-600 leading-snug max-w-xl">
-                Sends a sample <span className="text-neutral-500">.ics</span> to your manager email. Needs manager (or artist) email and verified Send from in{' '}
-                <Link to="/settings" className="text-neutral-400 hover:text-neutral-300 underline-offset-2 hover:underline">
-                  Settings
-                </Link>
-                .
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="shrink-0 w-full sm:w-auto"
-              disabled={icsTestSending}
-              onClick={() => void sendDevIcsFromOverview()}
-            >
-              {icsTestSending ? 'Sending…' : 'Send test .ics to manager email'}
-            </Button>
-          </div>
-        </Card>
-      )}
-
+    <>
+      {toastEl}
+      {devIcsFab}
+      <div className="space-y-5 max-w-5xl">
       {/* ── Row 1: Stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Tasks due */}
@@ -577,6 +578,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-    </div>
+      </div>
+    </>
   )
 }
