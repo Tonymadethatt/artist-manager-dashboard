@@ -446,6 +446,9 @@ export interface PerformanceReport {
   attendance: number | null
   artist_paid_status: 'yes' | 'no' | 'partial' | null
   payment_amount: number | null
+  fee_total: number | null
+  amount_received: number | null
+  payment_dispute_claimed_amount: number | null
   venue_interest: 'yes' | 'no' | 'unsure' | null
   relationship_quality: 'good' | 'neutral' | 'poor' | null
   notes: string | null
@@ -475,7 +478,7 @@ export interface PerformanceReport {
   creation_source: 'task_automation' | 'artist_email' | 'manager_dashboard' | null
   submitted_by: 'artist_link' | 'manager_dashboard' | null
   venue?: Pick<Venue, 'id' | 'name'> | null
-  deal?: Pick<Deal, 'id' | 'description' | 'event_date'> | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount'> | null
 }
 
 export interface VenueEmail {

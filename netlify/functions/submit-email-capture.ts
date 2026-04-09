@@ -17,9 +17,8 @@ function bad(msg: string, code = 400) {
 function validatePayload(kind: EmailCaptureKind, payload: Record<string, unknown>): string | null {
   switch (kind) {
     case 'pre_event_checkin': {
-      if (!String(payload.loadInOrSoundcheck ?? '').trim() && !String(payload.settlementMethod ?? '').trim()) {
-        return 'Add load-in or settlement details'
-      }
+      if (!String(payload.loadInOrSoundcheck ?? '').trim()) return 'Select load-in / soundcheck timing'
+      if (!String(payload.settlementMethod ?? '').trim()) return 'Select settlement method'
       return null
     }
     case 'first_outreach': {

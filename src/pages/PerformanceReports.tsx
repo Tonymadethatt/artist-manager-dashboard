@@ -75,9 +75,12 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
     { label: 'Did event happen', value: report.event_happened ?? '-' },
     ...(cancel ? [{ label: 'Situation', value: cancel }] : []),
     { label: 'Rating', value: report.event_rating ? `${report.event_rating}/5` : '-' },
-    { label: 'Attendance (est.)', value: report.attendance ? `~${report.attendance}` : '-' },
+    { label: 'Attendance', value: report.attendance != null ? String(report.attendance) : '-' },
     { label: 'Artist paid', value: report.artist_paid_status ?? '-' },
-    { label: 'Amount reported', value: report.payment_amount ? `$${report.payment_amount}` : '-' },
+    { label: 'Gig fee (reported)', value: report.fee_total != null ? `$${report.fee_total}` : '-' },
+    { label: 'Amount received', value: report.amount_received != null ? `$${report.amount_received}` : '-' },
+    { label: 'Disputed owed (claim)', value: report.payment_dispute_claimed_amount != null ? `$${report.payment_dispute_claimed_amount}` : '-' },
+    { label: 'Amount reported (legacy)', value: report.payment_amount ? `$${report.payment_amount}` : '-' },
     { label: 'Chase payment ask', value: report.chase_payment_followup ?? '-' },
     { label: 'Payment disagreement', value: report.payment_dispute ?? '-' },
     { label: 'Production / safety', value: report.production_issue_level ?? '-' },
@@ -200,12 +203,17 @@ export default function PerformanceReports() {
     const venueName = report.venue?.name ?? null
     const eventDate = report.deal?.event_date ?? null
     const dealDescription = report.deal?.description ?? null
+    const selectedDeal = manualDealId ? deals.find(d => d.id === manualDealId) : null
+    const dealGrossAmount =
+      selectedDeal?.gross_amount != null && Number.isFinite(Number(selectedDeal.gross_amount))
+        ? Number(selectedDeal.gross_amount)
+        : null
     setManualOpen(false)
     setManualVenueId('')
     setManualDealId('')
     goManualWizard({
       token: report.token,
-      context: { venueName, eventDate, dealDescription },
+      context: { venueName, eventDate, dealDescription, dealGrossAmount },
     })
   }
 

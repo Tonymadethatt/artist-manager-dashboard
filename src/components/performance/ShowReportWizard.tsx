@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { CheckCircle2, Loader2, ClipboardList } from 'lucide-react'
 import {
-  ATTENDANCE_BAND_TO_NUMBER,
   CANCELLATION_REASON_LABELS,
-  PARTIAL_PAYMENT_PRESETS,
   PRODUCTION_FRICTION_OPTIONS,
   type CancellationReason,
 } from '@/lib/performanceReportV1'
@@ -21,6 +19,8 @@ export interface ShowReportFormContext {
   venueName: string | null
   eventDate: string | null
   dealDescription: string | null
+  /** Deal `gross_amount` on file — prefill gig fee in the wizard when present. */
+  dealGrossAmount?: number | null
 }
 
 export interface ShowReportWizardProps {
@@ -49,72 +49,67 @@ interface FormAnswers {
   eventHappened: 'yes' | 'no' | 'postponed' | ''
   cancellationReason: CancellationReason | ''
   eventRating: number | null
-  attendanceBand: string
+  /** Exact headcount; null = not entered yet. */
+  attendanceCount: number | null
+  gigFeeTotal: string
+  amountReceived: string
+  /** Optional when payment dispute = yes */
+  paymentDisputeClaimedAmount: string
   crowdEnergy: 'electric' | 'warm' | 'flat' | 'hostile' | ''
   artistPaidStatus: 'yes' | 'no' | 'partial' | ''
-  paymentPreset: string
-  paymentAmount: string
-  chasePaymentFollowup: 'no' | 'unsure' | 'yes' | ''
   paymentDispute: 'no' | 'yes' | ''
-  supplementalIncome: 'none' | 'under_50' | '50_150' | 'over_150' | ''
+  /** Merch sales only (not tips / personal cash). */
+  merchIncome: 'yes' | 'no' | ''
+  merchIncomeAmount: string
   productionIssueLevel: 'none' | 'minor' | 'serious' | ''
   productionFrictionTags: string[]
   venueDelivered: 'yes_good' | 'mostly_off' | 'significant_gaps' | ''
   venueInterest: 'yes' | 'no' | 'unsure' | ''
   relationshipQuality: 'good' | 'neutral' | 'poor' | ''
   rebookingTimeline: 'this_month' | 'this_quarter' | 'later' | 'not_discussed' | ''
-  wantsBookingCall: 'no' | 'yes' | ''
   wouldPlayAgain: 'yes' | 'maybe' | 'no' | ''
-  wantsManagerVenueContact: 'no' | 'yes' | ''
   referralLead: 'no' | 'yes' | ''
   referralDetail: string
   noteChipIds: string[]
   notesExtra: string
-  mediaChoice: 'unset' | 'none' | 'links'
-  mediaLinks: string
 }
 
 const EMPTY: FormAnswers = {
   eventHappened: '',
   cancellationReason: '',
   eventRating: null,
-  attendanceBand: '',
+  attendanceCount: null,
   crowdEnergy: '',
   artistPaidStatus: '',
-  paymentPreset: '',
-  paymentAmount: '',
-  chasePaymentFollowup: '',
+  gigFeeTotal: '',
+  amountReceived: '',
+  paymentDisputeClaimedAmount: '',
   paymentDispute: '',
-  supplementalIncome: '',
+  merchIncome: '',
+  merchIncomeAmount: '',
   productionIssueLevel: '',
   productionFrictionTags: [],
   venueDelivered: '',
   venueInterest: '',
   relationshipQuality: '',
   rebookingTimeline: '',
-  wantsBookingCall: '',
   wouldPlayAgain: '',
-  wantsManagerVenueContact: '',
   referralLead: '',
   referralDetail: '',
   noteChipIds: [],
   notesExtra: '',
-  mediaChoice: 'unset',
-  mediaLinks: '',
 }
 
-const CROWD_ENERGY_OPTIONS: { value: FormAnswers['crowdEnergy']; label: string }[] = [
-  { value: 'electric', label: 'Electric — they were into it' },
-  { value: 'warm', label: 'Warm — decent energy' },
-  { value: 'flat', label: 'Flat — tough crowd' },
-  { value: 'hostile', label: 'Hostile — rough night' },
-]
-
-const SUPPLEMENTAL_INCOME_OPTIONS: { value: FormAnswers['supplementalIncome']; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'under_50', label: 'Under $50' },
-  { value: '50_150', label: '$50–$150' },
-  { value: 'over_150', label: '$150+' },
+/** Left (negative) → right (positive); payload `id` values unchanged. */
+const CROWD_ENERGY_STEPS: {
+  id: Exclude<FormAnswers['crowdEnergy'], ''>
+  emoji: string
+  label: string
+}[] = [
+  { id: 'hostile', emoji: '😠', label: 'Hostile' },
+  { id: 'flat', emoji: '😑', label: 'Flat' },
+  { id: 'warm', emoji: '🙂', label: 'Warm' },
+  { id: 'electric', emoji: '⚡', label: 'Electric' },
 ]
 
 const VENUE_DELIVERED_OPTIONS: { value: FormAnswers['venueDelivered']; label: string }[] = [
@@ -128,8 +123,7 @@ type WizardPhase1 =
   | 'attendance'
   | 'crowd_energy'
   | 'paid'
-  | 'partial'
-  | 'chase'
+  | 'economics'
   | 'dispute'
   | 'supplemental_income'
   | 'production'
@@ -140,23 +134,18 @@ type WizardVenuePhase =
   | 'venue_int'
   | 'rel'
   | 'timeline'
-  | 'booking_call'
   | 'play'
-  | 'mgr'
   | 'referral'
   | 'referral_detail'
   | 'notes'
-  | 'media'
   | 'done'
 
 function buildWizardPhase1Flow(a: FormAnswers): WizardPhase1[] {
   const flow: WizardPhase1[] = ['rating', 'attendance', 'crowd_energy', 'paid']
   if (!a.artistPaidStatus) {
-    return [...flow, 'partial', 'chase', 'dispute', 'supplemental_income', 'production', 'venue_delivered', 'friction']
+    return [...flow, 'economics', 'dispute', 'supplemental_income', 'production', 'venue_delivered', 'friction']
   }
-  if (a.artistPaidStatus === 'partial') flow.push('partial', 'chase')
-  else if (a.artistPaidStatus === 'no') flow.push('chase')
-  flow.push('dispute', 'supplemental_income', 'production', 'venue_delivered')
+  flow.push('economics', 'dispute', 'supplemental_income', 'production', 'venue_delivered')
   if (a.productionIssueLevel === 'minor' || a.productionIssueLevel === 'serious') flow.push('friction')
   else if (!a.productionIssueLevel) flow.push('friction')
   return flow
@@ -164,11 +153,10 @@ function buildWizardPhase1Flow(a: FormAnswers): WizardPhase1[] {
 
 function buildWizardVenueFlow(a: FormAnswers): Exclude<WizardVenuePhase, 'done'>[] {
   const flow: Exclude<WizardVenuePhase, 'done'>[] = ['venue_int', 'rel']
-  if (a.venueInterest === 'yes') flow.push('timeline', 'booking_call')
-  else if (!a.venueInterest) flow.push('timeline', 'booking_call')
-  flow.push('play', 'mgr', 'referral')
+  if (a.venueInterest === 'yes') flow.push('timeline')
+  flow.push('play', 'referral')
   if (a.referralLead === 'yes') flow.push('referral_detail')
-  flow.push('notes', 'media')
+  flow.push('notes')
   return flow
 }
 
@@ -264,111 +252,138 @@ function SelectField({
   )
 }
 
-const RATING_ROWS: { n: number; hint: string }[][] = [
-  [
-    { n: 1, hint: 'Rough' },
-    { n: 2, hint: 'Okay' },
-    { n: 3, hint: 'Decent' },
-  ],
-  [
-    { n: 4, hint: 'Great' },
-    { n: 5, hint: 'Amazing' },
-  ],
+const RATING_STEPS: { n: number; emoji: string; label: string }[] = [
+  { n: 1, emoji: '😟', label: 'Rough' },
+  { n: 2, emoji: '😐', label: 'Okay' },
+  { n: 3, emoji: '🙂', label: 'Decent' },
+  { n: 4, emoji: '😊', label: 'Great' },
+  { n: 5, emoji: '🤩', label: 'Amazing' },
 ]
 
-function RatingField({
+function CrowdEnergyField({
   value,
   onChange,
-  onSkip,
 }: {
-  value: number | null
-  onChange: (v: number) => void
-  /** One-question flow: skip without choosing a score */
-  onSkip?: () => void
+  value: FormAnswers['crowdEnergy']
+  onChange: (v: Exclude<FormAnswers['crowdEnergy'], ''>) => void
 }) {
   return (
     <div className="mb-5">
-      <label className="block text-sm font-medium text-white mb-2">
-        How did it go overall? <span className="text-neutral-300 font-normal">(optional)</span>
-      </label>
-      <div className="flex flex-col gap-2">
-        {RATING_ROWS.map((row, ri) => (
-          <div key={ri} className="flex gap-2">
-            {row.map(({ n, hint }) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => onChange(n)}
-                className={`min-h-[48px] flex-1 flex flex-col items-center justify-center rounded-lg border text-sm transition-all ${
-                  value === n
-                    ? 'bg-white text-black border-white font-semibold'
-                    : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white'
-                }`}
-              >
-                <span className="text-base leading-none">{n}</span>
-                <span className="text-[10px] mt-0.5 opacity-80">{hint}</span>
-              </button>
-            ))}
-          </div>
-        ))}
+      <label className="block text-sm font-medium text-white mb-3">How was the crowd energy?</label>
+      <div
+        className="relative rounded-xl border border-neutral-700 bg-neutral-950/80 p-1.5 sm:p-2"
+        role="radiogroup"
+        aria-label="Crowd energy"
+      >
+        <div
+          className="absolute left-2 right-2 top-1/2 h-px -translate-y-1/2 bg-neutral-700 pointer-events-none hidden sm:block"
+          aria-hidden
+        />
+        <div className="relative flex gap-1 sm:gap-1.5 w-full">
+          {CROWD_ENERGY_STEPS.map(({ id, emoji, label }) => (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={value === id}
+              onClick={() => onChange(id)}
+              className={`min-h-[56px] flex-1 min-w-0 flex flex-col items-center justify-center rounded-lg border px-0.5 py-2 transition-all ${
+                value === id
+                  ? 'bg-white text-black border-white shadow-sm z-[1]'
+                  : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:bg-neutral-900'
+              }`}
+            >
+              <span className="text-2xl sm:text-[1.65rem] leading-none select-none" aria-hidden>
+                {emoji}
+              </span>
+              <span className="text-[10px] sm:text-xs mt-1 font-medium leading-tight text-center">{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      {onSkip ? (
-        <button
-          type="button"
-          onClick={onSkip}
-          className="mt-3 text-sm font-medium text-neutral-200 hover:text-white"
-        >
-          Skip for now
-        </button>
-      ) : null}
     </div>
   )
 }
 
-const ATTENDANCE_BANDS = [
-  { value: 'under_50', label: 'Under 50' },
-  { value: '50_150', label: '50 – 150' },
-  { value: '150_300', label: '150 – 300' },
-  { value: '300_500', label: '300 – 500' },
-  { value: 'over_500', label: '500+' },
-  { value: 'skip', label: 'Rather not say' },
-] as const
+function RatingField({ value, onChange }: { value: number | null; onChange: (v: number) => void }) {
+  return (
+    <div className="mb-5">
+      <label className="block text-sm font-medium text-white mb-3">How did it go overall?</label>
+      <div
+        className="relative rounded-xl border border-neutral-700 bg-neutral-950/80 p-1.5 sm:p-2"
+        role="radiogroup"
+        aria-label="Overall show rating"
+      >
+        <div className="absolute left-2 right-2 top-1/2 h-px -translate-y-1/2 bg-neutral-700 pointer-events-none hidden sm:block" aria-hidden />
+        <div className="relative flex gap-1 sm:gap-1.5 w-full">
+          {RATING_STEPS.map(({ n, emoji, label }) => (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={value === n}
+              onClick={() => onChange(n)}
+              className={`min-h-[56px] flex-1 min-w-0 flex flex-col items-center justify-center rounded-lg border px-0.5 py-2 transition-all ${
+                value === n
+                  ? 'bg-white text-black border-white shadow-sm z-[1]'
+                  : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:bg-neutral-900'
+              }`}
+            >
+              <span className="text-2xl sm:text-[1.65rem] leading-none select-none" aria-hidden>
+                {emoji}
+              </span>
+              <span className="text-[10px] sm:text-xs mt-1 font-medium leading-tight text-center">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-function ChipGrid({
-  label, value, onChange, options, optional, onPick,
+const ATTENDANCE_MAX = 999_999
+
+function parseUsd(raw: string): number | null {
+  const n = parseFloat(raw.replace(/,/g, '').trim())
+  if (!Number.isFinite(n)) return null
+  return Math.round(n * 100) / 100
+}
+
+function AttendanceNumberField({
+  value,
+  onChange,
 }: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  options: { value: string; label: string }[]
-  optional?: boolean
-  onPick?: () => void
+  value: number | null
+  onChange: (n: number | null) => void
 }) {
   return (
     <div className="mb-5">
-      <label className="block text-sm font-medium text-white mb-2">
-        {label}
-        {optional && <span className="text-neutral-300 ml-1 font-normal">(optional)</span>}
+      <label className="block text-sm font-medium text-white mb-2" htmlFor="show-report-attendance-count">
+        How many people attended?{' '}
+        <span className="text-red-500 font-semibold" aria-hidden="true">*</span>
       </label>
-      <div className="grid grid-cols-2 gap-2">
-        {options.map(o => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => {
-              onChange(o.value)
-              onPick?.()
-            }}
-            className={`min-h-[44px] px-3 py-2.5 rounded-lg border text-sm text-center transition-all ${
-              value === o.value
-                ? 'bg-white text-black border-white font-medium'
-                : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500'
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <p className="text-xs text-neutral-400 mb-2">Exact headcount (0 if empty room).</p>
+      <input
+        id="show-report-attendance-count"
+        type="number"
+        min={0}
+        max={ATTENDANCE_MAX}
+        step={1}
+        inputMode="numeric"
+        value={value === null ? '' : value}
+        onChange={e => {
+          const t = e.target.value.trim()
+          if (t === '') {
+            onChange(null)
+            return
+          }
+          const n = parseInt(t, 10)
+          if (!Number.isFinite(n) || n < 0 || n > ATTENDANCE_MAX) return
+          onChange(n)
+        }}
+        placeholder="0"
+        className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
+      />
     </div>
   )
 }
@@ -405,6 +420,11 @@ function MultiFrictionField({
       </div>
     </div>
   )
+}
+
+function parseMerchDollars(raw: string): number | null {
+  const n = parseFloat(raw.replace(/,/g, '').trim())
+  return Number.isFinite(n) && n > 0 ? n : null
 }
 
 export function ShowReportWizard({
@@ -468,6 +488,13 @@ export function ShowReportWizard({
         setBrandingIn(mergePublicFormBranding(data.branding))
         if (!data.valid) { setState('invalid'); return }
         if (data.submitted) { setState('success'); return }
+        if (data.dealGrossAmount != null && Number.isFinite(Number(data.dealGrossAmount))) {
+          setAnswers(prev =>
+            prev.gigFeeTotal === ''
+              ? { ...prev, gigFeeTotal: String(data.dealGrossAmount) }
+              : prev,
+          )
+        }
         setState('form')
       })
       .catch(() => { if (!cancelled) setState('invalid') })
@@ -477,7 +504,14 @@ export function ShowReportWizard({
     embeddedContext?.venueName ?? '',
     embeddedContext?.eventDate ?? '',
     embeddedContext?.dealDescription ?? '',
+    embeddedContext?.dealGrossAmount ?? '',
   ])
+
+  useEffect(() => {
+    const g = embeddedContext?.dealGrossAmount
+    if (g == null || !Number.isFinite(Number(g))) return
+    setAnswers(prev => (prev.gigFeeTotal === '' ? { ...prev, gigFeeTotal: String(g) } : prev))
+  }, [embeddedContext?.dealGrossAmount])
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -523,24 +557,67 @@ export function ShowReportWizard({
     }
 
     if (showEventSections && s === 1) {
+      const r = answers.eventRating
+      if (r == null || !Number.isInteger(r) || r < 1 || r > 5) {
+        return { ok: false, field: 'rating', message: 'How did it go overall?' }
+      }
+      if (
+        answers.attendanceCount === null ||
+        !Number.isInteger(answers.attendanceCount) ||
+        answers.attendanceCount < 0 ||
+        answers.attendanceCount > ATTENDANCE_MAX
+      ) {
+        return { ok: false, field: 'attendance', message: 'Enter how many people attended (exact count).' }
+      }
       if (!answers.crowdEnergy) {
         return { ok: false, field: 'crowd_energy', message: 'How was the crowd energy?' }
       }
       if (!answers.artistPaidStatus) return { ok: false, field: 'paid', message: 'Select your payment status from the venue.' }
+      const fee = parseUsd(answers.gigFeeTotal)
+      const recv = parseUsd(answers.amountReceived)
+      if (fee == null || fee <= 0) {
+        return { ok: false, field: 'economics', message: 'Enter the total gig fee in USD (exact amount).' }
+      }
+      if (recv == null || recv < 0) {
+        return { ok: false, field: 'economics', message: 'Enter the amount you received in USD.' }
+      }
+      if (answers.artistPaidStatus === 'no') {
+        if (Math.abs(recv) > 0.005) {
+          return { ok: false, field: 'economics', message: 'If you were not paid yet, amount received should be $0.' }
+        }
+      }
+      if (answers.artistPaidStatus === 'yes') {
+        if (Math.abs(recv - fee) > 0.02) {
+          return {
+            ok: false,
+            field: 'economics',
+            message: 'For full payment, amount received should match the total gig fee.',
+          }
+        }
+      }
       if (answers.artistPaidStatus === 'partial') {
-        if (answers.paymentPreset === 'other' && !answers.paymentAmount.trim()) {
-          return { ok: false, field: 'partial_amt', message: 'Enter the partial payment amount (or pick a preset above).' }
-        }
-        if (!answers.paymentPreset) {
-          return { ok: false, field: 'partial_amt', message: 'Pick about how much you received (or Other).' }
+        if (recv <= 0.005 || recv >= fee - 0.005) {
+          return {
+            ok: false,
+            field: 'economics',
+            message: 'For partial payment, received must be more than $0 and less than the total fee.',
+          }
         }
       }
-      if (answers.artistPaidStatus !== 'yes' && !answers.chasePaymentFollowup) {
-        return { ok: false, field: 'chase', message: 'Let your manager know if they should help chase payment.' }
+      if (!answers.paymentDispute) {
+        return { ok: false, field: 'dispute', message: 'Is the amount the venue owes still what you agreed to?' }
       }
-      if (!answers.paymentDispute) return { ok: false, field: 'dispute', message: 'Is the amount owed still correct?' }
-      if (!answers.supplementalIncome) {
-        return { ok: false, field: 'supplemental', message: 'Any tips or merch income from the night?' }
+      if (answers.paymentDisputeClaimedAmount.trim()) {
+        const c = parseUsd(answers.paymentDisputeClaimedAmount)
+        if (c == null || c <= 0) {
+          return { ok: false, field: 'dispute', message: 'Disputed “owed” amount must be greater than zero, or leave blank.' }
+        }
+      }
+      if (!answers.merchIncome || (answers.merchIncome !== 'yes' && answers.merchIncome !== 'no')) {
+        return { ok: false, field: 'supplemental', message: 'Any merch sales income from the night?' }
+      }
+      if (answers.merchIncome === 'yes' && parseMerchDollars(answers.merchIncomeAmount) == null) {
+        return { ok: false, field: 'supplemental', message: 'Enter how much you made from merch (USD).' }
       }
       if (!answers.productionIssueLevel) return { ok: false, field: 'production', message: 'How were production and safety overall?' }
       if (!answers.venueDelivered) {
@@ -556,21 +633,9 @@ export function ShowReportWizard({
         if (!answers.rebookingTimeline) {
           return { ok: false, field: 'timeline', message: 'When did the venue hint at booking again?' }
         }
-        if (!answers.wantsBookingCall) {
-          return { ok: false, field: 'booking_call', message: 'Should your manager schedule the next booking conversation?' }
-        }
       }
       if (!answers.wouldPlayAgain) return { ok: false, field: 'play_again', message: 'Would you play this venue again?' }
-      if (!answers.wantsManagerVenueContact) {
-        return { ok: false, field: 'mgr_contact', message: 'Should your manager reach out to the venue for you?' }
-      }
       if (!answers.referralLead) return { ok: false, field: 'referral', message: 'Any other buyer or booker introduced?' }
-      if (answers.mediaChoice === 'unset') {
-        return { ok: false, field: 'media', message: 'Tap “No media” or add links below.' }
-      }
-      if (answers.mediaChoice === 'links' && !answers.mediaLinks.trim()) {
-        return { ok: false, field: 'media', message: 'Paste at least one link, or choose “No media”.' }
-      }
       return { ok: true }
     }
 
@@ -603,14 +668,6 @@ export function ShowReportWizard({
     return lines.join('\n\n')
   }
 
-  function resolvePaymentAmount(): number | null {
-    if (answers.artistPaidStatus !== 'partial') return null
-    const preset = PARTIAL_PAYMENT_PRESETS.find(p => p.value === answers.paymentPreset)
-    if (preset?.amount != null) return preset.amount
-    const n = parseFloat(answers.paymentAmount)
-    return Number.isFinite(n) ? n : null
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const v = validateStep(step)
@@ -635,9 +692,14 @@ export function ShowReportWizard({
     }
 
     setState('submitting')
-    const attendanceNum =
-      showEventSections && answers.attendanceBand && answers.attendanceBand !== 'skip'
-        ? ATTENDANCE_BAND_TO_NUMBER[answers.attendanceBand] ?? null
+    const attendanceNum = showEventSections ? answers.attendanceCount : null
+    const feeTotalNum = showEventSections ? parseUsd(answers.gigFeeTotal) : null
+    const receivedNum = showEventSections ? parseUsd(answers.amountReceived) : null
+    const disputeClaimNum =
+      showEventSections &&
+      answers.paymentDispute === 'yes' &&
+      answers.paymentDisputeClaimedAmount.trim()
+        ? parseUsd(answers.paymentDisputeClaimedAmount)
         : null
 
     const payload = {
@@ -646,14 +708,16 @@ export function ShowReportWizard({
       eventRating: showEventSections ? answers.eventRating : null,
       attendance: attendanceNum,
       artistPaidStatus: showEventSections ? answers.artistPaidStatus : null,
-      paymentAmount: resolvePaymentAmount(),
+      feeTotal: feeTotalNum,
+      amountReceived: receivedNum,
+      paymentDisputeClaimedAmount: disputeClaimNum,
+      /** Backward compat: amount received (partial balance tasks, outreach copy). */
+      paymentAmount: receivedNum,
       venueInterest: answers.venueInterest,
       relationshipQuality: answers.relationshipQuality,
       notes: buildNotes(),
-      mediaLinks: answers.mediaChoice === 'none' ? null : answers.mediaLinks.trim() || null,
-      chasePaymentFollowup: showEventSections
-        ? (answers.artistPaidStatus === 'yes' ? 'no' : answers.chasePaymentFollowup)
-        : null,
+      mediaLinks: null,
+      chasePaymentFollowup: null,
       paymentDispute: showEventSections ? answers.paymentDispute : null,
       productionIssueLevel: showEventSections ? answers.productionIssueLevel : null,
       productionFrictionTags: showEventSections && answers.productionIssueLevel !== 'none'
@@ -662,8 +726,8 @@ export function ShowReportWizard({
       rebookingTimeline: answers.venueInterest === 'yes' && answers.rebookingTimeline
         ? answers.rebookingTimeline
         : null,
-      wantsBookingCall: answers.venueInterest === 'yes' ? answers.wantsBookingCall : null,
-      wantsManagerVenueContact: answers.wantsManagerVenueContact,
+      wantsBookingCall: null,
+      wantsManagerVenueContact: null,
       wouldPlayAgain: answers.wouldPlayAgain,
       cancellationReason:
         answers.eventHappened !== 'yes' && answers.cancellationReason
@@ -672,7 +736,14 @@ export function ShowReportWizard({
       referralLead: answers.referralLead,
       referralDetail: answers.referralLead === 'yes' ? answers.referralDetail.trim() || null : null,
       crowdEnergy: showEventSections ? answers.crowdEnergy : null,
-      supplementalIncome: showEventSections ? answers.supplementalIncome : null,
+      merchIncome:
+        showEventSections && (answers.merchIncome === 'yes' || answers.merchIncome === 'no')
+          ? answers.merchIncome
+          : null,
+      merchIncomeAmount:
+        showEventSections && answers.merchIncome === 'yes'
+          ? parseMerchDollars(answers.merchIncomeAmount)
+          : null,
       venueDelivered: showEventSections ? answers.venueDelivered : null,
       submittedBy,
     }
@@ -781,8 +852,6 @@ export function ShowReportWizard({
     )
   }
 
-  const showPaymentChip = showEventSections && answers.artistPaidStatus === 'partial'
-
   const isVenueStep = (!showEventSections && step === 1) || (showEventSections && step === 2)
   const isEventPaymentStep = Boolean(showEventSections && step === 1)
   const showFooterBar = step > 0 && !isEventPaymentStep && (!isVenueStep || phaseVenue === 'done')
@@ -865,36 +934,45 @@ export function ShowReportWizard({
           {showEventSections && step === 1 ? (
             <>
               {phase1 === 'rating' ? (
-                <RatingField
-                  value={answers.eventRating}
-                  onChange={v => {
-                    set('eventRating', v)
-                    setPhase1('attendance')
-                  }}
-                  onSkip={() => setPhase1('attendance')}
-                />
+                <div ref={registerRef('rating')}>
+                  <RatingField
+                    value={answers.eventRating}
+                    onChange={v => {
+                      set('eventRating', v)
+                      setPhase1('attendance')
+                    }}
+                  />
+                </div>
               ) : null}
 
               {phase1 === 'attendance' ? (
-                <ChipGrid
-                  label="About how many people attended?"
-                  value={answers.attendanceBand}
-                  onChange={v => set('attendanceBand', v)}
-                  options={[...ATTENDANCE_BANDS]}
-                  optional
-                  onPick={() => setPhase1('crowd_energy')}
-                />
+                <div ref={registerRef('attendance')}>
+                  <AttendanceNumberField
+                    value={answers.attendanceCount}
+                    onChange={v => set('attendanceCount', v)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFieldError(null)
+                      setPhase1('crowd_energy')
+                    }}
+                    disabled={state === 'submitting'}
+                    className="mt-2 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100 disabled:opacity-50"
+                  >
+                    Continue
+                  </button>
+                </div>
               ) : null}
 
               {phase1 === 'crowd_energy' ? (
                 <div ref={registerRef('crowd_energy')}>
-                  <SelectField
-                    label="How was the crowd energy?"
+                  <CrowdEnergyField
                     value={answers.crowdEnergy}
-                    onChange={v => set('crowdEnergy', v as FormAnswers['crowdEnergy'])}
-                    onPick={() => setPhase1('paid')}
-                    required
-                    options={CROWD_ENERGY_OPTIONS}
+                    onChange={v => {
+                      set('crowdEnergy', v)
+                      setPhase1('paid')
+                    }}
                   />
                 </div>
               ) : null}
@@ -905,74 +983,132 @@ export function ShowReportWizard({
                     label="Did you receive payment from the venue?"
                     value={answers.artistPaidStatus}
                     onChange={v => {
-                      set('artistPaidStatus', v as FormAnswers['artistPaidStatus'])
-                      if (v !== 'partial') {
-                        set('paymentPreset', '')
-                        set('paymentAmount', '')
+                      const nv = v as FormAnswers['artistPaidStatus']
+                      set('artistPaidStatus', nv)
+                      if (nv === 'no') {
+                        set('amountReceived', '0')
+                      } else if (nv === 'yes') {
+                        const fee = parseUsd(answers.gigFeeTotal)
+                        set('amountReceived', fee != null ? String(fee) : '')
+                      } else {
+                        set('amountReceived', '')
                       }
-                      if (v === 'yes') setPhase1('dispute')
-                      else if (v === 'partial') setPhase1('partial')
-                      else setPhase1('chase')
+                      setPhase1('economics')
                     }}
                     required
                     options={[
-                      { value: 'yes', label: 'Yes, full payment' },
+                      { value: 'yes', label: 'Yes — paid in full' },
                       { value: 'partial', label: 'Partial payment' },
-                      { value: 'no', label: 'Not yet / no' },
+                      { value: 'no', label: 'Not yet' },
                     ]}
                   />
                 </div>
               ) : null}
 
-              {phase1 === 'partial' && showPaymentChip ? (
-                <div ref={registerRef('partial_amt')}>
-                  <label className="block text-sm font-medium text-white mb-2">About how much did you receive? ($)</label>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    {PARTIAL_PAYMENT_PRESETS.map(p => (
-                      <button
-                        key={p.value}
-                        type="button"
-                        onClick={() => {
-                          set('paymentPreset', p.value)
-                          if (p.amount != null) set('paymentAmount', '')
+              {phase1 === 'economics' ? (
+                <div ref={registerRef('economics')}>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white mb-2" htmlFor="show-report-gig-fee">
+                      Total gig fee (USD){' '}
+                      <span className="text-neutral-400 font-normal text-xs">— exact amount for this show</span>
+                      <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">*</span>
+                    </label>
+                    {embeddedContext?.dealGrossAmount != null || preview ? (
+                      <p className="text-xs text-neutral-400 mb-2">
+                        Pre-filled from your booking when available — change if the deal was updated.
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2 rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 focus-within:ring-2 focus-within:ring-white/25">
+                      <span className="text-neutral-400 text-sm shrink-0" aria-hidden="true">
+                        $
+                      </span>
+                      <input
+                        id="show-report-gig-fee"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        value={answers.gigFeeTotal}
+                        onChange={e => {
+                          const v = e.target.value
+                          setAnswers(prev => {
+                            const next: FormAnswers = { ...prev, gigFeeTotal: v }
+                            if (prev.artistPaidStatus === 'yes') {
+                              const f = parseUsd(v)
+                              next.amountReceived = f != null ? String(f) : v
+                            }
+                            return next
+                          })
+                          setFieldError(null)
                         }}
-                        className={`min-h-[44px] px-2 py-2 rounded-lg border text-xs sm:text-sm transition-all ${
-                          answers.paymentPreset === p.value
-                            ? 'bg-white text-black border-white font-medium'
-                            : 'bg-neutral-950 text-neutral-100 border-neutral-600'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
+                        placeholder="0.00"
+                        className="min-w-0 flex-1 bg-transparent text-white text-sm outline-none placeholder:text-neutral-500"
+                      />
+                    </div>
                   </div>
-                  {answers.paymentPreset === 'other' ? (
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      inputMode="decimal"
-                      value={answers.paymentAmount}
-                      onChange={e => set('paymentAmount', e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm mb-4 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
-                    />
-                  ) : null}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white mb-2" htmlFor="show-report-received">
+                      Amount you received from the venue (USD){' '}
+                      <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">*</span>
+                    </label>
+                    <p className="text-xs text-neutral-400 mb-2">
+                      {answers.artistPaidStatus === 'yes'
+                        ? 'Should match total fee when you were paid in full.'
+                        : answers.artistPaidStatus === 'no'
+                          ? 'Leave at $0 if nothing has been paid yet.'
+                          : 'Enter exactly what the venue paid you so far (partial).'}
+                    </p>
+                    <div className="flex items-center gap-2 rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 focus-within:ring-2 focus-within:ring-white/25">
+                      <span className="text-neutral-400 text-sm shrink-0" aria-hidden="true">
+                        $
+                      </span>
+                      <input
+                        id="show-report-received"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        readOnly={answers.artistPaidStatus === 'no'}
+                        value={answers.amountReceived}
+                        onChange={e => set('amountReceived', e.target.value)}
+                        placeholder="0.00"
+                        className="min-w-0 flex-1 bg-transparent text-white text-sm outline-none placeholder:text-neutral-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
-                      if (!answers.paymentPreset) {
-                        setFieldError('Pick about how much you received (or Other).')
-                        scrollToField('partial_amt')
+                      const fee = parseUsd(answers.gigFeeTotal)
+                      const recv = parseUsd(answers.amountReceived)
+                      if (fee == null || fee <= 0) {
+                        setFieldError('Enter the total gig fee (greater than zero).')
+                        scrollToField('economics')
                         return
                       }
-                      if (answers.paymentPreset === 'other' && !answers.paymentAmount.trim()) {
-                        setFieldError('Enter the partial payment amount.')
-                        scrollToField('partial_amt')
+                      if (recv == null || recv < 0) {
+                        setFieldError('Enter the amount received (0 or more).')
+                        scrollToField('economics')
+                        return
+                      }
+                      if (answers.artistPaidStatus === 'no' && Math.abs(recv) > 0.005) {
+                        setFieldError('Amount received should be $0 when you were not paid yet.')
+                        scrollToField('economics')
+                        return
+                      }
+                      if (answers.artistPaidStatus === 'yes' && Math.abs(recv - fee) > 0.02) {
+                        setFieldError('For full payment, amount received must match total fee.')
+                        scrollToField('economics')
+                        return
+                      }
+                      if (
+                        answers.artistPaidStatus === 'partial' &&
+                        (recv <= 0.005 || recv >= fee - 0.005)
+                      ) {
+                        setFieldError('For partial payment, received must be between $0 and the total fee.')
+                        scrollToField('economics')
                         return
                       }
                       setFieldError(null)
-                      setPhase1('chase')
+                      setPhase1('dispute')
                     }}
                     className="w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
                   >
@@ -981,52 +1117,181 @@ export function ShowReportWizard({
                 </div>
               ) : null}
 
-              {phase1 === 'chase' &&
-              showEventSections &&
-              answers.artistPaidStatus &&
-              answers.artistPaidStatus !== 'yes' ? (
-                <div ref={registerRef('chase')}>
-                  <SelectField
-                    label="Should your manager help chase payment from the venue?"
-                    value={answers.chasePaymentFollowup}
-                    onChange={v => set('chasePaymentFollowup', v as FormAnswers['chasePaymentFollowup'])}
-                    onPick={() => setPhase1('dispute')}
-                    required
-                    options={[
-                      { value: 'no', label: 'No, I will handle it' },
-                      { value: 'unsure', label: 'Not sure yet' },
-                      { value: 'yes', label: 'Yes, please follow up' },
-                    ]}
-                  />
-                </div>
-              ) : null}
-
               {phase1 === 'dispute' ? (
                 <div ref={registerRef('dispute')}>
-                  <SelectField
-                    label="Is the amount the venue owes still what you agreed to?"
-                    value={answers.paymentDispute}
-                    onChange={v => set('paymentDispute', v as FormAnswers['paymentDispute'])}
-                    onPick={() => setPhase1('supplemental_income')}
-                    required
-                    options={[
-                      { value: 'no', label: 'Yes — matches the deal' },
-                      { value: 'yes', label: 'No — there is a disagreement' },
-                    ]}
-                  />
+                  <div className="mb-5" role="group" aria-required>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      Is the amount the venue owes still what you agreed to?
+                      <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">*</span>
+                    </label>
+                    <p className="text-xs text-neutral-400 mb-3">
+                      This is about the contract number, not tips or personal cash.
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          set('paymentDispute', 'no')
+                          set('paymentDisputeClaimedAmount', '')
+                          setPhase1('supplemental_income')
+                        }}
+                        className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
+                          answers.paymentDispute === 'no'
+                            ? 'bg-white text-black border-white font-medium'
+                            : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white'
+                        }`}
+                      >
+                        Yes — matches the deal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => set('paymentDispute', 'yes')}
+                        className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all ${
+                          answers.paymentDispute === 'yes'
+                            ? 'bg-white text-black border-white font-medium'
+                            : 'bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white'
+                        }`}
+                      >
+                        No — there is a disagreement
+                      </button>
+                    </div>
+                  </div>
+                  {answers.paymentDispute === 'yes' ? (
+                    <div className="mb-5">
+                      <label className="block text-sm font-medium text-white mb-2" htmlFor="show-report-dispute-claim">
+                        What total fee do you believe you are owed? (USD){' '}
+                        <span className="text-neutral-400 font-normal text-xs">(optional)</span>
+                      </label>
+                      <div className="flex items-center gap-2 rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 focus-within:ring-2 focus-within:ring-white/25">
+                        <span className="text-neutral-400 text-sm shrink-0" aria-hidden="true">
+                          $
+                        </span>
+                        <input
+                          id="show-report-dispute-claim"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          value={answers.paymentDisputeClaimedAmount}
+                          onChange={e => set('paymentDisputeClaimedAmount', e.target.value)}
+                          placeholder="If different from the total above"
+                          className="min-w-0 flex-1 bg-transparent text-white text-sm outline-none placeholder:text-neutral-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (answers.paymentDisputeClaimedAmount.trim()) {
+                            const c = parseUsd(answers.paymentDisputeClaimedAmount)
+                            if (c == null || c <= 0) {
+                              setFieldError('Enter a positive dollar amount, or clear the field.')
+                              scrollToField('dispute')
+                              return
+                            }
+                          }
+                          setFieldError(null)
+                          setPhase1('supplemental_income')
+                        }}
+                        className="mt-4 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
               {phase1 === 'supplemental_income' ? (
                 <div ref={registerRef('supplemental')}>
-                  <SelectField
-                    label="Any tips or merch income from the night?"
-                    value={answers.supplementalIncome}
-                    onChange={v => set('supplementalIncome', v as FormAnswers['supplementalIncome'])}
-                    onPick={() => setPhase1('production')}
-                    required
-                    options={SUPPLEMENTAL_INCOME_OPTIONS}
-                  />
+                  {answers.merchIncome !== 'yes' ? (
+                    <div className="mb-5" role="group" aria-required>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Any merch sales income from the night?
+                        <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">
+                          *
+                        </span>
+                        <span className="sr-only">(required)</span>
+                      </label>
+                      <p className="text-xs text-neutral-400 mb-3">
+                        Tips or personal DJ cash — skip that. We only track merch here.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            set('merchIncome', 'no')
+                            set('merchIncomeAmount', '')
+                            setPhase1('production')
+                          }}
+                          className="min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white"
+                        >
+                          No
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            set('merchIncome', 'yes')
+                          }}
+                          className="min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm transition-all bg-neutral-950 text-neutral-100 border-neutral-600 hover:border-neutral-500 hover:text-white"
+                        >
+                          Yes
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-5">
+                      <label
+                        htmlFor="show-report-merch-amount"
+                        className="block text-sm font-medium text-white mb-2"
+                      >
+                        How much did you make from merch (USD)?
+                        <span className="text-red-500 ml-0.5 font-semibold" aria-hidden="true">
+                          *
+                        </span>
+                        <span className="sr-only">(required)</span>
+                      </label>
+                      <div className="flex items-center gap-2 rounded-lg border border-neutral-600 bg-neutral-950 px-3 py-2 focus-within:ring-2 focus-within:ring-white/25">
+                        <span className="text-neutral-400 text-sm shrink-0" aria-hidden="true">
+                          $
+                        </span>
+                        <input
+                          id="show-report-merch-amount"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder="0"
+                          value={answers.merchIncomeAmount}
+                          onChange={e => set('merchIncomeAmount', e.target.value)}
+                          className="min-w-0 flex-1 bg-transparent text-white text-sm outline-none placeholder:text-neutral-500"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (parseMerchDollars(answers.merchIncomeAmount) == null) {
+                            setFieldError('Enter how much you made from merch (greater than zero).')
+                            scrollToField('supplemental')
+                            return
+                          }
+                          setFieldError(null)
+                          setPhase1('production')
+                        }}
+                        className="mt-4 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
+                      >
+                        Continue
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFieldError(null)
+                          set('merchIncome', '')
+                          set('merchIncomeAmount', '')
+                        }}
+                        className="mt-3 text-sm text-neutral-400 hover:text-neutral-200"
+                      >
+                        Back to yes / no
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : null}
 
@@ -1103,7 +1368,6 @@ export function ShowReportWizard({
                       set('venueInterest', nv)
                       if (nv !== 'yes') {
                         set('rebookingTimeline', '')
-                        set('wantsBookingCall', '')
                       }
                       setPhaseVenue('rel')
                     }}
@@ -1143,7 +1407,7 @@ export function ShowReportWizard({
                     value={answers.rebookingTimeline}
                     onChange={v => {
                       set('rebookingTimeline', v as FormAnswers['rebookingTimeline'])
-                      setPhaseVenue('booking_call')
+                      setPhaseVenue('play')
                     }}
                     required
                     options={[
@@ -1156,24 +1420,6 @@ export function ShowReportWizard({
                 </div>
               ) : null}
 
-              {phaseVenue === 'booking_call' && answers.venueInterest === 'yes' ? (
-                <div ref={registerRef('booking_call')}>
-                  <SelectField
-                    label="Should your manager schedule the next booking conversation?"
-                    value={answers.wantsBookingCall}
-                    onChange={v => {
-                      set('wantsBookingCall', v as FormAnswers['wantsBookingCall'])
-                      setPhaseVenue('play')
-                    }}
-                    required
-                    options={[
-                      { value: 'yes', label: 'Yes — loop my manager in' },
-                      { value: 'no', label: "No — I'll handle it" },
-                    ]}
-                  />
-                </div>
-              ) : null}
-
               {phaseVenue === 'play' ? (
                 <div ref={registerRef('play_again')}>
                   <SelectField
@@ -1181,31 +1427,13 @@ export function ShowReportWizard({
                     value={answers.wouldPlayAgain}
                     onChange={v => {
                       set('wouldPlayAgain', v as FormAnswers['wouldPlayAgain'])
-                      setPhaseVenue('mgr')
+                      setPhaseVenue('referral')
                     }}
                     required
                     options={[
                       { value: 'yes', label: 'Yes' },
                       { value: 'maybe', label: 'Maybe' },
                       { value: 'no', label: 'No' },
-                    ]}
-                  />
-                </div>
-              ) : null}
-
-              {phaseVenue === 'mgr' ? (
-                <div ref={registerRef('mgr_contact')}>
-                  <SelectField
-                    label="Should your manager contact the venue on your behalf?"
-                    value={answers.wantsManagerVenueContact}
-                    onChange={v => {
-                      set('wantsManagerVenueContact', v as FormAnswers['wantsManagerVenueContact'])
-                      setPhaseVenue('referral')
-                    }}
-                    required
-                    options={[
-                      { value: 'no', label: 'No' },
-                      { value: 'yes', label: 'Yes' },
                     ]}
                   />
                 </div>
@@ -1297,74 +1525,12 @@ export function ShowReportWizard({
                     type="button"
                     onClick={() => {
                       setFieldError(null)
-                      setPhaseVenue('media')
+                      setPhaseVenue('done')
                     }}
                     className="mt-4 w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
                   >
                     Continue
                   </button>
-                </div>
-              ) : null}
-
-              {phaseVenue === 'media' ? (
-                <div className="mb-6" ref={registerRef('media')}>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Photos, videos, or posts from the show?
-                  </label>
-                  <div className="flex flex-col gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        set('mediaChoice', 'none')
-                        set('mediaLinks', '')
-                        setFieldError(null)
-                        setPhaseVenue('done')
-                      }}
-                      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                        answers.mediaChoice === 'none'
-                          ? 'bg-white text-black border-white'
-                          : 'bg-neutral-950 text-neutral-100 border-neutral-600'
-                      }`}
-                    >
-                      No media to share
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => set('mediaChoice', 'links')}
-                      className={`min-h-[44px] w-full text-left px-4 py-3 rounded-lg border text-sm ${
-                        answers.mediaChoice === 'links'
-                          ? 'bg-white text-black border-white'
-                          : 'bg-neutral-950 text-neutral-100 border-neutral-600'
-                      }`}
-                    >
-                      I will paste link(s) below
-                    </button>
-                  </div>
-                  {answers.mediaChoice === 'links' ? (
-                    <>
-                      <textarea
-                        value={answers.mediaLinks}
-                        onChange={e => set('mediaLinks', e.target.value)}
-                        rows={2}
-                        placeholder="Instagram, Drive, etc."
-                        className="w-full bg-neutral-950 border border-neutral-600 rounded-lg px-4 py-3 text-white text-sm resize-none mb-4 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/25"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!answers.mediaLinks.trim()) {
-                            setFieldError('Paste at least one link, or choose “No media”.')
-                            return
-                          }
-                          setFieldError(null)
-                          setPhaseVenue('done')
-                        }}
-                        className="w-full min-h-[48px] rounded-lg bg-white text-sm font-semibold text-black hover:bg-neutral-100"
-                      >
-                        Continue
-                      </button>
-                    </>
-                  ) : null}
                 </div>
               ) : null}
 

@@ -8,6 +8,9 @@ import {
 } from '../../src/lib/performanceReportV1'
 import { serializeArtistTxnQueueNotes } from '../../src/lib/email/artistTxnQueuePayload'
 import type { CancellationReason } from '../../src/lib/performanceReportV1'
+import {
+  formatDealGrossReconciliationNotes,
+} from '../../src/lib/dealGrossReconciliationTask'
 
 const FRICTION_IDS = new Set(PRODUCTION_FRICTION_OPTIONS.map(o => o.id))
 
@@ -22,6 +25,13 @@ interface SubmitBody {
   eventRating?: number | null
   attendance?: number | null
   artistPaidStatus?: 'yes' | 'no' | 'partial'
+  /** Total gig fee (exact); drives commission reconciliation vs deal.gross_amount. */
+  feeTotal?: number | null
+  /** Amount received from venue for this gig. */
+  amountReceived?: number | null
+  /** Optional artist claim when payment_dispute = yes */
+  paymentDisputeClaimedAmount?: number | null
+  /** @deprecated Use amountReceived; kept for backward compatibility. */
   paymentAmount?: number | null
   venueInterest?: 'yes' | 'no' | 'unsure'
   relationshipQuality?: 'good' | 'neutral' | 'poor'
@@ -39,7 +49,10 @@ interface SubmitBody {
   referralLead?: 'no' | 'yes' | null
   referralDetail?: string | null
   crowdEnergy?: 'electric' | 'warm' | 'flat' | 'hostile' | null
+  /** Legacy banded tips/merch; superseded by merchIncome + merchIncomeAmount from current form. */
   supplementalIncome?: 'none' | 'under_50' | '50_150' | 'over_150' | null
+  merchIncome?: 'yes' | 'no' | null
+  merchIncomeAmount?: number | null
   venueDelivered?: 'yes_good' | 'mostly_off' | 'significant_gaps' | null
   /** Who submitted: public form vs manager dashboard manual entry */
   submittedBy?: 'artist_link' | 'manager_dashboard'
@@ -63,6 +76,62 @@ function supplementalIncomeLabel(v: string): string {
     over_150: '$150+',
   }
   return m[v] ?? v
+}
+
+function parseMoneyField(v: unknown): number | null {
+  if (v == null) return null
+  const n = typeof v === 'number' ? v : parseFloat(String(v))
+  if (!Number.isFinite(n)) return null
+  return Math.round(n * 100) / 100
+}
+
+function validatePlayedEconomics(body: SubmitBody): { ok: true } | { ok: false; message: string } {
+  const fee = parseMoneyField(body.feeTotal)
+  const recv = parseMoneyField(body.amountReceived ?? body.paymentAmount)
+  if (fee == null || fee <= 0) {
+    return { ok: false, message: 'Missing or invalid fee total (feeTotal).' }
+  }
+  if (recv == null || recv < 0) {
+    return { ok: false, message: 'Missing or invalid amount received.' }
+  }
+  const st = body.artistPaidStatus
+  if (st === 'no' && Math.abs(recv) > 0.005) {
+    return { ok: false, message: 'Amount received must be zero when not paid yet.' }
+  }
+  if (st === 'yes' && Math.abs(recv - fee) > 0.02) {
+    return { ok: false, message: 'Amount received must match fee for full payment.' }
+  }
+  if (st === 'partial' && (recv <= 0.005 || recv >= fee - 0.005)) {
+    return { ok: false, message: 'Partial payment must be strictly between zero and total fee.' }
+  }
+  if (body.paymentDispute === 'yes') {
+    const raw = body.paymentDisputeClaimedAmount
+    if (raw !== null && raw !== undefined && `${raw}`.trim() !== '') {
+      const claim = parseMoneyField(raw)
+      if (claim == null || claim <= 0) {
+        return { ok: false, message: 'Disputed owed amount must be positive if provided.' }
+      }
+    }
+  }
+  return { ok: true }
+}
+
+async function applyReportedGrossToDeal(
+  supabase: ReturnType<typeof createClient>,
+  dealId: string,
+  newGross: number,
+) {
+  const { data: deal } = await supabase
+    .from('deals')
+    .select('commission_rate')
+    .eq('id', dealId)
+    .maybeSingle()
+  const rate = deal?.commission_rate != null ? Number(deal.commission_rate) : 0
+  const comm = Number.isFinite(rate) ? Math.round(newGross * rate * 100) / 100 : 0
+  await supabase
+    .from('deals')
+    .update({ gross_amount: newGross, commission_amount: comm })
+    .eq('id', dealId)
 }
 
 function venueDeliveredLabel(v: string): string {
@@ -110,6 +179,20 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing token' }) }
   }
 
+  const playedCheck = body.eventHappened === 'yes'
+  if (playedCheck) {
+    if (!body.artistPaidStatus) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'artistPaidStatus is required when the event happened.' }),
+      }
+    }
+    const econ = validatePlayedEconomics(body)
+    if (!econ.ok) {
+      return { statusCode: 400, body: JSON.stringify({ message: econ.message }) }
+    }
+  }
+
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const frictionTags = normalizeFrictionTags(body.productionFrictionTags)
   const submittedBy =
@@ -132,12 +215,49 @@ const handler: Handler = async (event) => {
   const today = new Date().toISOString().split('T')[0]
 
   const played = body.eventHappened === 'yes'
+  const feeTotalSaved = played && body.artistPaidStatus ? parseMoneyField(body.feeTotal) : null
+  const amountReceivedSaved =
+    played && body.artistPaidStatus
+      ? parseMoneyField(body.amountReceived ?? body.paymentAmount)
+      : null
+  const disputeClaimSaved =
+    played && body.paymentDispute === 'yes'
+      ? parseMoneyField(body.paymentDisputeClaimedAmount ?? null)
+      : null
+
+  const merchIncomeLine =
+    played &&
+    body.merchIncome === 'yes' &&
+    body.merchIncomeAmount != null &&
+    Number.isFinite(Number(body.merchIncomeAmount)) &&
+    Number(body.merchIncomeAmount) > 0
+      ? `Merch income: $${body.merchIncomeAmount}.`
+      : null
+  const legacySupplementalLine =
+    played && body.supplementalIncome && body.supplementalIncome !== 'none'
+      ? `Tips / merch income: ${supplementalIncomeLabel(body.supplementalIncome)}`
+      : null
+
+  const balanceLine =
+    played &&
+    feeTotalSaved != null &&
+    amountReceivedSaved != null &&
+    feeTotalSaved > 0
+      ? `Gig fee $${feeTotalSaved}; received $${amountReceivedSaved}; balance $${Math.round((feeTotalSaved - amountReceivedSaved) * 100) / 100}.`
+      : null
+  const disputeClaimLine =
+    played &&
+    body.paymentDispute === 'yes' &&
+    disputeClaimSaved != null &&
+    disputeClaimSaved > 0
+      ? `Artist-reported amount owed (dispute): $${disputeClaimSaved}.`
+      : null
 
   const structuredNoteLines = [
     played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}` : null,
-    played && body.supplementalIncome && body.supplementalIncome !== 'none'
-      ? `Tips / merch income: ${supplementalIncomeLabel(body.supplementalIncome)}`
-      : null,
+    balanceLine,
+    disputeClaimLine,
+    merchIncomeLine ?? legacySupplementalLine,
     played && body.venueDelivered
       ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}`
       : null,
@@ -157,7 +277,13 @@ const handler: Handler = async (event) => {
       event_rating: played ? body.eventRating ?? null : null,
       attendance: played ? body.attendance ?? null : null,
       artist_paid_status: played ? body.artistPaidStatus ?? null : null,
-      payment_amount: played ? body.paymentAmount ?? null : null,
+      payment_amount: played ? amountReceivedSaved ?? null : null,
+      fee_total: played ? feeTotalSaved ?? null : null,
+      amount_received: played ? amountReceivedSaved ?? null : null,
+      payment_dispute_claimed_amount:
+        played && body.paymentDispute === 'yes' && disputeClaimSaved != null && disputeClaimSaved > 0
+          ? disputeClaimSaved
+          : null,
       venue_interest: body.venueInterest ?? null,
       relationship_quality: body.relationshipQuality ?? null,
       notes: mergedNotes,
@@ -195,6 +321,63 @@ const handler: Handler = async (event) => {
     }
   } catch { /* non-critical */ }
 
+  if (played && row.deal_id && feeTotalSaved != null && submittedBy === 'manager_dashboard') {
+    try {
+      const { data: dealG } = await supabase
+        .from('deals')
+        .select('gross_amount')
+        .eq('id', row.deal_id)
+        .maybeSingle()
+      const onFile = dealG?.gross_amount != null ? Number(dealG.gross_amount) : null
+      if (onFile == null || !Number.isFinite(onFile) || Math.abs(onFile - feeTotalSaved) > 0.01) {
+        await applyReportedGrossToDeal(supabase, row.deal_id, feeTotalSaved)
+      }
+    } catch (e) {
+      console.error('[submit-performance-report] Manager gross sync failed:', e)
+    }
+  }
+
+  if (
+    played &&
+    row.deal_id &&
+    feeTotalSaved != null &&
+    submittedBy === 'artist_link' &&
+    venueOutreachTrack === 'pipeline'
+  ) {
+    try {
+      const { data: dealG } = await supabase
+        .from('deals')
+        .select('gross_amount')
+        .eq('id', row.deal_id)
+        .maybeSingle()
+      const onFile = dealG?.gross_amount != null ? Number(dealG.gross_amount) : null
+      if (
+        onFile != null &&
+        Number.isFinite(onFile) &&
+        Math.abs(onFile - feeTotalSaved) > 0.01
+      ) {
+        await supabase.from('tasks').insert({
+          user_id: row.user_id,
+          title: `Reconcile deal gross — ${venueName}`,
+          notes: formatDealGrossReconciliationNotes({
+            performance_report_id: row.id,
+            deal_id: row.deal_id,
+            gross_on_file: onFile,
+            reported_fee_total: feeTotalSaved,
+          }),
+          venue_id: row.venue_id,
+          deal_id: row.deal_id,
+          priority: 'high',
+          due_date: today,
+          recurrence: 'none',
+          completed: false,
+        })
+      }
+    } catch (e) {
+      console.error('[submit-performance-report] Gross reconciliation task failed:', e)
+    }
+  }
+
   try {
     const newStatus = venueStatusForReport(body)
     await supabase.from('venues').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', row.venue_id)
@@ -229,10 +412,16 @@ const handler: Handler = async (event) => {
     try {
       const { data: deal } = await supabase.from('deals').select('notes').eq('id', row.deal_id).single()
       const existingNotes = deal?.notes || ''
+      const recv = amountReceivedSaved ?? body.paymentAmount ?? '?'
+      const fee = feeTotalSaved ?? '?'
+      const bal =
+        feeTotalSaved != null && amountReceivedSaved != null
+          ? Math.round((feeTotalSaved - amountReceivedSaved) * 100) / 100
+          : '?'
       const partialNote =
         submittedBy === 'manager_dashboard'
-          ? `${today}: Partial payment of $${body.paymentAmount ?? '?'} recorded by manager via performance form.`
-          : `${today}: Partial payment of $${body.paymentAmount ?? '?'} reported by artist via performance form.`
+          ? `${today}: Partial payment $${recv} of $${fee} (balance $${bal}) recorded by manager via performance form.`
+          : `${today}: Partial payment $${recv} of $${fee} (balance $${bal}) reported by artist via performance form.`
       const appendNote = partialNote
       const newNotes = existingNotes ? `${existingNotes}\n${appendNote}` : appendNote
       await supabase.from('deals').update({ notes: newNotes }).eq('id', row.deal_id)
@@ -305,9 +494,7 @@ const handler: Handler = async (event) => {
     } catch (e) {
       console.error('[submit-performance-report] Re-engage task failed:', e)
     }
-  }
 
-  if (body.wantsBookingCall === 'yes') {
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
@@ -324,7 +511,7 @@ const handler: Handler = async (event) => {
     }
   }
 
-  if (played && body.chasePaymentFollowup === 'yes') {
+  if (played && body.artistPaidStatus === 'no') {
     try {
       await supabase.from('tasks').insert({
         user_id: row.user_id,
@@ -353,12 +540,29 @@ const handler: Handler = async (event) => {
             recipient_email: chaseContact.email,
             subject: `Payment Reminder — ${venueName}`,
             status: 'pending',
-            notes: 'Auto-queued from performance report (chase payment).',
+            notes: 'Auto-queued from performance report (payment not received).',
           })
         }
       }
     } catch (e) {
       console.error('[submit-performance-report] Chase payment task failed:', e)
+    }
+  }
+
+  if (played && body.artistPaidStatus === 'partial') {
+    try {
+      await supabase.from('tasks').insert({
+        user_id: row.user_id,
+        title: `Follow up remaining balance — ${venueName}`,
+        venue_id: row.venue_id,
+        deal_id: row.deal_id ?? null,
+        priority: 'high',
+        due_date: today,
+        recurrence: 'none',
+        completed: false,
+      })
+    } catch (e) {
+      console.error('[submit-performance-report] Partial balance task failed:', e)
     }
   }
 
@@ -393,23 +597,6 @@ const handler: Handler = async (event) => {
       })
     } catch (e) {
       console.error('[submit-performance-report] Production follow-up task failed:', e)
-    }
-  }
-
-  if (body.wantsManagerVenueContact === 'yes') {
-    try {
-      await supabase.from('tasks').insert({
-        user_id: row.user_id,
-        title: `Artist asked you to contact ${venueName}`,
-        venue_id: row.venue_id,
-        deal_id: row.deal_id ?? null,
-        priority: 'medium',
-        due_date: addDays(3),
-        recurrence: 'none',
-        completed: false,
-      })
-    } catch (e) {
-      console.error('[submit-performance-report] Manager contact task failed:', e)
     }
   }
 
@@ -488,31 +675,40 @@ const handler: Handler = async (event) => {
         ? `Cancellation/postpone reason: ${cancellationLabels[body.cancellationReason] ?? body.cancellationReason}.`
         : null,
       body.eventRating ? `Rating: ${body.eventRating}/5.` : null,
-      body.attendance ? `Attendance: approx. ${body.attendance} people.` : null,
-      played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}.` : null,
-      played && body.supplementalIncome && body.supplementalIncome !== 'none'
-        ? `Tips/merch income: ${supplementalIncomeLabel(body.supplementalIncome)}.`
+      body.attendance != null
+        ? `Attendance: ${body.attendance} people.`
         : null,
+      played && body.crowdEnergy ? `Crowd energy: ${crowdEnergyLabel(body.crowdEnergy)}.` : null,
+      played &&
+      body.merchIncome === 'yes' &&
+      body.merchIncomeAmount != null &&
+      Number.isFinite(Number(body.merchIncomeAmount)) &&
+      Number(body.merchIncomeAmount) > 0
+        ? `Merch income: $${body.merchIncomeAmount}.`
+        : played && body.supplementalIncome && body.supplementalIncome !== 'none'
+          ? `Tips/merch income: ${supplementalIncomeLabel(body.supplementalIncome)}.`
+          : null,
       played && body.venueDelivered
         ? `Venue delivered on promises: ${venueDeliveredLabel(body.venueDelivered)}.`
         : null,
       body.artistPaidStatus === 'yes'
         ? submittedBy === 'manager_dashboard'
-          ? 'Report indicates full payment received.'
-          : 'Artist confirmed full payment received.'
+          ? `Report indicates full payment ($${feeTotalSaved ?? '?'}) received.`
+          : `Artist confirmed full payment ($${feeTotalSaved ?? '?'}) received.`
         : body.artistPaidStatus === 'partial'
           ? submittedBy === 'manager_dashboard'
-            ? `Report indicates partial payment of $${body.paymentAmount ?? '?'}.`
-            : `Artist reported partial payment of $${body.paymentAmount ?? '?'}.`
+            ? `Partial payment: received $${amountReceivedSaved ?? '?'} of $${feeTotalSaved ?? '?'}.`
+            : `Partial payment: received $${amountReceivedSaved ?? '?'} of $${feeTotalSaved ?? '?'}.`
         : body.artistPaidStatus === 'no'
           ? submittedBy === 'manager_dashboard'
-            ? 'Report indicates no payment received yet.'
-            : 'Artist reported no payment received.'
+            ? `No payment received yet (gig fee $${feeTotalSaved ?? '?'}).`
+            : `Artist reported no payment yet (gig fee $${feeTotalSaved ?? '?'}).`
         : null,
-      played && body.chasePaymentFollowup === 'yes'
-        ? submittedBy === 'manager_dashboard'
-          ? 'Chase payment follow-up noted on report.'
-          : 'Artist asked manager to chase payment.'
+      played && body.artistPaidStatus === 'no'
+        ? 'Payment chase / reminder may be auto-queued for manager review.'
+        : null,
+      played && body.artistPaidStatus === 'partial'
+        ? 'Partial payment reported — remaining balance follow-up may be queued.'
         : null,
       played && body.paymentDispute === 'yes'
         ? submittedBy === 'manager_dashboard'
@@ -531,8 +727,6 @@ const handler: Handler = async (event) => {
         : null,
       body.relationshipQuality ? `Relationship quality: ${body.relationshipQuality}.` : null,
       body.wouldPlayAgain ? `Would play again: ${body.wouldPlayAgain}.` : null,
-      body.wantsBookingCall === 'yes' ? 'Wants manager to schedule next booking conversation.' : null,
-      body.wantsManagerVenueContact === 'yes' ? 'Wants manager to contact venue on their behalf.' : null,
       body.referralLead === 'yes' ? 'Referral / another buyer mentioned.' : null,
       body.referralLead === 'yes' && body.referralDetail?.trim()
         ? `Referral detail: ${body.referralDetail.trim()}`

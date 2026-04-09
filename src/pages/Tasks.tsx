@@ -23,6 +23,7 @@ import {
   VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS,
 } from '@/types'
 import { cn } from '@/lib/utils'
+import { parseDealGrossReconciliationNotes } from '@/lib/dealGrossReconciliationTask'
 
 const PRIORITY_BADGE: Record<TaskPriority, 'destructive' | 'warning' | 'secondary'> = {
   high: 'destructive',
@@ -80,10 +81,23 @@ export default function Tasks() {
     uncompleteTask,
     emailAutomationFeedback,
     dismissEmailAutomationFeedback,
+    refetch: refetchTasks,
   } = useTasks()
   const { venues } = useVenues()
-  const { deals } = useDeals()
+  const { deals, updateDeal, refetch: refetchDeals } = useDeals()
+  const [reconApplyingId, setReconApplyingId] = useState<string | null>(null)
   const { rows: customEmailRows } = useCustomEmailTemplates()
+
+  async function applyDealGrossFromReportTask(task: Task) {
+    const payload = parseDealGrossReconciliationNotes(task.notes)
+    if (!payload || !task.deal_id || task.completed) return
+    setReconApplyingId(task.id)
+    const { error } = await updateDeal(task.deal_id, { gross_amount: payload.reported_fee_total })
+    setReconApplyingId(null)
+    if (error) return
+    await refetchDeals()
+    await refetchTasks()
+  }
 
   const emailActionOptions = useMemo(() => {
     const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
@@ -257,7 +271,9 @@ export default function Tasks() {
                 {group.label} · {group.tasks.length}
               </div>
               <div className="space-y-1.5">
-                {group.tasks.map(task => (
+                {group.tasks.map(task => {
+                  const grossRecon = parseDealGrossReconciliationNotes(task.notes)
+                  return (
                   <div
                     key={task.id}
                     className={cn(
@@ -330,15 +346,36 @@ export default function Tasks() {
                             {task.deal.description}
                           </span>
                         )}
-                        {task.notes && (
+                        {task.notes && !grossRecon ? (
                           <span className="text-xs text-neutral-600 truncate max-w-xs">{task.notes}</span>
-                        )}
+                        ) : null}
                         {task.agreement_file && (
                           <span className="text-xs text-blue-400/90 truncate max-w-[200px]" title={task.agreement_file.name}>
                             PDF: {task.agreement_file.name}
                           </span>
                         )}
                       </div>
+                      {grossRecon && !task.completed ? (
+                        <div className="mt-2 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-xs text-neutral-200">
+                          <p className="mb-2">
+                            Deal gross on file:{' '}
+                            <span className="tabular-nums text-white">${grossRecon.gross_on_file}</span>
+                            . Show report fee:{' '}
+                            <span className="tabular-nums text-white">${grossRecon.reported_fee_total}</span>.
+                            Apply the reported fee to update the deal and commission.
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs border-amber-500/40 text-amber-100 hover:bg-amber-500/10"
+                            disabled={reconApplyingId === task.id}
+                            onClick={() => void applyDealGrossFromReportTask(task)}
+                          >
+                            {reconApplyingId === task.id ? 'Applying…' : `Apply $${grossRecon.reported_fee_total} to deal`}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Actions */}
@@ -355,7 +392,8 @@ export default function Tasks() {
                       </Button>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ))}

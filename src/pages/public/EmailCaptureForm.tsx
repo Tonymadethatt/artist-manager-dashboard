@@ -415,6 +415,26 @@ const PRE_EVENT_MEDIA_OPTIONS = [
   { value: 'not_sure', label: 'Not sure yet' },
 ] as const
 
+/** Stored as human-readable lines in deal/outreach notes (no extra server mapping). */
+const PRE_EVENT_LOADIN_OPTIONS = [
+  { value: 'afternoon', label: 'Afternoon load-in (typically before 5pm)' },
+  { value: 'early_evening', label: 'Early evening (~5–7pm)' },
+  { value: 'close_to_doors', label: 'Close to doors — shorter window' },
+  { value: 'soundcheck_before_doors', label: 'Soundcheck shortly before doors' },
+  { value: 'venue_coordinated', label: 'Venue / production will confirm timing' },
+  { value: 'not_sure', label: 'Not sure yet' },
+] as const
+
+const PRE_EVENT_SETTLEMENT_OPTIONS = [
+  { value: 'check_night', label: 'Check at end of night' },
+  { value: 'wire_ach', label: 'Wire or ACH' },
+  { value: 'cash_night', label: 'Cash night-of' },
+  { value: 'card', label: 'Card / credit' },
+  { value: 'deposit_balance', label: 'Deposit + balance (split schedule)' },
+  { value: 'per_contract', label: 'Per our signed agreement' },
+  { value: 'not_sure', label: 'Not sure yet' },
+] as const
+
 function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit: (p: Record<string, unknown>) => void }) {
   const [step, setStep] = useState(0)
   const [loadInOrSoundcheck, setLoadIn] = useState('')
@@ -433,7 +453,7 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
   const nPreEvent = 10
   useCaptureQuestionProgress(step, nPreEvent)
 
-  const canSubmit = loadInOrSoundcheck.trim() || settlementMethod.trim()
+  const canSubmit = Boolean(loadInOrSoundcheck.trim() && settlementMethod.trim())
 
   const toggleGenre = (v: string) => {
     setGenre(prev => (prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]))
@@ -441,13 +461,22 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
 
   return (
     <div className="pb-28">
-      <p className="text-sm text-neutral-200 mb-6">
-        Share load-in, settlement, and day-of contact details — one question at a time.
-      </p>
       {step === 0 ? (
         <>
-          <Field label="Load-in / soundcheck window" value={loadInOrSoundcheck} onChange={setLoadIn} placeholder="e.g. 5pm load-in, 8pm soundcheck" className="mb-6" />
-          <ContinueBar onClick={() => setStep(1)} submitting={submitting} />
+          <p className="text-sm font-medium text-white mb-2">When is load-in or soundcheck?</p>
+          <div className="flex flex-col gap-2 mb-2">
+            {PRE_EVENT_LOADIN_OPTIONS.map(o => (
+              <ChoiceRow
+                key={o.value}
+                label={o.label}
+                selected={loadInOrSoundcheck === o.label}
+                onSelect={() => {
+                  setLoadIn(o.label)
+                  setStep(1)
+                }}
+              />
+            ))}
+          </div>
         </>
       ) : null}
       {step === 1 ? (
@@ -469,8 +498,20 @@ function PreEventForm({ submitting, onSubmit }: { submitting: boolean; onSubmit:
       ) : null}
       {step === 3 ? (
         <>
-          <Field label="Settlement method" value={settlementMethod} onChange={setSettle} placeholder="Check, wire, night-of cash…" className="mb-6" />
-          <ContinueBar onClick={() => setStep(4)} submitting={submitting} />
+          <p className="text-sm font-medium text-white mb-2">How is payment handled for this show?</p>
+          <div className="flex flex-col gap-2 mb-2">
+            {PRE_EVENT_SETTLEMENT_OPTIONS.map(o => (
+              <ChoiceRow
+                key={o.value}
+                label={o.label}
+                selected={settlementMethod === o.label}
+                onSelect={() => {
+                  setSettle(o.label)
+                  setStep(4)
+                }}
+              />
+            ))}
+          </div>
         </>
       ) : null}
       {step === 4 ? (

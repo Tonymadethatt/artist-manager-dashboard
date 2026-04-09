@@ -892,6 +892,9 @@ export interface Database {
           attendance: number | null
           artist_paid_status: string | null
           payment_amount: number | null
+          fee_total: number | null
+          amount_received: number | null
+          payment_dispute_claimed_amount: number | null
           venue_interest: string | null
           relationship_quality: string | null
           notes: string | null
@@ -925,6 +928,9 @@ export interface Database {
           attendance?: number | null
           artist_paid_status?: string | null
           payment_amount?: number | null
+          fee_total?: number | null
+          amount_received?: number | null
+          payment_dispute_claimed_amount?: number | null
           venue_interest?: string | null
           relationship_quality?: string | null
           notes?: string | null
@@ -958,6 +964,9 @@ export interface Database {
           attendance?: number | null
           artist_paid_status?: string | null
           payment_amount?: number | null
+          fee_total?: number | null
+          amount_received?: number | null
+          payment_dispute_claimed_amount?: number | null
           venue_interest?: string | null
           relationship_quality?: string | null
           notes?: string | null

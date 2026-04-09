@@ -11,6 +11,7 @@ const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   venueName: 'Skyline Bar',
   eventDate: '2026-06-15',
   dealDescription: 'Evening DJ set — sample deal for preview',
+  dealGrossAmount: 1200,
 }
 
 const VENUE_KIND_ORDER: EmailCaptureKind[] = [

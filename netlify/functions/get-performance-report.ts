@@ -37,7 +37,7 @@ const handler: Handler = async (event) => {
 
   const { data, error } = await supabase
     .from('performance_reports')
-    .select('id, token, submitted, user_id, venues(name), deals(description, event_date)')
+    .select('id, token, submitted, user_id, venues(name), deals(description, event_date, gross_amount)')
     .eq('token', token)
     .single()
 
@@ -50,7 +50,11 @@ const handler: Handler = async (event) => {
   }
 
   const venue = data.venues as { name: string } | null
-  const deal = data.deals as { description: string; event_date: string | null } | null
+  const deal = data.deals as {
+    description: string
+    event_date: string | null
+    gross_amount: number | null
+  } | null
   const userId = data.user_id as string
   const branding = await brandingForUser(supabase, userId)
 
@@ -63,6 +67,10 @@ const handler: Handler = async (event) => {
       venueName: venue?.name ?? null,
       eventDate: deal?.event_date ?? null,
       dealDescription: deal?.description ?? null,
+      dealGrossAmount:
+        deal?.gross_amount != null && Number.isFinite(Number(deal.gross_amount))
+          ? Number(deal.gross_amount)
+          : null,
       branding,
     }),
   }

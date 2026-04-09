@@ -3,16 +3,17 @@
  * Do not add fields without a defined effect there.
  *
  * Matrix (v1):
- * - chasePaymentFollowup=yes (played only) → task "Chase payment — {venue}" (high, today)
+ * - artistPaidStatus=no (played) → task "Chase payment — {venue}" (high, today) + optional payment_reminder email
+ * - artistPaidStatus=partial (played) → task "Follow up remaining balance — {venue}" (high, today); no auto payment_reminder email
  * - paymentDispute=yes (played) → task "Payment discrepancy — {venue}" (medium, today)
  * - productionIssueLevel=serious (played) → task "Production / safety follow-up — {venue}" (high, today)
- * - venueInterest=yes → venue_emails rebooking_inquiry OR find-contact task; re-engage task due from rebookingTimeline
- * - wantsBookingCall=yes → task "Schedule rebooking call — {venue}" (high, +2d)
- * - wantsManagerVenueContact=yes → task "Artist asked you to contact {venue}" (medium, +3d)
+ * - venueInterest=yes → venue_emails rebooking_inquiry OR find-contact task; re-engage task; task "Schedule rebooking call — {venue}" (+2d)
  * - referralLead=yes → task "Capture referral lead — {venue}" (medium, +5d)
  * - venueInterest≠yes → single follow-up task "Performance report follow-up" (+7d played, +3d cancelled/postponed)
  * - venue status: interest=yes → rebooking; played && poor+no interest → closed_lost; else post_follow_up
  * - cancellationReason → outreach note line; played-only money/production fields null in DB
+ * - merchIncome=yes + merchIncomeAmount → structured note / outreach line only (no separate DB column)
+ * - feeTotal + amountReceived → performance_reports.fee_total / amount_received; commission reconciliation vs deals.gross_amount
  */
 
 export type ChasePaymentFollowup = 'no' | 'unsure' | 'yes'
@@ -47,14 +48,6 @@ export const ATTENDANCE_BAND_TO_NUMBER: Record<string, number> = {
   over_500: 600,
   skip: 0,
 }
-
-export const PARTIAL_PAYMENT_PRESETS: { value: string; label: string; amount: number | null }[] = [
-  { value: '100', label: 'Around $100', amount: 100 },
-  { value: '250', label: 'Around $250', amount: 250 },
-  { value: '500', label: 'Around $500', amount: 500 },
-  { value: '1000', label: 'Around $1,000', amount: 1000 },
-  { value: 'other', label: 'Other amount (enter below)', amount: null },
-]
 
 export function timelineToReengageDays(t: RebookingTimeline | null | undefined): number {
   switch (t) {
