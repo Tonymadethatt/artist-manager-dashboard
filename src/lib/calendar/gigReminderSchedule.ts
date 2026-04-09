@@ -31,3 +31,20 @@ export function shouldSendGigReminderNow(nowMs: number, showStartIso: string, sl
   const sendAfter = startMs - MS_BEFORE_SHOW
   return nowMs >= sendAfter - slackMs
 }
+
+/**
+ * PostgREST `deal:deals(...)` on `venue_emails` is usually an object; normalize edge shapes.
+ */
+export function eventStartAtFromQueueDealEmbed(dealEmbed: unknown): string | null {
+  if (dealEmbed == null) return null
+  if (Array.isArray(dealEmbed)) {
+    const first = dealEmbed[0] as { event_start_at?: string | null } | undefined
+    const s = first?.event_start_at
+    return typeof s === 'string' && s.trim() ? s.trim() : null
+  }
+  if (typeof dealEmbed === 'object' && dealEmbed !== null && 'event_start_at' in dealEmbed) {
+    const s = (dealEmbed as { event_start_at?: string | null }).event_start_at
+    return typeof s === 'string' && s.trim() ? s.trim() : null
+  }
+  return null
+}

@@ -46,6 +46,7 @@ import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
+import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
   addCalendarDaysPacific,
   pacificWallToUtcIso,
@@ -1103,6 +1104,11 @@ export default function EmailQueue() {
               .maybeSingle()
             const deal = dealRow as Deal | null
             if (!deal?.event_start_at || !deal.event_end_at) throw new Error('Deal or show times missing.')
+            if (gigN.kind === 'gig_reminder_24h' && !shouldSendGigReminderNow(Date.now(), deal.event_start_at)) {
+              throw new Error(
+                'This 24h reminder is not due yet — it is sent automatically about one day before show time.',
+              )
+            }
             const { data: venueRow } = await supabase
               .from('venues')
               .select('id,name,city,location,status')

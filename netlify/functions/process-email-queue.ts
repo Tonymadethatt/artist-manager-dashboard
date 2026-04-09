@@ -3,7 +3,7 @@
  *
  * Called by an external cron job every minute.
  * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`, `performance_report_received`, gig-calendar builtins) — buffer 0 so the next cron run can send.
- * `gig_reminder_24h` additionally requires `now >= deal.event_start_at - 24h` (see `shouldSendGigReminderNow`) so missing/erroneous `scheduled_send_at` cannot send it early.
+ * `gig_reminder_24h` uses `venue_emails.deal_id` → batch `deals.event_start_at` for eligibility (embedded `deal` join is fallback only), and re-checks `shouldSendGigReminderNow` immediately before Resend.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -45,7 +45,7 @@ import { buildBrandedGigCalendarEmail } from '../../src/lib/email/gigCalendarEma
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { buildDealIcsBlob } from '../../src/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
-import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
+import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 import { addCalendarDaysPacific, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '../../src/types'
 
@@ -163,6 +163,31 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const gigReminderDealIds = [
+    ...new Set(
+      candidates
+        .filter((row) => row.email_type === 'gig_reminder_24h' && row.deal_id)
+        .map((row) => row.deal_id as string),
+    ),
+  ]
+  /** Authoritative show start for reminder eligibility (do not rely on embedded `deal` join alone). */
+  const eventStartByDealId = new Map<string, string>()
+  if (gigReminderDealIds.length > 0) {
+    const { data: dealStartRows, error: dealStartErr } = await supabase
+      .from('deals')
+      .select('id, event_start_at')
+      .in('id', gigReminderDealIds)
+    if (dealStartErr) {
+      console.error('[process-email-queue] deals reminder times:', dealStartErr.message)
+      return { statusCode: 500, body: JSON.stringify({ error: dealStartErr.message }) }
+    }
+    for (const r of dealStartRows ?? []) {
+      const id = r.id as string
+      const es = r.event_start_at as string | null | undefined
+      if (typeof es === 'string' && es.trim()) eventStartByDealId.set(id, es.trim())
+    }
+  }
+
   const nowMs = Date.now()
   const emails: typeof candidates = []
   for (const e of candidates) {
@@ -177,8 +202,9 @@ const handler: Handler = async (event) => {
     const schedMs = schedRaw ? new Date(schedRaw).getTime() : null
 
     if (e.email_type === 'gig_reminder_24h') {
-      const nested = e.deal as { event_start_at?: string | null } | null | undefined
-      const startIso = nested?.event_start_at
+      const dealId = e.deal_id as string | null | undefined
+      const startIso = (dealId && eventStartByDealId.get(dealId))
+        || eventStartAtFromQueueDealEmbed(e.deal)
       if (!startIso || !shouldSendGigReminderNow(nowMs, startIso)) {
         continue
       }
@@ -655,6 +681,9 @@ const handler: Handler = async (event) => {
             .update({ status: 'failed', notes: 'Auto-send failed: deal missing show times' })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
+          continue
+        }
+        if (!shouldSendGigReminderNow(Date.now(), deal.event_start_at)) {
           continue
         }
         const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
