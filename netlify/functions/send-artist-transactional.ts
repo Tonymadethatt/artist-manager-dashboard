@@ -57,7 +57,7 @@ const handler: Handler = async (event) => {
     testOnly = false,
   } = body
 
-  if (kind !== 'performance_report_received' && kind !== 'gig_week_reminder') {
+  if (kind !== 'performance_report_received') {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid kind' }) }
   }
 
@@ -94,7 +94,6 @@ const handler: Handler = async (event) => {
   const firstName = artistTransactionalGreetingFirstName(profile.artist_name ?? '') || 'there'
   const defaultSubjects: Record<ArtistTransactionalKind, string> = {
     performance_report_received: `${firstName}, we received your show check-in`,
-    gig_week_reminder: `${firstName}, gig week — ${venueName || 'upcoming show'}`,
   }
   const defaultSubjectBase = defaultSubjects[kind]
   const defaultSubject = testOnly ? `[TEST] ${defaultSubjectBase}` : defaultSubjectBase

@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms } from '@/types'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
+import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
 
 interface Props {
   venue: Venue
@@ -136,10 +137,10 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
     setSavingDeal(false)
   }
 
-  const fmt = (d: string) => new Date(d).toLocaleString('en-US', {
+  const fmt = (d: string) => stripOnTheHourMinutes12h(new Date(d).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit',
-  })
+  }))
 
   return (
     <>

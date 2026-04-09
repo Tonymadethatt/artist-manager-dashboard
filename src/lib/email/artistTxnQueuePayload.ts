@@ -1,8 +1,8 @@
-/** Prefix for queued artist transactional emails (`performance_report_received`, `gig_week_reminder`). */
+/** Prefix for queued artist transactional emails (`performance_report_received`). */
 export const ARTIST_TXN_PENDING_PREFIX = 'artist_txn:' as const
 
 export type ArtistTxnQueuePayload = {
-  kind: 'performance_report_received' | 'gig_week_reminder'
+  kind: 'performance_report_received'
   venueName: string
   eventDate: string | null
 }
@@ -15,7 +15,7 @@ export function parseArtistTxnQueueNotes(notes: string | null | undefined): Arti
   if (!notes?.startsWith(ARTIST_TXN_PENDING_PREFIX)) return null
   try {
     const raw = JSON.parse(notes.slice(ARTIST_TXN_PENDING_PREFIX.length)) as ArtistTxnQueuePayload
-    if (raw?.kind !== 'performance_report_received' && raw?.kind !== 'gig_week_reminder') return null
+    if (raw?.kind !== 'performance_report_received') return null
     if (typeof raw.venueName !== 'string') return null
     return {
       kind: raw.kind,

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import type { Venue, Contact, OutreachNote } from '@/types'
+import { ensureCalendarEmailsForVenueDeals } from '@/lib/calendar/queueGigCalendarEmails'
 
 type VenueUpdate = Database['public']['Tables']['venues']['Update']
 type ContactUpdate = Database['public']['Tables']['contacts']['Update']
@@ -57,6 +58,9 @@ export function useVenues() {
       .single()
     if (error) return { error }
     setVenues(prev => prev.map(v => v.id === id ? data as Venue : v))
+    if ('status' in updates) {
+      void ensureCalendarEmailsForVenueDeals(id)
+    }
     return { data: data as Venue }
   }
 

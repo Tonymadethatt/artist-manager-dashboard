@@ -32,12 +32,8 @@ import {
   type PreviewEmailType,
   type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
-import {
-  buildDaySummaryHtml,
-  buildDigestHtml,
-  buildGigReminderHtml,
-  buildIcsInviteHtml,
-} from '@/lib/email/gigCalendarEmailHtml'
+import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
+import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
   venueEmailTypeToCaptureKind,
@@ -78,6 +74,14 @@ const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
 import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
+
+function gigEmailPreviewWhenLine(): string {
+  const d = PREVIEW_MOCK_DEAL.event_date?.trim()
+  if (!d) return ''
+  const a = pacificWallToUtcIso(d, '20:00')
+  const b = pacificWallToUtcIso(d, '23:00')
+  return a && b ? formatPacificTimeRangeCompact(a, b) : d
+}
 
 const CLIENT_CUSTOM_CAPTURE_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
   { value: 'first_outreach', label: EMAIL_CAPTURE_KIND_LABELS.first_outreach },
@@ -204,8 +208,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
   performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
-  gig_week_reminder:          'Operational nudge before a booked date (from a task with venue + deal).',
-  gig_calendar_digest_weekly: 'Every Sunday ~5am PT: list of booked gigs in the next two weeks (queued by schedule).',
+  gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days (Netlify schedule enqueues; email sends on next queue run).',
   gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
   gig_booked_ics:             'First time a gig qualifies for the calendar: .ics invite to the artist (idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a table of every booked gig on one day (queued; sends on next cron tick).',
@@ -217,7 +220,6 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   retainer_received:          '{firstName}, retainer received — thank you',
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
   performance_report_received: '{firstName}, we received your show check-in',
-  gig_week_reminder:          '{firstName}, gig week reminder — {venue}',
   gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
   gig_reminder_24h:           '{firstName}, reminder: {venue} in 24 hours',
   gig_booked_ics:             '{firstName}, calendar invite — booked gig',
@@ -230,7 +232,6 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'retainer_received',
   'performance_report_request',
   'performance_report_received',
-  'gig_week_reminder',
   'gig_calendar_digest_weekly',
   'gig_reminder_24h',
   'gig_booked_ics',
@@ -544,61 +545,88 @@ export default function EmailTemplates() {
           publicSiteOrigin(),
         )
       }
-      if (selectedType === 'gig_week_reminder') {
-        return buildArtistTransactionalEmailHtml(
-          'gig_week_reminder',
-          {
-            artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
-            venueName: PREVIEW_MOCK_VENUE.name,
-            eventDate: PREVIEW_MOCK_DEAL.event_date,
-            managerName: transactionalManagerName,
-            managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
-            website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
-            social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
-            phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
-          },
-          layout,
-          publicSiteOrigin(),
-        )
-      }
       if (selectedType === 'gig_reminder_24h') {
-        return buildGigReminderHtml({
-          introHtml: layout.intro ?? null,
-          venueName: PREVIEW_MOCK_VENUE.name,
-          dealDescription: PREVIEW_MOCK_DEAL.description,
-          whenLine: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
+        const Lsend = artistLayoutForSend(layout, null, null)
+        return buildBrandedGigCalendarEmail({
+          kind: 'gig_reminder_24h',
+          L: Lsend,
+          logoBaseUrl: publicSiteOrigin(),
+          artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
+          managerName: transactionalManagerName,
+          managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
+          website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+          social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+          phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
+          reminder: {
+            venueName: PREVIEW_MOCK_VENUE.name,
+            dealDescription: PREVIEW_MOCK_DEAL.description,
+            whenLine: gigEmailPreviewWhenLine(),
+          },
         })
       }
       if (selectedType === 'gig_booked_ics') {
-        return buildIcsInviteHtml({
-          introHtml: layout.intro ?? null,
-          dealDescription: PREVIEW_MOCK_DEAL.description,
-          venueLine: [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city].filter(Boolean).join(', '),
+        const Lsend = artistLayoutForSend(layout, null, null)
+        return buildBrandedGigCalendarEmail({
+          kind: 'gig_booked_ics',
+          L: Lsend,
+          logoBaseUrl: publicSiteOrigin(),
+          artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
+          managerName: transactionalManagerName,
+          managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
+          website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+          social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+          phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
+          icsBody: {
+            dealDescription: PREVIEW_MOCK_DEAL.description,
+            venueLine: [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city].filter(Boolean).join(', '),
+          },
         })
       }
       if (selectedType === 'gig_calendar_digest_weekly') {
-        return buildDigestHtml({
-          introHtml: layout.intro ?? null,
-          rows: [
-            {
-              when: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
-              title: PREVIEW_MOCK_DEAL.description,
-              venue: PREVIEW_MOCK_VENUE.name,
-            },
-          ],
+        const Lsend = artistLayoutForSend(layout, null, null)
+        return buildBrandedGigCalendarEmail({
+          kind: 'gig_calendar_digest_weekly',
+          L: Lsend,
+          logoBaseUrl: publicSiteOrigin(),
+          artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
+          managerName: transactionalManagerName,
+          managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
+          website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+          social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+          phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
+          digest: {
+            rows: [
+              {
+                when: gigEmailPreviewWhenLine(),
+                title: PREVIEW_MOCK_DEAL.description,
+                venue: PREVIEW_MOCK_VENUE.name,
+              },
+            ],
+          },
         })
       }
       if (selectedType === 'gig_day_summary_manual') {
-        return buildDaySummaryHtml({
-          introHtml: layout.intro ?? null,
-          dayLabel: 'Sample show day',
-          rows: [
-            {
-              when: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
-              title: PREVIEW_MOCK_DEAL.description,
-              venue: PREVIEW_MOCK_VENUE.name,
-            },
-          ],
+        const Lsend = artistLayoutForSend(layout, null, null)
+        return buildBrandedGigCalendarEmail({
+          kind: 'gig_day_summary_manual',
+          L: Lsend,
+          logoBaseUrl: publicSiteOrigin(),
+          artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
+          managerName: transactionalManagerName,
+          managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
+          website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
+          social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
+          phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
+          daySummary: {
+            dayLabel: 'Sample show day',
+            rows: [
+              {
+                when: gigEmailPreviewWhenLine(),
+                title: PREVIEW_MOCK_DEAL.description,
+                venue: PREVIEW_MOCK_VENUE.name,
+              },
+            ],
+          },
         })
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)

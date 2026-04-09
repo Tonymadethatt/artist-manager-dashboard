@@ -83,6 +83,7 @@ function VenueProgressPanelConnected({
   onOpenSendModal,
   onApplyTemplate,
   refetchEmails,
+  onRefreshNavBadges,
 }: {
   venue: Venue
   tasks: Task[]
@@ -95,6 +96,7 @@ function VenueProgressPanelConnected({
   onOpenSendModal: (venue: Venue, contact: Contact, emailType: string) => void
   onApplyTemplate: (templateId: string, venueId: string) => Promise<{ count: number }>
   refetchEmails: () => void | Promise<void>
+  onRefreshNavBadges: () => Promise<void>
 }) {
   const { contacts, addNote } = useVenueDetail(venue.id)
   const venueDeals = deals.filter(d => d.venue_id === venue.id)
@@ -109,7 +111,8 @@ function VenueProgressPanelConnected({
     const venueUpdates: Partial<Venue> = {}
     if (updates.newStatus) venueUpdates.status = updates.newStatus
     if (updates.followUpDate !== undefined) venueUpdates.follow_up_date = updates.followUpDate
-    if (Object.keys(venueUpdates).length > 0) {
+    const hadVenuePatch = Object.keys(venueUpdates).length > 0
+    if (hadVenuePatch) {
       promises.push(onUpdateVenue(venue.id, venueUpdates))
     }
 
@@ -127,6 +130,10 @@ function VenueProgressPanelConnected({
     }
 
     await Promise.all(promises)
+
+    if (hadVenuePatch) {
+      await onRefreshNavBadges()
+    }
 
     // 4. Auto-apply template if status changed
     if (updates.newStatus) {
@@ -161,7 +168,7 @@ function VenueProgressPanelConnected({
         onOpenSendModal(venue, primaryContact, updates.emailType)
       }
     }
-  }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails])
+  }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails, onRefreshNavBadges])
 
   return (
     <VenueProgressPanel
@@ -194,7 +201,7 @@ export default function Pipeline() {
   const { emails: allEmails, queueEmail, refetch: refetchEmails } = useVenueEmails()
   const { applyTemplate } = useTaskTemplates()
   const { rows: customEmailRows } = useCustomEmailTemplates()
-  const { markSeen } = useNavBadges()
+  const { markSeen, refreshNavBadges } = useNavBadges()
 
   // Mark Pipeline as seen on mount — clears the badge for new tasks
   useEffect(() => { void markSeen('pipeline') }, [markSeen])
@@ -376,9 +383,10 @@ export default function Pipeline() {
       showToast(result.error.message)
       return result
     }
+    await refreshNavBadges()
     showToast(task ? `"${task.title}" marked complete` : 'Task completed')
     return result
-  }, [completeTask, tasks, showToast])
+  }, [completeTask, tasks, showToast, refreshNavBadges])
 
   const handleUncompleteTask = useCallback(async (id: string) => {
     const result = await uncompleteTask(id)
@@ -635,6 +643,7 @@ export default function Pipeline() {
               onOpenSendModal={handleOpenSendModal}
               onApplyTemplate={applyTemplate}
               refetchEmails={refetchEmails}
+              onRefreshNavBadges={refreshNavBadges}
             />
           </div>
         )}

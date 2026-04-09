@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { useNavBadges } from '@/context/NavBadgesContext'
 import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
 import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
@@ -87,6 +88,7 @@ export default function Tasks() {
   const { deals, updateDeal, refetch: refetchDeals } = useDeals()
   const [reconApplyingId, setReconApplyingId] = useState<string | null>(null)
   const { rows: customEmailRows } = useCustomEmailTemplates()
+  const { refreshNavBadges } = useNavBadges()
 
   async function applyDealGrossFromReportTask(task: Task) {
     const payload = parseDealGrossReconciliationNotes(task.notes)
@@ -191,6 +193,7 @@ export default function Tasks() {
       await uncompleteTask(task.id)
     } else {
       await completeTask(task.id)
+      await refreshNavBadges()
     }
     setToggling(null)
   }

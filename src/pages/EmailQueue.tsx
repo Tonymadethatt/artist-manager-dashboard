@@ -43,18 +43,14 @@ import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload
 import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
-import {
-  buildDaySummaryHtml,
-  buildDigestHtml,
-  buildGigReminderHtml,
-  buildIcsInviteHtml,
-} from '@/lib/email/gigCalendarEmailHtml'
+import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import {
   addCalendarDaysPacific,
   pacificWallToUtcIso,
-  whenLineFriendlyFromDeal,
+  stripOnTheHourMinutes12h,
+  whenLineCompactFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
@@ -77,10 +73,10 @@ import {
 } from '@/lib/reports/buildManagementReportData'
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
+  return stripOnTheHourMinutes12h(new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit',
-  })
+  }))
 }
 
 function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
@@ -103,12 +99,11 @@ function pendingNotesLine(email: VenueEmail): string | null {
     const inv = parseInvoiceQueueNotes(email.notes)
     if (inv?.url) return 'Invoice link attached to this send'
   }
-  if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+  if (email.email_type === 'performance_report_received') {
     const t = parseArtistTxnQueueNotes(email.notes)
     if (t) {
-      const tag = t.kind === 'gig_week_reminder' ? 'Gig week' : 'Report received'
       const when = t.eventDate ? ` · ${t.eventDate}` : ''
-      return `${tag} · ${t.venueName}${when}`
+      return `Report received · ${t.venueName}${when}`
     }
   }
   if (email.email_type === 'gig_calendar_digest_weekly') {
@@ -477,9 +472,9 @@ export default function EmailQueue() {
             + rows
             + `<p style="margin:16px 0 0;color:${EMAIL_HINT};font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
           )
-        } else if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+        } else if (email.email_type === 'performance_report_received') {
           const txn = parseArtistTxnQueueNotes(email.notes)
-          if (!txn || txn.kind !== email.email_type) {
+          if (!txn || txn.kind !== 'performance_report_received') {
             setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Missing artist transactional payload on this row.</div>')
             setPreviewLoading(false)
             return
@@ -493,12 +488,13 @@ export default function EmailQueue() {
           const L = artistLayoutForSend(txTmpl?.layout ?? null, txTmpl?.custom_subject ?? null, txTmpl?.custom_intro ?? null)
           const site = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
           const html = buildArtistTransactionalEmailHtml(
-            txn.kind,
+            'performance_report_received',
             {
               artistName: profile.artist_name ?? '',
               venueName: txn.venueName,
               eventDate: txn.eventDate,
               managerName: profile.manager_name?.trim() || 'Management',
+              managerTitle: profile.manager_title ?? null,
               website: profile.website ?? null,
               social_handle: profile.social_handle ?? null,
               phone: profile.phone ?? null,
@@ -508,10 +504,7 @@ export default function EmailQueue() {
           )
           setPreviewHtml(html)
           const firstName = artistTransactionalGreetingFirstName(profile.artist_name ?? '') || 'Artist'
-          const defaultSubj = txn.kind === 'gig_week_reminder'
-            ? `${firstName}, gig week — ${txn.venueName}`
-            : `${firstName}, we received your show check-in`
-          setPreviewSubject(L.subject?.trim() || defaultSubj)
+          setPreviewSubject(L.subject?.trim() || `${firstName}, we received your show check-in`)
         } else if (
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
@@ -521,13 +514,22 @@ export default function EmailQueue() {
           const gigN = parseGigCalendarQueueNotes(email.notes)
           const { data: gcTmpl } = await supabase
             .from('email_templates')
-            .select('custom_subject, custom_intro')
+            .select('custom_subject, custom_intro, layout')
             .eq('user_id', user.id)
             .eq('email_type', email.email_type)
             .maybeSingle()
-          const intro = (gcTmpl?.custom_intro as string | null) ?? null
-          const subj = (gcTmpl?.custom_subject as string | null)?.trim() || email.subject
+          const Lg = artistLayoutForSend(gcTmpl?.layout ?? null, gcTmpl?.custom_subject ?? null, gcTmpl?.custom_intro ?? null)
+          const subj = Lg.subject?.trim() || email.subject
           setPreviewSubject(subj)
+          const siteG = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
+          const gigShellP = {
+            artistName: profile.artist_name ?? '',
+            managerName: profile.manager_name?.trim() || 'Management',
+            managerTitle: profile.manager_title ?? null,
+            website: profile.website ?? null,
+            social_handle: profile.social_handle ?? null,
+            phone: profile.phone ?? null,
+          }
 
           if (email.email_type === 'gig_calendar_digest_weekly' && gigN?.kind === 'gig_calendar_digest_weekly') {
             const venues = inputs.venues as Venue[]
@@ -547,14 +549,20 @@ export default function EmailQueue() {
                 const ts = new Date(d.event_start_at).getTime()
                 if (ts < t0 || ts > t1) continue
                 rows.push({
-                  when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                  when: whenLineCompactFromDeal(d) || d.event_date || '',
                   title: d.description?.trim() || 'Gig',
                   venue: v?.name?.trim() || '—',
                 })
               }
             }
             rows.sort((a, b) => a.when.localeCompare(b.when))
-            setPreviewHtml(buildDigestHtml({ introHtml: intro, rows }))
+            setPreviewHtml(buildBrandedGigCalendarEmail({
+              kind: 'gig_calendar_digest_weekly',
+              L: Lg,
+              logoBaseUrl: siteG,
+              ...gigShellP,
+              digest: { rows },
+            }))
           } else if (email.email_type === 'gig_day_summary_manual' && gigN?.kind === 'gig_day_summary_manual') {
             const ymdD = gigN.ymd
             const venuesD = inputs.venues as Venue[]
@@ -573,7 +581,7 @@ export default function EmailQueue() {
                 const ts = new Date(d.event_start_at).getTime()
                 if (ts < t0d || ts > t1d) continue
                 rowsD.push({
-                  when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                  when: whenLineCompactFromDeal(d) || d.event_date || '',
                   title: d.description?.trim() || 'Gig',
                   venue: v?.name?.trim() || '—',
                 })
@@ -590,7 +598,13 @@ export default function EmailQueue() {
                 timeZone: 'America/Los_Angeles',
               }).format(new Date(noonD))
               : ymdD
-            setPreviewHtml(buildDaySummaryHtml({ introHtml: intro, dayLabel: dayLabelD, rows: rowsD }))
+            setPreviewHtml(buildBrandedGigCalendarEmail({
+              kind: 'gig_day_summary_manual',
+              L: Lg,
+              logoBaseUrl: siteG,
+              ...gigShellP,
+              daySummary: { dayLabel: dayLabelD, rows: rowsD },
+            }))
           } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
             const { data: dealRow } = await supabase
               .from('deals')
@@ -604,11 +618,16 @@ export default function EmailQueue() {
             } else if (gigN.kind === 'gig_reminder_24h') {
               const { data: venueRow } = await supabase.from('venues').select('name').eq('id', deal.venue_id as string).maybeSingle()
               const vn = (venueRow as { name?: string } | null)?.name?.trim() || deal.description?.trim() || 'Show'
-              setPreviewHtml(buildGigReminderHtml({
-                introHtml: intro,
-                venueName: vn,
-                dealDescription: deal.description?.trim() || 'Gig',
-                whenLine: whenLineFriendlyFromDeal(deal),
+              setPreviewHtml(buildBrandedGigCalendarEmail({
+                kind: 'gig_reminder_24h',
+                L: Lg,
+                logoBaseUrl: siteG,
+                ...gigShellP,
+                reminder: {
+                  venueName: vn,
+                  dealDescription: deal.description?.trim() || 'Gig',
+                  whenLine: whenLineCompactFromDeal(deal),
+                },
               }))
             } else {
               const { data: venueRow } = await supabase
@@ -618,10 +637,15 @@ export default function EmailQueue() {
                 .maybeSingle()
               const venue = venueRow as Venue | null
               const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
-              setPreviewHtml(buildIcsInviteHtml({
-                introHtml: intro,
-                dealDescription: deal.description?.trim() || 'Gig',
-                venueLine,
+              setPreviewHtml(buildBrandedGigCalendarEmail({
+                kind: 'gig_booked_ics',
+                L: Lg,
+                logoBaseUrl: siteG,
+                ...gigShellP,
+                icsBody: {
+                  dealDescription: deal.description?.trim() || 'Gig',
+                  venueLine,
+                },
               }))
             }
           } else {
@@ -919,9 +943,9 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
-        } else if (email.email_type === 'performance_report_received' || email.email_type === 'gig_week_reminder') {
+        } else if (email.email_type === 'performance_report_received') {
           const txn = parseArtistTxnQueueNotes(email.notes)
-          if (!txn || txn.kind !== email.email_type) {
+          if (!txn || txn.kind !== 'performance_report_received') {
             throw new Error('Missing artist transactional payload on this row.')
           }
           const { data: txTmpl } = await supabase
@@ -934,7 +958,7 @@ export default function EmailQueue() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              kind: txn.kind,
+              kind: 'performance_report_received',
               profile: profileForArtistSend,
               venueName: txn.venueName,
               eventDate: txn.eventDate,
@@ -954,17 +978,25 @@ export default function EmailQueue() {
           const gigN = parseGigCalendarQueueNotes(email.notes)
           const { data: gcTmpl } = await supabase
             .from('email_templates')
-            .select('custom_subject, custom_intro')
+            .select('custom_subject, custom_intro, layout')
             .eq('user_id', user.id)
             .eq('email_type', email.email_type)
             .maybeSingle()
-          const intro = (gcTmpl?.custom_intro as string | null) ?? null
-          const subj = (gcTmpl?.custom_subject as string | null)?.trim() || email.subject
+          const Lsend = artistLayoutForSend(gcTmpl?.layout ?? null, gcTmpl?.custom_subject ?? null, gcTmpl?.custom_intro ?? null)
+          const subj = Lsend.subject?.trim() || email.subject
           const sendProfile = {
             artist_name: profileForArtistSend.artist_name ?? '',
             from_email: profileForArtistSend.from_email,
             reply_to_email: profileForArtistSend.reply_to_email,
             manager_email: profileForArtistSend.manager_email,
+          }
+          const shellQ = {
+            artistName: profileForArtistSend.artist_name ?? '',
+            managerName: profileForArtistSend.manager_name?.trim() || 'Management',
+            managerTitle: profileForArtistSend.manager_title ?? null,
+            website: profileForArtistSend.website ?? null,
+            social_handle: profileForArtistSend.social_handle ?? null,
+            phone: profileForArtistSend.phone ?? null,
           }
           if (email.email_type === 'gig_calendar_digest_weekly' && gigN?.kind === 'gig_calendar_digest_weekly') {
             const venues = inputs.venues as Venue[]
@@ -984,13 +1016,19 @@ export default function EmailQueue() {
               const ts = new Date(d.event_start_at).getTime()
               if (ts < t0 || ts > t1) continue
               rows.push({
-                when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                when: whenLineCompactFromDeal(d) || d.event_date || '',
                 title: d.description?.trim() || 'Gig',
                 venue: v?.name?.trim() || '—',
               })
             }
             rows.sort((a, b) => a.when.localeCompare(b.when))
-            const html = buildDigestHtml({ introHtml: intro, rows })
+            const html = buildBrandedGigCalendarEmail({
+              kind: 'gig_calendar_digest_weekly',
+              L: Lsend,
+              logoBaseUrl: siteUrl,
+              ...shellQ,
+              digest: { rows },
+            })
             const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1021,7 +1059,7 @@ export default function EmailQueue() {
               const ts = new Date(d.event_start_at).getTime()
               if (ts < t0s || ts > t1s) continue
               rowsS.push({
-                when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                when: whenLineCompactFromDeal(d) || d.event_date || '',
                 title: d.description?.trim() || 'Gig',
                 venue: v?.name?.trim() || '—',
               })
@@ -1037,7 +1075,13 @@ export default function EmailQueue() {
                 timeZone: 'America/Los_Angeles',
               }).format(new Date(noonS))
               : ymdS
-            const html = buildDaySummaryHtml({ introHtml: intro, dayLabel: dayLabelS, rows: rowsS })
+            const html = buildBrandedGigCalendarEmail({
+              kind: 'gig_day_summary_manual',
+              L: Lsend,
+              logoBaseUrl: siteUrl,
+              ...shellQ,
+              daySummary: { dayLabel: dayLabelS, rows: rowsS },
+            })
             const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1067,11 +1111,16 @@ export default function EmailQueue() {
             const venue = venueRow as Venue | null
             if (gigN.kind === 'gig_reminder_24h') {
               const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
-              const html = buildGigReminderHtml({
-                introHtml: intro,
-                venueName,
-                dealDescription: deal.description?.trim() || 'Gig',
-                whenLine: whenLineFriendlyFromDeal(deal),
+              const html = buildBrandedGigCalendarEmail({
+                kind: 'gig_reminder_24h',
+                L: Lsend,
+                logoBaseUrl: siteUrl,
+                ...shellQ,
+                reminder: {
+                  venueName,
+                  dealDescription: deal.description?.trim() || 'Gig',
+                  whenLine: whenLineCompactFromDeal(deal),
+                },
               })
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
                 method: 'POST',
@@ -1103,10 +1152,15 @@ export default function EmailQueue() {
                 throw new Error('Could not build .ics')
               }
               const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
-              const html = buildIcsInviteHtml({
-                introHtml: intro,
-                dealDescription: deal.description?.trim() || 'Gig',
-                venueLine,
+              const html = buildBrandedGigCalendarEmail({
+                kind: 'gig_booked_ics',
+                L: Lsend,
+                logoBaseUrl: siteUrl,
+                ...shellQ,
+                icsBody: {
+                  dealDescription: deal.description?.trim() || 'Gig',
+                  venueLine,
+                },
               })
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
                 method: 'POST',

@@ -59,22 +59,31 @@ const FRIENDLY_TIME_ONLY = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 })
 
-/** e.g. "Wed, Apr 9, 2026, 2:00 PM PT" */
+/**
+ * Drop redundant ":00" before am/pm (en-US Intl output). "8:00 PM" → "8 PM"; "8:30 PM" unchanged.
+ * Use for any user-facing 12-hour string from `Intl` or `toLocaleString` with `hour12` default true.
+ */
+export function stripOnTheHourMinutes12h(s: string): string {
+  if (!s) return s
+  return s.replace(/:00(?=\s*(?:AM|PM)\b)/gi, '')
+}
+
+/** e.g. "Wed, Apr 9, 2026, 2 PM PT" (on-the-hour drops :00) */
 export function formatPacificInstantReadable(iso: string): string {
   const ms = new Date(iso).getTime()
   if (!Number.isFinite(ms)) return ''
-  return `${FRIENDLY_DATE_TIME.format(new Date(ms))} PT`
+  return `${stripOnTheHourMinutes12h(FRIENDLY_DATE_TIME.format(new Date(ms)))} PT`
 }
 
-/** Same calendar day in LA: "Wed, Apr 9, 2026 · 2:00 PM – 11:00 PM PT"; else full range. */
+/** Same calendar day in LA: "Wed, Apr 9, 2026 · 2 PM – 11:30 PM PT"; else full range. */
 export function formatPacificTimeRangeReadable(startIso: string, endIso: string): string {
   const k0 = pacificDateKeyFromUtcIso(startIso)
   const k1 = pacificDateKeyFromUtcIso(endIso)
   if (!k0 || !k1) return formatPacificInstantReadable(startIso)
   if (k0 === k1) {
     const dayPart = FRIENDLY_DATE_ONLY.format(new Date(startIso))
-    const tA = FRIENDLY_TIME_ONLY.format(new Date(startIso))
-    const tB = FRIENDLY_TIME_ONLY.format(new Date(endIso))
+    const tA = stripOnTheHourMinutes12h(FRIENDLY_TIME_ONLY.format(new Date(startIso)))
+    const tB = stripOnTheHourMinutes12h(FRIENDLY_TIME_ONLY.format(new Date(endIso)))
     return `${dayPart} · ${tA} – ${tB} PT`
   }
   return `${formatPacificInstantReadable(startIso)} – ${formatPacificInstantReadable(endIso)}`
@@ -126,6 +135,84 @@ export function weekdaySunday0PacificYmd(ymd: string): number {
   const s = fmt.format(new Date(iso))
   const idx = SHORT_WD.indexOf(s as (typeof SHORT_WD)[number])
   return idx < 0 ? 0 : idx
+}
+
+const COMPACT_DAY_SAME_YEAR = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+})
+
+const COMPACT_DAY_WITH_YEAR = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+
+const COMPACT_TIME_12H = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+function compactDayLabel(iso: string, includeYear: boolean): string {
+  return includeYear
+    ? COMPACT_DAY_WITH_YEAR.format(new Date(iso))
+    : COMPACT_DAY_SAME_YEAR.format(new Date(iso))
+}
+
+/**
+ * Dense email / table line: 12-hour times, short weekday + month + day (year only if spans calendar years).
+ * Same day: "Mon, Jan 12 · 8 PM – 11:30 PM"
+ */
+export function formatPacificTimeRangeCompact(startIso: string, endIso: string): string {
+  const ms0 = new Date(startIso).getTime()
+  const ms1 = new Date(endIso).getTime()
+  if (!Number.isFinite(ms0) || !Number.isFinite(ms1)) return ''
+  const k0 = pacificDateKeyFromUtcIso(startIso)
+  const k1 = pacificDateKeyFromUtcIso(endIso)
+  if (!k0 || !k1) return ''
+
+  const y0 = Number(k0.slice(0, 4))
+  const y1 = Number(k1.slice(0, 4))
+  const includeYear = y0 !== y1
+
+  const t0 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms0)))
+  const t1 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms1)))
+
+  if (k0 === k1) {
+    const day = compactDayLabel(startIso, false)
+    return `${day} · ${t0} – ${t1}`
+  }
+
+  const day0 = compactDayLabel(startIso, includeYear)
+  const day1 = compactDayLabel(endIso, includeYear)
+  return `${day0}, ${t0} – ${day1}, ${t1}`
+}
+
+/** Date-only fallback when instants missing (raw YYYY-MM-DD). */
+function compactDateFromYmd(ymd: string): string {
+  const iso = pacificWallToUtcIso(ymd.trim(), '12:00')
+  if (!iso) return ymd.trim()
+  return COMPACT_DAY_SAME_YEAR.format(new Date(iso))
+}
+
+/**
+ * Short show window for digest / day-summary tables (12h, minimal date noise).
+ */
+export function whenLineCompactFromDeal(d: {
+  event_start_at?: string | null
+  event_end_at?: string | null
+  event_date?: string | null
+}): string {
+  if (d.event_start_at && d.event_end_at) {
+    return formatPacificTimeRangeCompact(d.event_start_at, d.event_end_at)
+  }
+  const ed = d.event_date?.trim()
+  return ed ? compactDateFromYmd(ed) : ''
 }
 
 /** Human-readable show window for emails and calendar detail (Pacific). */

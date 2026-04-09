@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ArtistProfile, AnyEmailType, VenueEmailType, GeneratedFile } from '@/types'
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
-import { normalizeEmailTemplateLayout } from '@/lib/emailLayout'
+import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
 import { EMAIL_TEMPLATE_PREVIEW_INVOICE_URL, PREVIEW_MOCK_DEAL, PREVIEW_MOCK_VENUE } from '@/lib/buildVenueEmailHtml'
 import {
   venueEmailTypeToCaptureKind,
@@ -22,13 +22,8 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
-import {
-  buildDaySummaryHtml,
-  buildDigestHtml,
-  buildGigReminderHtml,
-  buildIcsInviteHtml,
-} from '@/lib/email/gigCalendarEmailHtml'
-import { pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
+import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
+import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
   'booking_confirmation',
@@ -282,15 +277,15 @@ export async function sendEmailTemplateTest(
       return { ok: true }
     }
 
-    if (params.selectedType === 'performance_report_received' || params.selectedType === 'gig_week_reminder') {
+    if (params.selectedType === 'performance_report_received') {
       const res = await fetch('/.netlify/functions/send-artist-transactional', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          kind: params.selectedType,
+          kind: 'performance_report_received',
           profile: reportProfileForSend(profile),
           venueName: PREVIEW_MOCK_VENUE.name,
-          eventDate: params.selectedType === 'gig_week_reminder' ? PREVIEW_MOCK_DEAL.event_date : null,
+          eventDate: null,
           custom_subject: layoutNorm.subject ?? null,
           custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
@@ -304,14 +299,26 @@ export async function sendEmailTemplateTest(
     const previewEventDay = PREVIEW_MOCK_DEAL.event_date ?? '2026-05-17'
     const startIso = pacificWallToUtcIso(previewEventDay, '20:00')
     const endIso = pacificWallToUtcIso(previewEventDay, '23:00')
+    const Lsend = artistLayoutForSend(layoutNorm, null, null)
+    const gigShell = {
+      artistName: profile.artist_name ?? '',
+      managerName: profile.manager_name?.trim() || profile.company_name?.trim() || 'Management',
+      managerTitle: profile.manager_title ?? null,
+      website: profile.website ?? null,
+      social_handle: profile.social_handle ?? null,
+      phone: profile.phone ?? null,
+    }
     if (params.selectedType === 'gig_reminder_24h') {
-      const html = buildGigReminderHtml({
-        introHtml: layoutNorm.intro ?? null,
-        venueName: PREVIEW_MOCK_VENUE.name,
-        dealDescription: PREVIEW_MOCK_DEAL.description,
-        whenLine: startIso && endIso
-          ? `${previewEventDay} 20:00–23:00 PT`
-          : '',
+      const html = buildBrandedGigCalendarEmail({
+        kind: 'gig_reminder_24h',
+        L: Lsend,
+        logoBaseUrl: publicSiteOrigin(),
+        ...gigShell,
+        reminder: {
+          venueName: PREVIEW_MOCK_VENUE.name,
+          dealDescription: PREVIEW_MOCK_DEAL.description,
+          whenLine: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : '',
+        },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',
@@ -325,7 +332,7 @@ export async function sendEmailTemplateTest(
             manager_email: profile.manager_email,
           },
           to: managerRecipient.email,
-          subject: layoutNorm.subject?.trim() || `Reminder: ${PREVIEW_MOCK_VENUE.name}`,
+          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || `Reminder: ${PREVIEW_MOCK_VENUE.name}`,
           html,
         }),
       })
@@ -346,10 +353,15 @@ export async function sendEmailTemplateTest(
         artistDisplayName: profile.artist_name ?? 'Artist',
       })
       const venueLine = [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city, PREVIEW_MOCK_VENUE.location].filter(Boolean).join(', ')
-      const html = buildIcsInviteHtml({
-        introHtml: layoutNorm.intro ?? null,
-        dealDescription: PREVIEW_MOCK_DEAL.description,
-        venueLine,
+      const html = buildBrandedGigCalendarEmail({
+        kind: 'gig_booked_ics',
+        L: Lsend,
+        logoBaseUrl: publicSiteOrigin(),
+        ...gigShell,
+        icsBody: {
+          dealDescription: PREVIEW_MOCK_DEAL.description,
+          venueLine,
+        },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',
@@ -363,7 +375,7 @@ export async function sendEmailTemplateTest(
             manager_email: profile.manager_email,
           },
           to: managerRecipient.email,
-          subject: layoutNorm.subject?.trim() || 'Calendar invite — booked gig (test)',
+          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Calendar invite — booked gig (test)',
           html,
           icsFilename: 'preview-gig.ics',
           icsContentUtf8: icsText,
@@ -374,13 +386,18 @@ export async function sendEmailTemplateTest(
     }
 
     if (params.selectedType === 'gig_calendar_digest_weekly') {
-      const html = buildDigestHtml({
-        introHtml: layoutNorm.intro ?? null,
-        rows: [{
-          when: `${previewEventDay} 20:00–23:00 PT`,
-          title: PREVIEW_MOCK_DEAL.description,
-          venue: PREVIEW_MOCK_VENUE.name,
-        }],
+      const html = buildBrandedGigCalendarEmail({
+        kind: 'gig_calendar_digest_weekly',
+        L: Lsend,
+        logoBaseUrl: publicSiteOrigin(),
+        ...gigShell,
+        digest: {
+          rows: [{
+            when: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : previewEventDay,
+            title: PREVIEW_MOCK_DEAL.description,
+            venue: PREVIEW_MOCK_VENUE.name,
+          }],
+        },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',
@@ -394,7 +411,7 @@ export async function sendEmailTemplateTest(
             manager_email: profile.manager_email,
           },
           to: managerRecipient.email,
-          subject: layoutNorm.subject?.trim() || 'Your gigs — next two weeks (test)',
+          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Your gigs — next two weeks (test)',
           html,
         }),
       })
@@ -403,14 +420,19 @@ export async function sendEmailTemplateTest(
     }
 
     if (params.selectedType === 'gig_day_summary_manual') {
-      const html = buildDaySummaryHtml({
-        introHtml: layoutNorm.intro ?? null,
-        dayLabel: 'Sample show day',
-        rows: [{
-          when: `${previewEventDay} 20:00–23:00 PT`,
-          title: PREVIEW_MOCK_DEAL.description,
-          venue: PREVIEW_MOCK_VENUE.name,
-        }],
+      const html = buildBrandedGigCalendarEmail({
+        kind: 'gig_day_summary_manual',
+        L: Lsend,
+        logoBaseUrl: publicSiteOrigin(),
+        ...gigShell,
+        daySummary: {
+          dayLabel: 'Sample show day',
+          rows: [{
+            when: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : previewEventDay,
+            title: PREVIEW_MOCK_DEAL.description,
+            venue: PREVIEW_MOCK_VENUE.name,
+          }],
+        },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',
@@ -424,7 +446,7 @@ export async function sendEmailTemplateTest(
             manager_email: profile.manager_email,
           },
           to: managerRecipient.email,
-          subject: layoutNorm.subject?.trim() || 'Your gigs — one day (test)',
+          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Your gigs — one day (test)',
           html,
         }),
       })

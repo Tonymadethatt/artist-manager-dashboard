@@ -1053,6 +1053,14 @@ export interface Database {
         Args: { p_since: string }
         Returns: number
       }
+      ensure_deal_calendar_listing_stamp: {
+        Args: { p_deal_id: string }
+        Returns: undefined
+      }
+      ensure_calendar_listing_stamps_for_venue: {
+        Args: { p_venue_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       outreach_status: OutreachStatus

@@ -380,7 +380,7 @@ export async function queueEmailAutomationForCompletedTask(
     }
 
     const builtin = audience.builtinType
-    if (builtin === 'performance_report_received' || builtin === 'gig_week_reminder') {
+    if (builtin === 'performance_report_received') {
       if (!v || !resolvedVenueId) {
         return { ok: false, reason: 'artist_txn_needs_venue' }
       }

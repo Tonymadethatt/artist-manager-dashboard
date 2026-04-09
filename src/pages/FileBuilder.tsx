@@ -29,6 +29,7 @@ import {
   htmlDocumentToPdfBlob,
   sanitizeFilenameStem,
 } from '@/lib/agreement'
+import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
 
 export default function FileBuilder() {
   const navigate = useNavigate()
@@ -148,7 +149,7 @@ export default function FileBuilder() {
       if (cancelled) return
       const companyLine = profile?.company_name?.trim() || profile?.artist_name || 'Agreement'
       const tagline = profile?.tagline?.trim() || null
-      const generatedAtLabel = `Generated ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}`
+      const generatedAtLabel = `Generated ${stripOnTheHourMinutes12h(new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }))}`
       const html = renderAgreementHtmlDocument({
         sections: selectedTemplate.sections,
         vars,
@@ -174,7 +175,7 @@ export default function FileBuilder() {
     const logo = await resolveAgreementLogo(origin, selectedTemplate.sections)
     const companyLine = profile?.company_name?.trim() || profile?.artist_name || 'Agreement'
     const tagline = profile?.tagline?.trim() || null
-    const generatedAtLabel = `Generated ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}`
+    const generatedAtLabel = `Generated ${stripOnTheHourMinutes12h(new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' }))}`
     return renderAgreementHtmlDocument({
       sections: selectedTemplate.sections,
       vars,

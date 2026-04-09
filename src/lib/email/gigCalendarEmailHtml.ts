@@ -1,96 +1,212 @@
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import { escapeHtmlPlain } from './appendBlocksHtml'
+import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
+import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
+import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
+
+export type GigCalendarBrandedKind =
+  | 'gig_calendar_digest_weekly'
+  | 'gig_reminder_24h'
+  | 'gig_booked_ics'
+  | 'gig_day_summary_manual'
+
+type Row = { when: string; title: string; venue: string }
+
+function roleBannerRgba(
+  bg: string,
+  border: string,
+  dot: string,
+  label: string,
+): string {
+  return `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:11px 16px;margin-bottom:20px;">`
+    + `<span style="display:inline-block;width:6px;height:6px;background:${dot};border-radius:50%;margin-right:10px;vertical-align:middle;"></span>`
+    + `<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">${label}</span>`
+    + `</div>`
 }
 
-export function buildGigReminderHtml(args: {
-  introHtml: string | null
-  venueName: string
-  dealDescription: string
-  whenLine: string
-}): string {
-  const intro = args.introHtml?.trim()
-    ? `<div style="margin:16px 0;color:#e5e5e5;font-size:15px;line-height:1.5">${args.introHtml}</div>`
-    : ''
-  return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:system-ui,sans-serif;color:#fafafa;padding:24px;">
-  <div style="max-width:560px;margin:0 auto;">
-    <p style="font-size:15px;color:#a3a3a3;margin:0 0 8px">24-hour reminder</p>
-    <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(args.dealDescription)}</h1>
-    <p style="margin:0 0 4px;color:#d4d4d4">${escapeHtml(args.venueName)}</p>
-    <p style="margin:0 0 16px;font-weight:600">${escapeHtml(args.whenLine)}</p>
-    ${intro}
-    <p style="font-size:12px;color:#737373;margin-top:24px">Sent by your management team.</p>
-  </div></body></html>`
-}
+/** Divider lines — digest uses lighter grays so rows read clearly on #111/#141. */
+const TABLE_ROW_RULE_COMPACT = '#2e2e2e'
+const TABLE_ROW_RULE_DIGEST = '#4a4a4a'
+const TABLE_FRAME_DIGEST = '#5a5a5a'
+const TABLE_HEAD_BG = '#1f1f1f'
+/** Slightly darker header tint for the middle column only (digest). */
+const TABLE_MIDDLE_HEAD_DIGEST = '#1a1a1a'
+const TABLE_SURFACE_DIGEST = '#141414'
+/** Middle column body: darker strip vs outer columns so When / Show / Venue scan as three bands. */
+const TABLE_MIDDLE_COL_DIGEST = '#0f0f0f'
+/** Day-summary table sits on #111 — middle column a touch darker than the card. */
+const TABLE_MIDDLE_COL_COMPACT = '#0e0e0e'
 
-/** Single-day gig list (manual send from calendar). */
-export function buildDaySummaryHtml(args: {
-  introHtml: string | null
-  dayLabel: string
-  rows: { when: string; title: string; venue: string }[]
-}): string {
-  const intro = args.introHtml?.trim()
-    ? `<div style="margin:0 0 16px;color:#e5e5e5;font-size:15px;line-height:1.5">${args.introHtml}</div>`
-    : ''
-  const bodyRows = args.rows.length
-    ? args.rows.map(r => `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa;vertical-align:top">${escapeHtml(r.when)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa">${escapeHtml(r.title)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#a3a3a3">${escapeHtml(r.venue)}</td>
+type ScheduleTableMode = 'compact' | 'digest'
+
+/**
+ * 3-col schedule: `compact` = dense day-summary; `digest` = framed, header row, high-contrast rules.
+ */
+function scheduleTableHtml(rows: Row[], emptyMsg: string, mode: ScheduleTableMode = 'compact'): string {
+  const isDigest = mode === 'digest'
+  const rule = isDigest ? TABLE_ROW_RULE_DIGEST : TABLE_ROW_RULE_COMPACT
+  const fs = isDigest ? '13px' : '12px'
+  const padV = isDigest ? '9px' : '5px'
+  const padH = isDigest ? '12px' : '8px'
+  const cell = (extra: string) =>
+    `padding:${padV} ${padH};border-bottom:1px solid ${rule};vertical-align:top;font-size:${fs};line-height:1.4;${extra}`
+
+  const midBodyBg = isDigest ? TABLE_MIDDLE_COL_DIGEST : TABLE_MIDDLE_COL_COMPACT
+
+  const bodyRows = rows.length
+    ? rows.map(r => `<tr>
+        <td style="${cell(`color:#ffffff;white-space:nowrap;width:1%`)}">${escapeHtmlPlain(r.when)}</td>
+        <td style="${cell(`color:#ffffff;background:${midBodyBg}`)}">${escapeHtmlPlain(r.title)}</td>
+        <td style="${cell(`color:${EMAIL_BODY_SECONDARY}`)}">${escapeHtmlPlain(r.venue)}</td>
       </tr>`).join('')
-    : `<tr><td colspan="3" style="padding:16px;color:#737373">No booked shows on this day.</td></tr>`
-  return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:system-ui,sans-serif;color:#fafafa;padding:24px;">
-  <div style="max-width:640px;margin:0 auto;">
-    <h1 style="font-size:20px;margin:0 0 8px">Your gigs — ${escapeHtml(args.dayLabel)}</h1>
-    <p style="color:#a3a3a3;font-size:14px;margin:0 0 16px">Pacific times · sent by your manager</p>
-    ${intro}
-    <table style="width:100%;border-collapse:collapse;font-size:14px">${bodyRows}</table>
-    <p style="font-size:12px;color:#737373;margin-top:24px">Sent by your management team.</p>
-  </div></body></html>`
+    : `<tr><td colspan="3" style="padding:14px ${padH};font-size:${fs};color:${EMAIL_BODY_SECONDARY};border-bottom:1px solid ${rule}">${emptyMsg}</td></tr>`
+
+  const thStyle = (middleCol: boolean) =>
+    `padding:10px ${padH};text-align:left;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${EMAIL_LABEL};background:${middleCol ? TABLE_MIDDLE_HEAD_DIGEST : TABLE_HEAD_BG};border-bottom:2px solid ${rule};vertical-align:bottom;`
+
+  const head = isDigest
+    ? `<thead><tr>
+        <th style="${thStyle(false)}width:1%;white-space:nowrap">When</th>
+        <th style="${thStyle(true)}">Show</th>
+        <th style="${thStyle(false)}">Venue</th>
+      </tr></thead>`
+    : ''
+
+  const table = `<table role="presentation" style="width:100%;border-collapse:collapse;margin:0;font-size:${fs};">${head}<tbody>${bodyRows}</tbody></table>`
+
+  if (!isDigest) {
+    return `<div style="margin:0 0 8px">${table}</div>`
+  }
+
+  return `<div style="margin:0 0 14px;border:1px solid ${TABLE_FRAME_DIGEST};border-radius:10px;overflow:hidden;background:${TABLE_SURFACE_DIGEST};box-shadow:0 1px 0 rgba(255,255,255,0.04)">${table}</div>`
 }
 
-export function buildDigestHtml(args: {
-  introHtml: string | null
-  rows: { when: string; title: string; venue: string }[]
-}): string {
-  const intro = args.introHtml?.trim()
-    ? `<div style="margin:0 0 16px;color:#e5e5e5;font-size:15px;line-height:1.5">${args.introHtml}</div>`
-    : ''
-  const bodyRows = args.rows.length
-    ? args.rows.map(r => `<tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa;vertical-align:top">${escapeHtml(r.when)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa">${escapeHtml(r.title)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#a3a3a3">${escapeHtml(r.venue)}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="3" style="padding:16px;color:#737373">No booked shows in this window.</td></tr>`
-  return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:system-ui,sans-serif;color:#fafafa;padding:24px;">
-  <div style="max-width:640px;margin:0 auto;">
-    <h1 style="font-size:20px;margin:0 0 8px">Upcoming gigs (2 weeks)</h1>
-    <p style="color:#a3a3a3;font-size:14px;margin:0 0 16px">Pacific times</p>
-    ${intro}
-    <table style="width:100%;border-collapse:collapse;font-size:14px">${bodyRows}</table>
-    <p style="font-size:12px;color:#737373;margin-top:24px">Sent by your management team.</p>
-  </div></body></html>`
+export type BuildBrandedGigCalendarEmailArgs = {
+  kind: GigCalendarBrandedKind
+  L: EmailTemplateLayoutV1
+  logoBaseUrl: string
+  artistName: string
+  managerName: string
+  managerTitle?: string | null
+  website?: string | null
+  social_handle?: string | null
+  phone?: string | null
+  digest?: { rows: Row[] }
+  daySummary?: { rows: Row[]; dayLabel: string }
+  reminder?: { venueName: string; dealDescription: string; whenLine: string }
+  icsBody?: { dealDescription: string; venueLine: string }
 }
 
-export function buildIcsInviteHtml(args: {
-  introHtml: string | null
-  dealDescription: string
-  venueLine: string
-}): string {
-  const intro = args.introHtml?.trim()
-    ? `<div style="margin:16px 0;color:#e5e5e5;font-size:15px;line-height:1.5">${args.introHtml}</div>`
-    : ''
-  return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:system-ui,sans-serif;color:#fafafa;padding:24px;">
-  <div style="max-width:560px;margin:0 auto;">
-    <h1 style="font-size:20px;margin:0 0 8px">You’re booked</h1>
-    <p style="margin:0 0 4px;font-weight:600">${escapeHtml(args.dealDescription)}</p>
-    <p style="margin:0 0 16px;color:#a3a3a3">${escapeHtml(args.venueLine)}</p>
-    <p style="margin:0 0 8px;color:#fafafa">A calendar invite (.ics) is attached — tap to add to your calendar.</p>
-    ${intro}
-    <p style="font-size:12px;color:#737373;margin-top:24px">Sent by your management team.</p>
-  </div></body></html>`
+/** Artist gig calendar sends: same branded shell as transactional emails + per-kind body. */
+export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailArgs): string {
+  const {
+    kind,
+    L,
+    logoBaseUrl,
+    artistName,
+    managerName,
+    managerTitle,
+    website,
+    social_handle: socialHandle,
+    phone,
+  } = args
+  const firstName = artistTransactionalGreetingFirstName(artistName)
+
+  const defaultGreeting = `Hi ${escapeHtmlPlain(firstName)},`
+  let roleBanner: string
+  let defaultIntro: string
+  let defaultClosing: string
+  let middleHtml: string
+
+  switch (kind) {
+    case 'gig_calendar_digest_weekly': {
+      roleBanner = roleBannerRgba(
+        'rgba(251,191,36,0.08)',
+        'rgba(251,191,36,0.25)',
+        '#fbbf24',
+        'Two-week schedule',
+      )
+      middleHtml =
+        `<p style="font-size:16px;font-weight:600;color:#ffffff;margin:0 0 14px">Upcoming gigs</p>`
+        + scheduleTableHtml(args.digest?.rows ?? [], 'No booked shows in this window.', 'digest')
+      defaultIntro =
+        'Here are your <strong>confirmed</strong> gigs for the <strong>next two weeks</strong>.'
+      defaultClosing = 'If a date or time looks wrong, reply to this email and we’ll fix it.'
+      break
+    }
+    case 'gig_reminder_24h': {
+      roleBanner = roleBannerRgba(
+        'rgba(249,115,22,0.08)',
+        'rgba(249,115,22,0.25)',
+        '#f97316',
+        '24-hour reminder',
+      )
+      const r = args.reminder!
+      middleHtml =
+        `<p style="font-size:17px;font-weight:600;color:#ffffff;margin:0 0 6px">${escapeHtmlPlain(r.dealDescription)}</p>`
+        + `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};margin:0 0 4px">${escapeHtmlPlain(r.venueName)}</p>`
+        + `<p style="font-size:14px;font-weight:600;color:#ffffff;margin:0 0 8px">${escapeHtmlPlain(r.whenLine)}</p>`
+      defaultIntro = 'Quick heads-up — your show is coming up in about <strong>24 hours</strong>.'
+      defaultClosing = 'Break a leg. Reply if you need anything from the team.'
+      break
+    }
+    case 'gig_booked_ics': {
+      roleBanner = roleBannerRgba(
+        'rgba(34,197,94,0.07)',
+        'rgba(34,197,94,0.22)',
+        '#22c55e',
+        'Booked',
+      )
+      const b = args.icsBody!
+      middleHtml =
+        `<p style="font-size:17px;font-weight:600;color:#ffffff;margin:0 0 6px">${escapeHtmlPlain(b.dealDescription)}</p>`
+        + `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};margin:0 0 14px">${escapeHtmlPlain(b.venueLine)}</p>`
+        + `<p style="font-size:14px;color:#ffffff;margin:0">A calendar invite (<strong>.ics</strong>) is attached — open it to add this gig to your calendar.</p>`
+      defaultIntro = 'You’re officially on the books for this one.'
+      defaultClosing = 'We’ll keep the calendar updated as details firm up.'
+      break
+    }
+    case 'gig_day_summary_manual': {
+      roleBanner = roleBannerRgba(
+        'rgba(96,165,250,0.07)',
+        'rgba(96,165,250,0.22)',
+        '#60a5fa',
+        'Day schedule',
+      )
+      const d = args.daySummary!
+      middleHtml =
+        `<p style="font-size:16px;font-weight:600;color:#ffffff;margin:0 0 12px">Your gigs — ${escapeHtmlPlain(d.dayLabel)}</p>`
+        + scheduleTableHtml(d.rows, 'No booked shows on this day.')
+      defaultIntro = `Here’s everything on your calendar for <strong>${escapeHtmlPlain(d.dayLabel)}</strong>.`
+      defaultClosing = 'Reply if you want changes or a different snapshot.'
+      break
+    }
+  }
+
+  const greeting = L.greeting?.trim()
+    ? escapeHtmlPlain(L.greeting.trim().replace(/\{firstName\}/gi, firstName)).replace(/\n/g, '<br/>')
+    : defaultGreeting
+  const introRaw = L.intro?.trim()
+  const intro = introRaw
+    ? escapeHtmlPlain(introRaw).replace(/\n/g, '<br/>')
+    : defaultIntro
+  const closingRaw = L.closing?.trim()
+  const closing = closingRaw
+    ? escapeHtmlPlain(closingRaw).replace(/\n/g, '<br/>')
+    : defaultClosing
+
+  return buildArtistBrandedEmailHtml({
+    logoBaseUrl,
+    roleBannerHtml: roleBanner,
+    greetingInnerHtml: greeting,
+    introInnerHtml: intro,
+    middleHtml,
+    layout: L,
+    closingInnerHtml: closing,
+    managerName,
+    managerTitle,
+    website,
+    social_handle: socialHandle,
+    phone,
+  })
 }

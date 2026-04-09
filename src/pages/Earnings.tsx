@@ -47,6 +47,7 @@ import {
   addCalendarDaysPacific,
 } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarEmails } from '@/lib/calendar/queueGigCalendarEmails'
+import { useNavBadges } from '@/context/NavBadgesContext'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
 import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
@@ -630,6 +631,7 @@ export default function Earnings() {
   const { reports: perfReports, createReport } = usePerformanceReports()
   const { fees } = useMonthlyFees()
   const { requests: bookingRequests, loading: bookingRequestsLoading, deleteRequest: deleteBookingRequest } = useBookingRequests()
+  const { refreshNavBadges } = useNavBadges()
   const [dealsPage, setDealsPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
@@ -675,6 +677,7 @@ export default function Earnings() {
         artistEmail: profile?.artist_email,
       })
       await refetch()
+      await refreshNavBadges()
     }
     setCalendarConfirm(null)
     showFormToast(mode === 'off' ? 'Show removed from calendar (cancelled).' : 'Show restored to calendar.')
@@ -888,6 +891,7 @@ export default function Earnings() {
         artistEmail: profile?.artist_email,
       })
       await refetch()
+      await refreshNavBadges()
     }
 
     setSaving(false)

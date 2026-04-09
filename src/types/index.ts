@@ -402,7 +402,6 @@ export type ArtistEmailType =
   | 'retainer_received'
   | 'performance_report_request'
   | 'performance_report_received'
-  | 'gig_week_reminder'
   | 'gig_calendar_digest_weekly'
   | 'gig_reminder_24h'
   | 'gig_booked_ics'
@@ -435,8 +434,7 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   retainer_received: 'Retainer payment received',
   performance_report_request: 'Performance Report Request',
   performance_report_received: 'Performance report received',
-  gig_week_reminder: 'Gig week reminder',
-  gig_calendar_digest_weekly: 'Gig calendar — 2-week digest',
+  gig_calendar_digest_weekly: 'Weekly (Sundays, PT) — next 2 weeks of gigs',
   gig_reminder_24h: 'Gig reminder — 24h before show',
   gig_booked_ics: 'Gig booked — calendar invite (.ics)',
   gig_day_summary_manual: 'Gig schedule — day summary (manual)',
