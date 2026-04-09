@@ -80,24 +80,6 @@ export const EMAIL_CAPTURE_KIND_LABELS: Record<EmailCaptureKind, string> = {
   payment_receipt: 'Payment receipt — rebook interest',
 }
 
-/** Public capture form — centered title (shorter than dashboard labels). */
-export const EMAIL_CAPTURE_KIND_FORM_TITLES: Record<EmailCaptureKind, string> = {
-  pre_event_checkin: 'Pre-event details',
-  first_outreach: 'Your reply',
-  follow_up: 'Follow-up',
-  show_cancelled_or_postponed: 'Show update',
-  agreement_followup: 'Agreement follow-up',
-  agreement_ready: 'Agreement ready',
-  booking_confirmation: 'Confirm booking',
-  booking_confirmed: 'Booking confirmed',
-  invoice_sent: 'Invoice details',
-  post_show_thanks: 'Post-show feedback',
-  pass_for_now: 'Thanks for letting us know',
-  rebooking_inquiry: 'Rebooking',
-  payment_reminder_ack: 'Payment status',
-  payment_receipt: 'Payment receipt',
-}
-
 export function captureLinkLabel(kind: EmailCaptureKind): string {
   switch (kind) {
     case 'pre_event_checkin':
