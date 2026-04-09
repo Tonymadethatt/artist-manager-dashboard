@@ -33,6 +33,11 @@ import {
   type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
 import {
+  buildDigestHtml,
+  buildGigReminderHtml,
+  buildIcsInviteHtml,
+} from '@/lib/email/gigCalendarEmailHtml'
+import {
   EMAIL_CAPTURE_KIND_LABELS,
   venueEmailTypeToCaptureKind,
   type EmailCaptureKind,
@@ -199,6 +204,9 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_week_reminder:          'Operational nudge before a booked date (from a task with venue + deal).',
+  gig_calendar_digest_weekly: 'Every Sunday ~5am PT: list of booked gigs in the next two weeks (queued by schedule).',
+  gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
+  gig_booked_ics:             'First time a gig qualifies for the calendar: .ics invite to the artist (idempotent per deal).',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
@@ -208,6 +216,9 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
   performance_report_received: '{firstName}, we received your show check-in',
   gig_week_reminder:          '{firstName}, gig week reminder — {venue}',
+  gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
+  gig_reminder_24h:           '{firstName}, reminder: {venue} in 24 hours',
+  gig_booked_ics:             '{firstName}, calendar invite — booked gig',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = [
@@ -217,6 +228,9 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'performance_report_request',
   'performance_report_received',
   'gig_week_reminder',
+  'gig_calendar_digest_weekly',
+  'gig_reminder_24h',
+  'gig_booked_ics',
 ]
 
 type Group = 'client' | 'artist'
@@ -542,6 +556,33 @@ export default function EmailTemplates() {
           layout,
           publicSiteOrigin(),
         )
+      }
+      if (selectedType === 'gig_reminder_24h') {
+        return buildGigReminderHtml({
+          introHtml: layout.intro ?? null,
+          venueName: PREVIEW_MOCK_VENUE.name,
+          dealDescription: PREVIEW_MOCK_DEAL.description,
+          whenLine: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
+        })
+      }
+      if (selectedType === 'gig_booked_ics') {
+        return buildIcsInviteHtml({
+          introHtml: layout.intro ?? null,
+          dealDescription: PREVIEW_MOCK_DEAL.description,
+          venueLine: [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city].filter(Boolean).join(', '),
+        })
+      }
+      if (selectedType === 'gig_calendar_digest_weekly') {
+        return buildDigestHtml({
+          introHtml: layout.intro ?? null,
+          rows: [
+            {
+              when: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
+              title: PREVIEW_MOCK_DEAL.description,
+              venue: PREVIEW_MOCK_VENUE.name,
+            },
+          ],
+        })
       }
       return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
     }

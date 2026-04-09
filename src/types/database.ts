@@ -254,6 +254,10 @@ export interface Database {
           description: string
           venue_id: string | null
           event_date: string | null
+          event_start_at: string | null
+          event_end_at: string | null
+          ics_invite_sent_at: string | null
+          reminder_24h_queued_at: string | null
           gross_amount: number
           commission_tier: CommissionTier
           commission_rate: number
@@ -276,6 +280,10 @@ export interface Database {
           description: string
           venue_id?: string | null
           event_date?: string | null
+          event_start_at?: string | null
+          event_end_at?: string | null
+          ics_invite_sent_at?: string | null
+          reminder_24h_queued_at?: string | null
           gross_amount: number
           commission_tier: CommissionTier
           commission_rate: number
@@ -298,6 +306,10 @@ export interface Database {
           description?: string
           venue_id?: string | null
           event_date?: string | null
+          event_start_at?: string | null
+          event_end_at?: string | null
+          ics_invite_sent_at?: string | null
+          reminder_24h_queued_at?: string | null
           gross_amount?: number
           commission_tier?: CommissionTier
           commission_rate?: number
@@ -432,6 +444,7 @@ export interface Database {
           status: VenueEmailStatus
           sent_at: string | null
           notes: string | null
+          scheduled_send_at: string | null
           created_at: string
         }
         Insert: {
@@ -446,6 +459,7 @@ export interface Database {
           status?: VenueEmailStatus
           sent_at?: string | null
           notes?: string | null
+          scheduled_send_at?: string | null
           created_at?: string
         }
         Update: {
@@ -460,6 +474,7 @@ export interface Database {
           status?: VenueEmailStatus
           sent_at?: string | null
           notes?: string | null
+          scheduled_send_at?: string | null
           created_at?: string
         }
         Relationships: [

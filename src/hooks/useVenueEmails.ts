@@ -11,6 +11,7 @@ interface LogEmailParams {
   subject: string
   status: VenueEmailStatus
   notes?: string | null
+  scheduled_send_at?: string | null
 }
 
 export function useVenueEmails() {
@@ -22,7 +23,7 @@ export function useVenueEmails() {
     setLoading(true)
     const { data, error } = await supabase
       .from('venue_emails')
-      .select('*, venue:venues(id, name, city, location), deal:deals(id, description, event_date, gross_amount, agreement_url, agreement_generated_file_id, venue_id, notes, payment_due_date, artist_paid), contact:contacts(id, name, email)')
+      .select('*, venue:venues(id, name, city, location), deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, notes, payment_due_date, artist_paid), contact:contacts(id, name, email)')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setEmails((data ?? []) as VenueEmail[])
@@ -50,6 +51,7 @@ export function useVenueEmails() {
         status: params.status,
         sent_at: sentAt,
         notes: params.notes ?? null,
+        ...(params.scheduled_send_at !== undefined ? { scheduled_send_at: params.scheduled_send_at } : {}),
       })
       .select('*, venue:venues(id, name), deal:deals(id, description)')
       .single()

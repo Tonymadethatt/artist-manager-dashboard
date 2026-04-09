@@ -42,6 +42,20 @@ import { isQueuedBuiltinArtistEmailType, isQueueBufferZeroEmailType } from '@/li
 import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
 import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
+import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
+import {
+  buildDigestHtml,
+  buildGigReminderHtml,
+  buildIcsInviteHtml,
+} from '@/lib/email/gigCalendarEmailHtml'
+import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
+import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
+import {
+  addCalendarDaysPacific,
+  pacificWallToUtcIso,
+  utcIsoToPacificDateAndTime,
+} from '@/lib/calendar/pacificWallTime'
+import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 import {
@@ -73,6 +87,14 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
+function whenLineFromDealTimes(d: Pick<Deal, 'event_start_at' | 'event_end_at'>): string {
+  const a = d.event_start_at ? utcIsoToPacificDateAndTime(d.event_start_at) : null
+  const b = d.event_end_at ? utcIsoToPacificDateAndTime(d.event_end_at) : null
+  if (!a || !b) return ''
+  if (a.date === b.date) return `${a.date} ${a.time}–${b.time} PT`
+  return `${a.date} ${a.time} – ${b.date} ${b.time} PT`
+}
+
 function pendingNotesLine(email: VenueEmail): string | null {
   if (parseEmailCaptureTokenFromNotes(email.notes)) {
     return 'Includes venue quick-response link in body when sent'
@@ -95,6 +117,14 @@ function pendingNotesLine(email: VenueEmail): string | null {
       const when = t.eventDate ? ` · ${t.eventDate}` : ''
       return `${tag} · ${t.venueName}${when}`
     }
+  }
+  if (email.email_type === 'gig_calendar_digest_weekly') {
+    const n = parseGigCalendarQueueNotes(email.notes)
+    if (n?.kind === 'gig_calendar_digest_weekly') return `2-week digest · ${n.weekStart}`
+  }
+  if (email.email_type === 'gig_reminder_24h' || email.email_type === 'gig_booked_ics') {
+    const n = parseGigCalendarQueueNotes(email.notes)
+    if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'ICS invite · queued' : '24h reminder · queued'
   }
   return email.notes?.trim() || null
 }
@@ -485,6 +515,84 @@ export default function EmailQueue() {
             ? `${firstName}, gig week — ${txn.venueName}`
             : `${firstName}, we received your show check-in`
           setPreviewSubject(L.subject?.trim() || defaultSubj)
+        } else if (
+          email.email_type === 'gig_calendar_digest_weekly'
+          || email.email_type === 'gig_reminder_24h'
+          || email.email_type === 'gig_booked_ics'
+        ) {
+          const gigN = parseGigCalendarQueueNotes(email.notes)
+          const { data: gcTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro')
+            .eq('user_id', user.id)
+            .eq('email_type', email.email_type)
+            .maybeSingle()
+          const intro = (gcTmpl?.custom_intro as string | null) ?? null
+          const subj = (gcTmpl?.custom_subject as string | null)?.trim() || email.subject
+          setPreviewSubject(subj)
+
+          if (email.email_type === 'gig_calendar_digest_weekly' && gigN?.kind === 'gig_calendar_digest_weekly') {
+            const venues = inputs.venues as Venue[]
+            const deals = inputs.deals as Deal[]
+            const vmap = new Map(venues.map(v => [v.id, v]))
+            const startIso = pacificWallToUtcIso(gigN.weekStart, '00:00')
+            const endDay = addCalendarDaysPacific(gigN.weekStart, 14)
+            const endIso = pacificWallToUtcIso(endDay, '23:59')
+            const rows: { when: string; title: string; venue: string }[] = []
+            if (startIso && endIso) {
+              const t0 = new Date(startIso).getTime()
+              const t1 = new Date(endIso).getTime()
+              for (const d of deals) {
+                const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
+                if (!dealQualifiesForCalendar(d, v ?? null)) continue
+                if (!d.event_start_at) continue
+                const ts = new Date(d.event_start_at).getTime()
+                if (ts < t0 || ts > t1) continue
+                rows.push({
+                  when: whenLineFromDealTimes(d) || d.event_date || '',
+                  title: d.description?.trim() || 'Gig',
+                  venue: v?.name?.trim() || '—',
+                })
+              }
+            }
+            rows.sort((a, b) => a.when.localeCompare(b.when))
+            setPreviewHtml(buildDigestHtml({ introHtml: intro, rows }))
+          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
+            const { data: dealRow } = await supabase
+              .from('deals')
+              .select('*')
+              .eq('id', gigN.dealId)
+              .eq('user_id', user.id)
+              .maybeSingle()
+            const deal = dealRow as Deal | null
+            if (!deal?.event_start_at || !deal.event_end_at) {
+              setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Deal or show times missing.</div>')
+            } else if (gigN.kind === 'gig_reminder_24h') {
+              const { data: venueRow } = await supabase.from('venues').select('name').eq('id', deal.venue_id as string).maybeSingle()
+              const vn = (venueRow as { name?: string } | null)?.name?.trim() || deal.description?.trim() || 'Show'
+              setPreviewHtml(buildGigReminderHtml({
+                introHtml: intro,
+                venueName: vn,
+                dealDescription: deal.description?.trim() || 'Gig',
+                whenLine: whenLineFromDealTimes(deal),
+              }))
+            } else {
+              const { data: venueRow } = await supabase
+                .from('venues')
+                .select('id,name,city,location,status')
+                .eq('id', deal.venue_id as string)
+                .maybeSingle()
+              const venue = venueRow as Venue | null
+              const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+              setPreviewHtml(buildIcsInviteHtml({
+                introHtml: intro,
+                dealDescription: deal.description?.trim() || 'Gig',
+                venueLine,
+              }))
+            }
+          } else {
+            setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Missing gig calendar queue payload.</div>')
+          }
         } else {
           setPreviewHtml(`<div style="padding:40px;color:${EMAIL_HINT};text-align:center;">Preview not available for this email type.</div>`)
         }
@@ -695,6 +803,8 @@ export default function EmailQueue() {
           reply_to_email: profile.reply_to_email,
         }
 
+        const siteUrl = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
+
         const parseErr = async (res: Response) => {
           const text = await res.text()
           let msg = `Send failed (${res.status})`
@@ -800,6 +910,146 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+        } else if (
+          email.email_type === 'gig_calendar_digest_weekly'
+          || email.email_type === 'gig_reminder_24h'
+          || email.email_type === 'gig_booked_ics'
+        ) {
+          if (!profile.artist_email?.trim()) throw new Error('Artist email not set in profile.')
+          const gigN = parseGigCalendarQueueNotes(email.notes)
+          const { data: gcTmpl } = await supabase
+            .from('email_templates')
+            .select('custom_subject, custom_intro')
+            .eq('user_id', user.id)
+            .eq('email_type', email.email_type)
+            .maybeSingle()
+          const intro = (gcTmpl?.custom_intro as string | null) ?? null
+          const subj = (gcTmpl?.custom_subject as string | null)?.trim() || email.subject
+          const sendProfile = {
+            artist_name: profileForArtistSend.artist_name ?? '',
+            from_email: profileForArtistSend.from_email,
+            reply_to_email: profileForArtistSend.reply_to_email,
+            manager_email: profileForArtistSend.manager_email,
+          }
+          if (email.email_type === 'gig_calendar_digest_weekly' && gigN?.kind === 'gig_calendar_digest_weekly') {
+            const venues = inputs.venues as Venue[]
+            const deals = inputs.deals as Deal[]
+            const vmap = new Map(venues.map(v => [v.id, v]))
+            const startIso = pacificWallToUtcIso(gigN.weekStart, '00:00')
+            const endDay = addCalendarDaysPacific(gigN.weekStart, 14)
+            const endIso = pacificWallToUtcIso(endDay, '23:59')
+            if (!startIso || !endIso) throw new Error('Invalid digest window')
+            const t0 = new Date(startIso).getTime()
+            const t1 = new Date(endIso).getTime()
+            const rows: { when: string; title: string; venue: string }[] = []
+            for (const d of deals) {
+              const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
+              if (!dealQualifiesForCalendar(d, v ?? null)) continue
+              if (!d.event_start_at) continue
+              const ts = new Date(d.event_start_at).getTime()
+              if (ts < t0 || ts > t1) continue
+              rows.push({
+                when: whenLineFromDealTimes(d) || d.event_date || '',
+                title: d.description?.trim() || 'Gig',
+                venue: v?.name?.trim() || '—',
+              })
+            }
+            rows.sort((a, b) => a.when.localeCompare(b.when))
+            const html = buildDigestHtml({ introHtml: intro, rows })
+            const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                kind: 'gig_calendar_digest_weekly',
+                profile: sendProfile,
+                to: profile.artist_email.trim(),
+                subject: subj,
+                html,
+              }),
+            })
+            if (!res.ok) throw new Error(await parseErr(res))
+          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
+            const { data: dealRow } = await supabase
+              .from('deals')
+              .select('*')
+              .eq('id', gigN.dealId)
+              .eq('user_id', user.id)
+              .maybeSingle()
+            const deal = dealRow as Deal | null
+            if (!deal?.event_start_at || !deal.event_end_at) throw new Error('Deal or show times missing.')
+            const { data: venueRow } = await supabase
+              .from('venues')
+              .select('id,name,city,location,status')
+              .eq('id', deal.venue_id as string)
+              .maybeSingle()
+            const venue = venueRow as Venue | null
+            if (gigN.kind === 'gig_reminder_24h') {
+              const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
+              const html = buildGigReminderHtml({
+                introHtml: intro,
+                venueName,
+                dealDescription: deal.description?.trim() || 'Gig',
+                whenLine: whenLineFromDealTimes(deal),
+              })
+              const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  kind: 'gig_reminder_24h',
+                  profile: sendProfile,
+                  to: profile.artist_email.trim(),
+                  subject: subj,
+                  html,
+                }),
+              })
+              if (!res.ok) throw new Error(await parseErr(res))
+            } else {
+              let icsText: string
+              try {
+                icsText = buildDealIcsBlob({
+                  deal: {
+                    id: deal.id,
+                    description: deal.description,
+                    event_start_at: deal.event_start_at,
+                    event_end_at: deal.event_end_at,
+                    notes: deal.notes,
+                  },
+                  venue,
+                  artistDisplayName: sendProfile.artist_name || 'Artist',
+                })
+              } catch {
+                throw new Error('Could not build .ics')
+              }
+              const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+              const html = buildIcsInviteHtml({
+                introHtml: intro,
+                dealDescription: deal.description?.trim() || 'Gig',
+                venueLine,
+              })
+              const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  kind: 'gig_booked_ics',
+                  profile: sendProfile,
+                  to: profile.artist_email.trim(),
+                  subject: subj,
+                  html,
+                  icsFilename: `gig-${deal.id}.ics`,
+                  icsContentUtf8: icsText,
+                }),
+              })
+              if (!res.ok) throw new Error(await parseErr(res))
+              if (!deal.ics_invite_sent_at) {
+                await supabase
+                  .from('deals')
+                  .update({ ics_invite_sent_at: new Date().toISOString() })
+                  .eq('id', deal.id)
+              }
+            }
+          } else {
+            throw new Error('Missing gig calendar queue payload.')
+          }
         } else {
           throw new Error('Unsupported built-in artist email type.')
         }

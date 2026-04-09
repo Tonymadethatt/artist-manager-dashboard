@@ -39,6 +39,16 @@ import type { GeneratedFile } from '../../src/types'
 import { buildEmailAttachmentPayloadFromFile } from '../../src/lib/files/templateEmailAttachmentPayload'
 import { ensureQueueCaptureUrl } from '../../src/lib/emailCapture/ensureQueueCaptureUrl'
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
+import { parseGigCalendarQueueNotes } from '../../src/lib/email/gigCalendarQueueNotes'
+import {
+  buildDigestHtml,
+  buildGigReminderHtml,
+  buildIcsInviteHtml,
+} from '../../src/lib/email/gigCalendarEmailHtml'
+import { buildDealIcsBlob } from '../../src/lib/calendar/buildDealIcs'
+import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
+import { addCalendarDaysPacific, pacificWallToUtcIso, utcIsoToPacificDateAndTime } from '../../src/lib/calendar/pacificWallTime'
+import type { Deal, Venue } from '../../src/types'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -100,7 +110,7 @@ const handler: Handler = async (event) => {
     .select(`
       *,
       venue:venues(id, name, city, location),
-      deal:deals(id, description, event_date, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date),
+      deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date, ics_invite_sent_at),
       contact:contacts(id, name, email)
     `)
     .eq('status', 'pending')
@@ -164,6 +174,11 @@ const handler: Handler = async (event) => {
       ? 0
       : clampEmailQueueBufferMinutes(p?.email_queue_buffer_minutes as unknown)
     const ageMs = nowMs - new Date(e.created_at).getTime()
+    const schedRaw = e.scheduled_send_at as string | null | undefined
+    const schedMs = schedRaw ? new Date(schedRaw).getTime() : null
+    if (schedMs != null && Number.isFinite(schedMs) && schedMs > nowMs) {
+      continue
+    }
     if (ageMs >= bufferMin * 60 * 1000) {
       emails.push(e)
       if (emails.length >= 50) break
@@ -306,6 +321,258 @@ const handler: Handler = async (event) => {
               sent_at: new Date().toISOString(),
               notes: '[src:queue_cron] Performance form email',
             })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'sent' })
+        } else {
+          const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+          const reason = (err as { message?: string }).message ?? 'Send failed'
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason })
+        }
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : 'Unknown error'
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason })
+      }
+      continue
+    }
+
+    const gigCal = parseGigCalendarQueueNotes(email.notes as string | null)
+    if (
+      gigCal?.kind === 'gig_booked_ics'
+      || gigCal?.kind === 'gig_reminder_24h'
+      || gigCal?.kind === 'gig_calendar_digest_weekly'
+    ) {
+      const row = profileByUser.get(email.user_id) as Record<string, unknown> | undefined
+      if (!row?.artist_email || !row.from_email) {
+        await supabase
+          .from('venue_emails')
+          .update({ status: 'failed', notes: 'Auto-send failed: artist email not configured' })
+          .eq('id', email.id)
+        results.push({ id: email.id, result: 'failed', reason: 'no_artist_email' })
+        continue
+      }
+
+      const sendProfile = {
+        artist_name: String(row.artist_name ?? ''),
+        from_email: String(row.from_email ?? ''),
+        reply_to_email: (row.reply_to_email as string | null) ?? null,
+        manager_email: (row.manager_email as string | null) ?? null,
+      }
+
+      const tmpl = templateByUserAndType.get(`${email.user_id}:${email.email_type}`)
+
+      const whenLineFromDeal = (d: { event_start_at?: string | null; event_end_at?: string | null }) => {
+        const a = d.event_start_at ? utcIsoToPacificDateAndTime(d.event_start_at) : null
+        const b = d.event_end_at ? utcIsoToPacificDateAndTime(d.event_end_at) : null
+        if (!a || !b) return ''
+        if (a.date === b.date) return `${a.date} ${a.time}–${b.time} PT`
+        return `${a.date} ${a.time} – ${b.date} ${b.time} PT`
+      }
+
+      try {
+        if (gigCal.kind === 'gig_calendar_digest_weekly') {
+          const inputs = await fetchReportInputsForUser(supabase, email.user_id)
+          const venues = inputs.venues as Venue[]
+          const deals = inputs.deals as Deal[]
+          const vmap = new Map(venues.map(v => [v.id, v]))
+          const startIso = pacificWallToUtcIso(gigCal.weekStart, '00:00')
+          const endDay = addCalendarDaysPacific(gigCal.weekStart, 14)
+          const endIso = pacificWallToUtcIso(endDay, '23:59')
+          if (!startIso || !endIso) {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: 'Auto-send failed: bad digest window' })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason: 'digest_window' })
+            continue
+          }
+          const t0 = new Date(startIso).getTime()
+          const t1 = new Date(endIso).getTime()
+          const rows: { when: string; title: string; venue: string }[] = []
+          for (const d of deals) {
+            const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
+            if (!dealQualifiesForCalendar(d, v ?? null)) continue
+            if (!d.event_start_at) continue
+            const ts = new Date(d.event_start_at).getTime()
+            if (ts < t0 || ts > t1) continue
+            rows.push({
+              when: whenLineFromDeal(d) || d.event_date || '',
+              title: d.description?.trim() || 'Gig',
+              venue: v?.name?.trim() || '—',
+            })
+          }
+          rows.sort((a, b) => a.when.localeCompare(b.when))
+          const html = buildDigestHtml({
+            introHtml: tmpl?.custom_intro ? String(tmpl.custom_intro) : null,
+            rows,
+          })
+          const defaultSubj = `Your gigs — next two weeks (${gigCal.weekStart})`
+          const subj = tmpl?.custom_subject?.trim() || email.subject || defaultSubj
+          const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind: 'gig_calendar_digest_weekly',
+              profile: sendProfile,
+              to: String(row.artist_email ?? ''),
+              subject: subj,
+              html,
+            }),
+          })
+          if (sendRes.ok) {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'sent' })
+          } else {
+            const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+            const reason = (err as { message?: string }).message ?? 'Send failed'
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason })
+          }
+          continue
+        }
+
+        const dealId = gigCal.dealId
+        const { data: dealRow, error: dErr } = await supabase
+          .from('deals')
+          .select('*')
+          .eq('id', dealId)
+          .eq('user_id', email.user_id)
+          .maybeSingle()
+        if (dErr || !dealRow) {
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: 'Auto-send failed: deal not found' })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason: 'deal_missing' })
+          continue
+        }
+        const deal = dealRow as Deal
+        const { data: venueRow } = await supabase
+          .from('venues')
+          .select('id,name,city,location,status')
+          .eq('id', deal.venue_id as string)
+          .maybeSingle()
+        const venue = venueRow as Venue | null
+
+        if (gigCal.kind === 'gig_booked_ics') {
+          if (!deal.event_start_at || !deal.event_end_at) {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: 'Auto-send failed: deal missing show times' })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
+            continue
+          }
+          let icsText: string
+          try {
+            icsText = buildDealIcsBlob({
+              deal: {
+                id: deal.id,
+                description: deal.description,
+                event_start_at: deal.event_start_at,
+                event_end_at: deal.event_end_at,
+                notes: deal.notes,
+              },
+              venue,
+              artistDisplayName: sendProfile.artist_name || 'Artist',
+            })
+          } catch {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: 'Auto-send failed: could not build .ics' })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason: 'ics_build' })
+            continue
+          }
+          const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+          const html = buildIcsInviteHtml({
+            introHtml: tmpl?.custom_intro ? String(tmpl.custom_intro) : null,
+            dealDescription: deal.description?.trim() || 'Gig',
+            venueLine,
+          })
+          const subj = tmpl?.custom_subject?.trim() || email.subject || 'Calendar invite — booked gig'
+          const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              kind: 'gig_booked_ics',
+              profile: sendProfile,
+              to: String(row.artist_email ?? ''),
+              subject: subj,
+              html,
+              icsFilename: `gig-${deal.id}.ics`,
+              icsContentUtf8: icsText,
+            }),
+          })
+          if (sendRes.ok) {
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .eq('id', email.id)
+            if (!deal.ics_invite_sent_at) {
+              await supabase
+                .from('deals')
+                .update({ ics_invite_sent_at: new Date().toISOString() })
+                .eq('id', deal.id)
+            }
+            results.push({ id: email.id, result: 'sent' })
+          } else {
+            const err = await sendRes.json().catch(() => ({ message: 'Send failed' }))
+            const reason = (err as { message?: string }).message ?? 'Send failed'
+            await supabase
+              .from('venue_emails')
+              .update({ status: 'failed', notes: `Auto-send failed: ${reason}` })
+              .eq('id', email.id)
+            results.push({ id: email.id, result: 'failed', reason })
+          }
+          continue
+        }
+
+        // gig_reminder_24h
+        if (!deal.event_start_at || !deal.event_end_at) {
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'failed', notes: 'Auto-send failed: deal missing show times' })
+            .eq('id', email.id)
+          results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
+          continue
+        }
+        const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
+        const html = buildGigReminderHtml({
+          introHtml: tmpl?.custom_intro ? String(tmpl.custom_intro) : null,
+          venueName,
+          dealDescription: deal.description?.trim() || 'Gig',
+          whenLine: whenLineFromDeal(deal) || '',
+        })
+        const subj = tmpl?.custom_subject?.trim() || email.subject || `Reminder: ${venueName} tomorrow`
+        const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'gig_reminder_24h',
+            profile: sendProfile,
+            to: String(row.artist_email ?? ''),
+            subject: subj,
+            html,
+          }),
+        })
+        if (sendRes.ok) {
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'sent', sent_at: new Date().toISOString() })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'sent' })
         } else {

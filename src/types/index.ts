@@ -352,6 +352,11 @@ export interface Deal {
   description: string
   venue_id: string | null
   event_date: string | null
+  /** Show start/end (timestamptz ISO). Prefer over event_date when both set. */
+  event_start_at: string | null
+  event_end_at: string | null
+  ics_invite_sent_at: string | null
+  reminder_24h_queued_at: string | null
   gross_amount: number
   commission_tier: CommissionTier
   commission_rate: number
@@ -369,7 +374,7 @@ export interface Deal {
   notes: string | null
   created_at: string
   updated_at: string
-  venue?: Pick<Venue, 'id' | 'name' | 'outreach_track'> | null
+  venue?: Pick<Venue, 'id' | 'name' | 'outreach_track' | 'status'> | null
 }
 
 export type VenueEmailType =
@@ -394,6 +399,9 @@ export type ArtistEmailType =
   | 'performance_report_request'
   | 'performance_report_received'
   | 'gig_week_reminder'
+  | 'gig_calendar_digest_weekly'
+  | 'gig_reminder_24h'
+  | 'gig_booked_ics'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -422,6 +430,9 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Performance Report Request',
   performance_report_received: 'Performance report received',
   gig_week_reminder: 'Gig week reminder',
+  gig_calendar_digest_weekly: 'Gig calendar — 2-week digest',
+  gig_reminder_24h: 'Gig reminder — 24h before show',
+  gig_booked_ics: 'Gig booked — calendar invite (.ics)',
 }
 
 export interface EmailTemplate {
@@ -499,6 +510,8 @@ export interface VenueEmail {
   subject: string
   status: VenueEmailStatus
   sent_at: string | null
+  /** When set, row is not eligible to send until this time (24h reminders, etc.). */
+  scheduled_send_at: string | null
   notes: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null

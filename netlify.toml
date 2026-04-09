@@ -17,3 +17,8 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Hourly :05 UTC — handler only enqueues when America/Los_Angeles is Sunday 5:00.
+[[schedule]]
+  cron = "5 * * * *"
+  function = "enqueue-gig-calendar-digest"

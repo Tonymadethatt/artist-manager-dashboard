@@ -21,6 +21,13 @@ import {
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
+import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
+import {
+  buildDigestHtml,
+  buildGigReminderHtml,
+  buildIcsInviteHtml,
+} from '@/lib/email/gigCalendarEmailHtml'
+import { pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
   'booking_confirmation',
@@ -287,6 +294,107 @@ export async function sendEmailTemplateTest(
           custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
           testOnly: true,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    const previewEventDay = PREVIEW_MOCK_DEAL.event_date ?? '2026-05-17'
+    const startIso = pacificWallToUtcIso(previewEventDay, '20:00')
+    const endIso = pacificWallToUtcIso(previewEventDay, '23:00')
+    if (params.selectedType === 'gig_reminder_24h') {
+      const html = buildGigReminderHtml({
+        introHtml: layoutNorm.intro ?? null,
+        venueName: PREVIEW_MOCK_VENUE.name,
+        dealDescription: PREVIEW_MOCK_DEAL.description,
+        whenLine: startIso && endIso
+          ? `${previewEventDay} 20:00–23:00 PT`
+          : '',
+      })
+      const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'gig_reminder_24h',
+          profile: {
+            artist_name: profile.artist_name,
+            from_email: profile.from_email,
+            reply_to_email: profile.reply_to_email,
+            manager_email: profile.manager_email,
+          },
+          to: managerRecipient.email,
+          subject: layoutNorm.subject?.trim() || `Reminder: ${PREVIEW_MOCK_VENUE.name}`,
+          html,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'gig_booked_ics' && startIso && endIso) {
+      const icsText = buildDealIcsBlob({
+        deal: {
+          id: 'preview',
+          description: PREVIEW_MOCK_DEAL.description,
+          event_start_at: startIso,
+          event_end_at: endIso,
+          notes: null,
+        },
+        venue: PREVIEW_MOCK_VENUE,
+        artistDisplayName: profile.artist_name ?? 'Artist',
+      })
+      const venueLine = [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city, PREVIEW_MOCK_VENUE.location].filter(Boolean).join(', ')
+      const html = buildIcsInviteHtml({
+        introHtml: layoutNorm.intro ?? null,
+        dealDescription: PREVIEW_MOCK_DEAL.description,
+        venueLine,
+      })
+      const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'gig_booked_ics',
+          profile: {
+            artist_name: profile.artist_name,
+            from_email: profile.from_email,
+            reply_to_email: profile.reply_to_email,
+            manager_email: profile.manager_email,
+          },
+          to: managerRecipient.email,
+          subject: layoutNorm.subject?.trim() || 'Calendar invite — booked gig (test)',
+          html,
+          icsFilename: 'preview-gig.ics',
+          icsContentUtf8: icsText,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'gig_calendar_digest_weekly') {
+      const html = buildDigestHtml({
+        introHtml: layoutNorm.intro ?? null,
+        rows: [{
+          when: `${previewEventDay} 20:00–23:00 PT`,
+          title: PREVIEW_MOCK_DEAL.description,
+          venue: PREVIEW_MOCK_VENUE.name,
+        }],
+      })
+      const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'gig_calendar_digest_weekly',
+          profile: {
+            artist_name: profile.artist_name,
+            from_email: profile.from_email,
+            reply_to_email: profile.reply_to_email,
+            manager_email: profile.manager_email,
+          },
+          to: managerRecipient.email,
+          subject: layoutNorm.subject?.trim() || 'Your gigs — next two weeks (test)',
+          html,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }

@@ -40,6 +40,13 @@ import {
   presetToggleStateFromDealDoc,
 } from '@/lib/showReportCatalog'
 import { buildRetainerReceivedPayload } from '@/lib/reports/buildManagementReportData'
+import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
+import {
+  pacificWallToUtcIso,
+  utcIsoToPacificDateAndTime,
+  addCalendarDaysPacific,
+} from '@/lib/calendar/pacificWallTime'
+import { syncDealCalendarEmails } from '@/lib/calendar/queueGigCalendarEmails'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
 import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
@@ -569,7 +576,10 @@ function defaultPromisePresets(): Record<string, boolean> {
 const EMPTY_FORM = {
   description: '',
   venue_id: '',
+  /** Show date in Pacific (YYYY-MM-DD); synced to legacy event_date on save. */
   event_date: '',
+  event_start_time: '20:00',
+  event_end_time: '23:00',
   gross_amount: '',
   commission_tier: 'new_doors' as CommissionTier,
   payment_due_date: '',
@@ -614,7 +624,7 @@ function PayToggle({
 }
 
 export default function Earnings() {
-  const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid } = useDeals()
+  const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid, refetch } = useDeals()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
@@ -694,10 +704,15 @@ export default function Earnings() {
   }
 
   const openEdit = (deal: Deal) => {
+    const sPart = deal.event_start_at ? utcIsoToPacificDateAndTime(deal.event_start_at) : null
+    const ePart = deal.event_end_at ? utcIsoToPacificDateAndTime(deal.event_end_at) : null
+    const hasTimes = sPart && ePart
     setForm({
       description: deal.description,
       venue_id: deal.venue_id ?? '',
-      event_date: deal.event_date ?? '',
+      event_date: hasTimes ? sPart.date : (deal.event_date ?? ''),
+      event_start_time: hasTimes ? sPart.time : '20:00',
+      event_end_time: hasTimes ? ePart.time : '23:00',
       gross_amount: String(deal.gross_amount),
       commission_tier: deal.commission_tier,
       payment_due_date: deal.payment_due_date ?? '',
@@ -755,10 +770,52 @@ export default function Earnings() {
         ? 'new_doors'
         : form.commission_tier
 
+    const showDate = form.event_date.trim()
+    const st = form.event_start_time.trim()
+    const et = form.event_end_time.trim()
+    let event_start_at: string | null = null
+    let event_end_at: string | null = null
+    if (showDate && st && et) {
+      const [sh, sm] = st.split(':').map(Number)
+      const [eh, em] = et.split(':').map(Number)
+      let endYmd = showDate
+      if (Number.isFinite(sh) && Number.isFinite(sm) && Number.isFinite(eh) && Number.isFinite(em)) {
+        if (eh * 60 + em <= sh * 60 + sm) endYmd = addCalendarDaysPacific(showDate, 1)
+      }
+      const sIso = pacificWallToUtcIso(showDate, st)
+      const eIso = pacificWallToUtcIso(endYmd, et)
+      if (sIso && eIso) {
+        event_start_at = sIso
+        event_end_at = eIso
+      }
+    }
+
+    const tentativeId = editDeal?.id ?? '__new__'
+    const tentative: Pick<Deal, 'id' | 'event_start_at' | 'event_end_at'> = {
+      id: tentativeId,
+      event_start_at,
+      event_end_at,
+    }
+    const overlaps = overlappingDealIds(
+      tentative,
+      deals.map(d => ({ id: d.id, event_start_at: d.event_start_at, event_end_at: d.event_end_at })),
+    )
+    if (overlaps.length > 0) {
+      const ok = window.confirm(
+        'This show overlaps another deal in time (Pacific). Save anyway?',
+      )
+      if (!ok) {
+        setSaving(false)
+        return
+      }
+    }
+
     const payload = {
       description: form.description.trim(),
       venue_id: form.venue_id || null,
-      event_date: form.event_date || null,
+      event_date: showDate || null,
+      event_start_at,
+      event_end_at,
       gross_amount: gross,
       commission_tier: commissionTier,
       payment_due_date: form.payment_due_date || null,
@@ -767,11 +824,40 @@ export default function Earnings() {
       promise_lines: promiseDoc,
       notes: form.notes || null,
     }
+    let saved: Deal | null = null
     if (editDeal) {
-      await updateDeal(editDeal.id, payload)
+      const r = await updateDeal(editDeal.id, payload)
+      if (r.error) {
+        setSaving(false)
+        showFormToast(r.error.message ?? 'Save failed')
+        return
+      }
+      saved = r.data ?? null
     } else {
-      await addDeal(payload)
+      const r = await addDeal(payload)
+      if (r.error) {
+        setSaving(false)
+        showFormToast(r.error.message ?? 'Save failed')
+        return
+      }
+      saved = r.data ?? null
     }
+
+    if (saved) {
+      const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
+      const vBefore = editDeal
+        ? venues.find(v => v.id === editDeal.venue_id) ?? editDeal.venue
+        : null
+      await syncDealCalendarEmails({
+        beforeDeal: editDeal,
+        afterDeal: saved,
+        venueBefore: vBefore,
+        venueAfter: vAfter ?? null,
+        artistEmail: profile?.artist_email,
+      })
+      await refetch()
+    }
+
     setSaving(false)
     setAddOpen(false)
     if (!editDeal) setDealsPage(1)
@@ -943,9 +1029,15 @@ export default function Earnings() {
                       {deal.venue && (
                         <span className="text-xs text-neutral-500">{deal.venue.name}</span>
                       )}
-                      {deal.event_date && (
+                      {(deal.event_start_at && deal.event_end_at) ? (
+                        <span className="text-xs text-neutral-600 tabular-nums">
+                          {utcIsoToPacificDateAndTime(deal.event_start_at)?.date}{' '}
+                          {utcIsoToPacificDateAndTime(deal.event_start_at)?.time}–
+                          {utcIsoToPacificDateAndTime(deal.event_end_at)?.time} PT
+                        </span>
+                      ) : deal.event_date ? (
                         <span className="text-xs text-neutral-600">{deal.event_date}</span>
-                      )}
+                      ) : null}
                       {/* Commission flagged indicator */}
                       {perfReports.some(r => r.deal_id === deal.id && r.commission_flagged) && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
@@ -1089,7 +1181,7 @@ export default function Earnings() {
                 />
               </div>
               <div className="space-y-1">
-                <Label>Event date</Label>
+                <Label>Show date (Pacific)</Label>
                 <Input
                   type="date"
                   value={form.event_date}
@@ -1097,6 +1189,27 @@ export default function Earnings() {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Start time</Label>
+                <Input
+                  type="time"
+                  value={form.event_start_time}
+                  onChange={e => setField('event_start_time', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>End time</Label>
+                <Input
+                  type="time"
+                  value={form.event_end_time}
+                  onChange={e => setField('event_end_time', e.target.value)}
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-neutral-600 leading-snug">
+              If end is earlier than start on the same day, end is treated as the next calendar day (overnight gig).
+            </p>
 
             <div className="space-y-1">
               <Label>Commission tier *</Label>

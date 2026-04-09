@@ -15,7 +15,7 @@ export function useDeals() {
     setLoading(true)
     const { data, error } = await supabase
       .from('deals')
-      .select('*, venue:venues(id, name, outreach_track)')
+      .select('*, venue:venues(id, name, outreach_track, status)')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setDeals((data ?? []) as Deal[])
@@ -28,6 +28,8 @@ export function useDeals() {
     description: string
     venue_id: string | null
     event_date: string | null
+    event_start_at?: string | null
+    event_end_at?: string | null
     gross_amount: number
     commission_tier: CommissionTier
     commission_rate?: number
@@ -50,6 +52,8 @@ export function useDeals() {
         description: deal.description,
         venue_id: deal.venue_id,
         event_date: deal.event_date,
+        event_start_at: deal.event_start_at ?? null,
+        event_end_at: deal.event_end_at ?? null,
         gross_amount: deal.gross_amount,
         commission_tier: deal.commission_tier,
         commission_rate: rate,
@@ -60,7 +64,7 @@ export function useDeals() {
         promise_lines: deal.promise_lines ?? null,
         notes: deal.notes,
       })
-      .select('*, venue:venues(id, name, outreach_track)')
+      .select('*, venue:venues(id, name, outreach_track, status)')
       .single()
     if (error) return { error }
     setDeals(prev => [data as Deal, ...prev])
@@ -84,7 +88,7 @@ export function useDeals() {
       .from('deals')
       .update(patch)
       .eq('id', id)
-      .select('*, venue:venues(id, name, outreach_track)')
+      .select('*, venue:venues(id, name, outreach_track, status)')
       .single()
     if (error) return { error }
     setDeals(prev => prev.map(d => d.id === id ? data as Deal : d))

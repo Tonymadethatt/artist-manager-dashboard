@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CheckSquare, AlertCircle, DollarSign, Inbox,
-  ArrowRight, Clock, Building2, Mail, Calendar,
+  ArrowRight, Clock, Building2, Mail,
 } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
@@ -16,9 +16,8 @@ import {
   type OutreachStatus,
   type VenueEmailType,
 } from '@/types'
-import { Button } from '@/components/ui/button'
-import { sendDevIcsTestEmail } from '@/lib/dev/icsDevTest'
 import { cn } from '@/lib/utils'
+import { GigCalendar } from '@/components/dashboard/GigCalendar'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -108,32 +107,6 @@ export default function Dashboard() {
   const { fees,   loading: l3 } = useMonthlyFees()
   const { tasks,  loading: l4 } = useTasks()
   const { emails, loading: l5 } = useVenueEmails()
-
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
-  const [icsTestSending, setIcsTestSending] = useState(false)
-
-  const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 2200)
-  }, [])
-
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-  }, [])
-
-  const sendDevIcsFromOverview = useCallback(async () => {
-    setIcsTestSending(true)
-    try {
-      const { ok, message } = await sendDevIcsTestEmail()
-      showToast(message, ok ? 'ok' : 'err')
-    } catch {
-      showToast('Network error. Try again.', 'err')
-    } finally {
-      setIcsTestSending(false)
-    }
-  }, [showToast])
 
   const today    = new Date().toISOString().split('T')[0]
   const weekEnd  = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
@@ -258,57 +231,18 @@ export default function Dashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const toastEl = toast && (
-    <div
-      className={cn(
-        'fixed top-4 right-4 z-[200] max-w-[min(100vw-2rem,20rem)] px-4 py-2 rounded-lg text-sm font-medium shadow-lg border',
-        toast.type === 'ok'
-          ? 'bg-neutral-900 border-emerald-500/30 text-emerald-400'
-          : 'bg-neutral-900 border-red-500/30 text-red-400'
-      )}
-      role="status"
-    >
-      {toast.msg}
-    </div>
-  )
-
-  /** Fixed to viewport — outside dashboard layout. Always on Overview; server still validates session + profile. */
-  const devIcsFab = (
-    <Button
-      type="button"
-      variant="secondary"
-      className={cn(
-        'fixed bottom-4 right-4 z-[200] h-12 rounded-full px-4 shadow-lg border border-neutral-700',
-        'bg-neutral-900 hover:bg-neutral-800 text-neutral-200 text-xs font-medium',
-        'flex items-center gap-2 sm:bottom-6 sm:right-6',
-        icsTestSending && 'opacity-80 pointer-events-none'
-      )}
-      disabled={icsTestSending}
-      onClick={() => void sendDevIcsFromOverview()}
-      title="Sends a test .ics to your manager email. Needs manager (or artist) email and verified Send from in Settings."
-    >
-      <Calendar className="size-4 shrink-0 text-neutral-400" aria-hidden />
-      {icsTestSending ? 'Sending…' : 'ICS test'}
-    </Button>
-  )
-
   if (loading) {
     return (
-      <>
-        {toastEl}
-        {devIcsFab}
-        <div className="flex items-center justify-center py-24">
-          <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
-        </div>
-      </>
+      <div className="flex items-center justify-center py-24">
+        <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+      </div>
     )
   }
 
   return (
-    <>
-      {toastEl}
-      {devIcsFab}
-      <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5 max-w-5xl">
+      <GigCalendar deals={deals} venues={venues} loading={loading} />
+
       {/* ── Row 1: Stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Tasks due */}
@@ -578,7 +512,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      </div>
-    </>
+    </div>
   )
 }
