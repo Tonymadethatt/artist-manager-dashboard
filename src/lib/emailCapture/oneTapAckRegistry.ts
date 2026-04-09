@@ -5,7 +5,7 @@ export type OneTapThanksCopy = { heading: string; lines: string[] }
 export function oneTapThanksAlreadyReceived(): OneTapThanksCopy {
   return {
     heading: 'Thanks',
-    lines: ['We already have your confirmation on file.', 'You can close this window.'],
+    lines: ['We already have your confirmation on file.'],
   }
 }
 
@@ -23,32 +23,22 @@ export function oneTapThanksForKind(
         lines: [
           "We've noted that payment may be on the way.",
           "Our team will confirm receipt on our end — you don't need to do anything else here.",
-          'You can close this window.',
         ],
       }
     case 'invoice_sent':
       return {
         heading: 'Thank you',
-        lines: [
-          "We've recorded that you reviewed the invoice.",
-          'You can close this window.',
-        ],
+        lines: ["We've recorded that you reviewed the invoice."],
       }
     case 'booking_confirmation':
       return {
         heading: 'Thank you',
-        lines: [
-          "We've received your confirmation of the booking details.",
-          'You can close this window.',
-        ],
+        lines: ["We've received your confirmation of the booking details."],
       }
     case 'booking_confirmed':
       return {
         heading: 'Thank you',
-        lines: [
-          "We've recorded your confirmation.",
-          'You can close this window.',
-        ],
+        lines: ["We've recorded your confirmation."],
       }
   }
 }

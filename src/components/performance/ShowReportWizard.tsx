@@ -714,8 +714,8 @@ export function ShowReportWizard({
         mainClassName="flex flex-1 flex-col items-center justify-center px-0 py-10"
       >
         <div className="w-full max-w-sm text-center px-4">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/15">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/15">
+            <CheckCircle2 className="h-10 w-10 text-emerald-400" strokeWidth={2} />
           </div>
           <p className="text-sm leading-relaxed text-neutral-200">
             {preview ? 'Preview only — nothing saved.' : SUCCESS_MESSAGE}
