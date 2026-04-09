@@ -66,7 +66,10 @@ function htmlShell(title: string, inner: string): string {
 </html>`
 }
 
-/** Thank-you page only: success icon + card copy; below, “Back to mail” links to common webmail inboxes. */
+/**
+ * Thank-you page: success icon + card copy; one “Back to mail” control below the card.
+ * Click uses history.back() when the tab has prior history, else document.referrer (often the webmail page that opened this link). No provider picker.
+ */
 function htmlShellThankYou(title: string, inner: string): string {
   const successIcon = `<div class="ack-icon-wrap" aria-hidden="true">
   <svg class="ack-check-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -74,16 +77,9 @@ function htmlShellThankYou(title: string, inner: string): string {
     <path d="M6.5 12.5l3.5 3.5 7.5-8.5" fill="none" stroke="#fafafa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
 </div>`
-  const mailActions = `<section class="mail-back" aria-labelledby="mail-back-heading">
-  <h2 id="mail-back-heading" class="mail-back-title">Back to mail</h2>
-  <p class="mail-back-hint">Open your inbox in the browser. You may need to sign in.</p>
-  <div class="mail-btn-stack">
-    <a class="mail-btn" href="https://mail.google.com/mail/u/0/#inbox" rel="noopener noreferrer">Gmail</a>
-    <a class="mail-btn" href="https://outlook.live.com/mail/" rel="noopener noreferrer">Outlook</a>
-    <a class="mail-btn" href="https://outlook.office.com/mail/" rel="noopener noreferrer">Outlook (work or school)</a>
-    <a class="mail-btn" href="https://mail.yahoo.com/" rel="noopener noreferrer">Yahoo Mail</a>
-  </div>
-</section>`
+  const mailBack = `<div class="mail-back">
+  <button type="button" class="mail-btn" id="ack-back-mail">Back to mail</button>
+</div>`
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,20 +99,39 @@ function htmlShellThankYou(title: string, inner: string): string {
   .card p { font-size: 0.9rem; color: #a3a3a3; line-height: 1.6; margin-bottom: 10px; }
   .card p:last-child { margin-bottom: 0; }
   .mail-back { margin-top: 24px; text-align: center; }
-  .mail-back-title { font-size: 0.95rem; font-weight: 600; color: #fafafa; margin-bottom: 8px; }
-  .mail-back-hint { font-size: 0.8rem; color: #737373; line-height: 1.5; margin-bottom: 14px; }
-  .mail-btn-stack { display: flex; flex-direction: column; gap: 10px; }
-  .mail-btn { display: block; text-align: center; text-decoration: none; font-size: 0.9rem; font-weight: 600;
-    color: #fafafa; background: #1a1a1a; border: 1px solid #333333; border-radius: 8px; padding: 14px 16px;
-    min-height: 48px; line-height: 1.3; }
+  .mail-btn { width: 100%; display: block; cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 600;
+    text-align: center; color: #fafafa; background: #1a1a1a; border: 1px solid #333333; border-radius: 8px; padding: 14px 16px;
+    min-height: 48px; line-height: 1.3; -webkit-tap-highlight-color: transparent; }
   .mail-btn:active { background: #262626; }
 </style>
 </head>
 <body>
   <div class="ack-wrap">
     <div class="card">${successIcon}${inner}</div>
-    ${mailActions}
+    ${mailBack}
   </div>
+<script>
+(function () {
+  var btn = document.getElementById('ack-back-mail')
+  if (!btn) return
+  btn.addEventListener('click', function () {
+    try {
+      if (window.history.length > 1) {
+        window.history.back()
+        return
+      }
+    } catch (e) {}
+    try {
+      var r = document.referrer
+      if (!r) return
+      var u = new URL(r)
+      if (u.protocol === 'http:' || u.protocol === 'https:') {
+        window.location.assign(r)
+      }
+    } catch (e2) {}
+  })
+})()
+</script>
 </body>
 </html>`
 }
