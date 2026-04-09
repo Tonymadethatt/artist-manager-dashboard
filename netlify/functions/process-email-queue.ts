@@ -3,6 +3,7 @@
  *
  * Called by an external cron job every minute.
  * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`, `performance_report_received`, gig-calendar builtins) — buffer 0 so the next cron run can send.
+ * `gig_reminder_24h` additionally requires `now >= deal.event_start_at - 24h` (see `shouldSendGigReminderNow`) so missing/erroneous `scheduled_send_at` cannot send it early.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)
@@ -44,6 +45,7 @@ import { buildBrandedGigCalendarEmail } from '../../src/lib/email/gigCalendarEma
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { buildDealIcsBlob } from '../../src/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
+import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 import { addCalendarDaysPacific, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '../../src/types'
 
@@ -173,6 +175,20 @@ const handler: Handler = async (event) => {
     const ageMs = nowMs - new Date(e.created_at).getTime()
     const schedRaw = e.scheduled_send_at as string | null | undefined
     const schedMs = schedRaw ? new Date(schedRaw).getTime() : null
+
+    if (e.email_type === 'gig_reminder_24h') {
+      const nested = e.deal as { event_start_at?: string | null } | null | undefined
+      const startIso = nested?.event_start_at
+      if (!startIso || !shouldSendGigReminderNow(nowMs, startIso)) {
+        continue
+      }
+      if (ageMs >= bufferMin * 60 * 1000) {
+        emails.push(e)
+        if (emails.length >= 50) break
+      }
+      continue
+    }
+
     if (schedMs != null && Number.isFinite(schedMs) && schedMs > nowMs) {
       continue
     }
