@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   ClipboardList,
   Eye,
+  Calendar,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -26,6 +27,7 @@ const NAV_GROUPS = [
     label: 'Workspace',
     items: [
       { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true,  badgeKey: null              },
+      { to: '/calendar',            label: 'Calendar',      icon: Calendar,        end: false, badgeKey: null              },
       { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false, badgeKey: null              },
       { to: '/pipeline',            label: 'Pipeline',      icon: Workflow,        end: false, badgeKey: 'pipeline'        },
       { to: '/earnings',            label: 'Earnings',      icon: Banknote,        end: false, badgeKey: null              },

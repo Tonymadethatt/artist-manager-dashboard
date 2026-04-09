@@ -17,7 +17,6 @@ import {
   type VenueEmailType,
 } from '@/types'
 import { cn } from '@/lib/utils'
-import { GigCalendar } from '@/components/dashboard/GigCalendar'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -241,8 +240,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <GigCalendar deals={deals} venues={venues} loading={loading} />
-
       {/* ── Row 1: Stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Tasks due */}

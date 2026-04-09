@@ -7,6 +7,7 @@ import { NavBadgesProvider } from '@/context/NavBadgesContext'
 
 const PAGE_TITLES: Record<string, string> = {
   '/':                    'Dashboard',
+  '/calendar':            'Calendar',
   '/outreach':            'Outreach',
   '/pipeline':            'Pipeline',
   '/pipeline/templates':  'Task Templates',

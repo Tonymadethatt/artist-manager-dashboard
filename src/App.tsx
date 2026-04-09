@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Shell } from '@/components/layout/Shell'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
+import GigCalendarPage from '@/pages/GigCalendarPage'
 import Outreach from '@/pages/Outreach'
 import Templates from '@/pages/Templates'
 import Files from '@/pages/Files'
@@ -56,6 +57,7 @@ export default function App() {
 
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/calendar" element={<GigCalendarPage />} />
           <Route path="/outreach" element={<Outreach />} />
           <Route path="/earnings" element={<Earnings />} />
           <Route path="/tasks" element={<Navigate to="/pipeline" replace />} />
