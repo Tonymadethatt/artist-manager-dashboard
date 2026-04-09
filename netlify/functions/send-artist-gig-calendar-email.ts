@@ -35,6 +35,13 @@ export type GigCalendarEmailPayload =
     subject: string
     html: string
   }
+  | {
+    kind: 'gig_day_summary_manual'
+    profile: Profile
+    to: string
+    subject: string
+    html: string
+  }
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {

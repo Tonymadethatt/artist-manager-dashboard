@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { Plus, LayoutGrid, List, Settings2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTasks } from '@/hooks/useTasks'
 import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
@@ -211,8 +211,22 @@ export default function Pipeline() {
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
   const [filter, setFilter] = useState<Filter>('all')
+  const location = useLocation()
+  const navigate = useNavigate()
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [earlierExpanded, setEarlierExpanded] = useState(false)
+
+  useEffect(() => {
+    const st = location.state as { openVenueId?: string } | null
+    const vid = st?.openVenueId
+    if (!vid) return
+    if (!venues.some(v => v.id === vid)) return
+    setSelectedVenueId(vid)
+    navigate(location.pathname, { replace: true, state: {} })
+    requestAnimationFrame(() => {
+      document.getElementById(`pipeline-venue-${vid}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    })
+  }, [location.state, venues, location.pathname, navigate])
 
   // Toast
   const [toast, setToast] = useState<string | null>(null)

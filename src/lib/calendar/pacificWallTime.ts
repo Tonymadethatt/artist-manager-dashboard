@@ -35,6 +35,51 @@ export function pacificWallToUtcIso(ymd: string, hm: string): string | null {
   return null
 }
 
+const FRIENDLY_DATE_TIME = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+const FRIENDLY_DATE_ONLY = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+
+const FRIENDLY_TIME_ONLY = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+/** e.g. "Wed, Apr 9, 2026, 2:00 PM PT" */
+export function formatPacificInstantReadable(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  return `${FRIENDLY_DATE_TIME.format(new Date(ms))} PT`
+}
+
+/** Same calendar day in LA: "Wed, Apr 9, 2026 · 2:00 PM – 11:00 PM PT"; else full range. */
+export function formatPacificTimeRangeReadable(startIso: string, endIso: string): string {
+  const k0 = pacificDateKeyFromUtcIso(startIso)
+  const k1 = pacificDateKeyFromUtcIso(endIso)
+  if (!k0 || !k1) return formatPacificInstantReadable(startIso)
+  if (k0 === k1) {
+    const dayPart = FRIENDLY_DATE_ONLY.format(new Date(startIso))
+    const tA = FRIENDLY_TIME_ONLY.format(new Date(startIso))
+    const tB = FRIENDLY_TIME_ONLY.format(new Date(endIso))
+    return `${dayPart} · ${tA} – ${tB} PT`
+  }
+  return `${formatPacificInstantReadable(startIso)} – ${formatPacificInstantReadable(endIso)}`
+}
+
 /** UTC ISO → { date: YYYY-MM-DD, time: HH:mm } in LA. */
 export function utcIsoToPacificDateAndTime(iso: string): { date: string; time: string } | null {
   const ms = new Date(iso).getTime()
@@ -81,4 +126,17 @@ export function weekdaySunday0PacificYmd(ymd: string): number {
   const s = fmt.format(new Date(iso))
   const idx = SHORT_WD.indexOf(s as (typeof SHORT_WD)[number])
   return idx < 0 ? 0 : idx
+}
+
+/** Human-readable show window for emails and calendar detail (Pacific). */
+export function whenLineFriendlyFromDeal(d: {
+  event_start_at?: string | null
+  event_end_at?: string | null
+  event_date?: string | null
+}): string {
+  if (d.event_start_at && d.event_end_at) {
+    return formatPacificTimeRangeReadable(d.event_start_at, d.event_end_at)
+  }
+  const ed = d.event_date?.trim()
+  return ed ?? ''
 }

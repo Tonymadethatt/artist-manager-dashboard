@@ -7,7 +7,7 @@ interface NavBadgesContextValue {
 }
 
 const NavBadgesContext = createContext<NavBadgesContextValue>({
-  counts: { pipeline: 0, 'show-reports': 0, 'email-queue': 0 },
+  counts: { pipeline: 0, 'show-reports': 0, calendar: 0, 'email-queue': 0 },
   markSeen: async () => {},
 })
 

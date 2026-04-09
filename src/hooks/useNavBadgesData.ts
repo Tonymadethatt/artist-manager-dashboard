@@ -4,18 +4,19 @@ import { supabase } from '@/lib/supabase'
 export type NavBadgeCounts = {
   pipeline: number
   'show-reports': number
+  calendar: number
   'email-queue': number
 }
 
-const ALL_SECTIONS = ['pipeline', 'show-reports'] as const
+const ALL_SECTIONS = ['pipeline', 'show-reports', 'calendar'] as const
+type SeenSection = (typeof ALL_SECTIONS)[number]
 
 /**
  * Fetches nav badge counts and manages seen_at persistence.
  *
- * - pipeline / show-reports: "new since last visit" model — count rows created
- *   after seen_at[section]. Cleared when you visit the page (markSeen).
- * - email-queue: "live actionable count" model — count of pending emails right
- *   now. No seen_at needed; badge disappears when the queue empties.
+ * - pipeline / show-reports / calendar: "new since last visit" — count items
+ *   that qualify after seen_at[section]. Cleared when you visit the page (markSeen).
+ * - email-queue: "live actionable count" — pending emails now; no seen_at.
  *
  * @param pathname  Pass location.pathname so counts refresh on navigation.
  */
@@ -23,6 +24,7 @@ export function useNavBadgesData(pathname: string) {
   const [counts, setCounts] = useState<NavBadgeCounts>({
     pipeline: 0,
     'show-reports': 0,
+    calendar: 0,
     'email-queue': 0,
   })
 
@@ -41,7 +43,7 @@ export function useNavBadgesData(pathname: string) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const seenAt = (badgeRow?.seen_at ?? {}) as Record<string, string>
+    const seenAt = (badgeRow?.seen_at ?? {}) as Partial<Record<SeenSection, string>>
 
     // If the row doesn't exist yet, initialize it now so existing data
     // doesn't flood with stale badges on first visit.
@@ -51,7 +53,7 @@ export function useNavBadgesData(pathname: string) {
       await supabase
         .from('nav_badges')
         .insert({ user_id: user.id, seen_at: initialSeenAt })
-      setCounts({ pipeline: 0, 'show-reports': 0, 'email-queue': 0 })
+      setCounts({ pipeline: 0, 'show-reports': 0, calendar: 0, 'email-queue': 0 })
       return
     }
 
@@ -71,7 +73,23 @@ export function useNavBadgesData(pathname: string) {
       .eq('submitted', true)
       .gt('submitted_at', reportsSince)
 
-    // --- 4. Email Queue: all currently pending emails (live count, no seen_at) ---
+    // --- 4. Calendar: deals that became calendar-eligible after seen_at.calendar ---
+    const calendarSince = seenAt['calendar'] ?? new Date(0).toISOString()
+    const { data: calendarCountRaw, error: calendarRpcError } = await supabase.rpc(
+      'nav_calendar_badge_count',
+      { p_since: calendarSince },
+    )
+    if (calendarRpcError) {
+      console.warn('nav_calendar_badge_count', calendarRpcError.message)
+    }
+    const calendarCount =
+      typeof calendarCountRaw === 'number'
+        ? calendarCountRaw
+        : typeof calendarCountRaw === 'string'
+          ? parseInt(calendarCountRaw, 10) || 0
+          : 0
+
+    // --- 5. Email Queue: all currently pending emails (live count, no seen_at) ---
     const { count: queueCount } = await supabase
       .from('venue_emails')
       .select('id', { count: 'exact', head: true })
@@ -80,6 +98,7 @@ export function useNavBadgesData(pathname: string) {
     setCounts({
       pipeline: pipelineCount ?? 0,
       'show-reports': reportsCount ?? 0,
+      calendar: calendarCount,
       'email-queue': queueCount ?? 0,
     })
   }, [])

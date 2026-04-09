@@ -256,6 +256,8 @@ export interface Database {
           event_date: string | null
           event_start_at: string | null
           event_end_at: string | null
+          event_cancelled_at: string | null
+          calendar_first_listed_at: string | null
           ics_invite_sent_at: string | null
           reminder_24h_queued_at: string | null
           gross_amount: number
@@ -282,6 +284,8 @@ export interface Database {
           event_date?: string | null
           event_start_at?: string | null
           event_end_at?: string | null
+          event_cancelled_at?: string | null
+          calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
           gross_amount: number
@@ -308,6 +312,8 @@ export interface Database {
           event_date?: string | null
           event_start_at?: string | null
           event_end_at?: string | null
+          event_cancelled_at?: string | null
+          calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
           gross_amount?: number
@@ -1042,6 +1048,10 @@ export interface Database {
       update_nav_badge_seen: {
         Args: { p_section: string }
         Returns: undefined
+      }
+      nav_calendar_badge_count: {
+        Args: { p_since: string }
+        Returns: number
       }
     }
     Enums: {

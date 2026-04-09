@@ -52,11 +52,14 @@ export function VenueWorkCard({
   const hasOverdue = overdueTasks.length > 0
 
   return (
-    <div className={cn(
+    <div
+      id={venue ? `pipeline-venue-${venue.id}` : undefined}
+      className={cn(
       'flex flex-col bg-neutral-900 border rounded-lg min-w-[260px] w-[280px] shrink-0 transition-all',
       hasOverdue ? 'border-red-800' : 'border-neutral-800',
       selected && 'ring-2 ring-white/25 border-neutral-600',
-    )}>
+      )}
+    >
       <div
         className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
         onClick={() => {

@@ -23,6 +23,7 @@ import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import {
+  buildDaySummaryHtml,
   buildDigestHtml,
   buildGigReminderHtml,
   buildIcsInviteHtml,
@@ -394,6 +395,36 @@ export async function sendEmailTemplateTest(
           },
           to: managerRecipient.email,
           subject: layoutNorm.subject?.trim() || 'Your gigs — next two weeks (test)',
+          html,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'gig_day_summary_manual') {
+      const html = buildDaySummaryHtml({
+        introHtml: layoutNorm.intro ?? null,
+        dayLabel: 'Sample show day',
+        rows: [{
+          when: `${previewEventDay} 20:00–23:00 PT`,
+          title: PREVIEW_MOCK_DEAL.description,
+          venue: PREVIEW_MOCK_VENUE.name,
+        }],
+      })
+      const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'gig_day_summary_manual',
+          profile: {
+            artist_name: profile.artist_name,
+            from_email: profile.from_email,
+            reply_to_email: profile.reply_to_email,
+            manager_email: profile.manager_email,
+          },
+          to: managerRecipient.email,
+          subject: layoutNorm.subject?.trim() || 'Your gigs — one day (test)',
           html,
         }),
       })

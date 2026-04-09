@@ -8,6 +8,7 @@ export function isQueuedBuiltinArtistEmailType(emailType: string): boolean {
     || emailType === 'gig_calendar_digest_weekly'
     || emailType === 'gig_reminder_24h'
     || emailType === 'gig_booked_ics'
+    || emailType === 'gig_day_summary_manual'
 }
 
 /** Pending rows that should send on the next cron tick (same as artist-custom buffer). */

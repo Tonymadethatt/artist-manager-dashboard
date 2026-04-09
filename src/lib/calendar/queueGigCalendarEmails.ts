@@ -5,14 +5,17 @@ import { calendarQualificationFirstTouch, dealQualifiesForCalendar } from '@/lib
 
 type VenueStatus = Pick<Venue, 'status'> | null | undefined
 
-function beforePatch(deal: Deal | null): Pick<Deal, 'venue_id' | 'event_start_at' | 'event_end_at'> {
+function beforePatch(
+  deal: Deal | null,
+): Pick<Deal, 'venue_id' | 'event_start_at' | 'event_end_at' | 'event_cancelled_at'> {
   if (!deal) {
-    return { venue_id: null, event_start_at: null, event_end_at: null }
+    return { venue_id: null, event_start_at: null, event_end_at: null, event_cancelled_at: null }
   }
   return {
     venue_id: deal.venue_id,
     event_start_at: deal.event_start_at,
     event_end_at: deal.event_end_at,
+    event_cancelled_at: deal.event_cancelled_at ?? null,
   }
 }
 
@@ -34,6 +37,7 @@ export async function syncDealCalendarEmails(args: {
     venue_id: afterDeal.venue_id,
     event_start_at: afterDeal.event_start_at,
     event_end_at: afterDeal.event_end_at,
+    event_cancelled_at: afterDeal.event_cancelled_at ?? null,
   }
 
   const icsFirst =

@@ -33,6 +33,7 @@ import {
   type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
 import {
+  buildDaySummaryHtml,
   buildDigestHtml,
   buildGigReminderHtml,
   buildIcsInviteHtml,
@@ -207,6 +208,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   gig_calendar_digest_weekly: 'Every Sunday ~5am PT: list of booked gigs in the next two weeks (queued by schedule).',
   gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
   gig_booked_ics:             'First time a gig qualifies for the calendar: .ics invite to the artist (idempotent per deal).',
+  gig_day_summary_manual:     'From Gig calendar: send the artist a table of every booked gig on one day (queued; sends on next cron tick).',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
@@ -219,6 +221,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
   gig_reminder_24h:           '{firstName}, reminder: {venue} in 24 hours',
   gig_booked_ics:             '{firstName}, calendar invite — booked gig',
+  gig_day_summary_manual:     '{firstName}, your gigs — one day',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = [
@@ -231,6 +234,7 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'gig_calendar_digest_weekly',
   'gig_reminder_24h',
   'gig_booked_ics',
+  'gig_day_summary_manual',
 ]
 
 type Group = 'client' | 'artist'
@@ -575,6 +579,19 @@ export default function EmailTemplates() {
       if (selectedType === 'gig_calendar_digest_weekly') {
         return buildDigestHtml({
           introHtml: layout.intro ?? null,
+          rows: [
+            {
+              when: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,
+              title: PREVIEW_MOCK_DEAL.description,
+              venue: PREVIEW_MOCK_VENUE.name,
+            },
+          ],
+        })
+      }
+      if (selectedType === 'gig_day_summary_manual') {
+        return buildDaySummaryHtml({
+          introHtml: layout.intro ?? null,
+          dayLabel: 'Sample show day',
           rows: [
             {
               when: `${PREVIEW_MOCK_DEAL.event_date} 20:00–23:00 PT`,

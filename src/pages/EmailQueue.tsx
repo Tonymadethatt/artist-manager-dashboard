@@ -44,6 +44,7 @@ import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
 import {
+  buildDaySummaryHtml,
   buildDigestHtml,
   buildGigReminderHtml,
   buildIcsInviteHtml,
@@ -53,7 +54,7 @@ import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import {
   addCalendarDaysPacific,
   pacificWallToUtcIso,
-  utcIsoToPacificDateAndTime,
+  whenLineFriendlyFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
@@ -87,14 +88,6 @@ function getMinutesUntilSend(createdAt: string, bufferMinutes: number): number {
   return Math.max(0, Math.ceil((sendAt - Date.now()) / 60000))
 }
 
-function whenLineFromDealTimes(d: Pick<Deal, 'event_start_at' | 'event_end_at'>): string {
-  const a = d.event_start_at ? utcIsoToPacificDateAndTime(d.event_start_at) : null
-  const b = d.event_end_at ? utcIsoToPacificDateAndTime(d.event_end_at) : null
-  if (!a || !b) return ''
-  if (a.date === b.date) return `${a.date} ${a.time}–${b.time} PT`
-  return `${a.date} ${a.time} – ${b.date} ${b.time} PT`
-}
-
 function pendingNotesLine(email: VenueEmail): string | null {
   if (parseEmailCaptureTokenFromNotes(email.notes)) {
     return 'Includes venue quick-response link in body when sent'
@@ -121,6 +114,10 @@ function pendingNotesLine(email: VenueEmail): string | null {
   if (email.email_type === 'gig_calendar_digest_weekly') {
     const n = parseGigCalendarQueueNotes(email.notes)
     if (n?.kind === 'gig_calendar_digest_weekly') return `2-week digest · ${n.weekStart}`
+  }
+  if (email.email_type === 'gig_day_summary_manual') {
+    const n = parseGigCalendarQueueNotes(email.notes)
+    if (n?.kind === 'gig_day_summary_manual') return `Day summary · ${n.ymd}`
   }
   if (email.email_type === 'gig_reminder_24h' || email.email_type === 'gig_booked_ics') {
     const n = parseGigCalendarQueueNotes(email.notes)
@@ -519,6 +516,7 @@ export default function EmailQueue() {
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
           || email.email_type === 'gig_booked_ics'
+          || email.email_type === 'gig_day_summary_manual'
         ) {
           const gigN = parseGigCalendarQueueNotes(email.notes)
           const { data: gcTmpl } = await supabase
@@ -549,7 +547,7 @@ export default function EmailQueue() {
                 const ts = new Date(d.event_start_at).getTime()
                 if (ts < t0 || ts > t1) continue
                 rows.push({
-                  when: whenLineFromDealTimes(d) || d.event_date || '',
+                  when: whenLineFriendlyFromDeal(d) || d.event_date || '',
                   title: d.description?.trim() || 'Gig',
                   venue: v?.name?.trim() || '—',
                 })
@@ -557,6 +555,42 @@ export default function EmailQueue() {
             }
             rows.sort((a, b) => a.when.localeCompare(b.when))
             setPreviewHtml(buildDigestHtml({ introHtml: intro, rows }))
+          } else if (email.email_type === 'gig_day_summary_manual' && gigN?.kind === 'gig_day_summary_manual') {
+            const ymdD = gigN.ymd
+            const venuesD = inputs.venues as Venue[]
+            const dealsD = inputs.deals as Deal[]
+            const vmapD = new Map(venuesD.map(v => [v.id, v]))
+            const startD = pacificWallToUtcIso(ymdD, '00:00')
+            const endD = pacificWallToUtcIso(ymdD, '23:59')
+            const rowsD: { when: string; title: string; venue: string }[] = []
+            if (startD && endD) {
+              const t0d = new Date(startD).getTime()
+              const t1d = new Date(endD).getTime()
+              for (const d of dealsD) {
+                const v = d.venue ?? (d.venue_id ? vmapD.get(d.venue_id) : undefined)
+                if (!dealQualifiesForCalendar(d, v ?? null)) continue
+                if (!d.event_start_at) continue
+                const ts = new Date(d.event_start_at).getTime()
+                if (ts < t0d || ts > t1d) continue
+                rowsD.push({
+                  when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                  title: d.description?.trim() || 'Gig',
+                  venue: v?.name?.trim() || '—',
+                })
+              }
+            }
+            rowsD.sort((a, b) => a.when.localeCompare(b.when))
+            const noonD = pacificWallToUtcIso(ymdD, '12:00')
+            const dayLabelD = noonD
+              ? new Intl.DateTimeFormat('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                timeZone: 'America/Los_Angeles',
+              }).format(new Date(noonD))
+              : ymdD
+            setPreviewHtml(buildDaySummaryHtml({ introHtml: intro, dayLabel: dayLabelD, rows: rowsD }))
           } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
             const { data: dealRow } = await supabase
               .from('deals')
@@ -574,7 +608,7 @@ export default function EmailQueue() {
                 introHtml: intro,
                 venueName: vn,
                 dealDescription: deal.description?.trim() || 'Gig',
-                whenLine: whenLineFromDealTimes(deal),
+                whenLine: whenLineFriendlyFromDeal(deal),
               }))
             } else {
               const { data: venueRow } = await supabase
@@ -914,6 +948,7 @@ export default function EmailQueue() {
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
           || email.email_type === 'gig_booked_ics'
+          || email.email_type === 'gig_day_summary_manual'
         ) {
           if (!profile.artist_email?.trim()) throw new Error('Artist email not set in profile.')
           const gigN = parseGigCalendarQueueNotes(email.notes)
@@ -949,7 +984,7 @@ export default function EmailQueue() {
               const ts = new Date(d.event_start_at).getTime()
               if (ts < t0 || ts > t1) continue
               rows.push({
-                when: whenLineFromDealTimes(d) || d.event_date || '',
+                when: whenLineFriendlyFromDeal(d) || d.event_date || '',
                 title: d.description?.trim() || 'Gig',
                 venue: v?.name?.trim() || '—',
               })
@@ -961,6 +996,53 @@ export default function EmailQueue() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 kind: 'gig_calendar_digest_weekly',
+                profile: sendProfile,
+                to: profile.artist_email.trim(),
+                subject: subj,
+                html,
+              }),
+            })
+            if (!res.ok) throw new Error(await parseErr(res))
+          } else if (email.email_type === 'gig_day_summary_manual' && gigN?.kind === 'gig_day_summary_manual') {
+            const ymdS = gigN.ymd
+            const venuesS = inputs.venues as Venue[]
+            const dealsS = inputs.deals as Deal[]
+            const vmapS = new Map(venuesS.map(v => [v.id, v]))
+            const startS = pacificWallToUtcIso(ymdS, '00:00')
+            const endS = pacificWallToUtcIso(ymdS, '23:59')
+            if (!startS || !endS) throw new Error('Invalid day summary date')
+            const t0s = new Date(startS).getTime()
+            const t1s = new Date(endS).getTime()
+            const rowsS: { when: string; title: string; venue: string }[] = []
+            for (const d of dealsS) {
+              const v = d.venue ?? (d.venue_id ? vmapS.get(d.venue_id) : undefined)
+              if (!dealQualifiesForCalendar(d, v ?? null)) continue
+              if (!d.event_start_at) continue
+              const ts = new Date(d.event_start_at).getTime()
+              if (ts < t0s || ts > t1s) continue
+              rowsS.push({
+                when: whenLineFriendlyFromDeal(d) || d.event_date || '',
+                title: d.description?.trim() || 'Gig',
+                venue: v?.name?.trim() || '—',
+              })
+            }
+            rowsS.sort((a, b) => a.when.localeCompare(b.when))
+            const noonS = pacificWallToUtcIso(ymdS, '12:00')
+            const dayLabelS = noonS
+              ? new Intl.DateTimeFormat('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+                timeZone: 'America/Los_Angeles',
+              }).format(new Date(noonS))
+              : ymdS
+            const html = buildDaySummaryHtml({ introHtml: intro, dayLabel: dayLabelS, rows: rowsS })
+            const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                kind: 'gig_day_summary_manual',
                 profile: sendProfile,
                 to: profile.artist_email.trim(),
                 subject: subj,
@@ -989,7 +1071,7 @@ export default function EmailQueue() {
                 introHtml: intro,
                 venueName,
                 dealDescription: deal.description?.trim() || 'Gig',
-                whenLine: whenLineFromDealTimes(deal),
+                whenLine: whenLineFriendlyFromDeal(deal),
               })
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
                 method: 'POST',

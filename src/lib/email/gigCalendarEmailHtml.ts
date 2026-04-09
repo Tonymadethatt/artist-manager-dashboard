@@ -26,6 +26,32 @@ export function buildGigReminderHtml(args: {
   </div></body></html>`
 }
 
+/** Single-day gig list (manual send from calendar). */
+export function buildDaySummaryHtml(args: {
+  introHtml: string | null
+  dayLabel: string
+  rows: { when: string; title: string; venue: string }[]
+}): string {
+  const intro = args.introHtml?.trim()
+    ? `<div style="margin:0 0 16px;color:#e5e5e5;font-size:15px;line-height:1.5">${args.introHtml}</div>`
+    : ''
+  const bodyRows = args.rows.length
+    ? args.rows.map(r => `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa;vertical-align:top">${escapeHtml(r.when)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#fafafa">${escapeHtml(r.title)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #262626;color:#a3a3a3">${escapeHtml(r.venue)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="3" style="padding:16px;color:#737373">No booked shows on this day.</td></tr>`
+  return `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0a;font-family:system-ui,sans-serif;color:#fafafa;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;">
+    <h1 style="font-size:20px;margin:0 0 8px">Your gigs — ${escapeHtml(args.dayLabel)}</h1>
+    <p style="color:#a3a3a3;font-size:14px;margin:0 0 16px">Pacific times · sent by your manager</p>
+    ${intro}
+    <table style="width:100%;border-collapse:collapse;font-size:14px">${bodyRows}</table>
+    <p style="font-size:12px;color:#737373;margin-top:24px">Sent by your management team.</p>
+  </div></body></html>`
+}
+
 export function buildDigestHtml(args: {
   introHtml: string | null
   rows: { when: string; title: string; venue: string }[]

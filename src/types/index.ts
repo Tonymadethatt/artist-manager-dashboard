@@ -355,6 +355,10 @@ export interface Deal {
   /** Show start/end (timestamptz ISO). Prefer over event_date when both set. */
   event_start_at: string | null
   event_end_at: string | null
+  /** When set, show is off the calendar (cancelled) but deal row kept for earnings history. */
+  event_cancelled_at: string | null
+  /** Set when the deal first becomes calendar-eligible; drives sidebar Calendar badge vs nav_badges.seen_at. */
+  calendar_first_listed_at: string | null
   ics_invite_sent_at: string | null
   reminder_24h_queued_at: string | null
   gross_amount: number
@@ -402,6 +406,8 @@ export type ArtistEmailType =
   | 'gig_calendar_digest_weekly'
   | 'gig_reminder_24h'
   | 'gig_booked_ics'
+  /** Queued from gig calendar: one-day schedule to artist (buffer 0). */
+  | 'gig_day_summary_manual'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -433,6 +439,7 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   gig_calendar_digest_weekly: 'Gig calendar — 2-week digest',
   gig_reminder_24h: 'Gig reminder — 24h before show',
   gig_booked_ics: 'Gig booked — calendar invite (.ics)',
+  gig_day_summary_manual: 'Gig schedule — day summary (manual)',
 }
 
 export interface EmailTemplate {

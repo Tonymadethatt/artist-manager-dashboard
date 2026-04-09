@@ -1,15 +1,18 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
 import type { Deal, Venue } from '@/types'
+import { COMMISSION_TIER_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_TRACK_LABELS } from '@/types'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import {
   pacificDateKeyFromUtcIso,
-  utcIsoToPacificDateAndTime,
+  formatPacificTimeRangeReadable,
   weekdaySunday0PacificYmd,
   addCalendarDaysPacific,
   pacificTodayYmd,
+  pacificWallToUtcIso,
 } from '@/lib/calendar/pacificWallTime'
+import { queueManualGigDaySummary } from '@/lib/calendar/queueManualGigDaySummary'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,12 +25,31 @@ import {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MAX_CHIPS = 3
 
-type CalendarDeal = Deal & { venue?: Pick<Venue, 'id' | 'name' | 'status'> | null }
+type ViewMode = 'month' | 'week' | 'day'
 
-function venueById(venues: Venue[], id: string | null): Pick<Venue, 'id' | 'name' | 'status'> | null {
+type CalendarDeal = Deal & {
+  venue?: Pick<Venue, 'id' | 'name' | 'status' | 'outreach_track'> | null
+}
+
+function venueById(
+  venues: Venue[],
+  id: string | null,
+): Pick<Venue, 'id' | 'name' | 'status' | 'outreach_track'> | null {
   if (!id) return null
   const v = venues.find(x => x.id === id)
-  return v ? { id: v.id, name: v.name, status: v.status } : null
+  return v ? { id: v.id, name: v.name, status: v.status, outreach_track: v.outreach_track } : null
+}
+
+function formatPacificDateLong(ymd: string): string {
+  const iso = pacificWallToUtcIso(ymd, '12:00')
+  if (!iso) return ymd
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Los_Angeles',
+  }).format(new Date(iso))
 }
 
 function shortTitle(deal: CalendarDeal): string {
@@ -36,6 +58,12 @@ function shortTitle(deal: CalendarDeal): string {
   if (!v) return base.length > 22 ? `${base.slice(0, 20)}…` : base
   const s = `${base} · ${v}`
   return s.length > 26 ? `${s.slice(0, 24)}…` : s
+}
+
+function longTitle(deal: CalendarDeal): string {
+  const v = deal.venue?.name
+  const base = deal.description.trim() || 'Gig'
+  return v ? `${base} · ${v}` : base
 }
 
 function startOfCalendarMonthUTC(year: number, month0: number): Date {
@@ -50,6 +78,26 @@ function formatMonthYear(d: Date): string {
   return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
+/** YYYY-MM-DD lexicographic order matches calendar order for Pacific day keys. */
+function isPastPacificYmd(ymd: string, todayYmd: string): boolean {
+  return ymd < todayYmd
+}
+
+/** Venue for calendar display (embedded on deal or loaded from `venues`). */
+function resolveCalendarVenue(
+  deal: CalendarDeal,
+  venues: Venue[],
+): Pick<Venue, 'id' | 'name' | 'status' | 'outreach_track'> | null {
+  return deal.venue ?? venueById(venues, deal.venue_id)
+}
+
+function outreachTrackForDeal(deal: CalendarDeal, venues: Venue[]): 'pipeline' | 'community' | null {
+  const v = resolveCalendarVenue(deal, venues)
+  const t = v?.outreach_track
+  if (t === 'pipeline' || t === 'community') return t
+  return null
+}
+
 export function GigCalendar({
   deals,
   venues,
@@ -60,20 +108,33 @@ export function GigCalendar({
   loading?: boolean
 }) {
   const [cursor, setCursor] = useState(() => new Date())
-  const [view, setView] = useState<'week' | 'month'>('week')
+  const [view, setView] = useState<ViewMode>('week')
+  const [dayKey, setDayKey] = useState(() => pacificTodayYmd())
   const [selectedDeal, setSelectedDeal] = useState<CalendarDeal | null>(null)
+  const [dayActionsFor, setDayActionsFor] = useState<string | null>(null)
+  const [calendarNotice, setCalendarNotice] = useState<string | null>(null)
+  const [queueingDayEmail, setQueueingDayEmail] = useState(false)
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 640px)')
-    const apply = () => setView(mq.matches ? 'month' : 'week')
+    const mqLg = window.matchMedia('(min-width: 1024px)')
+    const mqMd = window.matchMedia('(min-width: 768px)')
+    const apply = () => {
+      if (mqLg.matches) setView('month')
+      else if (mqMd.matches) setView('week')
+      else setView('day')
+    }
     apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
+    mqLg.addEventListener('change', apply)
+    mqMd.addEventListener('change', apply)
+    return () => {
+      mqLg.removeEventListener('change', apply)
+      mqMd.removeEventListener('change', apply)
+    }
   }, [])
 
   const calendarDeals = useMemo(() => {
     return deals.filter(d => {
-      const v = d.venue ?? venueById(venues, d.venue_id)
+      const v = resolveCalendarVenue(d, venues)
       return dealQualifiesForCalendar(d, v)
     })
   }, [deals, venues])
@@ -99,6 +160,7 @@ export function GigCalendar({
   }, [calendarDeals])
 
   const nowMs = Date.now()
+  const todayYmd = pacificDateKeyFromUtcIso(new Date().toISOString()) ?? pacificTodayYmd()
 
   const monthCells = useMemo(() => {
     const y = cursor.getUTCFullYear()
@@ -126,84 +188,182 @@ export function GigCalendar({
     return Array.from({ length: 7 }, (_, i) => addCalendarDaysPacific(sunKey, i))
   }, [cursor])
 
-  function prevMonth() {
-    setCursor(addMonths(cursor, -1))
+  const dayList = useMemo(() => dealsByDay.get(dayKey) ?? [], [dealsByDay, dayKey])
+  const dayIsPastForPanel = isPastPacificYmd(dayKey, todayYmd)
+
+  const openDay = useCallback((ymd: string) => {
+    setDayKey(ymd)
+    const iso = pacificWallToUtcIso(ymd, '12:00')
+    if (iso) setCursor(new Date(iso))
+    setView('day')
+  }, [])
+
+  const prevMonth = () => setCursor(addMonths(cursor, -1))
+  const nextMonth = () => setCursor(addMonths(cursor, 1))
+  const prevWeek = () => setCursor(new Date(cursor.getTime() - 7 * 86400000))
+  const nextWeek = () => setCursor(new Date(cursor.getTime() + 7 * 86400000))
+  const prevDay = () => {
+    const next = addCalendarDaysPacific(dayKey, -1)
+    setDayKey(next)
+    const iso = pacificWallToUtcIso(next, '12:00')
+    if (iso) setCursor(new Date(iso))
   }
-  function nextMonth() {
-    setCursor(addMonths(cursor, 1))
+  const nextDay = () => {
+    const next = addCalendarDaysPacific(dayKey, 1)
+    setDayKey(next)
+    const iso = pacificWallToUtcIso(next, '12:00')
+    if (iso) setCursor(new Date(iso))
   }
-  function prevWeek() {
-    const t = cursor.getTime() - 7 * 86400000
-    setCursor(new Date(t))
-  }
-  function nextWeek() {
-    const t = cursor.getTime() + 7 * 86400000
-    setCursor(new Date(t))
-  }
-  function goToday() {
+
+  const goToday = () => {
+    const t = pacificTodayYmd()
+    setDayKey(t)
     setCursor(new Date())
   }
+
+  const navPrev = () => {
+    if (view === 'month') prevMonth()
+    else if (view === 'week') prevWeek()
+    else prevDay()
+  }
+  const navNext = () => {
+    if (view === 'month') nextMonth()
+    else if (view === 'week') nextWeek()
+    else nextDay()
+  }
+
+  const periodLabel =
+    view === 'month'
+      ? formatMonthYear(cursor)
+      : view === 'week'
+        ? (weekKeys[0] ? `Week of ${formatPacificDateLong(weekKeys[0])}` : '')
+        : formatPacificDateLong(dayKey)
 
   function cellTone(deal: CalendarDeal): 'past' | 'upcoming' {
     const end = deal.event_end_at ? new Date(deal.event_end_at).getTime() : 0
     return end < nowMs ? 'past' : 'upcoming'
   }
 
+  function chipClass(deal: CalendarDeal, compact: boolean) {
+    const past = cellTone(deal) === 'past'
+    const track = outreachTrackForDeal(deal, venues)
+    const base = cn(
+      'block w-full text-left rounded-md font-semibold border-2 text-[10px] sm:text-[11px] leading-tight transition-colors hover:brightness-110',
+      compact ? 'truncate px-1 py-0.5' : 'px-2 py-1.5 text-xs',
+    )
+
+    if (track === 'pipeline') {
+      return cn(
+        base,
+        past
+          ? 'border-blue-800 bg-blue-950 text-white border-l-[6px] border-l-blue-500'
+          : 'border-blue-600 bg-blue-900 text-white border-l-[6px] border-l-blue-400',
+      )
+    }
+    if (track === 'community') {
+      return cn(
+        base,
+        past
+          ? 'border-amber-600 bg-amber-900 text-white border-l-[6px] border-l-amber-400'
+          : 'border-orange-400 bg-amber-400 text-black border-l-[6px] border-l-yellow-100',
+      )
+    }
+    return cn(
+      base,
+      'border-neutral-500 border-l-[6px] border-l-neutral-300',
+      past ? 'bg-neutral-900 text-white' : 'bg-neutral-600 text-white',
+    )
+  }
+
+  const dealsForDayActions = useMemo(() => {
+    if (!dayActionsFor) return []
+    return calendarDeals.filter(
+      d => d.event_start_at && pacificDateKeyFromUtcIso(d.event_start_at) === dayActionsFor,
+    )
+  }, [dayActionsFor, calendarDeals])
+
+  async function handleQueueDaySummary() {
+    if (!dayActionsFor) return
+    setQueueingDayEmail(true)
+    setCalendarNotice(null)
+    const res = await queueManualGigDaySummary(dayActionsFor)
+    setQueueingDayEmail(false)
+    if (res.ok) {
+      setCalendarNotice('Queued email to your artist. It will send on the next queue run (usually within a minute).')
+      setDayActionsFor(null)
+    } else {
+      setCalendarNotice(res.message)
+    }
+  }
+
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-3 py-3 border-b border-neutral-800">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-3 py-3 border-b border-neutral-800">
         <div className="flex items-center gap-2 min-w-0">
           <CalendarIcon className="h-5 w-5 text-neutral-500 shrink-0" aria-hidden />
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-neutral-100 truncate">Gig calendar</h2>
-            <p className="text-[11px] text-neutral-500 truncate">Booked shows · Pacific time</p>
+            <p className="text-[11px] text-neutral-500 truncate">
+              Booked shows · Pacific time ·{' '}
+              <span className="text-blue-400 font-semibold">Pipeline</span>
+              {' / '}
+              <span className="text-amber-300 font-semibold">Community</span>
+            </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-md border border-neutral-700 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setView('week')}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'week' ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-400 hover:text-neutral-200',
-              )}
-            >
-              Week
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('month')}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium transition-colors',
-                view === 'month' ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-400 hover:text-neutral-200',
-              )}
-            >
-              Month
-            </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+          <div className="flex rounded-md border border-neutral-700 overflow-hidden w-fit max-w-full">
+            {(['day', 'week', 'month'] as const).map(v => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={cn(
+                  'px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
+                  view === v ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-400 hover:text-neutral-200',
+                )}
+              >
+                {v}
+              </button>
+            ))}
           </div>
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={goToday}>
-            Today
-          </Button>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={view === 'month' ? prevMonth : prevWeek} aria-label="Previous">
-              <ChevronLeft className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={goToday}>
+              Today
             </Button>
-            <span className="text-xs text-neutral-300 tabular-nums px-1 min-w-[8.5rem] text-center">
-              {view === 'month' ? formatMonthYear(cursor) : `Week of ${weekKeys[0]?.slice(5).replace('-', '/') ?? ''}`}
-            </span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={view === 'month' ? nextMonth : nextWeek} aria-label="Next">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1 min-w-0">
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={navPrev} aria-label="Previous">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-neutral-200 tabular-nums px-1 min-w-0 flex-1 text-center line-clamp-2 sm:line-clamp-1 sm:min-w-[10rem]">
+                {periodLabel}
+              </span>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={navNext} aria-label="Next">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <Link
+              to="/earnings"
+              className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors whitespace-nowrap"
+            >
+              Edit gigs →
+            </Link>
           </div>
-          <Link
-            to="/earnings"
-            className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors whitespace-nowrap"
-          >
-            Edit gigs →
-          </Link>
         </div>
       </div>
+
+      {calendarNotice && (
+        <div className="px-3 py-2 border-b border-neutral-800 flex items-start justify-between gap-2 bg-amber-950/20">
+          <p className="text-xs text-amber-200/95">{calendarNotice}</p>
+          <button
+            type="button"
+            className="text-[11px] text-neutral-500 hover:text-neutral-300 shrink-0"
+            onClick={() => setCalendarNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -219,43 +379,75 @@ export function GigCalendar({
             ))}
             {monthCells.map((c, idx) => {
               const list = c.key ? dealsByDay.get(c.key) ?? [] : []
-              const isToday = c.key === pacificDateKeyFromUtcIso(new Date().toISOString())
+              const isTodayCell = c.key === todayYmd
+              const isPastDay = c.key ? isPastPacificYmd(c.key, todayYmd) : false
               return (
                 <div
                   key={idx}
+                  role={c.key ? 'button' : undefined}
+                  tabIndex={c.key ? 0 : undefined}
+                  onKeyDown={e => {
+                    if (!c.key) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setDayActionsFor(c.key)
+                    }
+                  }}
+                  onClick={() => c.key && setDayActionsFor(c.key)}
                   className={cn(
-                    'min-h-[72px] sm:min-h-[88px] bg-neutral-900 p-1 sm:p-1.5 text-left align-top',
+                    'min-h-[76px] sm:min-h-[92px] p-1 sm:p-1.5 text-left align-top relative cursor-pointer flex flex-col',
+                    isPastDay
+                      ? 'bg-[#060606] hover:bg-[#0a0a0a] saturate-[0.55]'
+                      : 'bg-neutral-900 hover:bg-neutral-900/95',
                     !c.inMonth && 'opacity-40',
+                    isTodayCell &&
+                      'ring-2 ring-white ring-inset z-[1] bg-neutral-800/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]',
                   )}
                 >
                   {c.key && (
                     <>
-                      <div
-                        className={cn(
-                          'text-[10px] font-medium mb-0.5 tabular-nums',
-                          isToday ? 'text-white' : 'text-neutral-500',
+                      <div className="flex items-start justify-between gap-0.5 mb-0.5 pointer-events-none">
+                        <span
+                          className={cn(
+                            'text-[10px] font-semibold tabular-nums rounded px-0.5 -ml-0.5',
+                            isTodayCell && 'text-white',
+                            !isTodayCell && isPastDay && 'text-neutral-600',
+                            !isTodayCell && !isPastDay && 'text-neutral-500',
+                          )}
+                        >
+                          {parseInt(c.key.slice(8), 10)}
+                        </span>
+                        {isTodayCell && (
+                          <span className="text-[8px] font-bold uppercase tracking-wide text-white bg-white/15 px-1 py-0.5 rounded">
+                            Today
+                          </span>
                         )}
-                      >
-                        {parseInt(c.key.slice(8), 10)}
                       </div>
-                      <div className="space-y-0.5">
+                      <div
+                        className={cn('space-y-0.5 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
+                        onClick={e => e.stopPropagation()}
+                      >
                         {list.slice(0, MAX_CHIPS).map(deal => (
                           <button
                             key={deal.id}
                             type="button"
                             onClick={() => setSelectedDeal(deal)}
-                            className={cn(
-                              'block w-full text-left truncate rounded px-0.5 text-[10px] sm:text-[11px] leading-tight border border-transparent',
-                              cellTone(deal) === 'past'
-                                ? 'text-neutral-500 bg-neutral-950/80 border-neutral-800'
-                                : 'text-neutral-100 bg-neutral-800/90 hover:border-neutral-600',
-                            )}
+                            className={chipClass(deal, true)}
                           >
                             {shortTitle(deal)}
                           </button>
                         ))}
                         {list.length > MAX_CHIPS && (
-                          <div className="text-[9px] text-neutral-600">+{list.length - MAX_CHIPS} more</div>
+                          <button
+                            type="button"
+                            onClick={() => openDay(c.key!)}
+                            className={cn(
+                              'text-[9px] text-left w-full',
+                              isPastDay ? 'text-neutral-600 hover:text-neutral-400' : 'text-neutral-400 hover:text-neutral-200',
+                            )}
+                          >
+                            +{list.length - MAX_CHIPS} more · open day
+                          </button>
                         )}
                       </div>
                     </>
@@ -265,34 +457,61 @@ export function GigCalendar({
             })}
           </div>
         </div>
-      ) : (
-        <div className="p-2 sm:p-3">
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+      ) : view === 'week' ? (
+        <div className="p-2 sm:p-3 overflow-x-auto">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 min-w-[36rem] md:min-w-0">
             {weekKeys.map(key => {
               const list = dealsByDay.get(key) ?? []
-              const isToday = key === pacificDateKeyFromUtcIso(new Date().toISOString())
+              const isTodayCell = key === todayYmd
+              const isPastDay = isPastPacificYmd(key, todayYmd)
               const label = `${WEEKDAYS[weekdaySunday0PacificYmd(key)]} ${parseInt(key.slice(8), 10)}`
               return (
                 <div
                   key={key}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setDayActionsFor(key)
+                    }
+                  }}
+                  onClick={() => setDayActionsFor(key)}
                   className={cn(
-                    'rounded-md border p-1.5 sm:p-2 min-h-[120px] sm:min-h-[140px]',
-                    isToday ? 'border-neutral-500 bg-neutral-950' : 'border-neutral-800 bg-neutral-900/80',
+                    'rounded-md border p-1.5 sm:p-2 min-h-[128px] sm:min-h-[148px] min-w-[4.5rem] cursor-pointer flex flex-col',
+                    isPastDay
+                      ? 'border-neutral-900 bg-[#060606]/95 hover:bg-[#0a0a0a] saturate-[0.55]'
+                      : 'border-neutral-800 bg-neutral-900/80 hover:bg-neutral-900/90',
+                    isTodayCell &&
+                      'ring-2 ring-white border-neutral-600 bg-neutral-800/60',
                   )}
                 >
-                  <div className="text-[10px] font-semibold text-neutral-400 mb-1">{label}</div>
-                  <div className="space-y-1">
+                  <div className="text-[10px] font-semibold text-left w-full mb-1 rounded pointer-events-none">
+                    <span
+                      className={cn(
+                        isTodayCell && 'text-white',
+                        !isTodayCell && isPastDay && 'text-neutral-600',
+                        !isTodayCell && !isPastDay && 'text-neutral-400',
+                      )}
+                    >
+                      {label}
+                    </span>
+                    {isTodayCell && (
+                      <span className="block text-[8px] font-bold uppercase tracking-wide text-amber-200/90 mt-0.5">
+                        Today
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className={cn('space-y-1 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
+                    onClick={e => e.stopPropagation()}
+                  >
                     {list.map(deal => (
                       <button
                         key={deal.id}
                         type="button"
                         onClick={() => setSelectedDeal(deal)}
-                        className={cn(
-                          'block w-full text-left rounded px-1 py-0.5 text-[10px] sm:text-[11px] leading-snug border',
-                          cellTone(deal) === 'past'
-                            ? 'text-neutral-500 bg-neutral-950 border-neutral-800'
-                            : 'text-neutral-100 bg-neutral-800 border-neutral-700 hover:border-neutral-500',
-                        )}
+                        className={chipClass(deal, true)}
                       >
                         {shortTitle(deal)}
                       </button>
@@ -303,49 +522,256 @@ export function GigCalendar({
             })}
           </div>
         </div>
+      ) : (
+        <div className="p-3 sm:p-4">
+          <div
+            className={cn(
+              'rounded-lg border p-3 border-neutral-800 bg-neutral-950/40',
+              dayIsPastForPanel && 'border-neutral-900 bg-[#060606]/90 saturate-[0.55]',
+            )}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-2">
+              <div>
+                <p
+                  className={cn(
+                    'text-[10px] font-semibold uppercase tracking-wide',
+                    dayIsPastForPanel ? 'text-neutral-600' : 'text-neutral-500',
+                  )}
+                >
+                  {dayKey === todayYmd ? 'Today · ' : ''}
+                  {formatPacificDateLong(dayKey)}
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={() => setDayActionsFor(dayKey)}>
+                Day actions
+              </Button>
+            </div>
+            {dayList.length === 0 ? (
+              <div className="py-10 text-center rounded-md border border-dashed border-neutral-700">
+                <p className={cn('text-sm', dayIsPastForPanel ? 'text-neutral-500' : 'text-neutral-400')}>
+                  No booked gigs on this day.
+                </p>
+                <p className={cn('text-xs mt-1', dayIsPastForPanel ? 'text-neutral-600/80' : 'text-neutral-600')}>
+                  Use month/week to pick another day, or add a deal in Earnings.
+                </p>
+              </div>
+            ) : (
+              <ul className={cn('space-y-2', dayIsPastForPanel && 'opacity-[0.9]')}>
+                {dayList.map(deal => (
+                  <li key={deal.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeal(deal)}
+                      className={cn(chipClass(deal, false), 'w-full text-left')}
+                    >
+                      <span className="font-medium block text-inherit">{longTitle(deal)}</span>
+                      {deal.event_start_at && deal.event_end_at && (
+                        <span className="text-[11px] block mt-0.5 font-medium text-inherit">
+                          {formatPacificTimeRangeReadable(deal.event_start_at, deal.event_end_at)}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       <Dialog open={!!selectedDeal} onOpenChange={v => !v && setSelectedDeal(null)}>
-        <DialogContent className="max-w-md border-neutral-800 bg-neutral-900">
-          <DialogHeader>
-            <DialogTitle className="text-neutral-100 pr-6">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto border-neutral-800 bg-neutral-900 p-5 gap-0">
+          <DialogHeader className="pb-3 space-y-0">
+            <DialogTitle className="text-base text-white pr-8 leading-snug">
               {selectedDeal?.description ?? 'Gig'}
             </DialogTitle>
           </DialogHeader>
-          {selectedDeal && (
-            <div className="space-y-2 text-sm text-neutral-300">
+          {selectedDeal && (() => {
+            const related = calendarDeals.filter(
+              d => d.venue_id && d.venue_id === selectedDeal.venue_id && d.id !== selectedDeal.id,
+            ).slice(0, 8)
+            const sectionWrap = 'rounded-md border border-neutral-800 bg-neutral-950/60 p-3 space-y-2'
+            const sectionTitle = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-400'
+            const row = 'flex justify-between gap-4 text-sm'
+            const rowLabel = 'text-neutral-400 shrink-0'
+            const rowValue = 'text-white text-right min-w-0'
+            return (
+            <div className="flex flex-col gap-3 text-sm">
               {selectedDeal.venue?.name && (
-                <p>
-                  <span className="text-neutral-500">Venue · </span>
-                  {selectedDeal.venue.name}
-                </p>
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>Venue</h3>
+                  <p className="text-white font-medium">{selectedDeal.venue.name}</p>
+                  {selectedDeal.venue.outreach_track && (
+                    <div className={row}>
+                      <span className={rowLabel}>Track</span>
+                      <span className={rowValue}>{OUTREACH_TRACK_LABELS[selectedDeal.venue.outreach_track]}</span>
+                    </div>
+                  )}
+                  {selectedDeal.venue.status && (
+                    <div className={row}>
+                      <span className={rowLabel}>Status</span>
+                      <span className={rowValue}>
+                        {OUTREACH_STATUS_LABELS[selectedDeal.venue.status] ?? selectedDeal.venue.status}
+                      </span>
+                    </div>
+                  )}
+                </section>
               )}
-              {selectedDeal.event_start_at && selectedDeal.event_end_at && (
-                <p className="tabular-nums">
-                  <span className="text-neutral-500">When · </span>
-                  {utcIsoToPacificDateAndTime(selectedDeal.event_start_at)?.date}{' '}
-                  {utcIsoToPacificDateAndTime(selectedDeal.event_start_at)?.time} –{' '}
-                  {utcIsoToPacificDateAndTime(selectedDeal.event_end_at)?.time}
-                  <span className="text-neutral-600"> PT</span>
-                </p>
+
+              <section className={sectionWrap}>
+                <h3 className={sectionTitle}>Schedule</h3>
+                {selectedDeal.event_start_at && selectedDeal.event_end_at ? (
+                  <p className="text-white text-sm leading-snug">
+                    {formatPacificTimeRangeReadable(selectedDeal.event_start_at, selectedDeal.event_end_at)}
+                  </p>
+                ) : selectedDeal.event_date ? (
+                  <p className="text-white text-sm">{selectedDeal.event_date}</p>
+                ) : (
+                  <p className="text-neutral-400 text-sm">No times set</p>
+                )}
+              </section>
+
+              <section className={sectionWrap}>
+                <h3 className={sectionTitle}>Money</h3>
+                {selectedDeal.gross_amount != null && (
+                  <div className={row}>
+                    <span className={rowLabel}>Gross</span>
+                    <span className={cn(rowValue, 'tabular-nums')}>
+                      {selectedDeal.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    </span>
+                  </div>
+                )}
+                <div className={row}>
+                  <span className={rowLabel}>Commission</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>
+                    {COMMISSION_TIER_LABELS[selectedDeal.commission_tier]}
+                  </span>
+                </div>
+                <div className={row}>
+                  <span className={rowLabel}>Rate</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>{Math.round(selectedDeal.commission_rate * 100)}%</span>
+                </div>
+                <div className={row}>
+                  <span className={rowLabel}>Your cut</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>
+                    {selectedDeal.commission_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </span>
+                </div>
+                {selectedDeal.payment_due_date && (
+                  <div className={row}>
+                    <span className={rowLabel}>Payment due</span>
+                    <span className={rowValue}>{selectedDeal.payment_due_date}</span>
+                  </div>
+                )}
+                <div className={row}>
+                  <span className={rowLabel}>Artist paid</span>
+                  <span className={rowValue}>{selectedDeal.artist_paid ? 'Yes' : 'No'}</span>
+                </div>
+                <div className={row}>
+                  <span className={rowLabel}>Manager paid</span>
+                  <span className={rowValue}>{selectedDeal.manager_paid ? 'Yes' : 'No'}</span>
+                </div>
+              </section>
+
+              {(selectedDeal.agreement_url || selectedDeal.agreement_generated_file_id) && (
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>Agreement</h3>
+                  {selectedDeal.agreement_url ? (
+                    <a
+                      href={selectedDeal.agreement_url}
+                      className="text-sm text-blue-400 hover:underline break-all"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open link
+                    </a>
+                  ) : (
+                    <p className="text-white text-sm">PDF on file — open in Earnings</p>
+                  )}
+                </section>
               )}
-              {selectedDeal.gross_amount != null && (
-                <p className="tabular-nums">
-                  <span className="text-neutral-500">Gross · </span>
-                  {selectedDeal.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </p>
-              )}
+
               {selectedDeal.notes?.trim() && (
-                <p className="text-xs text-neutral-400 whitespace-pre-wrap">{selectedDeal.notes}</p>
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>Notes</h3>
+                  <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{selectedDeal.notes}</p>
+                </section>
               )}
-              <div className="pt-2 flex gap-2">
-                <Button asChild className="flex-1">
-                  <Link to="/earnings" onClick={() => setSelectedDeal(null)}>
-                    Open Earnings
+
+              {related.length > 0 && (
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>More at this venue</h3>
+                  <ul className="space-y-2">
+                    {related.map(d => (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          className="w-full rounded border border-neutral-800 bg-neutral-900/80 px-2.5 py-2 text-left transition-colors hover:border-neutral-600 hover:bg-neutral-900"
+                          onClick={() => setSelectedDeal(d)}
+                        >
+                          <span className="block text-sm text-white">{d.description.trim() || 'Gig'}</span>
+                          {d.event_start_at && d.event_end_at && (
+                            <span className="mt-0.5 block text-xs text-neutral-200">
+                              {formatPacificTimeRangeReadable(d.event_start_at, d.event_end_at)}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4 sm:flex-row">
+                <Button asChild variant="default" className="flex-1 h-9 text-sm">
+                  <Link to={`/earnings#earnings-deal-${selectedDeal.id}`} onClick={() => setSelectedDeal(null)}>
+                    Open in Earnings
                   </Link>
                 </Button>
+                {selectedDeal.venue_id && (
+                  <Button asChild variant="outline" className="flex-1 h-9 text-sm">
+                    <Link
+                      to="/pipeline"
+                      state={{ openVenueId: selectedDeal.venue_id }}
+                      onClick={() => setSelectedDeal(null)}
+                    >
+                      Venue in Pipeline
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!dayActionsFor} onOpenChange={v => !v && setDayActionsFor(null)}>
+        <DialogContent className="max-w-sm border-neutral-800 bg-neutral-900 p-5 gap-0">
+          <DialogHeader className="space-y-1 pb-4">
+            <DialogTitle className="text-base text-neutral-100 pr-6">
+              {dayActionsFor ? formatPacificDateLong(dayActionsFor) : 'Day'}
+            </DialogTitle>
+            {dayActionsFor && (
+              <p className="text-sm text-neutral-200 font-normal leading-snug">
+                {dealsForDayActions.length === 0
+                  ? 'No gigs this day'
+                  : `${dealsForDayActions.length} gig${dealsForDayActions.length === 1 ? '' : 's'}`}
+              </p>
+            )}
+          </DialogHeader>
+          {dayActionsFor && (
+            <>
+              <Button
+                type="button"
+                className="w-full h-10 text-sm font-medium"
+                disabled={dealsForDayActions.length === 0 || queueingDayEmail}
+                title={dealsForDayActions.length === 0 ? 'Needs at least one saved gig on this day' : undefined}
+                onClick={() => void handleQueueDaySummary()}
+              >
+                {queueingDayEmail ? 'Sending…' : 'Send reminder to artist'}
+              </Button>
+            </>
           )}
         </DialogContent>
       </Dialog>

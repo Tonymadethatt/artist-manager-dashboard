@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -634,6 +634,8 @@ export default function Earnings() {
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
+  const [calendarConfirm, setCalendarConfirm] = useState<{ deal: Deal; mode: 'off' | 'on' } | null>(null)
+  const [calendarSaving, setCalendarSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
@@ -646,6 +648,36 @@ export default function Earnings() {
   function showFormToast(msg: string) {
     setFormToast(msg)
     setTimeout(() => setFormToast(null), 3000)
+  }
+
+  const dealHasShowTimes = (d: Deal) => Boolean(d.event_start_at && d.event_end_at)
+
+  async function handleConfirmCalendarAction() {
+    if (!calendarConfirm || calendarSaving) return
+    const { deal: d0, mode } = calendarConfirm
+    setCalendarSaving(true)
+    const ts = mode === 'off' ? new Date().toISOString() : null
+    const r = await updateDeal(d0.id, { event_cancelled_at: ts })
+    setCalendarSaving(false)
+    if (r.error) {
+      showFormToast(r.error.message ?? 'Update failed')
+      return
+    }
+    const saved = r.data ?? null
+    if (saved) {
+      const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
+      const vBefore = d0.venue_id ? venues.find(v => v.id === d0.venue_id) ?? d0.venue : d0.venue
+      await syncDealCalendarEmails({
+        beforeDeal: d0,
+        afterDeal: saved,
+        venueBefore: vBefore ?? null,
+        venueAfter: vAfter ?? null,
+        artistEmail: profile?.artist_email,
+      })
+      await refetch()
+    }
+    setCalendarConfirm(null)
+    showFormToast(mode === 'off' ? 'Show removed from calendar (cancelled).' : 'Show restored to calendar.')
   }
 
   async function handleSendPerfForm(deal: Deal) {
@@ -1022,9 +1054,23 @@ export default function Earnings() {
             </thead>
             <tbody>
               {deals.slice((dealsPage - 1) * PAGE_SIZE, dealsPage * PAGE_SIZE).map(deal => (
-                <tr key={deal.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800/50 transition-colors">
+                <tr
+                  key={deal.id}
+                  id={`earnings-deal-${deal.id}`}
+                  className={cn(
+                    'border-b border-neutral-800 last:border-0 hover:bg-neutral-800/50 transition-colors',
+                    deal.event_cancelled_at && 'opacity-[0.88]',
+                  )}
+                >
                   <td className="px-4 py-3">
-                    <div className="font-medium text-neutral-100 leading-tight">{deal.description}</div>
+                    <div className="font-medium text-neutral-100 leading-tight flex items-center gap-2 flex-wrap">
+                      {deal.description}
+                      {deal.event_cancelled_at && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400/95 bg-red-950/50 border border-red-900/50 px-1.5 py-0.5 rounded">
+                          Off calendar
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {deal.venue && (
                         <span className="text-xs text-neutral-500">{deal.venue.name}</span>
@@ -1095,6 +1141,27 @@ export default function Earnings() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
+                      {deal.event_cancelled_at ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-emerald-600 hover:text-emerald-400"
+                          title="Put show back on calendar"
+                          onClick={() => setCalendarConfirm({ deal, mode: 'on' })}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : dealHasShowTimes(deal) ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-neutral-500 hover:text-red-400"
+                          title="Cancel show — removes from calendar (keeps deal in Earnings)"
+                          onClick={() => setCalendarConfirm({ deal, mode: 'off' })}
+                        >
+                          <CalendarOff className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
                       {/* Send performance report form — only when venue is linked and no existing report for this deal */}
                       {deal.venue_id && !perfReports.some(r => r.deal_id === deal.id) && (
                         <Button
@@ -1388,6 +1455,36 @@ export default function Earnings() {
       </Dialog>
 
       {/* Confirm delete */}
+      {calendarConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !calendarSaving && setCalendarConfirm(null)} />
+          <div className="relative bg-neutral-900 rounded-lg border border-neutral-700 p-6 max-w-sm w-full shadow-xl">
+            <h3 className="font-semibold text-neutral-100 mb-2">
+              {calendarConfirm.mode === 'off' ? 'Cancel show?' : 'Restore to calendar?'}
+            </h3>
+            <p className="text-sm text-neutral-400 mb-4">
+              <strong className="text-neutral-200">{calendarConfirm.deal.description}</strong>
+              {calendarConfirm.mode === 'off'
+                ? ' will be removed from the gig calendar and artist calendar emails for this date. The deal stays here for earnings history.'
+                : ' will appear on the gig calendar again when it still meets booking status and venue rules.'}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" disabled={calendarSaving} onClick={() => setCalendarConfirm(null)}>
+                Back
+              </Button>
+              <Button
+                variant={calendarConfirm.mode === 'off' ? 'destructive' : 'default'}
+                size="sm"
+                disabled={calendarSaving}
+                onClick={() => void handleConfirmCalendarAction()}
+              >
+                {calendarSaving ? 'Saving…' : calendarConfirm.mode === 'off' ? 'Cancel show' : 'Restore'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDelete(null)} />
