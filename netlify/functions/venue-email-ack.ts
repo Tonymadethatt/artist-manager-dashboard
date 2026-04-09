@@ -66,15 +66,24 @@ function htmlShell(title: string, inner: string): string {
 </html>`
 }
 
-/** Thank-you page only: big success icon in card; countdown + history.back() live below the card. */
-function htmlShellWithCountdown(title: string, inner: string, opts: { seconds: number }): string {
-  const seconds = Math.max(1, Math.min(30, Math.floor(opts.seconds)))
+/** Thank-you page only: success icon + card copy; below, “Back to mail” links to common webmail inboxes. */
+function htmlShellThankYou(title: string, inner: string): string {
   const successIcon = `<div class="ack-icon-wrap" aria-hidden="true">
   <svg class="ack-check-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <circle cx="12" cy="12" r="12" fill="#22c55e"/>
     <path d="M6.5 12.5l3.5 3.5 7.5-8.5" fill="none" stroke="#fafafa" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
 </div>`
+  const mailActions = `<section class="mail-back" aria-labelledby="mail-back-heading">
+  <h2 id="mail-back-heading" class="mail-back-title">Back to mail</h2>
+  <p class="mail-back-hint">Open your inbox in the browser. You may need to sign in.</p>
+  <div class="mail-btn-stack">
+    <a class="mail-btn" href="https://mail.google.com/mail/u/0/#inbox" rel="noopener noreferrer">Gmail</a>
+    <a class="mail-btn" href="https://outlook.live.com/mail/" rel="noopener noreferrer">Outlook</a>
+    <a class="mail-btn" href="https://outlook.office.com/mail/" rel="noopener noreferrer">Outlook (work or school)</a>
+    <a class="mail-btn" href="https://mail.yahoo.com/" rel="noopener noreferrer">Yahoo Mail</a>
+  </div>
+</section>`
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -93,46 +102,21 @@ function htmlShellWithCountdown(title: string, inner: string, opts: { seconds: n
   .card h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 14px; color: #fafafa; }
   .card p { font-size: 0.9rem; color: #a3a3a3; line-height: 1.6; margin-bottom: 10px; }
   .card p:last-child { margin-bottom: 0; }
-  #ack-status { margin-top: 20px; font-size: 0.9rem; color: #a3a3a3; line-height: 1.6; text-align: center; min-height: 1.5em; }
+  .mail-back { margin-top: 24px; text-align: center; }
+  .mail-back-title { font-size: 0.95rem; font-weight: 600; color: #fafafa; margin-bottom: 8px; }
+  .mail-back-hint { font-size: 0.8rem; color: #737373; line-height: 1.5; margin-bottom: 14px; }
+  .mail-btn-stack { display: flex; flex-direction: column; gap: 10px; }
+  .mail-btn { display: block; text-align: center; text-decoration: none; font-size: 0.9rem; font-weight: 600;
+    color: #fafafa; background: #1a1a1a; border: 1px solid #333333; border-radius: 8px; padding: 14px 16px;
+    min-height: 48px; line-height: 1.3; }
+  .mail-btn:active { background: #262626; }
 </style>
 </head>
 <body>
   <div class="ack-wrap">
     <div class="card">${successIcon}${inner}</div>
-    <p id="ack-status" role="status" aria-live="polite" aria-atomic="true"></p>
+    ${mailActions}
   </div>
-<script>
-(function () {
-  var el = document.getElementById('ack-status')
-  if (!el) return
-  var total = ${seconds}
-  var reduce = false
-  try {
-    reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  } catch (e) {}
-  function finish() {
-    try {
-      if (window.history.length > 1) window.history.back()
-    } catch (e) {}
-    el.textContent = ''
-  }
-  if (reduce) {
-    finish()
-    return
-  }
-  var n = total
-  el.textContent = 'Returning to the previous page in ' + n + '…'
-  var id = window.setInterval(function () {
-    n -= 1
-    if (n < 1) {
-      window.clearInterval(id)
-      finish()
-    } else {
-      el.textContent = 'Returning to the previous page in ' + n + '…'
-    }
-  }, 1000)
-})()
-</script>
 </body>
 </html>`
 }
@@ -188,9 +172,7 @@ const handler: Handler = async event => {
 
   const copy = oneTapAckThanksCopy(result.captureKind, result.alreadyReceived)
   const paras = copy.lines.map(l => `<p>${esc(l)}</p>`).join('')
-  const body = htmlShellWithCountdown(copy.heading, `<h1>${esc(copy.heading)}</h1>${paras}`, {
-    seconds: 5,
-  })
+  const body = htmlShellThankYou(copy.heading, `<h1>${esc(copy.heading)}</h1>${paras}`)
 
   return {
     statusCode: 200,
