@@ -76,15 +76,42 @@ type VenueEmailType =
   | 'show_cancelled_or_postponed'
   | 'pass_for_now'
 
+/** Case-insensitive header lookup (Netlify / proxies vary casing; missing headers must not throw). */
+function headerFirst(headers: Record<string, string | undefined>, name: string): string | undefined {
+  const t = name.toLowerCase()
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === t && v != null && v !== '') return v
+  }
+  return undefined
+}
+
+function normalizeRequestHeaders(event: Parameters<Handler>[0]): Record<string, string | undefined> {
+  const raw = event.headers
+  if (raw == null || typeof raw !== 'object') return {}
+  return raw as Record<string, string | undefined>
+}
+
+/**
+ * Functions need an absolute origin for fetch() to other `/.netlify/functions/*` endpoints.
+ * `URL` is usually set on Netlify; fall back so cron-triggered runs never use an empty base.
+ */
+function resolveSiteUrl(): string {
+  const primary = process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || ''
+  const fallback = 'https://artist-manager-dashboard.netlify.app'
+  const base = primary.trim() || fallback
+  return base.replace(/\/$/, '')
+}
+
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method not allowed' }
   }
 
+  try {
   const supabaseUrl = process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const resendApiKey = process.env.RESEND_API_KEY
-  const siteUrl = process.env.URL || ''
+  const siteUrl = resolveSiteUrl()
 
   if (!supabaseUrl || !serviceRoleKey) {
     return { statusCode: 500, body: 'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set' }
@@ -93,18 +120,18 @@ const handler: Handler = async (event) => {
     return { statusCode: 500, body: 'RESEND_API_KEY not configured' }
   }
 
+  const hdrs = normalizeRequestHeaders(event)
+
   // Authenticate: Netlify schedule header, external cron secret, OR Supabase JWT (client polling)
   const secret = process.env.PROCESS_QUEUE_SECRET
-  const provided = event.headers['x-queue-secret']
-  const scheduledHeader = Object.entries(event.headers).find(
-    ([k]) => k.toLowerCase() === 'netlify-scheduled-function',
-  )?.[1]
+  const provided = headerFirst(hdrs, 'x-queue-secret')
+  const scheduledHeader = headerFirst(hdrs, 'netlify-scheduled-function')
   const fromNetlifySchedule = String(scheduledHeader) === 'true'
 
   let authenticated = fromNetlifySchedule || (!!secret && provided === secret)
 
   if (!authenticated) {
-    const authHeader = event.headers['authorization'] || event.headers['Authorization'] || ''
+    const authHeader = headerFirst(hdrs, 'authorization') || ''
     if (authHeader.startsWith('Bearer ')) {
       const jwt = authHeader.slice(7)
       const authClient = createClient(supabaseUrl, serviceRoleKey)
@@ -1271,6 +1298,15 @@ const handler: Handler = async (event) => {
   return {
     statusCode: 200,
     body: JSON.stringify({ processed: results.length, sent, failed, results, v: '2026-04-09-reminder-guard' }),
+  }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[process-email-queue] unhandled_error', msg, e)
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: msg, code: 'unhandled_exception' }),
+    }
   }
 }
 

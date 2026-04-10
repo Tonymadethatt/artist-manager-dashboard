@@ -133,6 +133,8 @@ After the cron job is created:
 | Cron returns `500` with Supabase error | `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` not set | Check Netlify env vars |
 | Cron returns `500` with Resend error | `RESEND_API_KEY` not set | Check Netlify env vars |
 | Cron succeeds but emails don't send | Buffer time hasn't elapsed, or `scheduled_send_at` is in the future | This is correct behavior — wait for the buffer, check the response JSON for details |
+| Cron returns **500** | Unhandled exception in `process-email-queue`, or bad Supabase/Resend config | Turn on **Save responses** on the cron job; response body may be JSON with `error` / `code`. Check Netlify function logs. Common fixes: ensure **`URL`** / deploy URL env is present, or rely on deploy that includes **`resolveSiteUrl()`** fallback; ensure **`X-Queue-Secret`** matches **`PROCESS_QUEUE_SECRET`** full string (UI may truncate the display — compare character count). |
+| Three duplicate jobs hitting the same URL | Accidental duplicates | Disable or delete extras; one POST/minute is enough. |
 | Function logs still empty on Netlify | Netlify log retention is limited; check within minutes of a cron fire | Alternatively, check the cron-job.org dashboard for response codes |
 
 ---
