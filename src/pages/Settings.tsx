@@ -3,7 +3,19 @@ import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
 import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import {
+  EMAIL_QUEUE_BUFFER_OPTIONS,
+  clampEmailQueueBufferMinutes,
+  type EmailQueueBufferMinutes,
+} from '@/lib/emailQueueBuffer'
 import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
 type FormState = {
@@ -132,6 +144,7 @@ export default function Settings() {
   const savingRef = useRef(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [bufferSaving, setBufferSaving] = useState(false)
 
   const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -198,6 +211,22 @@ export default function Settings() {
     [saveField]
   )
 
+  const handleEmailQueueBufferChange = useCallback(
+    async (value: string) => {
+      const n = parseInt(value, 10) as EmailQueueBufferMinutes
+      if (!EMAIL_QUEUE_BUFFER_OPTIONS.includes(n) || !profile) return
+      setBufferSaving(true)
+      const result = await updateProfile({ email_queue_buffer_minutes: n })
+      setBufferSaving(false)
+      if (result && 'error' in result && result.error) {
+        showToast(result.error.message || 'Could not save.', 'err')
+        return
+      }
+      showToast('Saved', 'ok')
+    },
+    [profile, updateProfile, showToast]
+  )
+
   const handleDeletePreset = useCallback(
     async (id: string) => {
       const res = await deletePreset(id)
@@ -221,6 +250,10 @@ export default function Settings() {
       </div>
     )
   }
+
+  const emailQueueBufferMinutes = profile
+    ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
+    : EMAIL_QUEUE_BUFFER_OPTIONS[1]
 
   const fieldGrid = 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 md:gap-y-4'
   const fieldFull = 'sm:col-span-2'
@@ -409,6 +442,41 @@ export default function Settings() {
                 Must be a verified sender on Resend. Used for all outgoing email.
               </p>
             </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Email queue"
+          description="How long venue-targeted emails wait in the queue before the automated sender picks them up. Artist and gig automations (reminders, calendar ICS, digest, custom artist templates, etc.) are not governed by this—they send on the next queue run or at their scheduled time."
+          className="lg:col-span-2"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="email-queue-buffer">Delay for venue outreach (minutes)</Label>
+              <Select
+                value={String(emailQueueBufferMinutes)}
+                onValueChange={handleEmailQueueBufferChange}
+                disabled={bufferSaving || !profile}
+              >
+                <SelectTrigger
+                  id="email-queue-buffer"
+                  className="w-[140px] h-9 text-sm bg-neutral-950 border-neutral-700"
+                  aria-label="Minutes to wait after queue before auto-sending venue emails"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EMAIL_QUEUE_BUFFER_OPTIONS.map(m => (
+                    <SelectItem key={m} value={String(m)} className="text-sm">
+                      {m} min
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className={cn(hint, 'sm:pb-1 flex-1 max-w-xl')}>
+              Use this when you want a short pause to cancel mistaken venue sends. Open Email queue to see pending rows; the list refreshes about every 30 seconds while the Queue tab is open.
+            </p>
           </div>
         </SectionCard>
       </div>
