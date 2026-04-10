@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Eye, HelpCircle } from 'lucide-react'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
@@ -124,6 +124,31 @@ function effectiveQueueBufferMinutes(email: VenueEmail, userBuffer: number): num
   if (cid && !email.venue_id) return 0
   if (isQueueBufferZeroEmailType(email.email_type)) return 0
   return userBuffer
+}
+
+/** Pending row is held until a future wall time (e.g. 24h reminder)—show under Scheduled, not Active. */
+function isPendingScheduledForLater(email: VenueEmail): boolean {
+  const raw = email.scheduled_send_at
+  if (raw == null || String(raw).trim() === '') return false
+  const ms = new Date(raw).getTime()
+  return Number.isFinite(ms) && ms > Date.now()
+}
+
+function splitPendingBySchedule(pending: VenueEmail[]): {
+  immediate: VenueEmail[]
+  scheduled: VenueEmail[]
+} {
+  const immediate: VenueEmail[] = []
+  const scheduled: VenueEmail[] = []
+  for (const e of pending) {
+    if (isPendingScheduledForLater(e)) scheduled.push(e)
+    else immediate.push(e)
+  }
+  scheduled.sort(
+    (a, b) =>
+      new Date(a.scheduled_send_at!).getTime() - new Date(b.scheduled_send_at!).getTime(),
+  )
+  return { immediate, scheduled }
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -348,6 +373,7 @@ export default function EmailQueue() {
   const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
   const { profile } = useArtistProfile()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
+  const [queueSubTab, setQueueSubTab] = useState<'immediate' | 'scheduled'>('immediate')
   const [recentCaptures, setRecentCaptures] = useState<RecentCaptureRow[]>([])
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [dismissingId, setDismissingId] = useState<string | null>(null)
@@ -360,6 +386,14 @@ export default function EmailQueue() {
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
     : DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES
+
+  const { immediate: pendingImmediate, scheduled: pendingScheduled } = useMemo(
+    () => splitPendingBySchedule(pendingEmails),
+    [pendingEmails],
+  )
+
+  const displayedPending =
+    queueSubTab === 'scheduled' ? pendingScheduled : pendingImmediate
 
   useEffect(() => {
     if (activeTab !== 'queue') return
@@ -1520,7 +1554,11 @@ export default function EmailQueue() {
                     <span className="text-neutral-400">scheduled</span> time—not that delay.
                   </li>
                   <li>
-                    <span className="text-neutral-300">Queue</span> lists <code className="text-neutral-500">pending</code> rows. Use <span className="text-neutral-300">Send now</span> to override when allowed.
+                    <span className="text-neutral-300">Active queue</span> lists pending rows that can go out soon (next run, venue buffer, or past their scheduled time).{' '}
+                    <span className="text-neutral-300">Scheduled</span> lists rows whose <span className="text-neutral-400">send time is still in the future</span>.
+                  </li>
+                  <li>
+                    <span className="text-neutral-300">Send now</span> only works when the server allows it—some scheduled types block until their window.
                   </li>
                   <li>
                     <span className="text-neutral-300">History</span> includes cron-sent rows, Send now from here, pipeline &quot;Send email&quot; modal (logged immediately), and Reports / Earnings sends.
@@ -1561,24 +1599,69 @@ export default function EmailQueue() {
           ) : pendingEmails.length === 0 ? (
             <EmptyState message="No emails queued. Pending rows from tasks and outreach appear here. Artist custom templates and zero-buffer types send on the next queue run." />
           ) : (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
-                <p className="text-xs font-medium text-neutral-500">
-                  {pendingEmails.length} pending email{pendingEmails.length !== 1 ? 's' : ''}
-                </p>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-neutral-900/80 border border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setQueueSubTab('immediate')}
+                  className={cn(
+                    'flex-1 min-w-[9rem] px-3 py-2 text-xs font-medium rounded-md transition-colors',
+                    queueSubTab === 'immediate'
+                      ? 'bg-neutral-800 text-neutral-100 border border-neutral-700'
+                      : 'text-neutral-500 hover:text-neutral-300 border border-transparent',
+                  )}
+                >
+                  Active queue
+                  <span className="ml-1.5 tabular-nums text-neutral-500">({pendingImmediate.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQueueSubTab('scheduled')}
+                  className={cn(
+                    'flex-1 min-w-[9rem] px-3 py-2 text-xs font-medium rounded-md transition-colors',
+                    queueSubTab === 'scheduled'
+                      ? 'bg-neutral-800 text-neutral-100 border border-neutral-700'
+                      : 'text-neutral-500 hover:text-neutral-300 border border-transparent',
+                  )}
+                >
+                  Scheduled
+                  <span className="ml-1.5 tabular-nums text-neutral-500">({pendingScheduled.length})</span>
+                </button>
               </div>
-              {pendingEmails.map(email => (
-                <PendingRow
-                  key={email.id}
-                  email={email}
-                  bufferMinutes={effectiveQueueBufferMinutes(email, bufferMinutes)}
-                  onSendNow={handleSendNow}
-                  onDismiss={handleDismiss}
-                  onPreview={handlePreview}
-                  sending={sendingId === email.id}
-                  dismissing={dismissingId === email.id}
+
+              {displayedPending.length === 0 ? (
+                <EmptyState
+                  message={
+                    queueSubTab === 'scheduled'
+                      ? 'No emails scheduled for a future send time. Timed reminders and similar sends appear here when their scheduled time is still ahead.'
+                      : pendingScheduled.length > 0
+                        ? 'Nothing queued to send soon. Check the Scheduled tab for emails waiting on a future send time.'
+                        : 'No emails in this view.'
+                  }
                 />
-              ))}
+              ) : (
+                <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
+                    <p className="text-xs font-medium text-neutral-500">
+                      {displayedPending.length}{' '}
+                      {queueSubTab === 'scheduled' ? 'scheduled' : 'active'} pending email
+                      {displayedPending.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  {displayedPending.map(email => (
+                    <PendingRow
+                      key={email.id}
+                      email={email}
+                      bufferMinutes={effectiveQueueBufferMinutes(email, bufferMinutes)}
+                      onSendNow={handleSendNow}
+                      onDismiss={handleDismiss}
+                      onPreview={handlePreview}
+                      sending={sendingId === email.id}
+                      dismissing={dismissingId === email.id}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </>
