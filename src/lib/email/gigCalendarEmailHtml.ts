@@ -1,7 +1,13 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import {
+  scheduleWhenStackFromDeal,
+  whenLineCompactFromDeal,
+  type ScheduleWhenStack,
+} from '@/lib/calendar/pacificWallTime'
 import { escapeHtmlPlain } from './appendBlocksHtml'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
+import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
 import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
 
 export type GigCalendarBrandedKind =
@@ -10,7 +16,34 @@ export type GigCalendarBrandedKind =
   | 'gig_booked_ics'
   | 'gig_day_summary_manual'
 
-type Row = { when: string; title: string; venue: string }
+export type GigCalendarScheduleRow = {
+  /** Legacy single-line when (used only if `whenStack` is absent). */
+  when: string
+  whenStack?: ScheduleWhenStack
+  title: string
+  venue: string
+}
+
+/** Shared by queue worker, previews, and tests — prefers stacked “when” when instants or date exist. */
+export function buildGigCalendarTableRow(
+  deal: {
+    event_start_at?: string | null
+    event_end_at?: string | null
+    event_date?: string | null
+  },
+  title: string,
+  venue: string,
+): GigCalendarScheduleRow {
+  const stack = scheduleWhenStackFromDeal(deal)
+  if (stack) {
+    return { when: '', whenStack: stack, title, venue }
+  }
+  return {
+    when: whenLineCompactFromDeal(deal) || deal.event_date?.trim() || '',
+    title,
+    venue,
+  }
+}
 
 function roleBannerRgba(
   bg: string,
@@ -42,7 +75,14 @@ type ScheduleTableMode = 'compact' | 'digest'
 /**
  * 3-col schedule: `compact` = dense day-summary; `digest` = framed, header row, high-contrast rules.
  */
-function scheduleTableHtml(rows: Row[], emptyMsg: string, mode: ScheduleTableMode = 'compact'): string {
+function scheduleWhenCellHtml(r: GigCalendarScheduleRow, isDigest: boolean): string {
+  if (r.whenStack) {
+    return stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', isDigest ? 'digest' : 'compact')
+  }
+  return escapeHtmlPlain(r.when)
+}
+
+function scheduleTableHtml(rows: GigCalendarScheduleRow[], emptyMsg: string, mode: ScheduleTableMode = 'compact'): string {
   const isDigest = mode === 'digest'
   const rule = isDigest ? TABLE_ROW_RULE_DIGEST : TABLE_ROW_RULE_COMPACT
   const fs = isDigest ? '13px' : '12px'
@@ -55,7 +95,7 @@ function scheduleTableHtml(rows: Row[], emptyMsg: string, mode: ScheduleTableMod
 
   const bodyRows = rows.length
     ? rows.map(r => `<tr>
-        <td style="${cell(`color:#ffffff;white-space:nowrap;width:1%`)}">${escapeHtmlPlain(r.when)}</td>
+        <td style="${cell('color:#ffffff;width:1%;vertical-align:top')}">${scheduleWhenCellHtml(r, isDigest)}</td>
         <td style="${cell(`color:#ffffff;background:${midBodyBg}`)}">${escapeHtmlPlain(r.title)}</td>
         <td style="${cell(`color:${EMAIL_BODY_SECONDARY}`)}">${escapeHtmlPlain(r.venue)}</td>
       </tr>`).join('')
@@ -66,7 +106,7 @@ function scheduleTableHtml(rows: Row[], emptyMsg: string, mode: ScheduleTableMod
 
   const head = isDigest
     ? `<thead><tr>
-        <th style="${thStyle(false)}width:1%;white-space:nowrap">When</th>
+        <th style="${thStyle(false)}width:1%;">When</th>
         <th style="${thStyle(true)}">Show</th>
         <th style="${thStyle(false)}">Venue</th>
       </tr></thead>`
@@ -91,8 +131,8 @@ export type BuildBrandedGigCalendarEmailArgs = {
   website?: string | null
   social_handle?: string | null
   phone?: string | null
-  digest?: { rows: Row[] }
-  daySummary?: { rows: Row[]; dayLabel: string }
+  digest?: { rows: GigCalendarScheduleRow[] }
+  daySummary?: { rows: GigCalendarScheduleRow[]; dayLabel: string }
   reminder?: { venueName: string; dealDescription: string; whenLine: string }
   icsBody?: { dealDescription: string; venueLine: string }
 }

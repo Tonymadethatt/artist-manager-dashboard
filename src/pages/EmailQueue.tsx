@@ -38,7 +38,7 @@ import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload
 import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
-import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
+import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
@@ -604,7 +604,7 @@ export default function EmailQueue() {
             const startIso = pacificWallToUtcIso(gigN.weekStart, '00:00')
             const endDay = addCalendarDaysPacific(gigN.weekStart, 14)
             const endExclusiveIso = pacificDayEndExclusiveUtcIso(endDay)
-            const rows: { when: string; title: string; venue: string }[] = []
+            const digestDeals: Deal[] = []
             if (startIso && endExclusiveIso) {
               const t0 = new Date(startIso).getTime()
               const tExclusiveEnd = new Date(endExclusiveIso).getTime()
@@ -614,14 +614,18 @@ export default function EmailQueue() {
                 if (!d.event_start_at) continue
                 const ts = new Date(d.event_start_at).getTime()
                 if (ts < t0 || ts >= tExclusiveEnd) continue
-                rows.push({
-                  when: whenLineCompactFromDeal(d) || d.event_date || '',
-                  title: d.description?.trim() || 'Gig',
-                  venue: v?.name?.trim() || '—',
-                })
+                digestDeals.push(d)
               }
             }
-            rows.sort((a, b) => a.when.localeCompare(b.when))
+            digestDeals.sort((a, b) => String(a.event_start_at).localeCompare(String(b.event_start_at)))
+            const rows = digestDeals.map(d => {
+              const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
+              return buildGigCalendarTableRow(
+                d,
+                d.description?.trim() || 'Gig',
+                v?.name?.trim() || '—',
+              )
+            })
             setPreviewHtml(buildBrandedGigCalendarEmail({
               kind: 'gig_calendar_digest_weekly',
               L: Lg,
@@ -636,7 +640,7 @@ export default function EmailQueue() {
             const vmapD = new Map(venuesD.map(v => [v.id, v]))
             const startD = pacificWallToUtcIso(ymdD, '00:00')
             const endExclusiveD = pacificDayEndExclusiveUtcIso(ymdD)
-            const rowsD: { when: string; title: string; venue: string }[] = []
+            const dayDeals: Deal[] = []
             if (startD && endExclusiveD) {
               const t0d = new Date(startD).getTime()
               const tExclusiveD = new Date(endExclusiveD).getTime()
@@ -646,14 +650,18 @@ export default function EmailQueue() {
                 if (!d.event_start_at) continue
                 const ts = new Date(d.event_start_at).getTime()
                 if (ts < t0d || ts >= tExclusiveD) continue
-                rowsD.push({
-                  when: whenLineCompactFromDeal(d) || d.event_date || '',
-                  title: d.description?.trim() || 'Gig',
-                  venue: v?.name?.trim() || '—',
-                })
+                dayDeals.push(d)
               }
             }
-            rowsD.sort((a, b) => a.when.localeCompare(b.when))
+            dayDeals.sort((a, b) => String(a.event_start_at).localeCompare(String(b.event_start_at)))
+            const rowsD = dayDeals.map(d => {
+              const v = d.venue ?? (d.venue_id ? vmapD.get(d.venue_id) : undefined)
+              return buildGigCalendarTableRow(
+                d,
+                d.description?.trim() || 'Gig',
+                v?.name?.trim() || '—',
+              )
+            })
             const noonD = pacificWallToUtcIso(ymdD, '12:00')
             const dayLabelD = noonD
               ? new Intl.DateTimeFormat('en-US', {
@@ -1074,20 +1082,24 @@ export default function EmailQueue() {
             if (!startIso || !endExclusiveIso) throw new Error('Invalid digest window')
             const t0 = new Date(startIso).getTime()
             const tExclusiveEnd = new Date(endExclusiveIso).getTime()
-            const rows: { when: string; title: string; venue: string }[] = []
+            const digestDealsQ: Deal[] = []
             for (const d of deals) {
               const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
               if (!dealQualifiesForCalendar(d, v ?? null)) continue
               if (!d.event_start_at) continue
               const ts = new Date(d.event_start_at).getTime()
               if (ts < t0 || ts >= tExclusiveEnd) continue
-              rows.push({
-                when: whenLineCompactFromDeal(d) || d.event_date || '',
-                title: d.description?.trim() || 'Gig',
-                venue: v?.name?.trim() || '—',
-              })
+              digestDealsQ.push(d)
             }
-            rows.sort((a, b) => a.when.localeCompare(b.when))
+            digestDealsQ.sort((a, b) => String(a.event_start_at).localeCompare(String(b.event_start_at)))
+            const rows = digestDealsQ.map(d => {
+              const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
+              return buildGigCalendarTableRow(
+                d,
+                d.description?.trim() || 'Gig',
+                v?.name?.trim() || '—',
+              )
+            })
             const html = buildBrandedGigCalendarEmail({
               kind: 'gig_calendar_digest_weekly',
               L: Lsend,
@@ -1117,20 +1129,24 @@ export default function EmailQueue() {
             if (!startS || !endExclusiveS) throw new Error('Invalid day summary date')
             const t0s = new Date(startS).getTime()
             const tExclusiveS = new Date(endExclusiveS).getTime()
-            const rowsS: { when: string; title: string; venue: string }[] = []
+            const dayDealsS: Deal[] = []
             for (const d of dealsS) {
               const v = d.venue ?? (d.venue_id ? vmapS.get(d.venue_id) : undefined)
               if (!dealQualifiesForCalendar(d, v ?? null)) continue
               if (!d.event_start_at) continue
               const ts = new Date(d.event_start_at).getTime()
               if (ts < t0s || ts >= tExclusiveS) continue
-              rowsS.push({
-                when: whenLineCompactFromDeal(d) || d.event_date || '',
-                title: d.description?.trim() || 'Gig',
-                venue: v?.name?.trim() || '—',
-              })
+              dayDealsS.push(d)
             }
-            rowsS.sort((a, b) => a.when.localeCompare(b.when))
+            dayDealsS.sort((a, b) => String(a.event_start_at).localeCompare(String(b.event_start_at)))
+            const rowsS = dayDealsS.map(d => {
+              const v = d.venue ?? (d.venue_id ? vmapS.get(d.venue_id) : undefined)
+              return buildGigCalendarTableRow(
+                d,
+                d.description?.trim() || 'Gig',
+                v?.name?.trim() || '—',
+              )
+            })
             const noonS = pacificWallToUtcIso(ymdS, '12:00')
             const dayLabelS = noonS
               ? new Intl.DateTimeFormat('en-US', {

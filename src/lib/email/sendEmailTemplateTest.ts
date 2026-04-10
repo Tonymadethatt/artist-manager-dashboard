@@ -22,7 +22,7 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
-import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
+import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
@@ -392,11 +392,15 @@ export async function sendEmailTemplateTest(
         logoBaseUrl: publicSiteOrigin(),
         ...gigShell,
         digest: {
-          rows: [{
-            when: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : previewEventDay,
-            title: PREVIEW_MOCK_DEAL.description,
-            venue: PREVIEW_MOCK_VENUE.name,
-          }],
+          rows: [buildGigCalendarTableRow(
+            {
+              event_start_at: startIso,
+              event_end_at: endIso,
+              event_date: previewEventDay,
+            },
+            PREVIEW_MOCK_DEAL.description,
+            PREVIEW_MOCK_VENUE.name,
+          )],
         },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
@@ -427,11 +431,15 @@ export async function sendEmailTemplateTest(
         ...gigShell,
         daySummary: {
           dayLabel: 'Sample show day',
-          rows: [{
-            when: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : previewEventDay,
-            title: PREVIEW_MOCK_DEAL.description,
-            venue: PREVIEW_MOCK_VENUE.name,
-          }],
+          rows: [buildGigCalendarTableRow(
+            {
+              event_start_at: startIso,
+              event_end_at: endIso,
+              event_date: previewEventDay,
+            },
+            PREVIEW_MOCK_DEAL.description,
+            PREVIEW_MOCK_VENUE.name,
+          )],
         },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {

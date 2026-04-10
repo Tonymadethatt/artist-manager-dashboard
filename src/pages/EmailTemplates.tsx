@@ -32,7 +32,7 @@ import {
   type PreviewEmailType,
   type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
-import { buildBrandedGigCalendarEmail } from '@/lib/email/gigCalendarEmailHtml'
+import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
@@ -81,6 +81,21 @@ function gigEmailPreviewWhenLine(): string {
   const a = pacificWallToUtcIso(d, '20:00')
   const b = pacificWallToUtcIso(d, '23:00')
   return a && b ? formatPacificTimeRangeCompact(a, b) : d
+}
+
+function gigEmailPreviewTableRow() {
+  const d = PREVIEW_MOCK_DEAL.event_date?.trim()
+  const start = d ? pacificWallToUtcIso(d, '20:00') : null
+  const end = d ? pacificWallToUtcIso(d, '23:00') : null
+  return buildGigCalendarTableRow(
+    {
+      event_start_at: start,
+      event_end_at: end,
+      event_date: PREVIEW_MOCK_DEAL.event_date,
+    },
+    PREVIEW_MOCK_DEAL.description,
+    PREVIEW_MOCK_VENUE.name,
+  )
 }
 
 const CLIENT_CUSTOM_CAPTURE_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
@@ -595,13 +610,7 @@ export default function EmailTemplates() {
           social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
           phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
           digest: {
-            rows: [
-              {
-                when: gigEmailPreviewWhenLine(),
-                title: PREVIEW_MOCK_DEAL.description,
-                venue: PREVIEW_MOCK_VENUE.name,
-              },
-            ],
+            rows: [gigEmailPreviewTableRow()],
           },
         })
       }
@@ -619,13 +628,7 @@ export default function EmailTemplates() {
           phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
           daySummary: {
             dayLabel: 'Sample show day',
-            rows: [
-              {
-                when: gigEmailPreviewWhenLine(),
-                title: PREVIEW_MOCK_DEAL.description,
-                venue: PREVIEW_MOCK_VENUE.name,
-              },
-            ],
+            rows: [gigEmailPreviewTableRow()],
           },
         })
       }

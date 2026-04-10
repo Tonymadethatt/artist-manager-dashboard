@@ -242,3 +242,88 @@ export function whenLineFriendlyFromDeal(d: {
   const ed = d.event_date?.trim()
   return ed ?? ''
 }
+
+const WEEKDAY_SHORT_STACK = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+})
+
+const MD_STACK = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  month: 'short',
+  day: 'numeric',
+})
+
+const MDY_STACK = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+
+/** Stacked email “when” cell: weekday, calendar date, time range (or all day). */
+export type ScheduleWhenStack = { dayLine: string; dateLine: string; timeLine: string }
+
+/** Pacific wall date (YYYY-MM-DD) → three display lines for table cells. */
+export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null {
+  const trimmed = (ymd ?? '').trim()
+  if (!trimmed) return null
+  const iso = pacificWallToUtcIso(trimmed, '12:00')
+  if (!iso) return null
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return null
+  const k0 = pacificDateKeyFromUtcIso(iso)
+  if (!k0) return null
+  const yNow = pacificTodayYmd().slice(0, 4)
+  const yEv = k0.slice(0, 4)
+  return {
+    dayLine: WEEKDAY_SHORT_STACK.format(new Date(ms)),
+    dateLine: yEv === yNow ? MD_STACK.format(new Date(ms)) : MDY_STACK.format(new Date(ms)),
+    timeLine: 'All day',
+  }
+}
+
+/** Deal instants or event_date → stack for gig digest / day-summary tables. */
+export function scheduleWhenStackFromDeal(d: {
+  event_start_at?: string | null
+  event_end_at?: string | null
+  event_date?: string | null
+}): ScheduleWhenStack | null {
+  if (d.event_start_at && d.event_end_at) {
+    const ms0 = new Date(d.event_start_at).getTime()
+    const ms1 = new Date(d.event_end_at).getTime()
+    if (!Number.isFinite(ms0) || !Number.isFinite(ms1)) {
+      const ed = d.event_date?.trim()
+      return ed ? scheduleWhenStackFromYmd(ed) : null
+    }
+    const k0 = pacificDateKeyFromUtcIso(d.event_start_at)
+    const k1 = pacificDateKeyFromUtcIso(d.event_end_at)
+    if (!k0 || !k1) {
+      const ed = d.event_date?.trim()
+      return ed ? scheduleWhenStackFromYmd(ed) : null
+    }
+    const yNow = pacificTodayYmd().slice(0, 4)
+    const t0 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms0)))
+    const t1 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms1)))
+    if (k0 === k1) {
+      const yEv = k0.slice(0, 4)
+      return {
+        dayLine: WEEKDAY_SHORT_STACK.format(new Date(ms0)),
+        dateLine: yEv === yNow ? MD_STACK.format(new Date(ms0)) : MDY_STACK.format(new Date(ms0)),
+        timeLine: `${t0} – ${t1}`,
+      }
+    }
+    const dayLine =
+      `${WEEKDAY_SHORT_STACK.format(new Date(ms0))} – ${WEEKDAY_SHORT_STACK.format(new Date(ms1))}`
+    const y0 = k0.slice(0, 4)
+    const y1 = k1.slice(0, 4)
+    const dateLine =
+      y0 === y1
+        ? `${MD_STACK.format(new Date(ms0))} – ${MD_STACK.format(new Date(ms1))}, ${y0}`
+        : `${MDY_STACK.format(new Date(ms0))} – ${MDY_STACK.format(new Date(ms1))}`
+    const timeLine = `${t0} – ${t1}`
+    return { dayLine, dateLine, timeLine }
+  }
+  const ed = d.event_date?.trim()
+  return ed ? scheduleWhenStackFromYmd(ed) : null
+}
