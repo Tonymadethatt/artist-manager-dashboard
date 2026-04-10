@@ -49,6 +49,7 @@ import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
   addCalendarDaysPacific,
+  pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
   stripOnTheHourMinutes12h,
   whenLineCompactFromDeal,
@@ -538,17 +539,17 @@ export default function EmailQueue() {
             const vmap = new Map(venues.map(v => [v.id, v]))
             const startIso = pacificWallToUtcIso(gigN.weekStart, '00:00')
             const endDay = addCalendarDaysPacific(gigN.weekStart, 14)
-            const endIso = pacificWallToUtcIso(endDay, '23:59')
+            const endExclusiveIso = pacificDayEndExclusiveUtcIso(endDay)
             const rows: { when: string; title: string; venue: string }[] = []
-            if (startIso && endIso) {
+            if (startIso && endExclusiveIso) {
               const t0 = new Date(startIso).getTime()
-              const t1 = new Date(endIso).getTime()
+              const tExclusiveEnd = new Date(endExclusiveIso).getTime()
               for (const d of deals) {
                 const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
                 if (!dealQualifiesForCalendar(d, v ?? null)) continue
                 if (!d.event_start_at) continue
                 const ts = new Date(d.event_start_at).getTime()
-                if (ts < t0 || ts > t1) continue
+                if (ts < t0 || ts >= tExclusiveEnd) continue
                 rows.push({
                   when: whenLineCompactFromDeal(d) || d.event_date || '',
                   title: d.description?.trim() || 'Gig',
@@ -570,17 +571,17 @@ export default function EmailQueue() {
             const dealsD = inputs.deals as Deal[]
             const vmapD = new Map(venuesD.map(v => [v.id, v]))
             const startD = pacificWallToUtcIso(ymdD, '00:00')
-            const endD = pacificWallToUtcIso(ymdD, '23:59')
+            const endExclusiveD = pacificDayEndExclusiveUtcIso(ymdD)
             const rowsD: { when: string; title: string; venue: string }[] = []
-            if (startD && endD) {
+            if (startD && endExclusiveD) {
               const t0d = new Date(startD).getTime()
-              const t1d = new Date(endD).getTime()
+              const tExclusiveD = new Date(endExclusiveD).getTime()
               for (const d of dealsD) {
                 const v = d.venue ?? (d.venue_id ? vmapD.get(d.venue_id) : undefined)
                 if (!dealQualifiesForCalendar(d, v ?? null)) continue
                 if (!d.event_start_at) continue
                 const ts = new Date(d.event_start_at).getTime()
-                if (ts < t0d || ts > t1d) continue
+                if (ts < t0d || ts >= tExclusiveD) continue
                 rowsD.push({
                   when: whenLineCompactFromDeal(d) || d.event_date || '',
                   title: d.description?.trim() || 'Gig',
@@ -1005,17 +1006,17 @@ export default function EmailQueue() {
             const vmap = new Map(venues.map(v => [v.id, v]))
             const startIso = pacificWallToUtcIso(gigN.weekStart, '00:00')
             const endDay = addCalendarDaysPacific(gigN.weekStart, 14)
-            const endIso = pacificWallToUtcIso(endDay, '23:59')
-            if (!startIso || !endIso) throw new Error('Invalid digest window')
+            const endExclusiveIso = pacificDayEndExclusiveUtcIso(endDay)
+            if (!startIso || !endExclusiveIso) throw new Error('Invalid digest window')
             const t0 = new Date(startIso).getTime()
-            const t1 = new Date(endIso).getTime()
+            const tExclusiveEnd = new Date(endExclusiveIso).getTime()
             const rows: { when: string; title: string; venue: string }[] = []
             for (const d of deals) {
               const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
               if (!dealQualifiesForCalendar(d, v ?? null)) continue
               if (!d.event_start_at) continue
               const ts = new Date(d.event_start_at).getTime()
-              if (ts < t0 || ts > t1) continue
+              if (ts < t0 || ts >= tExclusiveEnd) continue
               rows.push({
                 when: whenLineCompactFromDeal(d) || d.event_date || '',
                 title: d.description?.trim() || 'Gig',
@@ -1048,17 +1049,17 @@ export default function EmailQueue() {
             const dealsS = inputs.deals as Deal[]
             const vmapS = new Map(venuesS.map(v => [v.id, v]))
             const startS = pacificWallToUtcIso(ymdS, '00:00')
-            const endS = pacificWallToUtcIso(ymdS, '23:59')
-            if (!startS || !endS) throw new Error('Invalid day summary date')
+            const endExclusiveS = pacificDayEndExclusiveUtcIso(ymdS)
+            if (!startS || !endExclusiveS) throw new Error('Invalid day summary date')
             const t0s = new Date(startS).getTime()
-            const t1s = new Date(endS).getTime()
+            const tExclusiveS = new Date(endExclusiveS).getTime()
             const rowsS: { when: string; title: string; venue: string }[] = []
             for (const d of dealsS) {
               const v = d.venue ?? (d.venue_id ? vmapS.get(d.venue_id) : undefined)
               if (!dealQualifiesForCalendar(d, v ?? null)) continue
               if (!d.event_start_at) continue
               const ts = new Date(d.event_start_at).getTime()
-              if (ts < t0s || ts > t1s) continue
+              if (ts < t0s || ts >= tExclusiveS) continue
               rowsS.push({
                 when: whenLineCompactFromDeal(d) || d.event_date || '',
                 title: d.description?.trim() || 'Gig',
@@ -1137,6 +1138,7 @@ export default function EmailQueue() {
                   to: profile.artist_email.trim(),
                   subject: subj,
                   html,
+                  showStartIso: deal.event_start_at,
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))

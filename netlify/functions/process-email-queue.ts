@@ -46,7 +46,7 @@ import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { buildDealIcsBlob } from '../../src/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
-import { addCalendarDaysPacific, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
+import { addCalendarDaysPacific, pacificDayEndExclusiveUtcIso, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '../../src/types'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
@@ -203,9 +203,17 @@ const handler: Handler = async (event) => {
 
     if (e.email_type === 'gig_reminder_24h') {
       const dealId = e.deal_id as string | null | undefined
-      const startIso = (dealId && eventStartByDealId.get(dealId))
-        || eventStartAtFromQueueDealEmbed(e.deal)
-      if (!startIso || !shouldSendGigReminderNow(nowMs, startIso)) {
+      const batchStart = dealId ? eventStartByDealId.get(dealId) : undefined
+      const embedStart = eventStartAtFromQueueDealEmbed(e.deal)
+      const startIso = batchStart || embedStart || null
+      const eligible = !!startIso && shouldSendGigReminderNow(nowMs, startIso)
+      console.log(
+        `[gig_reminder_24h:filter] id=${e.id} deal_id=${dealId ?? 'null'}`
+        + ` event_start_at=${startIso ?? 'null'} scheduled_send_at=${schedRaw ?? 'null'}`
+        + ` batchHit=${!!batchStart} embedHit=${!!embedStart}`
+        + ` eligible=${eligible} now=${new Date(nowMs).toISOString()}`,
+      )
+      if (!startIso || !eligible) {
         continue
       }
       if (ageMs >= bufferMin * 60 * 1000) {
@@ -429,8 +437,8 @@ const handler: Handler = async (event) => {
           const vmap = new Map(venues.map(v => [v.id, v]))
           const startIso = pacificWallToUtcIso(gigCal.weekStart, '00:00')
           const endDay = addCalendarDaysPacific(gigCal.weekStart, 14)
-          const endIso = pacificWallToUtcIso(endDay, '23:59')
-          if (!startIso || !endIso) {
+          const endExclusiveIso = pacificDayEndExclusiveUtcIso(endDay)
+          if (!startIso || !endExclusiveIso) {
             await supabase
               .from('venue_emails')
               .update({ status: 'failed', notes: 'Auto-send failed: bad digest window' })
@@ -439,14 +447,14 @@ const handler: Handler = async (event) => {
             continue
           }
           const t0 = new Date(startIso).getTime()
-          const t1 = new Date(endIso).getTime()
+          const tExclusiveEnd = new Date(endExclusiveIso).getTime()
           const rows: { when: string; title: string; venue: string }[] = []
           for (const d of deals) {
             const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
             if (!dealQualifiesForCalendar(d, v ?? null)) continue
             if (!d.event_start_at) continue
             const ts = new Date(d.event_start_at).getTime()
-            if (ts < t0 || ts > t1) continue
+            if (ts < t0 || ts >= tExclusiveEnd) continue
             rows.push({
               when: whenLineCompactFromDeal(d) || d.event_date || '',
               title: d.description?.trim() || 'Gig',
@@ -499,8 +507,8 @@ const handler: Handler = async (event) => {
           const vmap = new Map(venues.map(v => [v.id, v]))
           const ymd0 = gigCal.ymd
           const startIso0 = pacificWallToUtcIso(ymd0, '00:00')
-          const endIso0 = pacificWallToUtcIso(ymd0, '23:59')
-          if (!startIso0 || !endIso0) {
+          const dayEndExclusive0 = pacificDayEndExclusiveUtcIso(ymd0)
+          if (!startIso0 || !dayEndExclusive0) {
             await supabase
               .from('venue_emails')
               .update({ status: 'failed', notes: 'Auto-send failed: bad day summary date' })
@@ -509,14 +517,14 @@ const handler: Handler = async (event) => {
             continue
           }
           const tDay0 = new Date(startIso0).getTime()
-          const tDay1 = new Date(endIso0).getTime()
+          const tDayExclusiveEnd = new Date(dayEndExclusive0).getTime()
           const rowsDay: { when: string; title: string; venue: string }[] = []
           for (const d of deals) {
             const v = d.venue ?? (d.venue_id ? vmap.get(d.venue_id) : undefined)
             if (!dealQualifiesForCalendar(d, v ?? null)) continue
             if (!d.event_start_at) continue
             const ts = new Date(d.event_start_at).getTime()
-            if (ts < tDay0 || ts > tDay1) continue
+            if (ts < tDay0 || ts >= tDayExclusiveEnd) continue
             rowsDay.push({
               when: whenLineCompactFromDeal(d) || d.event_date || '',
               title: d.description?.trim() || 'Gig',
@@ -683,7 +691,13 @@ const handler: Handler = async (event) => {
           results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
           continue
         }
-        if (!shouldSendGigReminderNow(Date.now(), deal.event_start_at)) {
+        const sendNowCheck = shouldSendGigReminderNow(Date.now(), deal.event_start_at)
+        console.log(
+          `[gig_reminder_24h:send] id=${email.id} deal_id=${deal.id}`
+          + ` event_start_at=${deal.event_start_at} sendNowCheck=${sendNowCheck}`
+          + ` now=${new Date().toISOString()}`,
+        )
+        if (!sendNowCheck) {
           continue
         }
         const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
@@ -708,6 +722,7 @@ const handler: Handler = async (event) => {
             to: String(row.artist_email ?? ''),
             subject: subj,
             html,
+            showStartIso: deal.event_start_at,
           }),
         })
         if (sendRes.ok) {
@@ -1238,7 +1253,7 @@ const handler: Handler = async (event) => {
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ processed: results.length, sent, failed, results }),
+    body: JSON.stringify({ processed: results.length, sent, failed, results, v: '2026-04-09-reminder-guard' }),
   }
 }
 

@@ -3,6 +3,7 @@
  * Invoked from process-email-queue (server-to-server).
  */
 import type { Handler } from '@netlify/functions'
+import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 
 type Profile = {
   artist_name?: string
@@ -27,6 +28,8 @@ export type GigCalendarEmailPayload =
     to: string
     subject: string
     html: string
+    /** UTC ISO of deal.event_start_at — send function verifies timing before Resend. */
+    showStartIso?: string
   }
   | {
     kind: 'gig_calendar_digest_weekly'
@@ -58,6 +61,28 @@ const handler: Handler = async (event) => {
     payload = JSON.parse(event.body ?? '{}')
   } catch {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) }
+  }
+
+  // Defense-in-depth: reject premature 24h reminders regardless of caller.
+  if (payload.kind === 'gig_reminder_24h') {
+    const iso = 'showStartIso' in payload ? payload.showStartIso : undefined
+    if (iso) {
+      if (!shouldSendGigReminderNow(Date.now(), iso)) {
+        console.warn(
+          `[send-artist-gig-calendar-email] BLOCKED premature gig_reminder_24h — showStartIso=${iso}, now=${new Date().toISOString()}`,
+        )
+        return {
+          statusCode: 409,
+          body: JSON.stringify({
+            message: `24h reminder not due yet (event_start_at=${iso})`,
+          }),
+        }
+      }
+    } else {
+      console.warn(
+        '[send-artist-gig-calendar-email] gig_reminder_24h called without showStartIso — timing not verified at send boundary',
+      )
+    }
   }
 
   const replyTo = payload.profile.reply_to_email?.trim() || payload.profile.from_email

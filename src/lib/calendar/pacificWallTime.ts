@@ -12,7 +12,11 @@ const LA_DATE_TIME = new Intl.DateTimeFormat('en-CA', {
   hour12: false,
 })
 
-/** Map "YYYY-MM-DD" + "HH:mm" (24h) in LA to UTC ISO string, or null if not found. */
+/**
+ * Map "YYYY-MM-DD" + "HH:mm" (24h) in LA to UTC ISO string, or null if not found.
+ * Uses 15-minute UTC steps — minute values not reachable on that grid (e.g. 23:59) return null.
+ * For "end of Pacific day `ymd`", use `pacificDayEndExclusiveUtcIso(ymd)` instead of 23:59.
+ */
 export function pacificWallToUtcIso(ymd: string, hm: string): string | null {
   const [y, mo, d] = ymd.split('-').map(Number)
   const [h, mi] = hm.split(':').map(Number)
@@ -118,6 +122,17 @@ export function addCalendarDaysPacific(ymd: string, deltaDays: number): string {
     LA_DATE_TIME.formatToParts(new Date(base)).filter(p => p.type !== 'literal').map(p => [p.type, p.value]),
   ) as Record<string, string>
   return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+/**
+ * UTC instant of the next Pacific midnight after `ymd` — use as an exclusive end when selecting
+ * “everything on calendar day `ymd`” (`ts >= start(ymd) && ts < this`).
+ */
+export function pacificDayEndExclusiveUtcIso(ymd: string): string | null {
+  const trimmed = ymd.trim()
+  if (!trimmed) return null
+  const nextYmd = addCalendarDaysPacific(trimmed, 1)
+  return pacificWallToUtcIso(nextYmd, '00:00')
 }
 
 /** Today YYYY-MM-DD in LA. */
