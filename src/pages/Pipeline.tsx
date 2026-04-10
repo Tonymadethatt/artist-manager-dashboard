@@ -248,6 +248,7 @@ export default function Pipeline() {
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(() => new Set())
+  const [taskSelectionMode, setTaskSelectionMode] = useState(false)
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -301,31 +302,50 @@ export default function Pipeline() {
     [incompleteFiltered, doneTodayList],
   )
 
-  const filteredTaskIdSet = useMemo(
-    () => new Set(filteredTasks.map(t => t.id)),
-    [filteredTasks],
+  const earlierCompletedTasks = useMemo(
+    () => tasks.filter(t => t.completed && !isTaskCompletedToday(t, today)),
+    [tasks, today],
+  )
+
+  /** Tasks eligible for bulk select: main feed for this tab + earlier completed when that section is expanded. */
+  const bulkScopeTasks = useMemo(
+    () => [...filteredTasks, ...(earlierExpanded ? earlierCompletedTasks : [])],
+    [filteredTasks, earlierExpanded, earlierCompletedTasks],
+  )
+
+  const bulkEligibleIdSet = useMemo(
+    () => new Set(bulkScopeTasks.map(t => t.id)),
+    [bulkScopeTasks],
   )
 
   useEffect(() => {
     setBulkSelectedIds(prev => {
       const next = new Set<string>()
       for (const id of prev) {
-        if (filteredTaskIdSet.has(id)) next.add(id)
+        if (bulkEligibleIdSet.has(id)) next.add(id)
       }
       if (next.size === prev.size && [...prev].every(id => next.has(id))) return prev
       return next
     })
-  }, [filteredTaskIdSet])
+  }, [bulkEligibleIdSet])
 
   const setFilterTab = useCallback((f: Filter) => {
     setFilter(f)
     setBulkSelectedIds(new Set())
+    setTaskSelectionMode(false)
   }, [])
 
-  const earlierCompletedTasks = useMemo(
-    () => tasks.filter(t => t.completed && !isTaskCompletedToday(t, today)),
-    [tasks, today],
-  )
+  const exitTaskSelectionMode = useCallback(() => {
+    setTaskSelectionMode(false)
+    setBulkSelectedIds(new Set())
+  }, [])
+
+  useEffect(() => {
+    if (taskSelectionMode && bulkScopeTasks.length === 0) {
+      setTaskSelectionMode(false)
+      setBulkSelectedIds(new Set())
+    }
+  }, [taskSelectionMode, bulkScopeTasks.length])
 
   const hasPipelineContent = filteredTasks.length > 0 || earlierCompletedTasks.length > 0
 
@@ -361,21 +381,21 @@ export default function Pipeline() {
     })
   }, [])
 
-  const selectAllFiltered = useCallback(() => {
-    setBulkSelectedIds(new Set(filteredTasks.map(t => t.id)))
-  }, [filteredTasks])
+  const selectAllInScope = useCallback(() => {
+    setBulkSelectedIds(new Set(bulkScopeTasks.map(t => t.id)))
+  }, [bulkScopeTasks])
 
   const clearBulkSelection = useCallback(() => {
     setBulkSelectedIds(new Set())
   }, [])
 
   const pipelineBulkSelection = useMemo((): TaskBulkSelection | null => {
-    if (filteredTasks.length === 0) return null
+    if (!taskSelectionMode || bulkScopeTasks.length === 0) return null
     return {
       isSelected: id => bulkSelectedIds.has(id),
       onToggle: toggleBulkSelection,
     }
-  }, [filteredTasks.length, bulkSelectedIds, toggleBulkSelection])
+  }, [taskSelectionMode, bulkScopeTasks.length, bulkSelectedIds, toggleBulkSelection])
 
   const handleConfirmBulkDelete = useCallback(async () => {
     const ids = [...bulkSelectedIds]
@@ -395,13 +415,15 @@ export default function Pipeline() {
     }
     setBulkDeleting(false)
     setConfirmBulkDeleteOpen(false)
-    setBulkSelectedIds(new Set())
-    if (errMsg) showToast(errMsg)
-    else {
-      showToast(ids.length === 1 ? 'Task deleted' : `${ids.length} tasks deleted`)
-      await refreshNavBadges()
-      if (snapshot.some(t => t.deal_id || t.venue_id)) await refetchDeals()
+    if (errMsg) {
+      showToast(errMsg)
+      return
     }
+    setBulkSelectedIds(new Set())
+    setTaskSelectionMode(false)
+    showToast(ids.length === 1 ? 'Task deleted' : `${ids.length} tasks deleted`)
+    await refreshNavBadges()
+    if (snapshot.some(t => t.deal_id || t.venue_id)) await refetchDeals()
   }, [bulkSelectedIds, deleteTask, tasks, showToast, refreshNavBadges, refetchDeals])
 
   const openAdd = (venueId: string | null = null) => {
@@ -534,14 +556,25 @@ export default function Pipeline() {
           ))}
         </div>
 
-        {filteredTasks.length > 0 && !loading && (
+        {bulkScopeTasks.length > 0 && !loading && !taskSelectionMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-neutral-500 hover:text-neutral-200"
+            onClick={() => setTaskSelectionMode(true)}
+          >
+            Select tasks
+          </Button>
+        )}
+        {taskSelectionMode && bulkScopeTasks.length > 0 && !loading && (
           <div className="flex items-center gap-1 flex-wrap">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 text-xs text-neutral-500 hover:text-neutral-200"
-              onClick={selectAllFiltered}
+              onClick={selectAllInScope}
             >
               Select all
             </Button>
@@ -564,6 +597,15 @@ export default function Pipeline() {
               onClick={() => setConfirmBulkDeleteOpen(true)}
             >
               Delete selected{bulkSelectedIds.size > 0 ? ` (${bulkSelectedIds.size})` : ''}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-neutral-700 text-neutral-400 hover:text-neutral-100"
+              onClick={exitTaskSelectionMode}
+            >
+              Cancel
             </Button>
           </div>
         )}
@@ -654,6 +696,7 @@ export default function Pipeline() {
                           onSelect={venue ? () => setSelectedVenueId(
                             selectedVenueId === venue.id ? null : venue.id
                           ) : undefined}
+                          selectionMode={taskSelectionMode}
                           bulkSelection={pipelineBulkSelection}
                         />
                       ))}
@@ -666,6 +709,7 @@ export default function Pipeline() {
                         onEdit={openEdit}
                         onDelete={requestDeleteTask}
                         onAddTask={openAdd}
+                        selectionMode={taskSelectionMode}
                         bulkSelection={pipelineBulkSelection}
                       />
                     </div>
@@ -694,6 +738,7 @@ export default function Pipeline() {
                                   onSnooze={snoozeTask}
                                   onEdit={openEdit}
                                   onDelete={requestDeleteTask}
+                                  selectionMode={taskSelectionMode}
                                   bulkSelection={pipelineBulkSelection ?? undefined}
                                 />
                               </div>
@@ -731,6 +776,8 @@ export default function Pipeline() {
                             onEdit={openEdit}
                             onDelete={requestDeleteTask}
                             contextLabel={task.venue_id ? venues.find(v => v.id === task.venue_id)?.name ?? undefined : undefined}
+                            selectionMode={taskSelectionMode}
+                            bulkSelection={pipelineBulkSelection ?? undefined}
                           />
                         </div>
                       ))}

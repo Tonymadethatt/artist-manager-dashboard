@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MoreHorizontal, Pencil, Trash2, AlarmClock } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, AlarmClock, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { Task, TaskPriority } from '@/types'
 import { cn } from '@/lib/utils'
@@ -41,7 +41,8 @@ interface TaskItemProps {
   /** Shown under title in list/archive (e.g. venue name). */
   contextLabel?: string | null
   compact?: boolean
-  /** Pipeline bulk delete: checkbox before complete control. */
+  /** Pipeline multi-select mode: hides complete control; use bulkSelection for toggles. */
+  selectionMode?: boolean
   bulkSelection?: TaskBulkSelection | null
 }
 
@@ -54,6 +55,7 @@ export function TaskItem({
   onDelete,
   contextLabel,
   compact = false,
+  selectionMode = false,
   bulkSelection,
 }: TaskItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -70,37 +72,53 @@ export function TaskItem({
     setSnoozeOpen(false)
   }
 
+  const inSelectMode = selectionMode && !!bulkSelection
+  const isRowSelected = bulkSelection?.isSelected(task.id) ?? false
+
   return (
     <div className={cn(
       'group flex items-start gap-2.5 py-2 px-1 rounded transition-colors relative',
-      isOverdue && 'border-l-2 border-red-500 pl-2.5',
-      task.completed && 'opacity-50',
+      isOverdue && !inSelectMode && 'border-l-2 border-red-500 pl-2.5',
+      task.completed && !inSelectMode && 'opacity-50',
+      inSelectMode && isRowSelected && 'bg-neutral-800/35',
     )}>
-      {bulkSelection && (
-        <input
-          type="checkbox"
-          checked={bulkSelection.isSelected(task.id)}
-          onChange={() => bulkSelection.onToggle(task.id)}
-          onClick={e => e.stopPropagation()}
-          className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded border border-neutral-600 bg-neutral-900 text-neutral-200 focus:ring-1 focus:ring-neutral-500 focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer accent-neutral-500"
-          aria-label={`Select task: ${task.title}`}
-        />
+      {inSelectMode ? (
+        <button
+          type="button"
+          aria-pressed={isRowSelected}
+          aria-label={isRowSelected ? `Deselect: ${task.title}` : `Select: ${task.title}`}
+          title={isRowSelected ? 'Deselect' : 'Select'}
+          onClick={e => {
+            e.stopPropagation()
+            bulkSelection!.onToggle(task.id)
+          }}
+          className={cn(
+            'flex-shrink-0 mt-0.5 h-4 w-4 rounded-[3px] border flex items-center justify-center transition-colors',
+            isRowSelected
+              ? 'border-neutral-200 bg-neutral-700/90 text-neutral-100'
+              : 'border-neutral-500 bg-neutral-900/80 hover:border-neutral-400',
+          )}
+        >
+          {isRowSelected && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-label={task.completed ? `Mark incomplete: ${task.title}` : `Mark complete: ${task.title}`}
+          onClick={e => {
+            e.stopPropagation()
+            task.completed ? onUncomplete(task.id) : onComplete(task.id)
+          }}
+          className={cn(
+            'flex-shrink-0 mt-0.5 w-4 h-4 rounded-full border-2 transition-colors flex items-center justify-center',
+            task.completed
+              ? 'bg-neutral-600 border-neutral-600 text-neutral-200'
+              : 'border-neutral-600 hover:border-neutral-400',
+          )}
+        >
+          {task.completed && <Check className="h-2 w-2" strokeWidth={2.5} />}
+        </button>
       )}
-      <button
-        type="button"
-        onClick={e => {
-          e.stopPropagation()
-          task.completed ? onUncomplete(task.id) : onComplete(task.id)
-        }}
-        className={cn(
-          'flex-shrink-0 mt-0.5 w-4 h-4 rounded border-2 transition-colors flex items-center justify-center',
-          task.completed
-            ? 'bg-neutral-600 border-neutral-600'
-            : 'border-neutral-600 hover:border-neutral-400'
-        )}
-      >
-        {task.completed && <div className="w-2 h-2 bg-neutral-300 rounded-sm" />}
-      </button>
 
       <div className="flex-1 min-w-0 flex items-start gap-1">
         <button
@@ -108,8 +126,11 @@ export function TaskItem({
           className={cn(
             'flex-1 min-w-0 text-left rounded px-0.5 -mx-0.5 cursor-pointer hover:bg-neutral-800/50',
           )}
-          onClick={() => onEdit(task)}
-          onKeyDown={e => { if (e.key === 'Enter') onEdit(task) }}
+          onClick={() => (inSelectMode ? bulkSelection!.onToggle(task.id) : onEdit(task))}
+          onKeyDown={e => {
+            if (e.key !== 'Enter') return
+            inSelectMode ? bulkSelection!.onToggle(task.id) : onEdit(task)
+          }}
         >
           <span className={cn(
             'text-sm leading-snug block',
@@ -141,6 +162,7 @@ export function TaskItem({
           )}
         </button>
 
+        {!inSelectMode && (
         <div className="flex items-start gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pt-0.5">
           {!task.completed && (
             <div className="relative">
@@ -230,6 +252,7 @@ export function TaskItem({
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

@@ -26,12 +26,13 @@ interface VenueWorkCardProps {
   onAddTask: (venueId: string | null) => void
   selected?: boolean
   onSelect?: () => void
+  selectionMode?: boolean
   bulkSelection?: TaskBulkSelection | null
 }
 
 export function VenueWorkCard({
   venue, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask,
-  selected = false, onSelect, bulkSelection,
+  selected = false, onSelect, selectionMode = false, bulkSelection,
 }: VenueWorkCardProps) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -108,6 +109,7 @@ export function VenueWorkCard({
                     onSnooze={onSnooze}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    selectionMode={selectionMode}
                     bulkSelection={bulkSelection ?? undefined}
                   />
                 ))}
@@ -125,6 +127,7 @@ export function VenueWorkCard({
                         onSnooze={onSnooze}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        selectionMode={selectionMode}
                         bulkSelection={bulkSelection ?? undefined}
                       />
                     ))}
