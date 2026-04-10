@@ -18,6 +18,11 @@
 [functions]
   node_bundler = "esbuild"
 
+# Process email queue every minute — sends pending venue_emails that have passed their buffer / schedule.
+[[schedule]]
+  cron = "* * * * *"
+  function = "process-email-queue"
+
 # Hourly :05 UTC — handler only enqueues when America/Los_Angeles is Sunday 5:00.
 [[schedule]]
   cron = "5 * * * *"

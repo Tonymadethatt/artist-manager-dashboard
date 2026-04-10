@@ -169,7 +169,7 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-function CountdownBadge({ createdAt, bufferMinutes }: { createdAt: string; bufferMinutes: number }) {
+function CountdownBadge({ createdAt, bufferMinutes, scheduledSendAt }: { createdAt: string; bufferMinutes: number; scheduledSendAt?: string | null }) {
   const [minsLeft, setMinsLeft] = useState(() => getMinutesUntilSend(createdAt, bufferMinutes))
 
   useEffect(() => {
@@ -178,6 +178,21 @@ function CountdownBadge({ createdAt, bufferMinutes }: { createdAt: string; buffe
     tick()
     return () => clearInterval(id)
   }, [createdAt, bufferMinutes])
+
+  // If scheduled_send_at is in the future, show the scheduled date instead of "Sending soon"
+  if (scheduledSendAt) {
+    const schedMs = new Date(scheduledSendAt).getTime()
+    if (Number.isFinite(schedMs) && schedMs > Date.now()) {
+      const label = new Date(scheduledSendAt).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500">
+          <Clock className="h-2.5 w-2.5" />Scheduled · {label}
+        </span>
+      )
+    }
+  }
 
   if (minsLeft <= 0) return (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400">
@@ -219,7 +234,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
           {recipientName ? `${recipientName} · ` : ''}{email.recipient_email}
         </p>
         <div className="flex items-center gap-3">
-          <CountdownBadge createdAt={email.created_at} bufferMinutes={bufferMinutes} />
+          <CountdownBadge createdAt={email.created_at} bufferMinutes={bufferMinutes} scheduledSendAt={email.scheduled_send_at} />
           <span className="text-[10px] text-neutral-700">{fmtDate(email.created_at)}</span>
         </div>
         {noteLine && (

@@ -81,10 +81,14 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: 'Method not allowed' }
   }
 
-  // Authenticate the cron caller
+  // Authenticate: Netlify scheduled function header OR external cron secret
   const secret = process.env.PROCESS_QUEUE_SECRET
   const provided = event.headers['x-queue-secret']
-  if (!secret || provided !== secret) {
+  const scheduledHeader = Object.entries(event.headers).find(
+    ([k]) => k.toLowerCase() === 'netlify-scheduled-function',
+  )?.[1]
+  const fromNetlifySchedule = String(scheduledHeader) === 'true'
+  if (!fromNetlifySchedule && (!secret || provided !== secret)) {
     return { statusCode: 401, body: 'Unauthorized' }
   }
 
