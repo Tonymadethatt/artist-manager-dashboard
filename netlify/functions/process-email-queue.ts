@@ -81,17 +81,6 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, body: 'Method not allowed' }
   }
 
-  // Authenticate: Netlify scheduled function header OR external cron secret
-  const secret = process.env.PROCESS_QUEUE_SECRET
-  const provided = event.headers['x-queue-secret']
-  const scheduledHeader = Object.entries(event.headers).find(
-    ([k]) => k.toLowerCase() === 'netlify-scheduled-function',
-  )?.[1]
-  const fromNetlifySchedule = String(scheduledHeader) === 'true'
-  if (!fromNetlifySchedule && (!secret || provided !== secret)) {
-    return { statusCode: 401, body: 'Unauthorized' }
-  }
-
   const supabaseUrl = process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const resendApiKey = process.env.RESEND_API_KEY
@@ -102,6 +91,30 @@ const handler: Handler = async (event) => {
   }
   if (!resendApiKey) {
     return { statusCode: 500, body: 'RESEND_API_KEY not configured' }
+  }
+
+  // Authenticate: Netlify schedule header, external cron secret, OR Supabase JWT (client polling)
+  const secret = process.env.PROCESS_QUEUE_SECRET
+  const provided = event.headers['x-queue-secret']
+  const scheduledHeader = Object.entries(event.headers).find(
+    ([k]) => k.toLowerCase() === 'netlify-scheduled-function',
+  )?.[1]
+  const fromNetlifySchedule = String(scheduledHeader) === 'true'
+
+  let authenticated = fromNetlifySchedule || (!!secret && provided === secret)
+
+  if (!authenticated) {
+    const authHeader = event.headers['authorization'] || event.headers['Authorization'] || ''
+    if (authHeader.startsWith('Bearer ')) {
+      const jwt = authHeader.slice(7)
+      const authClient = createClient(supabaseUrl, serviceRoleKey)
+      const { data: { user }, error: authErr } = await authClient.auth.getUser(jwt)
+      if (user && !authErr) authenticated = true
+    }
+  }
+
+  if (!authenticated) {
+    return { statusCode: 401, body: 'Unauthorized' }
   }
 
   // Admin client — bypasses RLS

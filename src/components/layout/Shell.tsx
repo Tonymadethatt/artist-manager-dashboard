@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { useAutoSendQueue } from '@/hooks/useAutoSendQueue'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { NavBadgesProvider } from '@/context/NavBadgesContext'
@@ -27,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 export function Shell() {
   const { user, loading } = useAuth()
+  useAutoSendQueue()
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
