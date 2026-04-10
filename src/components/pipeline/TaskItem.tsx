@@ -26,6 +26,11 @@ function fmtDue(dateStr: string): { label: string; color: string } {
   return { label: dateStr, color: 'text-neutral-600' }
 }
 
+export interface TaskBulkSelection {
+  isSelected: (id: string) => boolean
+  onToggle: (id: string) => void
+}
+
 interface TaskItemProps {
   task: Task
   onComplete: (id: string) => void
@@ -36,6 +41,8 @@ interface TaskItemProps {
   /** Shown under title in list/archive (e.g. venue name). */
   contextLabel?: string | null
   compact?: boolean
+  /** Pipeline bulk delete: checkbox before complete control. */
+  bulkSelection?: TaskBulkSelection | null
 }
 
 export function TaskItem({
@@ -47,6 +54,7 @@ export function TaskItem({
   onDelete,
   contextLabel,
   compact = false,
+  bulkSelection,
 }: TaskItemProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [snoozeOpen, setSnoozeOpen] = useState(false)
@@ -68,6 +76,16 @@ export function TaskItem({
       isOverdue && 'border-l-2 border-red-500 pl-2.5',
       task.completed && 'opacity-50',
     )}>
+      {bulkSelection && (
+        <input
+          type="checkbox"
+          checked={bulkSelection.isSelected(task.id)}
+          onChange={() => bulkSelection.onToggle(task.id)}
+          onClick={e => e.stopPropagation()}
+          className="mt-0.5 shrink-0 w-3.5 h-3.5 rounded border border-neutral-600 bg-neutral-900 text-neutral-200 focus:ring-1 focus:ring-neutral-500 focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer accent-neutral-500"
+          aria-label={`Select task: ${task.title}`}
+        />
+      )}
       <button
         type="button"
         onClick={e => {

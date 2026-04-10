@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { TaskItem } from './TaskItem'
+import { TaskItem, type TaskBulkSelection } from './TaskItem'
 import type { Task, Venue } from '@/types'
 import { OUTREACH_STATUS_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
@@ -26,11 +26,12 @@ interface VenueWorkCardProps {
   onAddTask: (venueId: string | null) => void
   selected?: boolean
   onSelect?: () => void
+  bulkSelection?: TaskBulkSelection | null
 }
 
 export function VenueWorkCard({
   venue, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask,
-  selected = false, onSelect,
+  selected = false, onSelect, bulkSelection,
 }: VenueWorkCardProps) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -107,6 +108,7 @@ export function VenueWorkCard({
                     onSnooze={onSnooze}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    bulkSelection={bulkSelection ?? undefined}
                   />
                 ))}
                 {completedTodayTasks.length > 0 && (
@@ -123,6 +125,7 @@ export function VenueWorkCard({
                         onSnooze={onSnooze}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        bulkSelection={bulkSelection ?? undefined}
                       />
                     ))}
                   </>

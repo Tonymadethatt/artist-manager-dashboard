@@ -8,7 +8,7 @@ import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { VenueWorkCard } from '@/components/pipeline/VenueWorkCard'
 import { VenueProgressPanel, type ProgressUpdate } from '@/components/pipeline/VenueProgressPanel'
-import { TaskItem } from '@/components/pipeline/TaskItem'
+import { TaskItem, type TaskBulkSelection } from '@/components/pipeline/TaskItem'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { Button } from '@/components/ui/button'
@@ -247,6 +247,9 @@ export default function Pipeline() {
   const [addOpen, setAddOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Task | null>(null)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(() => new Set())
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
@@ -298,6 +301,27 @@ export default function Pipeline() {
     [incompleteFiltered, doneTodayList],
   )
 
+  const filteredTaskIdSet = useMemo(
+    () => new Set(filteredTasks.map(t => t.id)),
+    [filteredTasks],
+  )
+
+  useEffect(() => {
+    setBulkSelectedIds(prev => {
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (filteredTaskIdSet.has(id)) next.add(id)
+      }
+      if (next.size === prev.size && [...prev].every(id => next.has(id))) return prev
+      return next
+    })
+  }, [filteredTaskIdSet])
+
+  const setFilterTab = useCallback((f: Filter) => {
+    setFilter(f)
+    setBulkSelectedIds(new Set())
+  }, [])
+
   const earlierCompletedTasks = useMemo(
     () => tasks.filter(t => t.completed && !isTaskCompletedToday(t, today)),
     [tasks, today],
@@ -327,6 +351,58 @@ export default function Pipeline() {
     const t = tasks.find(x => x.id === id)
     if (t) setConfirmDelete(t)
   }, [tasks])
+
+  const toggleBulkSelection = useCallback((id: string) => {
+    setBulkSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectAllFiltered = useCallback(() => {
+    setBulkSelectedIds(new Set(filteredTasks.map(t => t.id)))
+  }, [filteredTasks])
+
+  const clearBulkSelection = useCallback(() => {
+    setBulkSelectedIds(new Set())
+  }, [])
+
+  const pipelineBulkSelection = useMemo((): TaskBulkSelection | null => {
+    if (filteredTasks.length === 0) return null
+    return {
+      isSelected: id => bulkSelectedIds.has(id),
+      onToggle: toggleBulkSelection,
+    }
+  }, [filteredTasks.length, bulkSelectedIds, toggleBulkSelection])
+
+  const handleConfirmBulkDelete = useCallback(async () => {
+    const ids = [...bulkSelectedIds]
+    if (!ids.length) return
+    const snapshot = tasks.filter(t => ids.includes(t.id))
+    setBulkDeleting(true)
+    let errMsg: string | null = null
+    for (const id of ids) {
+      const r = await deleteTask(id)
+      if (r && 'error' in r && r.error) {
+        const e = r.error
+        errMsg = e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e
+          ? String((e as { message: unknown }).message)
+          : 'Delete failed'
+        break
+      }
+    }
+    setBulkDeleting(false)
+    setConfirmBulkDeleteOpen(false)
+    setBulkSelectedIds(new Set())
+    if (errMsg) showToast(errMsg)
+    else {
+      showToast(ids.length === 1 ? 'Task deleted' : `${ids.length} tasks deleted`)
+      await refreshNavBadges()
+      if (snapshot.some(t => t.deal_id || t.venue_id)) await refetchDeals()
+    }
+  }, [bulkSelectedIds, deleteTask, tasks, showToast, refreshNavBadges, refetchDeals])
 
   const openAdd = (venueId: string | null = null) => {
     setForm({ ...EMPTY_FORM, venue_id: venueId ?? '' })
@@ -447,7 +523,7 @@ export default function Pipeline() {
           {(['today', 'week', 'all'] as Filter[]).map(f => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => setFilterTab(f)}
               className={cn(
                 'px-3 py-1 text-xs rounded-md transition-colors',
                 filter === f ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'
@@ -457,6 +533,40 @@ export default function Pipeline() {
             </button>
           ))}
         </div>
+
+        {filteredTasks.length > 0 && !loading && (
+          <div className="flex items-center gap-1 flex-wrap">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-neutral-500 hover:text-neutral-200"
+              onClick={selectAllFiltered}
+            >
+              Select all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-neutral-500 hover:text-neutral-200"
+              onClick={clearBulkSelection}
+              disabled={bulkSelectedIds.size === 0}
+            >
+              Deselect
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={bulkSelectedIds.size === 0}
+              onClick={() => setConfirmBulkDeleteOpen(true)}
+            >
+              Delete selected{bulkSelectedIds.size > 0 ? ` (${bulkSelectedIds.size})` : ''}
+            </Button>
+          </div>
+        )}
 
         <div className="flex-1" />
 
@@ -544,6 +654,7 @@ export default function Pipeline() {
                           onSelect={venue ? () => setSelectedVenueId(
                             selectedVenueId === venue.id ? null : venue.id
                           ) : undefined}
+                          bulkSelection={pipelineBulkSelection}
                         />
                       ))}
                       <VenueWorkCard
@@ -555,6 +666,7 @@ export default function Pipeline() {
                         onEdit={openEdit}
                         onDelete={requestDeleteTask}
                         onAddTask={openAdd}
+                        bulkSelection={pipelineBulkSelection}
                       />
                     </div>
                   )}
@@ -582,6 +694,7 @@ export default function Pipeline() {
                                   onSnooze={snoozeTask}
                                   onEdit={openEdit}
                                   onDelete={requestDeleteTask}
+                                  bulkSelection={pipelineBulkSelection ?? undefined}
                                 />
                               </div>
                             ))}
@@ -775,6 +888,25 @@ export default function Pipeline() {
             <Button variant="destructive" onClick={async () => {
               if (confirmDelete) { await deleteTask(confirmDelete.id); setConfirmDelete(null) }
             }}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmBulkDeleteOpen} onOpenChange={v => !v && !bulkDeleting && setConfirmBulkDeleteOpen(v)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete selected tasks?</DialogTitle></DialogHeader>
+          <p className="text-sm text-neutral-400">
+            {bulkSelectedIds.size === 1
+              ? 'This task will be permanently deleted.'
+              : `${bulkSelectedIds.size} tasks will be permanently deleted.`}
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirmBulkDeleteOpen(false)} disabled={bulkDeleting}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" onClick={() => void handleConfirmBulkDelete()} disabled={bulkDeleting}>
+              {bulkDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
