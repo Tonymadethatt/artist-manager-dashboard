@@ -4,7 +4,7 @@ import {
   whenLineCompactFromDeal,
   type ScheduleWhenStack,
 } from '../calendar/pacificWallTime'
-import { escapeHtmlPlain } from './appendBlocksHtml'
+import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
 import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
@@ -57,68 +57,46 @@ function roleBannerRgba(
     + `</div>`
 }
 
-/** Divider lines — digest uses lighter grays so rows read clearly on #111/#141. */
-const TABLE_ROW_RULE_COMPACT = '#2e2e2e'
-const TABLE_ROW_RULE_DIGEST = '#4a4a4a'
-const TABLE_FRAME_DIGEST = '#5a5a5a'
-const TABLE_HEAD_BG = '#1f1f1f'
-/** Slightly darker header tint for the middle column only (digest). */
-const TABLE_MIDDLE_HEAD_DIGEST = '#1a1a1a'
-const TABLE_SURFACE_DIGEST = '#141414'
-/** Middle column body: darker strip vs outer columns so When / Show / Venue scan as three bands. */
-const TABLE_MIDDLE_COL_DIGEST = '#0f0f0f'
-/** Day-summary table sits on #111 — middle column a touch darker than the card. */
-const TABLE_MIDDLE_COL_COMPACT = '#0e0e0e'
-
-type ScheduleTableMode = 'compact' | 'digest'
-
 /**
- * 3-col schedule: `compact` = dense day-summary; `digest` = framed, header row, high-contrast rules.
+ * Schedule grid: same visual language as custom-template / prose tables (#333 outer, #383838 cells)
+ * and always includes column headers (parity for weekly digest + day summary).
  */
-function scheduleWhenCellHtml(r: GigCalendarScheduleRow, isDigest: boolean): string {
+const TABLE_OUTER_BORDER = '#333333'
+const TABLE_CELL_BORDER = '#383838'
+const TABLE_TH_BG = '#1e1e1e'
+/** Middle column — subtle band so Show scans between When and Venue */
+const TABLE_MID_BG = '#141414'
+
+function scheduleWhenCellHtml(r: GigCalendarScheduleRow): string {
   if (r.whenStack) {
-    return stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', isDigest ? 'digest' : 'compact')
+    return stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', 'digest')
   }
   return escapeHtmlPlain(r.when)
 }
 
-function scheduleTableHtml(rows: GigCalendarScheduleRow[], emptyMsg: string, mode: ScheduleTableMode = 'compact'): string {
-  const isDigest = mode === 'digest'
-  const rule = isDigest ? TABLE_ROW_RULE_DIGEST : TABLE_ROW_RULE_COMPACT
-  const fs = isDigest ? '13px' : '12px'
-  const padV = isDigest ? '9px' : '5px'
-  const padH = isDigest ? '12px' : '8px'
-  const cell = (extra: string) =>
-    `padding:${padV} ${padH};border-bottom:1px solid ${rule};vertical-align:top;font-size:${fs};line-height:1.4;${extra}`
-
-  const midBodyBg = isDigest ? TABLE_MIDDLE_COL_DIGEST : TABLE_MIDDLE_COL_COMPACT
+function scheduleTableHtml(rows: GigCalendarScheduleRow[], emptyMsg: string): string {
+  const fs = '13px'
+  const pad = '9px 10px'
+  const thShared =
+    `padding:${pad};text-align:left;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};background:${TABLE_TH_BG};border:1px solid ${TABLE_CELL_BORDER};vertical-align:bottom;`
+  const td = (extra: string) =>
+    `padding:${pad};border:1px solid ${TABLE_CELL_BORDER};vertical-align:top;font-size:${fs};line-height:1.45;${extra}`
 
   const bodyRows = rows.length
     ? rows.map(r => `<tr>
-        <td style="${cell('color:#ffffff;width:1%;vertical-align:top')}">${scheduleWhenCellHtml(r, isDigest)}</td>
-        <td style="${cell(`color:#ffffff;background:${midBodyBg}`)}">${escapeHtmlPlain(r.title)}</td>
-        <td style="${cell(`color:${EMAIL_BODY_SECONDARY}`)}">${escapeHtmlPlain(r.venue)}</td>
+        <td style="${td('color:#ffffff;width:1%;')}">${scheduleWhenCellHtml(r)}</td>
+        <td style="${td(`color:#ffffff;background:${TABLE_MID_BG};`)}">${escapeHtmlPlain(r.title)}</td>
+        <td style="${td(`color:${EMAIL_BODY_SECONDARY};`)}">${escapeHtmlPlain(r.venue)}</td>
       </tr>`).join('')
-    : `<tr><td colspan="3" style="padding:14px ${padH};font-size:${fs};color:${EMAIL_BODY_SECONDARY};border-bottom:1px solid ${rule}">${emptyMsg}</td></tr>`
+    : `<tr><td colspan="3" style="padding:14px ${pad};font-size:${fs};color:${EMAIL_BODY_SECONDARY};border:1px solid ${TABLE_CELL_BORDER};">${emptyMsg}</td></tr>`
 
-  const thStyle = (middleCol: boolean) =>
-    `padding:10px ${padH};text-align:left;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:${EMAIL_LABEL};background:${middleCol ? TABLE_MIDDLE_HEAD_DIGEST : TABLE_HEAD_BG};border-bottom:2px solid ${rule};vertical-align:bottom;`
+  const head = `<thead><tr>
+      <th style="${thShared}width:1%;">When</th>
+      <th style="${thShared}">Show</th>
+      <th style="${thShared}">Venue</th>
+    </tr></thead>`
 
-  const head = isDigest
-    ? `<thead><tr>
-        <th style="${thStyle(false)}width:1%;">When</th>
-        <th style="${thStyle(true)}">Show</th>
-        <th style="${thStyle(false)}">Venue</th>
-      </tr></thead>`
-    : ''
-
-  const table = `<table role="presentation" style="width:100%;border-collapse:collapse;margin:0;font-size:${fs};">${head}<tbody>${bodyRows}</tbody></table>`
-
-  if (!isDigest) {
-    return `<div style="margin:0 0 8px">${table}</div>`
-  }
-
-  return `<div style="margin:0 0 14px;border:1px solid ${TABLE_FRAME_DIGEST};border-radius:10px;overflow:hidden;background:${TABLE_SURFACE_DIGEST};box-shadow:0 1px 0 rgba(255,255,255,0.04)">${table}</div>`
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:10px 0 4px;border:1px solid ${TABLE_OUTER_BORDER};font-size:${fs};">${head}<tbody>${bodyRows}</tbody></table>`
 }
 
 export type BuildBrandedGigCalendarEmailArgs = {
@@ -166,9 +144,11 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '#fbbf24',
         'Two-week schedule',
       )
-      middleHtml =
-        `<p style="font-size:16px;font-weight:600;color:#ffffff;margin:0 0 14px">Upcoming gigs</p>`
-        + scheduleTableHtml(args.digest?.rows ?? [], 'No booked shows in this window.', 'digest')
+      middleHtml = emailSectionCardHtml(
+        'Upcoming gigs',
+        scheduleTableHtml(args.digest?.rows ?? [], 'No booked shows in this window.'),
+        '#fbbf24',
+      )
       defaultIntro =
         'Here are your <strong>confirmed</strong> gigs for the <strong>next two weeks</strong>.'
       defaultClosing = 'If a date or time looks wrong, reply to this email and we’ll fix it.'
@@ -182,10 +162,11 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '24-hour reminder',
       )
       const r = args.reminder!
-      middleHtml =
-        `<p style="font-size:17px;font-weight:600;color:#ffffff;margin:0 0 6px">${escapeHtmlPlain(r.dealDescription)}</p>`
-        + `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};margin:0 0 4px">${escapeHtmlPlain(r.venueName)}</p>`
-        + `<p style="font-size:14px;font-weight:600;color:#ffffff;margin:0 0 8px">${escapeHtmlPlain(r.whenLine)}</p>`
+      const reminderBody =
+        `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(r.dealDescription)}</p>`
+        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(r.venueName)}</p>`
+        + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.whenLine)}</p>`
+      middleHtml = emailSectionCardHtml('Show details', reminderBody, '#f97316')
       defaultIntro = 'Quick heads-up — your show is coming up in about <strong>24 hours</strong>.'
       defaultClosing = 'Break a leg. Reply if you need anything from the team.'
       break
@@ -198,10 +179,11 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         'Booked',
       )
       const b = args.icsBody!
-      middleHtml =
-        `<p style="font-size:17px;font-weight:600;color:#ffffff;margin:0 0 6px">${escapeHtmlPlain(b.dealDescription)}</p>`
-        + `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};margin:0 0 14px">${escapeHtmlPlain(b.venueLine)}</p>`
-        + `<p style="font-size:14px;color:#ffffff;margin:0">A calendar invite (<strong>.ics</strong>) is attached — open it to add this gig to your calendar.</p>`
+      const bookedBody =
+        `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(b.dealDescription)}</p>`
+        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 14px;line-height:1.6;">${escapeHtmlPlain(b.venueLine)}</p>`
+        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">A calendar invite (<strong style="color:#ffffff;">.ics</strong>) is attached — open it to add this gig to your calendar.</p>`
+      middleHtml = emailSectionCardHtml('Booking confirmed', bookedBody, '#22c55e')
       defaultIntro = 'You’re officially on the books for this one.'
       defaultClosing = 'We’ll keep the calendar updated as details firm up.'
       break
@@ -214,9 +196,11 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         'Day schedule',
       )
       const d = args.daySummary!
-      middleHtml =
-        `<p style="font-size:16px;font-weight:600;color:#ffffff;margin:0 0 12px">Your gigs — ${escapeHtmlPlain(d.dayLabel)}</p>`
-        + scheduleTableHtml(d.rows, 'No booked shows on this day.')
+      middleHtml = emailSectionCardHtml(
+        'Day schedule',
+        scheduleTableHtml(d.rows, 'No booked shows on this day.'),
+        '#60a5fa',
+      )
       defaultIntro = `Here’s everything on your calendar for <strong>${escapeHtmlPlain(d.dayLabel)}</strong>.`
       defaultClosing = 'Reply if you want changes or a different snapshot.'
       break
