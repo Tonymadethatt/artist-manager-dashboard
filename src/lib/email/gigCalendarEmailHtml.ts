@@ -3,7 +3,7 @@ import {
   scheduleWhenStackFromDeal,
   whenLineCompactFromDeal,
   type ScheduleWhenStack,
-} from '@/lib/calendar/pacificWallTime'
+} from '../calendar/pacificWallTime'
 import { escapeHtmlPlain } from './appendBlocksHtml'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'

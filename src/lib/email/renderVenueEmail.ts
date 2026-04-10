@@ -18,7 +18,7 @@ import {
   buildVenueClientEmailHeaderBrandInnerHtml,
   venueClientEmailLogoAlt,
 } from './venueClientEmailHeaderBrandHtml'
-import { scheduleWhenStackFromYmd } from '@/lib/calendar/pacificWallTime'
+import { scheduleWhenStackFromYmd } from '../calendar/pacificWallTime'
 import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
 
 function hrefAttr(u: string): string {

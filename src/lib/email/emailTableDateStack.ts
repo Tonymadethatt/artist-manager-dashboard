@@ -1,5 +1,5 @@
-import type { ScheduleWhenStack } from '@/lib/calendar/pacificWallTime'
-import { escapeHtmlPlain } from '@/lib/email/appendBlocksHtml'
+import type { ScheduleWhenStack } from '../calendar/pacificWallTime'
+import { escapeHtmlPlain } from './appendBlocksHtml'
 
 /**
  * 3-line "when" block for narrow email table columns: weekday / date / time (or "All day").
