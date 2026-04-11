@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import type { GoogleCalendarSyncResponseBody } from '@/lib/calendar/googleCalendarSyncToast'
 import { googleCalendarSyncSuccessMessageSettings } from '@/lib/calendar/googleCalendarSyncToast'
+import { logGoogleCalendarSyncClient } from '@/lib/calendar/logGoogleCalendarSyncClient'
 import type { Database } from '@/types/database'
 
 type ConnectionRow = Database['public']['Tables']['google_calendar_connection']['Row']
@@ -158,6 +159,7 @@ export function GoogleCalendarSettingsCard({
     const j = (await res.json().catch(() => ({}))) as GoogleCalendarSyncResponseBody & {
       error?: string
     }
+    logGoogleCalendarSyncClient('GoogleCalendarSettingsCard', res, j)
     setSyncing(false)
     if (!res.ok) {
       showToast(j.error ?? 'Sync failed.', 'err')

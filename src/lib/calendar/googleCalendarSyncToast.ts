@@ -63,6 +63,10 @@ function dealPushSuffix(j: GoogleCalendarSyncResponseBody): string {
   }
 
   const attempted = j.dealPushAttempted ?? 0
+  if (scan && j.dealPushOAuthConfigured !== false) {
+    s += ` [Push scan: ${scan.dealsLoaded} deals loaded, ${scan.qualifiedByLookup} eligible for Google]`
+  }
+
   if (attempted <= 0) {
     if (
       scan &&
@@ -87,6 +91,11 @@ function dealPushSuffix(j: GoogleCalendarSyncResponseBody): string {
   if (errN > 0) {
     const sample = (j.dealPushErrorSample ?? '').trim().slice(0, 140)
     s += ` ${errN} push error(s)${sample ? `: ${sample}` : ''}. Check Settings for Google status.`
+  }
+
+  const noop = j.dealPushNoop ?? 0
+  if (attempted > 0 && saved === 0 && errN === 0) {
+    s += ` ${attempted} server push run(s) but 0 Google updates (${noop} no-op). Open DevTools → Console and search for [ArtistManager][google-calendar-sync].`
   }
   return s
 }

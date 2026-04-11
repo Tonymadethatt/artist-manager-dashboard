@@ -5,6 +5,7 @@ import { useVenues } from '@/hooks/useVenues'
 import { GigCalendar, type CalendarSyncEventChip } from '@/components/dashboard/GigCalendar'
 import type { GoogleCalendarSyncResponseBody } from '@/lib/calendar/googleCalendarSyncToast'
 import { googleCalendarSyncSuccessMessageGigPage } from '@/lib/calendar/googleCalendarSyncToast'
+import { logGoogleCalendarSyncClient } from '@/lib/calendar/logGoogleCalendarSyncClient'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { supabase } from '@/lib/supabase'
 
@@ -166,6 +167,7 @@ export default function GigCalendarPage() {
     const j = (await res.json().catch(() => ({}))) as GoogleCalendarSyncResponseBody & {
       error?: string
     }
+    logGoogleCalendarSyncClient('GigCalendarPage', res, j)
     setGoogleSyncing(false)
     if (!res.ok) {
       showGcalToast(j.error ?? 'Sync failed.', 'err')
