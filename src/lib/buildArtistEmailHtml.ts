@@ -65,15 +65,26 @@ const sharedHeader = `
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
 
-/** Matches live transactional footers; preview uses empty base URL so asset paths are site-root relative. */
-const previewFooterHtml = buildArtistBrandedEmailFooterHtml({
-  logoBaseUrl: '',
-  managerName: 'Front Office',
-  managerTitle: null,
-  website: 'https://djluijay.com',
-  social_handle: 'djluijay',
-  phone: null,
-})
+/** Live manager profile fields for the branded email footer in the template preview panel (matches production sends). */
+export type ArtistEmailHtmlPreviewFooter = {
+  logoBaseUrl: string
+  managerName: string
+  managerTitle?: string | null
+  website?: string | null
+  social_handle?: string | null
+  phone?: string | null
+}
+
+function brandedFooterHtml(footer: ArtistEmailHtmlPreviewFooter): string {
+  return buildArtistBrandedEmailFooterHtml({
+    logoBaseUrl: footer.logoBaseUrl,
+    managerName: footer.managerName,
+    managerTitle: footer.managerTitle ?? null,
+    website: footer.website ?? null,
+    social_handle: footer.social_handle ?? null,
+    phone: footer.phone ?? null,
+  })
+}
 
 const sharedStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -81,6 +92,7 @@ const sharedStyles = `
   @media only screen and (max-width: 600px) {
     .wrapper { margin: 0 !important; border-radius: 0 !important; }
     .email-body { padding: 22px 18px !important; }
+    .email-footer { padding: 16px 18px !important; }
     .hero-val { font-size: 36px !important; }
   }`
 
@@ -92,6 +104,7 @@ const PERF_PREVIEW_ARTIST = 'DJ Luijay'
 // ---------------------------------------------------------------------------
 
 export function buildManagementReportHtml(
+  footer: ArtistEmailHtmlPreviewFooter,
   customIntro?: string | null,
   _customSubject?: string | null,
   layout?: EmailTemplateLayoutV1 | null,
@@ -160,7 +173,7 @@ export function buildManagementReportHtml(
     ${renderAppendBlocksHtml(L.appendBlocks)}
     <p style="font-size:13px;color:${EMAIL_FOOTER_MUTED};line-height:1.75;margin-top:10px;">${closer}</p>
   </div>
-  ${previewFooterHtml}
+  ${brandedFooterHtml(footer)}
 </div>
 </body>
 </html>`
@@ -171,6 +184,7 @@ export function buildManagementReportHtml(
 // ---------------------------------------------------------------------------
 
 export function buildRetainerReminderHtml(
+  footer: ArtistEmailHtmlPreviewFooter,
   customIntro?: string | null,
   _customSubject?: string | null,
   layout?: EmailTemplateLayoutV1 | null,
@@ -248,7 +262,7 @@ export function buildRetainerReminderHtml(
     : `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
     <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
   </div>
-  ${previewFooterHtml}
+  ${brandedFooterHtml(footer)}
   </div>
 </body>
 </html>`
@@ -259,6 +273,7 @@ export function buildRetainerReminderHtml(
 // ---------------------------------------------------------------------------
 
 export function buildRetainerReceivedHtml(
+  footer: ArtistEmailHtmlPreviewFooter,
   customIntro?: string | null,
   customSubject?: string | null,
   layout?: EmailTemplateLayoutV1 | null,
@@ -266,21 +281,22 @@ export function buildRetainerReceivedHtml(
   const L = artistLayoutForSend(layout ?? null, customSubject, customIntro)
   const profile = {
     artist_name: 'DJ Luijay',
-    manager_name: 'Front Office',
-    manager_title: null as string | null,
-    social_handle: 'djluijay',
-    website: 'https://djluijay.com',
-    phone: null as string | null,
+    manager_name: footer.managerName,
+    manager_title: footer.managerTitle ?? null,
+    social_handle: footer.social_handle ?? null,
+    website: footer.website ?? null,
+    phone: footer.phone ?? null,
   }
   const settledFees = [
     { month: 'February 2026', invoiced: 350, paid: 350 },
     { month: 'March 2026', invoiced: 350, paid: 350 },
   ]
   const totalAcknowledged = settledFees.reduce((s, f) => s + f.paid, 0)
-  return buildRetainerReceivedEmailHtml(profile, settledFees, totalAcknowledged, L, '')
+  return buildRetainerReceivedEmailHtml(profile, settledFees, totalAcknowledged, L, footer.logoBaseUrl)
 }
 
 export function buildPerformanceReportRequestHtml(
+  footer: ArtistEmailHtmlPreviewFooter,
   customIntro?: string | null,
   customSubject?: string | null,
   layout?: EmailTemplateLayoutV1 | null,
@@ -331,7 +347,7 @@ export function buildPerformanceReportRequestHtml(
 
     <p style="font-size:13px;color:${EMAIL_HINT};line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>
-  ${previewFooterHtml}
+  ${brandedFooterHtml(footer)}
 </div>
 </body>
 </html>`

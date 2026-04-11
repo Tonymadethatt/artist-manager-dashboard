@@ -525,9 +525,18 @@ export default function EmailTemplates() {
       || artistProfile?.company_name?.trim()
       || PREVIEW_MOCK_PROFILE.company_name?.trim()
       || 'Management'
+    const artistPreviewFooter = {
+      logoBaseUrl: publicSiteOrigin(),
+      managerName: transactionalManagerName,
+      managerTitle: artistProfile?.manager_title ?? PREVIEW_MOCK_PROFILE.manager_title ?? null,
+      website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website ?? null,
+      social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle ?? null,
+      phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone ?? null,
+    }
     if (activeGroup === 'artist') {
       if (selectedType === 'management_report') {
         return buildManagementReportHtml(
+          artistPreviewFooter,
           layout.intro ?? null,
           layout.subject ?? null,
           layout,
@@ -535,13 +544,19 @@ export default function EmailTemplates() {
       }
       if (selectedType === 'performance_report_request') {
         return buildPerformanceReportRequestHtml(
+          artistPreviewFooter,
           layout.intro ?? null,
           layout.subject ?? null,
           layout,
         )
       }
       if (selectedType === 'retainer_received') {
-        return buildRetainerReceivedHtml(layout.intro ?? null, layout.subject ?? null, layout)
+        return buildRetainerReceivedHtml(
+          artistPreviewFooter,
+          layout.intro ?? null,
+          layout.subject ?? null,
+          layout,
+        )
       }
       if (selectedType === 'performance_report_received') {
         return buildArtistTransactionalEmailHtml(
@@ -632,7 +647,12 @@ export default function EmailTemplates() {
           },
         })
       }
-      return buildRetainerReminderHtml(layout.intro ?? null, layout.subject ?? null, layout)
+      return buildRetainerReminderHtml(
+        artistPreviewFooter,
+        layout.intro ?? null,
+        layout.subject ?? null,
+        layout,
+      )
     }
     const previewCaptureUrl = venueEmailTypeToCaptureKind(selectedType as VenueEmailType)
       ? 'https://preview.example.com/venue-email-ack/mock-preview-token'
