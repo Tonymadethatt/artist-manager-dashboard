@@ -26,7 +26,8 @@ function beforePatch(
 }
 
 /**
- * After a deal is saved: queue ICS on first calendar qualification; reconcile 24h reminder row.
+ * After a deal is saved: queue artist “gig booked” confirmation email on first calendar qualification
+ * (no .ics attachment — shared calendar is updated separately); reconcile 24h reminder row.
  */
 export async function syncDealCalendarEmails(args: {
   beforeDeal: Deal | null
@@ -106,7 +107,7 @@ export async function syncDealCalendarEmails(args: {
 }
 
 /**
- * Idempotent: if the deal is calendar-qualified and ICS not yet sent, queue `gig_booked_ics`;
+ * Idempotent: if the deal is calendar-qualified and the booked confirmation email not yet sent, queue `gig_booked_ics`;
  * reconcile pending `gig_reminder_24h`. Use when qualification can happen without an Earnings save
  * (e.g. task completion or venue status change).
  */

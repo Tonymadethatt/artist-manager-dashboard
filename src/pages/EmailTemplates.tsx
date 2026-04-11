@@ -225,7 +225,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days (Netlify schedule enqueues; email sends on next queue run).',
   gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
-  gig_booked_ics:             'First time a gig qualifies for the calendar: .ics invite to the artist (idempotent per deal).',
+  gig_booked_ics:             'First time a gig qualifies for the calendar: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a table of every booked gig on one day (queued; sends on next cron tick).',
 }
 
@@ -237,7 +237,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   performance_report_received: '{firstName}, we received your show check-in',
   gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
   gig_reminder_24h:           '{firstName}, reminder: {venue} in 24 hours',
-  gig_booked_ics:             '{firstName}, calendar invite — booked gig',
+  gig_booked_ics:             '{firstName}, you’re booked — show details',
   gig_day_summary_manual:     '{firstName}, your gigs — one day',
 }
 

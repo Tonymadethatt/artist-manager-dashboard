@@ -452,7 +452,7 @@ export default function Settings() {
 
         <SectionCard
           title="Email queue"
-          description="How long venue-targeted emails wait in the queue before the automated sender picks them up. Artist and gig automations (reminders, calendar ICS, digest, custom artist templates, etc.) are not governed by this—they send on the next queue run or at their scheduled time."
+          description="How long venue-targeted emails wait in the queue before the automated sender picks them up. Artist and gig automations (reminders, booked-gig notices, digest, custom artist templates, etc.) are not governed by this—they send on the next queue run or at their scheduled time."
           className="lg:col-span-2"
         >
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">

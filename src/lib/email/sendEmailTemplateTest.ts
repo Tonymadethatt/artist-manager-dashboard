@@ -21,7 +21,6 @@ import {
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
-import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 
@@ -341,17 +340,6 @@ export async function sendEmailTemplateTest(
     }
 
     if (params.selectedType === 'gig_booked_ics' && startIso && endIso) {
-      const icsText = buildDealIcsBlob({
-        deal: {
-          id: 'preview',
-          description: PREVIEW_MOCK_DEAL.description,
-          event_start_at: startIso,
-          event_end_at: endIso,
-          notes: null,
-        },
-        venue: PREVIEW_MOCK_VENUE,
-        artistDisplayName: profile.artist_name ?? 'Artist',
-      })
       const venueLine = [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city, PREVIEW_MOCK_VENUE.location].filter(Boolean).join(', ')
       const html = buildBrandedGigCalendarEmail({
         kind: 'gig_booked_ics',
@@ -375,10 +363,8 @@ export async function sendEmailTemplateTest(
             manager_email: profile.manager_email,
           },
           to: managerRecipient.email,
-          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Calendar invite — booked gig (test)',
+          subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Booked gig — show details (test)',
           html,
-          icsFilename: 'preview-gig.ics',
-          icsContentUtf8: icsText,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }

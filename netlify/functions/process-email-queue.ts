@@ -43,7 +43,6 @@ import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { parseGigCalendarQueueNotes } from '../../src/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '../../src/lib/email/gigCalendarEmailHtml'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
-import { buildDealIcsBlob } from '../../src/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 import { addCalendarDaysPacific, pacificDayEndExclusiveUtcIso, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
@@ -664,27 +663,6 @@ const handler: Handler = async (event) => {
             results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
             continue
           }
-          let icsText: string
-          try {
-            icsText = buildDealIcsBlob({
-              deal: {
-                id: deal.id,
-                description: deal.description,
-                event_start_at: deal.event_start_at,
-                event_end_at: deal.event_end_at,
-                notes: deal.notes,
-              },
-              venue,
-              artistDisplayName: sendProfile.artist_name || 'Artist',
-            })
-          } catch {
-            await supabase
-              .from('venue_emails')
-              .update({ status: 'failed', notes: 'Auto-send failed: could not build .ics' })
-              .eq('id', email.id)
-            results.push({ id: email.id, result: 'failed', reason: 'ics_build' })
-            continue
-          }
           const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
           const html = buildBrandedGigCalendarEmail({
             kind: 'gig_booked_ics',
@@ -696,7 +674,7 @@ const handler: Handler = async (event) => {
               venueLine,
             },
           })
-          const subj = layoutMerged.subject?.trim() || email.subject || 'Calendar invite — booked gig'
+          const subj = layoutMerged.subject?.trim() || email.subject || 'Booked gig — show details'
           const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -706,8 +684,6 @@ const handler: Handler = async (event) => {
               to: String(row.artist_email ?? ''),
               subject: subj,
               html,
-              icsFilename: `gig-${deal.id}.ics`,
-              icsContentUtf8: icsText,
             }),
           })
           if (sendRes.ok) {

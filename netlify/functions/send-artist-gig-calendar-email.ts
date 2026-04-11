@@ -1,5 +1,5 @@
 /**
- * Artist-facing gig calendar emails: .ics invite, 24h reminder, weekly digest.
+ * Artist-facing gig calendar emails: booked-gig notice (no attachment), 24h reminder, weekly digest.
  * Invoked from process-email-queue (server-to-server).
  */
 import type { Handler } from '@netlify/functions'
@@ -19,8 +19,6 @@ export type GigCalendarEmailPayload =
     to: string
     subject: string
     html: string
-    icsFilename: string
-    icsContentUtf8: string
   }
   | {
     kind: 'gig_reminder_24h'
@@ -90,13 +88,7 @@ const handler: Handler = async (event) => {
   const mgr = payload.profile.manager_email?.trim()
   if (mgr && mgr.toLowerCase() !== payload.to.toLowerCase()) cc.push(mgr)
 
-  const attachments
-    = payload.kind === 'gig_booked_ics'
-      ? [{
-        filename: payload.icsFilename || 'gig.ics',
-        content: Buffer.from(payload.icsContentUtf8, 'utf-8').toString('base64'),
-      }]
-      : []
+  const attachments: { filename: string; content: string }[] = []
 
   try {
     const resendRes = await fetch('https://api.resend.com/emails', {

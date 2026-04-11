@@ -182,7 +182,10 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       const bookedBody =
         `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(b.dealDescription)}</p>`
         + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 14px;line-height:1.6;">${escapeHtmlPlain(b.venueLine)}</p>`
-        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">A calendar invite (<strong style="color:#ffffff;">.ics</strong>) is attached — open it to add this gig to your calendar.</p>`
+        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">`
+        + 'This gig is already on your shared performance calendar (the one management keeps in sync). '
+        + 'You don’t need to import a file or add it manually.'
+        + `</p>`
       middleHtml = emailSectionCardHtml('Booking confirmed', bookedBody, '#22c55e')
       defaultIntro = 'You’re officially on the books for this one.'
       defaultClosing = 'We’ll keep the calendar updated as details firm up.'

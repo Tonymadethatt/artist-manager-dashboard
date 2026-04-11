@@ -39,7 +39,6 @@ import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
-import { buildDealIcsBlob } from '@/lib/calendar/buildDealIcs'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
@@ -113,7 +112,7 @@ function pendingNotesLine(email: VenueEmail): string | null {
   }
   if (email.email_type === 'gig_reminder_24h' || email.email_type === 'gig_booked_ics') {
     const n = parseGigCalendarQueueNotes(email.notes)
-    if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'ICS invite · queued' : '24h reminder · queued'
+    if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'Booked gig email · queued' : '24h reminder · queued'
   }
   return email.notes?.trim() || null
 }
@@ -1223,22 +1222,6 @@ export default function EmailQueue() {
               })
               if (!res.ok) throw new Error(await parseErr(res))
             } else {
-              let icsText: string
-              try {
-                icsText = buildDealIcsBlob({
-                  deal: {
-                    id: deal.id,
-                    description: deal.description,
-                    event_start_at: deal.event_start_at,
-                    event_end_at: deal.event_end_at,
-                    notes: deal.notes,
-                  },
-                  venue,
-                  artistDisplayName: sendProfile.artist_name || 'Artist',
-                })
-              } catch {
-                throw new Error('Could not build .ics')
-              }
               const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
               const html = buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
@@ -1259,8 +1242,6 @@ export default function EmailQueue() {
                   to: profile.artist_email.trim(),
                   subject: subj,
                   html,
-                  icsFilename: `gig-${deal.id}.ics`,
-                  icsContentUtf8: icsText,
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))
