@@ -3,8 +3,8 @@ import type {
   DealPricingSnapshot,
   PricingCatalogDoc,
   PricingService,
-} from '@/types'
-import { isDealPricingSnapshot } from '@/types'
+} from '../../types'
+import { isDealPricingSnapshot } from '../../types'
 
 /** Whole-dollar rounding for quotes (discovery). */
 export function roundUsd(n: number): number {
