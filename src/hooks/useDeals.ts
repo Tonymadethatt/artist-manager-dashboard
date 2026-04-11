@@ -37,6 +37,9 @@ export function useDeals() {
     agreement_url?: string | null
     agreement_generated_file_id?: string | null
     promise_lines?: unknown | null
+    pricing_snapshot?: unknown | null
+    deposit_due_amount?: number | null
+    deposit_paid_amount?: number
     notes: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -62,6 +65,9 @@ export function useDeals() {
         agreement_url: deal.agreement_url ?? null,
         agreement_generated_file_id: deal.agreement_generated_file_id ?? null,
         promise_lines: deal.promise_lines ?? null,
+        pricing_snapshot: deal.pricing_snapshot ?? null,
+        deposit_due_amount: deal.deposit_due_amount ?? null,
+        deposit_paid_amount: deal.deposit_paid_amount ?? 0,
         notes: deal.notes,
       })
       .select('*, venue:venues(id, name, outreach_track, status)')

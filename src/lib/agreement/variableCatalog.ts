@@ -32,6 +32,21 @@ export const AGREEMENT_VARIABLE_CATALOG: VariableCatalogEntry[] = [
   { key: 'payment_due_date', label: 'Payment due date', group: 'deal' },
   { key: 'agreement_url', label: 'Agreement URL', group: 'deal' },
   { key: 'deal_notes', label: 'Deal notes', group: 'deal' },
+  {
+    key: 'pricing_summary_text',
+    label: 'Pricing summary (from deal calculator; empty if no snapshot)',
+    group: 'deal',
+  },
+  {
+    key: 'pricing_total_display',
+    label: 'Pricing total — currency (from snapshot)',
+    group: 'deal',
+  },
+  {
+    key: 'pricing_deposit_display',
+    label: 'Pricing deposit — currency (from snapshot)',
+    group: 'deal',
+  },
 
   { key: 'contact_name', label: 'Contact name', group: 'contact' },
   { key: 'contact_role', label: 'Contact role', group: 'contact' },

@@ -28,8 +28,22 @@ export const SHOW_REPORT_PRESETS: readonly ShowReportPresetDef[] = [
   { id: 'guest_list', label: 'Guest list and comps', globalMajor: false },
 ] as const
 
+/** Artist-side checklist (behavioral); ids namespaced `artist_preset:` on save. */
+export const ARTIST_SHOW_REPORT_PRESETS: readonly ShowReportPresetDef[] = [
+  { id: 'artist_on_time', label: 'On time for load-in and show', globalMajor: true },
+  { id: 'artist_gear', label: 'Gear prepared and functional', globalMajor: true },
+  { id: 'artist_backup', label: 'Backup plan if gear fails', globalMajor: false },
+  { id: 'artist_professional', label: 'Professional with staff and crowd', globalMajor: false },
+  { id: 'artist_comm', label: 'Communication with venue / promoter', globalMajor: false },
+  { id: 'artist_music', label: 'Music plan / requests handled', globalMajor: false },
+] as const
+
 export const GLOBAL_MAJOR_PRESET_IDS = new Set(
   SHOW_REPORT_PRESETS.filter(p => p.globalMajor).map(p => p.id),
+)
+
+export const ARTIST_GLOBAL_MAJOR_PRESET_IDS = new Set(
+  ARTIST_SHOW_REPORT_PRESETS.filter(p => p.globalMajor).map(p => p.id),
 )
 
 export interface DealPromiseLine {
@@ -43,6 +57,57 @@ export interface DealPromiseLinesDoc {
   lines: DealPromiseLine[]
 }
 
+/** v2: venue vs artist commitments (split caps in UI: ~5 custom lines per side). */
+export interface DealPromiseLinesDocV2 {
+  v: 2
+  venue: { lines: DealPromiseLine[] }
+  artist: { lines: DealPromiseLine[] }
+}
+
+export type NormalizedPromiseSides = {
+  version: 1 | 2
+  venue: DealPromiseLine[]
+  artist: DealPromiseLine[]
+}
+
+const MAX_LINES_PER_SIDE = 22
+
+function sanitizePromiseLines(raw: unknown): DealPromiseLine[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (l): l is DealPromiseLine =>
+        !!l &&
+        typeof l === 'object' &&
+        typeof (l as DealPromiseLine).id === 'string' &&
+        typeof (l as DealPromiseLine).label === 'string',
+    )
+    .slice(0, MAX_LINES_PER_SIDE)
+}
+
+/** Legacy flat `{ lines }` or v2 `{ v:2, venue, artist }`. */
+export function normalizePromiseLinesDoc(doc: unknown): NormalizedPromiseSides {
+  if (doc && typeof doc === 'object' && (doc as DealPromiseLinesDocV2).v === 2) {
+    const v2 = doc as DealPromiseLinesDocV2
+    const venue = sanitizePromiseLines(v2.venue?.lines)
+    const artist = sanitizePromiseLines(v2.artist?.lines)
+    return { version: 2, venue, artist }
+  }
+  if (!doc || typeof doc !== 'object') {
+    return { version: 1, venue: defaultDealPromiseLines(), artist: [] }
+  }
+  const lines = (doc as DealPromiseLinesDoc).lines
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return { version: 1, venue: defaultDealPromiseLines(), artist: [] }
+  }
+  const venue = sanitizePromiseLines(lines)
+  return {
+    version: 1,
+    venue: venue.length ? venue : defaultDealPromiseLines(),
+    artist: [],
+  }
+}
+
 export function defaultDealPromiseLines(): DealPromiseLine[] {
   return SHOW_REPORT_PRESETS.map(p => ({
     id: `preset:${p.id}`,
@@ -52,25 +117,32 @@ export function defaultDealPromiseLines(): DealPromiseLine[] {
   }))
 }
 
-/** Merge saved deal doc with defaults when empty */
+export function defaultArtistPromisePresets(): Record<string, boolean> {
+  return Object.fromEntries(ARTIST_SHOW_REPORT_PRESETS.map(p => [p.id, false])) as Record<string, boolean>
+}
+
+/** Venue-side lines only (backward compatible with legacy `{ lines }`). */
+export function resolveVenuePromiseLinesForDeal(doc: unknown): DealPromiseLine[] {
+  const { venue } = normalizePromiseLinesDoc(doc)
+  return venue.length ? venue : defaultDealPromiseLines()
+}
+
+/** Artist-side lines (empty for legacy deals). */
+export function resolveArtistPromiseLinesForDeal(doc: unknown): DealPromiseLine[] {
+  return normalizePromiseLinesDoc(doc).artist
+}
+
+/** @deprecated Prefer {@link resolveVenuePromiseLinesForDeal}; same behavior. */
 export function resolvePromiseLinesForDeal(doc: unknown): DealPromiseLine[] {
-  if (!doc || typeof doc !== 'object') return defaultDealPromiseLines()
-  const lines = (doc as DealPromiseLinesDoc).lines
-  if (!Array.isArray(lines) || lines.length === 0) return defaultDealPromiseLines()
-  return lines
-    .filter(
-      (l): l is DealPromiseLine =>
-        !!l &&
-        typeof l === 'object' &&
-        typeof (l as DealPromiseLine).id === 'string' &&
-        typeof (l as DealPromiseLine).label === 'string',
-    )
-    .slice(0, 22)
+  return resolveVenuePromiseLinesForDeal(doc)
 }
 
 export function isLineMajor(line: DealPromiseLine): boolean {
   if (line.major) return true
-  if (line.presetKey && GLOBAL_MAJOR_PRESET_IDS.has(line.presetKey)) return true
+  if (line.presetKey) {
+    if (GLOBAL_MAJOR_PRESET_IDS.has(line.presetKey)) return true
+    if (ARTIST_GLOBAL_MAJOR_PRESET_IDS.has(line.presetKey)) return true
+  }
   return false
 }
 
@@ -215,33 +287,54 @@ export function moodToEventRating(mood: ShowReportNightMood): number {
   }
 }
 
-/** Which checklist presets are on for a saved deal doc (`promise_lines`). */
-export function presetToggleStateFromDealDoc(doc: unknown): Record<string, boolean> {
-  const lines = resolvePromiseLinesForDeal(doc)
-  const preset: Record<string, boolean> = Object.fromEntries(
-    SHOW_REPORT_PRESETS.map(p => [p.id, false]),
-  )
+function presetToggleFromLines(
+  lines: DealPromiseLine[],
+  defs: readonly ShowReportPresetDef[],
+): Record<string, boolean> {
+  const preset: Record<string, boolean> = Object.fromEntries(defs.map(p => [p.id, false]))
   for (const line of lines) {
     if (line.presetKey && line.presetKey in preset) preset[line.presetKey] = true
   }
   return preset
 }
 
+/** Venue preset toggles from saved deal doc. */
+export function presetToggleStateFromDealDoc(doc: unknown): Record<string, boolean> {
+  return presetToggleFromLines(resolveVenuePromiseLinesForDeal(doc), SHOW_REPORT_PRESETS)
+}
+
+export function artistPresetToggleStateFromDealDoc(doc: unknown): Record<string, boolean> {
+  return presetToggleFromLines(resolveArtistPromiseLinesForDeal(doc), ARTIST_SHOW_REPORT_PRESETS)
+}
+
 export function customLabelsFromDealDoc(doc: unknown): string[] {
-  return resolvePromiseLinesForDeal(doc)
+  return resolveVenuePromiseLinesForDeal(doc)
     .filter(l => !l.presetKey)
     .map(l => l.label)
 }
 
-export function buildPromiseLinesDocFromUi(
+export function artistCustomLabelsFromDealDoc(doc: unknown): string[] {
+  return resolveArtistPromiseLinesForDeal(doc)
+    .filter(l => !l.presetKey)
+    .map(l => l.label)
+}
+
+const CUSTOM_CAP_VENUE = 5
+const CUSTOM_CAP_ARTIST = 5
+
+function buildSideLines(
+  defs: readonly ShowReportPresetDef[],
   preset: Record<string, boolean>,
   customs: string[],
-): DealPromiseLinesDoc {
+  idPresetPrefix: string,
+  idCustomPrefix: string,
+  customCap: number,
+): DealPromiseLine[] {
   const lines: DealPromiseLine[] = []
-  for (const p of SHOW_REPORT_PRESETS) {
+  for (const p of defs) {
     if (preset[p.id]) {
       lines.push({
-        id: `preset:${p.id}`,
+        id: `${idPresetPrefix}${p.id}`,
         label: p.label,
         presetKey: p.id,
         major: p.globalMajor,
@@ -251,13 +344,64 @@ export function buildPromiseLinesDocFromUi(
   let n = 0
   for (const text of customs) {
     const t = text.trim()
-    if (!t || n >= 10) continue
+    if (!t || n >= customCap) continue
     lines.push({
-      id: `custom:${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${n}`}`,
+      id: `${idCustomPrefix}${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${n}`}`,
       label: t,
       major: false,
     })
     n++
   }
+  return lines
+}
+
+/** Persists v2 doc (venue + artist). */
+export function buildPromiseLinesDocV2FromUi(
+  venuePreset: Record<string, boolean>,
+  venueCustoms: string[],
+  artistPreset: Record<string, boolean>,
+  artistCustoms: string[],
+): DealPromiseLinesDocV2 {
+  return {
+    v: 2,
+    venue: {
+      lines: buildSideLines(
+        SHOW_REPORT_PRESETS,
+        venuePreset,
+        venueCustoms,
+        'preset:',
+        'custom:',
+        CUSTOM_CAP_VENUE,
+      ),
+    },
+    artist: {
+      lines: buildSideLines(
+        ARTIST_SHOW_REPORT_PRESETS,
+        artistPreset,
+        artistCustoms,
+        'artist_preset:',
+        'artist_custom:',
+        CUSTOM_CAP_ARTIST,
+      ),
+    },
+  }
+}
+
+/** @deprecated Use {@link buildPromiseLinesDocV2FromUi}; builds flat legacy doc (venue only). */
+export function buildPromiseLinesDocFromUi(
+  preset: Record<string, boolean>,
+  customs: string[],
+): DealPromiseLinesDoc {
+  const lines = buildSideLines(SHOW_REPORT_PRESETS, preset, customs, 'preset:', 'custom:', 10)
   return { lines }
+}
+
+export type StoredPromiseResultsV2 = {
+  v: 2
+  venue: { id: string; met: boolean }[]
+  artist: { id: string; met: boolean }[]
+}
+
+export function isPromiseResultsV2(x: unknown): x is StoredPromiseResultsV2 {
+  return !!x && typeof x === 'object' && (x as StoredPromiseResultsV2).v === 2
 }

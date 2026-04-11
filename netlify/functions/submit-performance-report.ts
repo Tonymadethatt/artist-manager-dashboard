@@ -13,11 +13,14 @@ import {
   deriveVenueDelivered,
   mapNightMoodToCrowdEnergy,
   moodToEventRating,
-  resolvePromiseLinesForDeal,
+  resolveVenuePromiseLinesForDeal,
+  resolveArtistPromiseLinesForDeal,
+  isPromiseResultsV2,
   NIGHT_MOODS,
   TOP_THREE_MOOD,
   type DealPromiseLine,
   type ShowReportNightMood,
+  type StoredPromiseResultsV2,
 } from '../../src/lib/showReportCatalog'
 import {
   formatDealGrossReconciliationNotes,
@@ -134,6 +137,7 @@ interface SubmitBody {
   /** Smart form: mood drives crowd_energy + event_rating */
   nightMood?: string | null
   promiseResults?: { id: string; met: boolean }[] | null
+  promiseResultsV2?: StoredPromiseResultsV2 | null
   rescheduledToDate?: string | null
   rebookingSpecificDate?: string | null
   cancellationFreeform?: string | null
@@ -305,8 +309,31 @@ const handler: Handler = async (event) => {
     row.deal_id && row.deals
       ? (row.deals as { promise_lines?: unknown } | null)?.promise_lines ?? null
       : null
-  const promiseLines = resolvePromiseLinesForDeal(dealPromiseDoc)
-  const promiseNorm = normalizePromiseResults(body.promiseResults, promiseLines)
+  const venueLines = resolveVenuePromiseLinesForDeal(dealPromiseDoc)
+  const artistLines = resolveArtistPromiseLinesForDeal(dealPromiseDoc)
+
+  let promiseNormVenue: { id: string; met: boolean }[] = []
+  let promiseNormArtist: { id: string; met: boolean }[] = []
+  let promiseResultsStored: unknown = null
+
+  if (
+    body.promiseResultsV2 &&
+    isPromiseResultsV2(body.promiseResultsV2) &&
+    artistLines.length > 0
+  ) {
+    promiseNormVenue = normalizePromiseResults(body.promiseResultsV2.venue, venueLines)
+    promiseNormArtist = normalizePromiseResults(body.promiseResultsV2.artist, artistLines)
+    promiseResultsStored =
+      promiseNormVenue.length || promiseNormArtist.length
+        ? { v: 2, venue: promiseNormVenue, artist: promiseNormArtist }
+        : null
+  } else {
+    const flat = normalizePromiseResults(body.promiseResults, venueLines)
+    promiseNormVenue = flat
+    promiseNormArtist = []
+    promiseResultsStored = flat.length ? flat : null
+  }
+
   const rebookingTimelineNorm = normalizeRebookingTimeline(body.rebookingTimeline)
 
   if (played) {
@@ -326,10 +353,16 @@ const handler: Handler = async (event) => {
         body: JSON.stringify({ message: 'Pick how the night felt.' }),
       }
     }
-    if (!promiseResultsComplete(promiseLines, promiseNorm)) {
+    if (!promiseResultsComplete(venueLines, promiseNormVenue)) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ message: 'Answer each recap line (Yes / No).' }),
+        body: JSON.stringify({ message: 'Answer each venue recap line (Yes / No).' }),
+      }
+    }
+    if (artistLines.length > 0 && !promiseResultsComplete(artistLines, promiseNormArtist)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: 'Answer each artist recap line (Yes / No).' }),
       }
     }
   }
@@ -375,7 +408,7 @@ const handler: Handler = async (event) => {
     referralDetailFinal = null
   }
 
-  const venueDeliveredFinal = played ? deriveVenueDelivered(promiseNorm, promiseLines) : null
+  const venueDeliveredFinal = played ? deriveVenueDelivered(promiseNormVenue, venueLines) : null
   const crowdEnergyFinal =
     played && nightMoodParsed ? mapNightMoodToCrowdEnergy(nightMoodParsed) : null
   const eventRatingFinal =
@@ -466,7 +499,7 @@ const handler: Handler = async (event) => {
       would_play_again: body.wouldPlayAgain ?? null,
       cancellation_reason: !played ? body.cancellationReason ?? null : null,
       referral_lead: referralLeadFinal,
-      promise_results: played && promiseNorm.length ? promiseNorm : null,
+      promise_results: played && promiseResultsStored ? promiseResultsStored : null,
       night_mood: played ? nightMoodParsed : null,
       rescheduled_to_date:
         !played && body.eventHappened === 'postponed'

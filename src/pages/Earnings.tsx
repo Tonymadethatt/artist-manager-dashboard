@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
@@ -25,7 +26,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { Deal, CommissionTier, PaymentMethod } from '@/types'
+import type { Deal, CommissionTier, PaymentMethod, DealPricingFinalSource } from '@/types'
+import { isDealPricingSnapshot } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS, COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
@@ -35,10 +37,21 @@ import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { hasPendingArtistEmail } from '@/lib/queueEmailsFromTemplate'
 import {
   SHOW_REPORT_PRESETS,
-  buildPromiseLinesDocFromUi,
+  ARTIST_SHOW_REPORT_PRESETS,
+  buildPromiseLinesDocV2FromUi,
   customLabelsFromDealDoc,
+  artistCustomLabelsFromDealDoc,
   presetToggleStateFromDealDoc,
+  artistPresetToggleStateFromDealDoc,
+  defaultArtistPromisePresets,
 } from '@/lib/showReportCatalog'
+import { usePricingCatalog } from '@/hooks/usePricingCatalog'
+import { EarningsPricingPanel } from '@/components/earnings/EarningsPricingPanel'
+import {
+  catalogHasMinimumForDealLogging,
+  computeDealPrice,
+  pickDefaultServiceId,
+} from '@/lib/pricing/computeDealPrice'
 import { buildRetainerReceivedPayload } from '@/lib/reports/buildManagementReportData'
 import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
 import {
@@ -594,6 +607,7 @@ const EMPTY_FORM = {
   payment_due_date: '',
   agreement_url: '',
   agreement_generated_file_id: '',
+  deposit_paid_amount: '',
   notes: '',
 }
 
@@ -633,6 +647,9 @@ function PayToggle({
 }
 
 export default function Earnings() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const pricingCatalog = usePricingCatalog()
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid, refetch } = useDeals()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
@@ -640,6 +657,9 @@ export default function Earnings() {
   const { fees } = useMonthlyFees()
   const { requests: bookingRequests, loading: bookingRequestsLoading, deleteRequest: deleteBookingRequest } = useBookingRequests()
   const { refreshNavBadges } = useNavBadges()
+  const [earningsSection, setEarningsSection] = useState<'deals' | 'pricing'>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'pricing' ? 'pricing' : 'deals',
+  )
   const [dealsPage, setDealsPage] = useState(1)
   const [addOpen, setAddOpen] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
@@ -654,7 +674,35 @@ export default function Earnings() {
   const [formToast, setFormToast] = useState<string | null>(null)
   const [promisePresets, setPromisePresets] = useState<Record<string, boolean>>(defaultPromisePresets)
   const [promiseCustomLines, setPromiseCustomLines] = useState<string[]>([''])
+  const [artistPromisePresets, setArtistPromisePresets] = useState<Record<string, boolean>>(defaultArtistPromisePresets())
+  const [artistPromiseCustomLines, setArtistPromiseCustomLines] = useState<string[]>([''])
   const [dealFormTab, setDealFormTab] = useState<DealFormTab>('basics')
+
+  const [pricingBaseMode, setPricingBaseMode] = useState<'package' | 'hourly'>('hourly')
+  const [pricingPackageId, setPricingPackageId] = useState<string | null>(null)
+  const [pricingServiceId, setPricingServiceId] = useState<string | null>(null)
+  const [pricingOvertimeServiceId, setPricingOvertimeServiceId] = useState<string | null>(null)
+  const [pricingPerformanceHours, setPricingPerformanceHours] = useState(4)
+  const [pricingAddonQty, setPricingAddonQty] = useState<Record<string, number>>({})
+  const [pricingSurchargeIds, setPricingSurchargeIds] = useState<string[]>([])
+  const [pricingDiscountIds, setPricingDiscountIds] = useState<string[]>([])
+
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get('tab')
+    setEarningsSection(t === 'pricing' ? 'pricing' : 'deals')
+  }, [location.search])
+
+  const goEarningsSection = useCallback(
+    (s: 'deals' | 'pricing') => {
+      const p = new URLSearchParams(location.search)
+      if (s === 'pricing') p.set('tab', 'pricing')
+      else p.delete('tab')
+      const qs = p.toString()
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true })
+      setEarningsSection(s)
+    },
+    [location.pathname, location.search, navigate],
+  )
 
   function showFormToast(msg: string) {
     setFormToast(msg)
@@ -739,11 +787,78 @@ export default function Earnings() {
     return gross * COMMISSION_TIER_RATES[form.commission_tier]
   }, [form.gross_amount, form.commission_tier])
 
+  const resetPricingFromCatalog = (eventDate: string) => {
+    const cat = pricingCatalog.doc
+    const svc = pickDefaultServiceId(cat, eventDate || null)
+    const firstPkg = cat.packages[0]?.id ?? null
+    setPricingBaseMode(firstPkg ? 'package' : 'hourly')
+    setPricingPackageId(firstPkg)
+    setPricingServiceId(svc)
+    setPricingOvertimeServiceId(svc)
+    setPricingPerformanceHours(4)
+    setPricingAddonQty({})
+    setPricingSurchargeIds([])
+    setPricingDiscountIds([])
+  }
+
+  const pricingComputed = useMemo(() => {
+    if (!catalogHasMinimumForDealLogging(pricingCatalog.doc)) return null
+    try {
+      return computeDealPrice({
+        catalog: pricingCatalog.doc,
+        eventDate: form.event_date.trim() || null,
+        baseMode: pricingBaseMode,
+        packageId: pricingPackageId,
+        serviceId: pricingServiceId,
+        overtimeServiceId: pricingOvertimeServiceId,
+        performanceHours: pricingPerformanceHours,
+        addonQuantities: pricingAddonQty,
+        surchargeIds: pricingSurchargeIds,
+        discountIds: pricingDiscountIds,
+      })
+    } catch {
+      return null
+    }
+  }, [
+    pricingCatalog.doc,
+    form.event_date,
+    pricingBaseMode,
+    pricingPackageId,
+    pricingServiceId,
+    pricingOvertimeServiceId,
+    pricingPerformanceHours,
+    pricingAddonQty,
+    pricingSurchargeIds,
+    pricingDiscountIds,
+  ])
+
+  /** New deals: auto-sync gross from calculator (discovery). Edited deals: manual-first. */
+  useEffect(() => {
+    if (!addOpen || editDeal || !pricingComputed) return
+    setForm(prev => ({ ...prev, gross_amount: String(pricingComputed.gross) }))
+  }, [addOpen, editDeal, pricingComputed])
+
+  useEffect(() => {
+    if (!addOpen || editDeal || pricingBaseMode !== 'hourly') return
+    const pick = pickDefaultServiceId(pricingCatalog.doc, form.event_date.trim() || null)
+    if (pick) setPricingServiceId(pick)
+  }, [addOpen, editDeal, pricingBaseMode, form.event_date, pricingCatalog.doc])
+
+  const canLogDeal = catalogHasMinimumForDealLogging(pricingCatalog.doc)
+
   const openAdd = () => {
+    if (!canLogDeal) {
+      showFormToast('Add at least one package or hourly rate under Pricing & fees first.')
+      goEarningsSection('pricing')
+      return
+    }
     setForm(EMPTY_FORM)
     setEditDeal(null)
     setPromisePresets(defaultPromisePresets())
     setPromiseCustomLines([''])
+    setArtistPromisePresets(defaultArtistPromisePresets())
+    setArtistPromiseCustomLines([''])
+    resetPricingFromCatalog('')
     setDealFormTab('basics')
     setAddOpen(true)
   }
@@ -752,10 +867,11 @@ export default function Earnings() {
     const sPart = deal.event_start_at ? utcIsoToPacificDateAndTime(deal.event_start_at) : null
     const ePart = deal.event_end_at ? utcIsoToPacificDateAndTime(deal.event_end_at) : null
     const hasTimes = sPart && ePart
+    const ed = deal.event_date ?? ''
     setForm({
       description: deal.description,
       venue_id: deal.venue_id ?? '',
-      event_date: hasTimes ? sPart.date : (deal.event_date ?? ''),
+      event_date: hasTimes ? sPart.date : ed,
       event_start_time: hasTimes ? sPart.time : '20:00',
       event_end_time: hasTimes ? ePart.time : '23:00',
       gross_amount: String(deal.gross_amount),
@@ -763,11 +879,31 @@ export default function Earnings() {
       payment_due_date: deal.payment_due_date ?? '',
       agreement_url: deal.agreement_url ?? '',
       agreement_generated_file_id: deal.agreement_generated_file_id ?? '',
+      deposit_paid_amount:
+        deal.deposit_paid_amount != null && Number.isFinite(Number(deal.deposit_paid_amount))
+          ? String(deal.deposit_paid_amount)
+          : '',
       notes: deal.notes ?? '',
     })
     setPromisePresets(presetToggleStateFromDealDoc(deal.promise_lines ?? null))
     const customs = customLabelsFromDealDoc(deal.promise_lines ?? null)
     setPromiseCustomLines(customs.length ? customs : [''])
+    setArtistPromisePresets(artistPresetToggleStateFromDealDoc(deal.promise_lines ?? null))
+    const ac = artistCustomLabelsFromDealDoc(deal.promise_lines ?? null)
+    setArtistPromiseCustomLines(ac.length ? ac : [''])
+    const snap = deal.pricing_snapshot
+    if (isDealPricingSnapshot(snap)) {
+      setPricingBaseMode(snap.baseMode)
+      setPricingPackageId(snap.packageId)
+      setPricingServiceId(snap.serviceId)
+      setPricingOvertimeServiceId(snap.overtimeServiceId)
+      setPricingPerformanceHours(snap.performanceHours)
+      setPricingAddonQty(snap.addonQuantities ?? {})
+      setPricingSurchargeIds(snap.surchargeIds ?? [])
+      setPricingDiscountIds(snap.discountIds ?? [])
+    } else {
+      resetPricingFromCatalog(hasTimes ? sPart.date : ed)
+    }
     setEditDeal(deal)
     setDealFormTab('basics')
     setAddOpen(true)
@@ -789,9 +925,14 @@ export default function Earnings() {
   const handleSave = async () => {
     const gross = parseFloat(form.gross_amount)
     if (!form.description.trim() || isNaN(gross) || gross <= 0) return
-    const promiseDoc = buildPromiseLinesDocFromUi(promisePresets, promiseCustomLines)
-    if (promiseDoc.lines.length === 0) {
-      showFormToast('Select at least one show-report recap line (or add a custom line).')
+    const promiseDoc = buildPromiseLinesDocV2FromUi(
+      promisePresets,
+      promiseCustomLines,
+      artistPromisePresets,
+      artistPromiseCustomLines,
+    )
+    if (promiseDoc.venue.lines.length === 0) {
+      showFormToast('Select at least one venue recap line (or add a custom line).')
       setDealFormTab('recap')
       return
     }
@@ -857,6 +998,23 @@ export default function Earnings() {
       }
     }
 
+    const depPaidRaw = parseFloat(form.deposit_paid_amount)
+    const depositPaidSafe = !isNaN(depPaidRaw) && depPaidRaw >= 0 ? depPaidRaw : 0
+
+    let pricingSnapshotPayload: import('@/types').DealPricingSnapshot | null = null
+    if (pricingComputed && canLogDeal) {
+      const roundedFormGross = Math.round(gross)
+      const finalSource: DealPricingFinalSource =
+        pricingComputed.gross === roundedFormGross ? 'calculated' : 'manual'
+      pricingSnapshotPayload = {
+        ...pricingComputed.snapshot,
+        finalSource,
+        computedAt: new Date().toISOString(),
+      }
+    } else if (editDeal?.pricing_snapshot && isDealPricingSnapshot(editDeal.pricing_snapshot)) {
+      pricingSnapshotPayload = editDeal.pricing_snapshot
+    }
+
     const payload = {
       description: form.description.trim(),
       venue_id: form.venue_id || null,
@@ -869,6 +1027,9 @@ export default function Earnings() {
       agreement_url: agreementUrl,
       agreement_generated_file_id: agreementFileId,
       promise_lines: promiseDoc,
+      pricing_snapshot: pricingSnapshotPayload,
+      deposit_due_amount: pricingSnapshotPayload?.depositDue ?? editDeal?.deposit_due_amount ?? null,
+      deposit_paid_amount: depositPaidSafe,
       notes: form.notes || null,
     }
     let saved: Deal | null = null
@@ -934,6 +1095,42 @@ export default function Earnings() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-neutral-800 p-0.5 bg-neutral-900/80">
+          <button
+            type="button"
+            className={cn(
+              'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors',
+              earningsSection === 'deals' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300',
+            )}
+            onClick={() => goEarningsSection('deals')}
+          >
+            Deals
+          </button>
+          <button
+            type="button"
+            className={cn(
+              'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors',
+              earningsSection === 'pricing' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300',
+            )}
+            onClick={() => goEarningsSection('pricing')}
+          >
+            Pricing &amp; fees
+          </button>
+        </div>
+      </div>
+
+      {earningsSection === 'pricing' && (
+        <div className="space-y-3">
+          <p className="text-xs text-neutral-500">
+            Your reusable packages, rates, and add-ons. Changes save automatically.
+          </p>
+          <EarningsPricingPanel catalog={pricingCatalog} />
+        </div>
+      )}
+
+      {earningsSection === 'deals' && (
+        <>
       {/* ── Overview ─────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         {combinedOutstanding > 0 && (
@@ -1321,15 +1518,215 @@ export default function Earnings() {
 
             {dealFormTab === 'terms' && (
               <div className="space-y-3">
+                {canLogDeal && pricingComputed && (
+                  <div className="rounded-md border border-neutral-700 bg-neutral-900/50 p-3 space-y-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Price calculator</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1 col-span-2">
+                        <Label className="text-neutral-400">Base</Label>
+                        <Select
+                          value={pricingBaseMode}
+                          onValueChange={v => setPricingBaseMode(v as 'package' | 'hourly')}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="package">Package</SelectItem>
+                            <SelectItem value="hourly">Hourly / flat service</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {pricingBaseMode === 'package' ? (
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-neutral-400">Package</Label>
+                          <Select
+                            value={pricingPackageId ?? '__none__'}
+                            onValueChange={v => setPricingPackageId(v === '__none__' ? null : v)}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">—</SelectItem>
+                              {pricingCatalog.doc.packages.map(p => (
+                                <SelectItem key={p.id} value={p.id}>{p.name} (${p.price})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-neutral-400">Service rate</Label>
+                          <Select
+                            value={pricingServiceId ?? '__none__'}
+                            onValueChange={v => setPricingServiceId(v === '__none__' ? null : v)}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">—</SelectItem>
+                              {pricingCatalog.doc.services.map(s => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} (${s.price}{s.priceType === 'per_hour' ? '/hr' : ' flat'})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {pricingBaseMode === 'package' && (
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-neutral-400">Overtime hourly rate (service)</Label>
+                          <Select
+                            value={pricingOvertimeServiceId ?? '__none__'}
+                            onValueChange={v => setPricingOvertimeServiceId(v === '__none__' ? null : v)}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">—</SelectItem>
+                              {pricingCatalog.doc.services.filter(s => s.priceType === 'per_hour').map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name} (${s.price}/hr)</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div className="space-y-1 col-span-2">
+                        <Label className="text-neutral-400">Performance hours</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={pricingPerformanceHours}
+                          onChange={e => setPricingPerformanceHours(Number(e.target.value) || 0)}
+                        />
+                      </div>
+                    </div>
+                    {pricingCatalog.doc.addons.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-neutral-500">Add-ons (qty)</span>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {pricingCatalog.doc.addons.map(a => (
+                            <div key={a.id} className="flex items-center gap-2">
+                              <span className="text-xs text-neutral-300 flex-1 min-w-0 truncate">{a.name}</span>
+                              <Input
+                                className="w-16 h-8"
+                                type="number"
+                                min={0}
+                                value={pricingAddonQty[a.id] ?? ''}
+                                onChange={e => {
+                                  const n = Number(e.target.value)
+                                  setPricingAddonQty(prev => {
+                                    const next = { ...prev }
+                                    if (!e.target.value.trim() || n <= 0) delete next[a.id]
+                                    else next[a.id] = n
+                                    return next
+                                  })
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {pricingCatalog.doc.surcharges.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {pricingCatalog.doc.surcharges.map(s => {
+                          const on = pricingSurchargeIds.includes(s.id)
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() =>
+                                setPricingSurchargeIds(prev =>
+                                  on ? prev.filter(x => x !== s.id) : [...prev, s.id],
+                                )
+                              }
+                              className={cn(
+                                'text-[10px] px-2 py-1 rounded border',
+                                on ? 'border-neutral-400 bg-neutral-800 text-white' : 'border-neutral-700 text-neutral-500',
+                              )}
+                            >
+                              {s.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {pricingCatalog.doc.discounts.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {pricingCatalog.doc.discounts.map(d => {
+                          const on = pricingDiscountIds.includes(d.id)
+                          return (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() =>
+                                setPricingDiscountIds(prev =>
+                                  on ? prev.filter(x => x !== d.id) : [...prev, d.id],
+                                )
+                              }
+                              className={cn(
+                                'text-[10px] px-2 py-1 rounded border',
+                                on ? 'border-neutral-400 bg-neutral-800 text-white' : 'border-neutral-700 text-neutral-500',
+                              )}
+                            >
+                              {d.name} ({d.percent}%)
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <div className="text-xs space-y-0.5 text-neutral-400 border-t border-neutral-800 pt-2">
+                      <div className="flex justify-between">
+                        <span>Subtotal + tax</span>
+                        <span className="tabular-nums text-neutral-200">
+                          {fmtMoney((pricingComputed?.snapshot.subtotalBeforeTax ?? 0) + (pricingComputed?.snapshot.taxAmount ?? 0))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-neutral-100">
+                        <span>Total (rounded)</span>
+                        <span className="tabular-nums">{fmtMoney(pricingComputed?.gross ?? 0)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span>Deposit due (catalog %)</span>
+                        <span className="tabular-nums">{fmtMoney(pricingComputed?.snapshot.depositDue ?? 0)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!canLogDeal && (
+                  <p className="text-xs text-amber-500/90">
+                    Set up at least one package or hourly rate under Pricing &amp; fees to use the calculator.
+                  </p>
+                )}
                 <div className="space-y-1">
                   <Label>Gross amount ($) *</Label>
                   <Input
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="1"
                     value={form.gross_amount}
                     onChange={e => setField('gross_amount', e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
+                  />
+                  {editDeal && pricingComputed && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs mt-1"
+                      onClick={() => setField('gross_amount', String(pricingComputed.gross))}
+                    >
+                      Apply calculated {fmtMoney(pricingComputed.gross)}
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label>Deposit paid ($)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.deposit_paid_amount}
+                    onChange={e => setField('deposit_paid_amount', e.target.value)}
+                    placeholder="0"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1428,11 +1825,11 @@ export default function Earnings() {
 
             {dealFormTab === 'recap' && (
               <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-900/50 p-3">
-                <Label className="text-neutral-300">Show report recap</Label>
+                <Label className="text-neutral-300">Venue commitments</Label>
                 <p className="text-[10px] text-neutral-500 leading-snug">
-                  Checklist on the artist post-show form. Up to 10 custom lines.
+                  What the venue promises on the post-show form. Up to 5 custom lines on this side.
                 </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 max-h-[min(40vh,16rem)] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 max-h-[min(32vh,14rem)] overflow-y-auto pr-1">
                   {SHOW_REPORT_PRESETS.map(p => (
                     <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
                       <input
@@ -1448,7 +1845,7 @@ export default function Earnings() {
                   ))}
                 </div>
                 <div className="space-y-1.5">
-                  <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines</span>
+                  <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines (venue)</span>
                   {promiseCustomLines.map((line, i) => (
                     <div key={i} className="flex gap-2">
                       <Input
@@ -1457,7 +1854,7 @@ export default function Earnings() {
                           const v = e.target.value
                           setPromiseCustomLines(prev => prev.map((s, j) => (j === i ? v : s)))
                         }}
-                        placeholder={`Custom line ${i + 1}`}
+                        placeholder={`Venue custom ${i + 1}`}
                         className="text-sm"
                       />
                       {promiseCustomLines.length > 1 ? (
@@ -1473,7 +1870,7 @@ export default function Earnings() {
                       ) : null}
                     </div>
                   ))}
-                  {promiseCustomLines.length < 10 ? (
+                  {promiseCustomLines.length < 5 ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1481,9 +1878,68 @@ export default function Earnings() {
                       className="h-8 text-xs text-neutral-400"
                       onClick={() => setPromiseCustomLines(prev => [...prev, ''])}
                     >
-                      + Add custom line
+                      + Add venue custom line
                     </Button>
                   ) : null}
+                </div>
+                <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-900/50 p-3 mt-3">
+                  <Label className="text-neutral-300">Artist (self) commitments</Label>
+                  <p className="text-[10px] text-neutral-500 leading-snug">
+                    Optional checklist for your side on the post-show form. Up to 5 custom lines.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 max-h-[min(28vh,12rem)] overflow-y-auto pr-1">
+                    {ARTIST_SHOW_REPORT_PRESETS.map(p => (
+                      <label key={p.id} className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={artistPromisePresets[p.id] ?? false}
+                          onChange={e =>
+                            setArtistPromisePresets(prev => ({ ...prev, [p.id]: e.target.checked }))
+                          }
+                          className="rounded border-neutral-600"
+                        />
+                        {p.label}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] text-neutral-500 uppercase tracking-wide">Custom lines (artist)</span>
+                    {artistPromiseCustomLines.map((line, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          value={line}
+                          onChange={e => {
+                            const v = e.target.value
+                            setArtistPromiseCustomLines(prev => prev.map((s, j) => (j === i ? v : s)))
+                          }}
+                          placeholder={`Artist custom ${i + 1}`}
+                          className="text-sm"
+                        />
+                        {artistPromiseCustomLines.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 px-2"
+                            onClick={() => setArtistPromiseCustomLines(prev => prev.filter((_, j) => j !== i))}
+                          >
+                            x
+                          </Button>
+                        ) : null}
+                      </div>
+                    ))}
+                    {artistPromiseCustomLines.length < 5 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs text-neutral-400"
+                        onClick={() => setArtistPromiseCustomLines(prev => [...prev, ''])}
+                      >
+                        + Add artist custom line
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             )}
@@ -1500,6 +1956,7 @@ export default function Earnings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
 
       {/* Confirm delete */}
       {calendarConfirm && (
@@ -1565,7 +2022,6 @@ export default function Earnings() {
         dealId={sendEmailDeal?.id ?? null}
         venueId={sendEmailDeal?.venue_id ?? null}
       />
-      </div>
 
       {/* ── Booking requests ─────────────────────────────────────────────── */}
       {(bookingRequestsLoading || bookingRequests.length > 0) && (
@@ -1629,6 +2085,8 @@ export default function Earnings() {
 
       {/* ── Monthly retainer ─────────────────────────────────────────────── */}
       <RetainerTab hideSummary />
+        </>
+      )}
     </div>
   )
 }

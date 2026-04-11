@@ -286,6 +286,9 @@ export interface Database {
           agreement_url: string | null
           agreement_generated_file_id: string | null
           promise_lines: unknown | null
+          pricing_snapshot: unknown | null
+          deposit_due_amount: number | null
+          deposit_paid_amount: number
           notes: string | null
           created_at: string
           updated_at: string
@@ -316,6 +319,9 @@ export interface Database {
           agreement_url?: string | null
           agreement_generated_file_id?: string | null
           promise_lines?: unknown | null
+          pricing_snapshot?: unknown | null
+          deposit_due_amount?: number | null
+          deposit_paid_amount?: number
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -346,6 +352,9 @@ export interface Database {
           agreement_url?: string | null
           agreement_generated_file_id?: string | null
           promise_lines?: unknown | null
+          pricing_snapshot?: unknown | null
+          deposit_due_amount?: number | null
+          deposit_paid_amount?: number
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -358,6 +367,24 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      user_pricing_catalog: {
+        Row: {
+          user_id: string
+          doc: unknown
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          doc?: unknown
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          doc?: unknown
+          updated_at?: string
+        }
+        Relationships: []
       }
       artist_profile: {
         Row: {

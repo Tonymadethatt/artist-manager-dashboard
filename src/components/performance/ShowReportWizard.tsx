@@ -16,6 +16,7 @@ import {
   resolvePromiseLineDisplayLabel,
   type DealPromiseLine,
   type ShowReportNightMood,
+  type StoredPromiseResultsV2,
 } from '@/lib/showReportCatalog'
 import {
   PRODUCTION_FRICTION_OPTIONS,
@@ -37,7 +38,10 @@ type LoadedOk = {
   eventDate: string | null
   dealDescription: string | null
   dealGrossAmount: number | null
+  /** Venue-side lines (alias of venuePromiseLines from API). */
   promiseLines: DealPromiseLine[]
+  venuePromiseLines: DealPromiseLine[]
+  artistPromiseLines: DealPromiseLine[]
   branding: PublicFormBranding
 }
 
@@ -242,6 +246,8 @@ export function ShowReportWizard({
               ? Number(mockContext.dealGrossAmount)
               : null,
           promiseLines: defaultDealPromiseLines(),
+          venuePromiseLines: defaultDealPromiseLines(),
+          artistPromiseLines: [],
           branding: propsBranding ? mergePublicFormBranding(propsBranding) : DEFAULT_PUBLIC_FORM_BRANDING,
         }
       : null,
@@ -312,7 +318,15 @@ export function ShowReportWizard({
           setUi('success')
           return
         }
-        const lines: DealPromiseLine[] = Array.isArray(data.promiseLines) ? data.promiseLines : []
+        const venueLines: DealPromiseLine[] = Array.isArray(data.venuePromiseLines)
+          ? data.venuePromiseLines
+          : Array.isArray(data.promiseLines)
+            ? data.promiseLines
+            : []
+        const artistLines: DealPromiseLine[] = Array.isArray(data.artistPromiseLines)
+          ? data.artistPromiseLines
+          : []
+        const vLines = venueLines.length ? venueLines : defaultDealPromiseLines()
         setLoaded({
           valid: true,
           submitted: false,
@@ -323,7 +337,9 @@ export function ShowReportWizard({
             data.dealGrossAmount != null && Number.isFinite(Number(data.dealGrossAmount))
               ? Number(data.dealGrossAmount)
               : null,
-          promiseLines: lines.length ? lines : defaultDealPromiseLines(),
+          promiseLines: vLines,
+          venuePromiseLines: vLines,
+          artistPromiseLines: artistLines,
           branding: data.branding ? mergePublicFormBranding(data.branding) : DEFAULT_PUBLIC_FORM_BRANDING,
         })
         setUi('form')
@@ -347,7 +363,9 @@ export function ShowReportWizard({
     return () => window.clearTimeout(t)
   }, [ui])
 
-  const promiseLines = loaded?.promiseLines ?? defaultDealPromiseLines()
+  const venuePromiseLines = loaded?.venuePromiseLines ?? loaded?.promiseLines ?? defaultDealPromiseLines()
+  const artistPromiseLines = loaded?.artistPromiseLines ?? []
+  const promiseLines = venuePromiseLines
 
   const onPromisesStep = eventHappened === 'yes' && stepIndex === 1
 
@@ -400,11 +418,12 @@ export function ShowReportWizard({
   }, [])
 
   useEffect(() => {
-    if (!promiseLines.length) return
+    const all = [...venuePromiseLines, ...artistPromiseLines]
+    if (!all.length) return
     setPromiseResults(prev => {
       const next = { ...prev }
       let changed = false
-      for (const l of promiseLines) {
+      for (const l of all) {
         if (next[l.id] === undefined) {
           next[l.id] = true
           changed = true
@@ -412,7 +431,7 @@ export function ShowReportWizard({
       }
       return changed ? next : prev
     })
-  }, [promiseLines])
+  }, [venuePromiseLines, artistPromiseLines])
 
   const goNext = useCallback(() => {
     setSubmitErr(null)
@@ -420,12 +439,13 @@ export function ShowReportWizard({
       const cur = stepsRef.current[i]
       if (cur === 'promises') {
         setProductionNeededFromPromises(
-          promiseLines.some(l => promiseResultsRef.current[l.id] === false),
+          venuePromiseLines.some(l => promiseResultsRef.current[l.id] === false) ||
+            artistPromiseLines.some(l => promiseResultsRef.current[l.id] === false),
         )
       }
       return i + 1
     })
-  }, [promiseLines])
+  }, [venuePromiseLines, artistPromiseLines])
 
   /** After selection-only controls: advance after React applies state (avoids stale `steps.length`). */
   const selectAndAdvance = useCallback(() => {
@@ -453,8 +473,10 @@ export function ShowReportWizard({
         if (notPlayedVenuePaidAnything === 'yes' && !notPlayedPaymentSummary.trim()) return false
         return notPlayedVenuePaidAnything != null
       }
-      case 'promises':
-        return promiseLines.every(l => promiseResults[l.id] === true || promiseResults[l.id] === false)
+      case 'promises': {
+        const all = [...venuePromiseLines, ...artistPromiseLines]
+        return all.every(l => promiseResults[l.id] === true || promiseResults[l.id] === false)
+      }
       case 'mood':
         return nightMood != null
       case 'crowd':
@@ -500,7 +522,8 @@ export function ShowReportWizard({
     rescheduledToDate,
     notPlayedVenuePaidAnything,
     notPlayedPaymentSummary,
-    promiseLines,
+    venuePromiseLines,
+    artistPromiseLines,
     promiseResults,
     nightMood,
     crowdHeadcount,
@@ -543,7 +566,11 @@ export function ShowReportWizard({
     const merchIncomeAmount =
       played && merchIncome === 'yes' ? parseMerchSalesInput(merchSalesInput) : null
 
-    const promiseResultsArr = promiseLines.map(l => ({
+    const venueArr = venuePromiseLines.map(l => ({
+      id: l.id,
+      met: promiseResults[l.id] !== false,
+    }))
+    const artistArr = artistPromiseLines.map(l => ({
       id: l.id,
       met: promiseResults[l.id] !== false,
     }))
@@ -586,7 +613,11 @@ export function ShowReportWizard({
       notes: notesCombined,
       mediaLinks: null,
       nightMood: played && nightMood ? nightMood : null,
-      promiseResults: played ? promiseResultsArr : null,
+      promiseResults: played && artistPromiseLines.length === 0 ? venueArr : null,
+      promiseResultsV2:
+        played && artistPromiseLines.length > 0
+          ? ({ v: 2, venue: venueArr, artist: artistArr } as StoredPromiseResultsV2)
+          : null,
       rescheduledToDate:
         !played && eventHappened === 'postponed' ? rescheduledToDate.trim() || null : null,
       rebookingSpecificDate:
@@ -605,7 +636,8 @@ export function ShowReportWizard({
     crowdHeadcount,
     merchIncome,
     merchSalesInput,
-    promiseLines,
+    venuePromiseLines,
+    artistPromiseLines,
     promiseResults,
     artistPaidStatus,
     feeTotal,
@@ -937,25 +969,49 @@ export function ShowReportWizard({
         ) : null}
 
         {currentStep === 'promises' ? (
-          <div className="space-y-2">
-            <p className={STEP_QUESTION_CLASS}>Did the venue deliver on their promise?</p>
-            <ul className="divide-y divide-neutral-800/90 rounded-lg border border-neutral-800 bg-neutral-950/50">
-              {promiseLines.map(line => {
-                const met = promiseResults[line.id] !== false
-                return (
-                  <li key={line.id} className="flex items-center gap-3 px-3 py-2">
-                    <span className="min-w-0 flex-1 text-sm leading-snug text-neutral-100">
-                      {resolvePromiseLineDisplayLabel(line, loaded?.dealGrossAmount)}
-                    </span>
-                    <PromiseDeliveredToggle
-                      lineId={line.id}
-                      met={met}
-                      onToggle={() => setPromiseMet(line.id, !met)}
-                    />
-                  </li>
-                )
-              })}
-            </ul>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className={STEP_QUESTION_CLASS}>Did the venue deliver on their promises?</p>
+              <ul className="divide-y divide-neutral-800/90 rounded-lg border border-neutral-800 bg-neutral-950/50">
+                {venuePromiseLines.map(line => {
+                  const met = promiseResults[line.id] !== false
+                  return (
+                    <li key={line.id} className="flex items-center gap-3 px-3 py-2">
+                      <span className="min-w-0 flex-1 text-sm leading-snug text-neutral-100">
+                        {resolvePromiseLineDisplayLabel(line, loaded?.dealGrossAmount)}
+                      </span>
+                      <PromiseDeliveredToggle
+                        lineId={line.id}
+                        met={met}
+                        onToggle={() => setPromiseMet(line.id, !met)}
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+            {artistPromiseLines.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-center text-sm font-semibold text-neutral-200">Your commitments</p>
+                <ul className="divide-y divide-neutral-800/90 rounded-lg border border-neutral-800 bg-neutral-950/50">
+                  {artistPromiseLines.map(line => {
+                    const met = promiseResults[line.id] !== false
+                    return (
+                      <li key={line.id} className="flex items-center gap-3 px-3 py-2">
+                        <span className="min-w-0 flex-1 text-sm leading-snug text-neutral-100">
+                          {line.label}
+                        </span>
+                        <PromiseDeliveredToggle
+                          lineId={line.id}
+                          met={met}
+                          onToggle={() => setPromiseMet(line.id, !met)}
+                        />
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

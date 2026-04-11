@@ -74,10 +74,31 @@ function nightMoodLabel(raw: string | null | undefined): string | null {
 
 function promiseResultsSummary(report: PerformanceReport): string | null {
   const pr = report.promise_results
-  if (!pr || !Array.isArray(pr) || pr.length === 0) return null
+  if (!pr) return null
+  if (typeof pr === 'object' && pr !== null && 'v' in pr && (pr as { v?: number }).v === 2) {
+    const v2 = pr as { venue?: { met?: boolean }[]; artist?: { met?: boolean }[] }
+    const vn = v2.venue?.length ?? 0
+    const vy = (v2.venue ?? []).filter(p => p.met).length
+    const an = v2.artist?.length ?? 0
+    const ay = (v2.artist ?? []).filter(p => p.met).length
+    if (vn === 0 && an === 0) return null
+    return an > 0
+      ? `Venue ${vy}/${vn} yes · Artist ${ay}/${an} yes`
+      : `${vy} yes / ${vn - vy} no (${vn} venue lines)`
+  }
+  if (!Array.isArray(pr) || pr.length === 0) return null
   const yes = pr.filter(p => p.met).length
   const no = pr.length - yes
   return `${yes} yes / ${no} no (${pr.length} lines)`
+}
+
+function artistRecapHasNo(report: PerformanceReport): boolean {
+  const pr = report.promise_results
+  if (!pr || typeof pr !== 'object' || pr === null || !('v' in pr) || (pr as { v?: number }).v !== 2) {
+    return false
+  }
+  const v2 = pr as { artist?: { met?: boolean }[] }
+  return (v2.artist ?? []).some(p => p.met === false)
 }
 
 function ReportDetail({ report }: { report: PerformanceReport }) {
@@ -319,6 +340,9 @@ export default function PerformanceReports() {
                   {expanded === report.id ? <ChevronDown className="h-3 w-3 text-neutral-500 shrink-0" /> : <ChevronRight className="h-3 w-3 text-neutral-600 shrink-0" />}
                   <span className="text-sm text-white font-medium truncate">{report.venue?.name ?? 'Unknown venue'}</span>
                   {report.commission_flagged && <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" aria-label="Commission flagged" />}
+                  {artistRecapHasNo(report) && (
+                    <AlertTriangle className="h-3 w-3 text-orange-400 shrink-0" aria-label="Artist recap: at least one No" />
+                  )}
                 </div>
                 <span className="text-xs text-neutral-400">{report.deal?.event_date ? formatDate(report.deal.event_date) : '-'}</span>
                 <span className="text-xs text-neutral-500">{formatDate(report.created_at)}</span>

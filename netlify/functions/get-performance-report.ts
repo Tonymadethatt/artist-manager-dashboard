@@ -2,7 +2,10 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 import { brandingFromArtistProfileRow } from '../../src/lib/publicFormBranding'
-import { resolvePromiseLinesForDeal } from '../../src/lib/showReportCatalog'
+import {
+  resolveVenuePromiseLinesForDeal,
+  resolveArtistPromiseLinesForDeal,
+} from '../../src/lib/showReportCatalog'
 
 const ARTIST_PROFILE_SELECT =
   'company_name, artist_name, tagline, manager_name, manager_title, website, social_handle, phone, reply_to_email, from_email, manager_email'
@@ -61,7 +64,8 @@ const handler: Handler = async (event) => {
   } | null
   const userId = data.user_id as string
   const branding = await brandingForUser(supabase, userId)
-  const promiseLines = resolvePromiseLinesForDeal(deal?.promise_lines ?? null)
+  const venuePromiseLines = resolveVenuePromiseLinesForDeal(deal?.promise_lines ?? null)
+  const artistPromiseLines = resolveArtistPromiseLinesForDeal(deal?.promise_lines ?? null)
 
   return {
     statusCode: 200,
@@ -76,7 +80,9 @@ const handler: Handler = async (event) => {
         deal?.gross_amount != null && Number.isFinite(Number(deal.gross_amount))
           ? Number(deal.gross_amount)
           : null,
-      promiseLines,
+      promiseLines: venuePromiseLines,
+      venuePromiseLines,
+      artistPromiseLines,
       branding,
     }),
   }

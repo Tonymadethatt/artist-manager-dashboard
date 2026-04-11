@@ -127,6 +127,148 @@ export interface DealTerms {
   notes?: string
 }
 
+/** Catalog service day-type for auto-picking rate from event date (weekend = Fri–Sun). */
+export type PricingDayType = 'weekday' | 'weekend' | 'any'
+
+export interface PricingPackage {
+  id: string
+  name: string
+  /** Whole dollars */
+  price: number
+  hoursIncluded: number
+  bullets: string[]
+}
+
+export interface PricingService {
+  id: string
+  name: string
+  category?: string
+  /** Whole dollars; hourly or flat per handoff */
+  price: number
+  priceType: 'per_hour' | 'flat_rate'
+  dayType: PricingDayType
+}
+
+export type PricingAddonPriceType =
+  | 'flat_fee'
+  | 'per_event'
+  | 'per_artist'
+  | 'per_sq_ft'
+  | 'per_effect'
+  | 'per_setup'
+
+export interface PricingAddon {
+  id: string
+  name: string
+  category?: string
+  price: number
+  priceType: PricingAddonPriceType
+  /** Shown in UI only (e.g. “sq ft”) */
+  unitLabel?: string
+}
+
+export interface PricingDiscount {
+  id: string
+  name: string
+  clientType?: string
+  /** Whole percent e.g. 10 = 10% */
+  percent: number
+}
+
+export interface PricingSurcharge {
+  id: string
+  name: string
+  /** Multiplier e.g. 1.35 for +35% */
+  multiplier: number
+}
+
+export interface PricingPolicies {
+  defaultDepositPercent: number
+  salesTaxPercent: number
+  minimumBillableHours: number
+}
+
+/** Stored in `user_pricing_catalog.doc` */
+export interface PricingCatalogDoc {
+  v: 1
+  packages: PricingPackage[]
+  services: PricingService[]
+  addons: PricingAddon[]
+  discounts: PricingDiscount[]
+  surcharges: PricingSurcharge[]
+  policies: PricingPolicies
+}
+
+export function emptyPricingCatalogDoc(): PricingCatalogDoc {
+  return {
+    v: 1,
+    packages: [],
+    services: [],
+    addons: [],
+    discounts: [],
+    surcharges: [],
+    policies: {
+      defaultDepositPercent: 50,
+      salesTaxPercent: 0,
+      minimumBillableHours: 0,
+    },
+  }
+}
+
+export function normalizePricingCatalogDoc(raw: unknown): PricingCatalogDoc {
+  const e = emptyPricingCatalogDoc()
+  if (!raw || typeof raw !== 'object') return e
+  const o = raw as Record<string, unknown>
+  if (o.v !== 1) return e
+  const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+  return {
+    v: 1,
+    packages: arr(o.packages),
+    services: arr(o.services),
+    addons: arr(o.addons),
+    discounts: arr(o.discounts),
+    surcharges: arr(o.surcharges),
+    policies: {
+      defaultDepositPercent: typeof o.policies === 'object' && o.policies && 'defaultDepositPercent' in o.policies
+        ? Number((o.policies as PricingPolicies).defaultDepositPercent) || e.policies.defaultDepositPercent
+        : e.policies.defaultDepositPercent,
+      salesTaxPercent: typeof o.policies === 'object' && o.policies && 'salesTaxPercent' in o.policies
+        ? Number((o.policies as PricingPolicies).salesTaxPercent) || 0
+        : e.policies.salesTaxPercent,
+      minimumBillableHours: typeof o.policies === 'object' && o.policies && 'minimumBillableHours' in o.policies
+        ? Number((o.policies as PricingPolicies).minimumBillableHours) || 0
+        : e.policies.minimumBillableHours,
+    },
+  }
+}
+
+export type DealPricingFinalSource = 'calculated' | 'manual'
+
+/** Persisted on `deals.pricing_snapshot` */
+export interface DealPricingSnapshot {
+  v: 1
+  finalSource: DealPricingFinalSource
+  subtotalBeforeTax: number
+  taxAmount: number
+  total: number
+  depositDue: number
+  baseMode: 'package' | 'hourly'
+  packageId: string | null
+  serviceId: string | null
+  /** Hourly service used for overtime when base is package */
+  overtimeServiceId: string | null
+  performanceHours: number
+  addonQuantities: Record<string, number>
+  surchargeIds: string[]
+  discountIds: string[]
+  lastCalculatedTotal: number | null
+  computedAt: string
+}
+
+export function isDealPricingSnapshot(x: unknown): x is DealPricingSnapshot {
+  return !!x && typeof x === 'object' && (x as DealPricingSnapshot).v === 1
+}
+
 export type TemplateSectionKind = 'header' | 'body' | 'footer'
 
 export interface TemplateSection {
@@ -386,6 +528,10 @@ export interface Deal {
   agreement_generated_file_id: string | null
   /** Show report recap lines (`DealPromiseLinesDoc` in `showReportCatalog`). */
   promise_lines?: unknown | null
+  /** Deal Terms calculator snapshot; null until saved with calculator or legacy deals. */
+  pricing_snapshot?: unknown | null
+  deposit_due_amount?: number | null
+  deposit_paid_amount?: number
   notes: string | null
   created_at: string
   updated_at: string
@@ -504,7 +650,14 @@ export interface PerformanceReport {
     | 'other'
     | null
   referral_lead: 'no' | 'yes' | null
-  promise_results?: { id: string; met: boolean }[] | null
+  /**
+   * Legacy: flat venue-only `{ id, met }[]`.
+   * V2: `{ v: 2, venue, artist }` when the deal has artist recap lines — see `showReportCatalog.ts`.
+   */
+  promise_results?:
+    | { id: string; met: boolean }[]
+    | import('@/lib/showReportCatalog').StoredPromiseResultsV2
+    | null
   night_mood?: string | null
   rescheduled_to_date?: string | null
   rebooking_specific_date?: string | null

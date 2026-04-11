@@ -1,4 +1,5 @@
 import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '@/types'
+import { isDealPricingSnapshot } from '@/types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '@/types'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
@@ -48,6 +49,28 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
   return out
 }
 
+const usdWhole = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+})
+
+/** Plain-text lines for templates; only when `pricing_snapshot` exists on the deal. */
+export function pricingSnapshotAgreementFields(deal: Deal): Record<string, string> {
+  if (!deal.pricing_snapshot || !isDealPricingSnapshot(deal.pricing_snapshot)) return {}
+  const s = deal.pricing_snapshot
+  const lines: string[] = []
+  lines.push(`Quote total: ${usdWhole.format(s.total)}`)
+  if (s.taxAmount) lines.push(`Tax: ${usdWhole.format(s.taxAmount)}`)
+  if (s.depositDue) lines.push(`Deposit: ${usdWhole.format(s.depositDue)}`)
+  lines.push(`Basis: ${s.finalSource === 'manual' ? 'manual gross on deal' : 'calculator'}`)
+  return {
+    pricing_summary_text: lines.join('\n'),
+    pricing_total_display: usdWhole.format(s.total),
+    pricing_deposit_display: usdWhole.format(s.depositDue),
+  }
+}
+
 /** Prefill for File Builder: venue, profile, optional deal, optional contact for merge fields. */
 export function buildAgreementPrefill(
   venue: Venue | null,
@@ -74,6 +97,7 @@ export function buildAgreementPrefill(
     if (deal.payment_due_date) out.payment_due_date = deal.payment_due_date
     if (deal.agreement_url) out.agreement_url = deal.agreement_url
     if (deal.notes?.trim()) out.deal_notes = deal.notes.trim()
+    Object.assign(out, pricingSnapshotAgreementFields(deal))
   }
 
   if (mergeContact) {
