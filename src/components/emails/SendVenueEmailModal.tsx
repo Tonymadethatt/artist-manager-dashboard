@@ -26,6 +26,7 @@ import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUrl'
 import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
+import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import {
@@ -157,6 +158,11 @@ export function SendVenueEmailModal({
   const [customCaptureKind, setCustomCaptureKind] = useState<EmailCaptureKind | ''>('')
   /** Deal with `agreement_url` resolved from `agreement_generated_file_id` when needed (matches send payload). */
   const [dealForPreview, setDealForPreview] = useState<Deal | null>(null)
+  /**
+   * When set, agreement link for this send uses this `generated_files` row (e.g. signed upload) instead of
+   * only `deal.agreement_generated_file_id`. Does not change the deal in the database.
+   */
+  const [agreementSendFileId, setAgreementSendFileId] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -165,6 +171,7 @@ export function SendVenueEmailModal({
       setRecipientName(initialName)
       setStatus('idle')
       setErrorMsg('')
+      setAgreementSendFileId(null)
     }
   }, [open, defaultType, deal, initialEmail, initialName])
 
@@ -188,19 +195,24 @@ export function SendVenueEmailModal({
     setDealForPreview(deal)
     let cancelled = false
     ;(async () => {
+      const effectiveDeal: Deal = {
+        ...deal,
+        agreement_generated_file_id:
+          agreementSendFileId ?? deal.agreement_generated_file_id ?? null,
+      }
       const url = await resolveDealAgreementUrlForEmailPayload(
         async id => {
           const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
           return (data as GeneratedFile | null) ?? null
         },
-        deal,
+        effectiveDeal,
         publicSiteOrigin()
       )
       if (cancelled) return
       setDealForPreview({ ...deal, agreement_url: url ?? deal.agreement_url ?? null })
     })()
     return () => { cancelled = true }
-  }, [open, deal])
+  }, [open, deal, agreementSendFileId])
 
   const handleSend = async () => {
     if (!recipientEmail || !profile) return
@@ -236,13 +248,18 @@ export function SendVenueEmailModal({
 
       let agreementUrl: string | null = deal?.agreement_url ?? null
       if (deal) {
+        const effectiveDeal: Deal = {
+          ...deal,
+          agreement_generated_file_id:
+            agreementSendFileId ?? deal.agreement_generated_file_id ?? null,
+        }
         agreementUrl =
           (await resolveDealAgreementUrlForEmailPayload(
             async id => {
               const { data } = await supabase.from('generated_files').select('*').eq('id', id).maybeSingle()
               return (data as GeneratedFile | null) ?? null
             },
-            deal,
+            effectiveDeal,
             publicSiteOrigin()
           )) ?? agreementUrl
       }
@@ -442,6 +459,28 @@ export function SendVenueEmailModal({
                 : getTypeDescription(emailType as VenueEmailType, dealForPreview ?? deal, venue?.name)}
             </p>
           </div>
+
+          {deal &&
+            !isCustomEmailType(emailType) &&
+            (emailType === 'agreement_ready' || emailType === 'agreement_followup') && (
+              <div className="space-y-1.5">
+                <Label>Agreement PDF for this email</Label>
+                <AgreementPdfPicker
+                  value={
+                    agreementSendFileId ?? deal.agreement_generated_file_id ?? null
+                  }
+                  onChange={id => setAgreementSendFileId(id)}
+                  venueId={venueId ?? deal.venue_id ?? null}
+                  dealId={dealId ?? deal.id ?? null}
+                  preferScoped
+                />
+                <p className="text-xs text-neutral-500 leading-relaxed">
+                  Defaults to the PDF linked on the deal. Choose a different file (e.g. signed copy you uploaded in
+                  Files) to control the &quot;Open agreement&quot; link for this send only — the deal record is not
+                  updated until you save it on the deal.
+                </p>
+              </div>
+            )}
 
           {/* Capture kind picker for custom venue templates */}
           {isCustomEmailType(emailType) && (

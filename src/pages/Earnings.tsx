@@ -66,10 +66,11 @@ import {
 } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
 import { useNavBadges } from '@/context/NavBadgesContext'
+import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
+import type { GeneratedFile } from '@/types'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
-import { publicSiteOrigin, resolvedPdfHrefFromOrigin } from '@/lib/files/pdfShareUrl'
-import type { GeneratedFile } from '@/types'
 
 const PAGE_SIZE = 10
 
@@ -1034,8 +1035,8 @@ export default function Earnings() {
         .select('*')
         .eq('id', agreementFileId)
         .maybeSingle()
-      if (f && (f as GeneratedFile).output_format === 'pdf') {
-        const href = resolvedPdfHrefFromOrigin(f as GeneratedFile, publicSiteOrigin())
+      if (f) {
+        const href = resolveGeneratedFileDownloadUrl(f as GeneratedFile, publicSiteOrigin())
         if (href) agreementUrl = href
       }
     }

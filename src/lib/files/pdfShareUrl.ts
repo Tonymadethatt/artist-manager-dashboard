@@ -1,4 +1,5 @@
 import type { GeneratedFile } from '../../types'
+import { isAgreementDocumentFileRow } from './agreementFileKinds'
 import {
   AGREEMENT_PDF_SHARE_SLUG_MAX_LEN,
   isValidAgreementPdfShareSlug,
@@ -142,11 +143,14 @@ export function resolvedPdfHref(file: GeneratedFile): string | null {
   return resolvedPdfHrefFromOrigin(file, publicSiteOrigin())
 }
 
-/** PDF row the user can attach to a deal (picker): any file in agreement-pdfs or resolvable href. */
+/** PDF row the user can attach to a deal (picker): File Builder PDFs + PDF uploads in Files. */
 export function isSelectableAgreementPdfFile(f: GeneratedFile): boolean {
-  if (f.output_format !== 'pdf') return false
-  if (f.pdf_storage_path?.trim()) return true
-  return resolvedPdfHref(f) != null
+  if (!isAgreementDocumentFileRow(f)) return false
+  if (f.output_format === 'pdf') {
+    if (f.pdf_storage_path?.trim()) return true
+    return resolvedPdfHref(f) != null
+  }
+  return Boolean(f.upload_public_url?.trim())
 }
 
 export function hasResolvablePdfLink(file: GeneratedFile): boolean {

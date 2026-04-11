@@ -3,7 +3,7 @@
  *
  * 1. Progress panel / options `agreementUrl` — explicit paste from the venue flow (highest intent).
  * 2. Task or template item `generated_file_id` → PDF row → share/public URL (overrides deal file for this step).
- * 3. Deal `agreement_generated_file_id` → PDF row → URL (canonical file on the deal).
+ * 3. Deal `agreement_generated_file_id` → document row → URL (File Builder PDF or PDF uploaded in Files).
  * 4. Deal `agreement_url` string — external DocuSign/Drive links and legacy data.
  *
  * Buffered sends (`process-email-queue`) only re-join `deals` + optional `generated_files`, so the client
@@ -27,11 +27,10 @@
  */
 
 import type { GeneratedFile } from '../types'
+import { isAgreementDocumentFileRow } from './files/agreementFileKinds'
+import { resolveGeneratedFileDownloadUrl } from './files/resolveGeneratedFileDownloadUrl'
 import { isValidAgreementPdfShareSlug } from './files/pdfSlugCanonical'
-import {
-  collectAgreementSiteOrigins,
-  resolvedPdfHrefFromOrigin,
-} from './files/pdfShareUrl'
+import { collectAgreementSiteOrigins } from './files/pdfShareUrl'
 
 export type AgreementResolutionSource =
   | 'progress_panel'
@@ -55,8 +54,8 @@ export function isValidAgreementPdfFile(
   file: GeneratedFile,
   siteOrigin: string
 ): boolean {
-  if (file.output_format !== 'pdf') return false
-  return resolvedPdfHrefFromOrigin(file, siteOrigin) != null
+  if (!isAgreementDocumentFileRow(file)) return false
+  return resolveGeneratedFileDownloadUrl(file, siteOrigin) != null
 }
 
 /** Enforce ownership and venue/deal scope for task/template-linked PDFs. */
@@ -121,7 +120,7 @@ export function computeResolvedAgreement(params: {
   }
 
   if (params.pinnedFile && isValidAgreementPdfFile(params.pinnedFile, origin)) {
-    const url = resolvedPdfHrefFromOrigin(params.pinnedFile, origin)
+    const url = resolveGeneratedFileDownloadUrl(params.pinnedFile, origin)
     return {
       url,
       source: 'task_or_template_file',
@@ -130,7 +129,7 @@ export function computeResolvedAgreement(params: {
   }
 
   if (params.dealFile && isValidAgreementPdfFile(params.dealFile, origin)) {
-    const url = resolvedPdfHrefFromOrigin(params.dealFile, origin)
+    const url = resolveGeneratedFileDownloadUrl(params.dealFile, origin)
     return {
       url,
       source: 'deal_generated_file',
