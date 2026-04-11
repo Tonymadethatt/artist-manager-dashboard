@@ -1,4 +1,9 @@
 import type { GeneratedFile } from '../../types'
+import {
+  AGREEMENT_PDF_SHARE_SLUG_MAX_LEN,
+  isValidAgreementPdfShareSlug,
+  normalizeAgreementSiteOrigin,
+} from './pdfSlugCanonical'
 
 /**
  * Site origin for first-party agreement links.
@@ -6,9 +11,61 @@ import type { GeneratedFile } from '../../types'
  */
 export function publicSiteOrigin(): string {
   const env = import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined
-  if (env && /^https?:\/\//i.test(env.trim())) return env.trim().replace(/\/$/, '')
+  if (env && /^https?:\/\//i.test(env.trim())) return normalizeAgreementSiteOrigin(env)
   if (typeof window !== 'undefined') return window.location.origin
   return ''
+}
+
+/** Origins that may host first-party `/agreements/{slug}` links (custom domain + Netlify + local). */
+export function collectAgreementSiteOrigins(primaryOrigin: string): Set<string> {
+  const out = new Set<string>()
+  const add = (s: string) => {
+    const n = normalizeAgreementSiteOrigin(s)
+    if (n) out.add(n)
+  }
+  add(primaryOrigin)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PUBLIC_SITE_URL) {
+    add(import.meta.env.VITE_PUBLIC_SITE_URL as string)
+  }
+   if (typeof window !== 'undefined' && window.location?.origin) {
+    add(window.location.origin)
+  }
+  const nodeProc = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process
+  if (nodeProc?.env) {
+    add(nodeProc.env.URL || '')
+    add(nodeProc.env.DEPLOY_PRIME_URL || '')
+    add(nodeProc.env.DEPLOY_URL || '')
+    add('https://artist-manager-dashboard.netlify.app')
+  }
+  return out
+}
+
+/**
+ * If `pdf_public_url` points at our site with a non-canonical slug, drop it (same as handler 400).
+ * External origins with `/agreements/...` are left unchanged.
+ */
+export function filterPoisonedFirstPartyAgreementPublicUrl(
+  urlStr: string,
+  knownOrigins: ReadonlySet<string>,
+): string | null {
+  const raw = urlStr.trim()
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const m = u.pathname.match(/^\/agreements\/([^/]+)\/?$/i)
+    if (m && knownOrigins.has(u.origin)) {
+      let seg: string
+      try {
+        seg = decodeURIComponent(m[1]).trim().toLowerCase()
+      } catch {
+        return null
+      }
+      if (!isValidAgreementPdfShareSlug(seg)) return null
+    }
+    return raw
+  } catch {
+    return raw
+  }
 }
 
 /** Detect legacy storage keys that were only `{uuid}.pdf` (no readable slug). */
@@ -23,9 +80,9 @@ function isUuidOnlyStem(stem: string): boolean {
 export function inferredPdfSlugFromStoragePath(pdf_storage_path: string | null): string | null {
   if (!pdf_storage_path) return null
   const base = pdf_storage_path.split('/').pop()?.replace(/\.pdf$/i, '') ?? ''
-  if (!base || base.length > 220 || isUuidOnlyStem(base)) return null
+  if (!base || base.length > AGREEMENT_PDF_SHARE_SLUG_MAX_LEN || isUuidOnlyStem(base)) return null
   const lower = base.toLowerCase()
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(lower)) return null
+  if (!isValidAgreementPdfShareSlug(lower)) return null
   return lower
 }
 
@@ -37,12 +94,17 @@ export function inferredPdfSlugFromStoragePath(pdf_storage_path: string | null):
  */
 export function resolvedPdfHrefFromOrigin(file: GeneratedFile, origin: string): string | null {
   if (file.output_format !== 'pdf') return null
-  const slug =
-    file.pdf_share_slug?.trim().toLowerCase() ||
-    inferredPdfSlugFromStoragePath(file.pdf_storage_path)
-  const base = origin.trim().replace(/\/$/, '')
+  const fromCol = file.pdf_share_slug?.trim().toLowerCase() ?? ''
+  const slugFromCol = fromCol && isValidAgreementPdfShareSlug(fromCol) ? fromCol : null
+  const slug = slugFromCol ?? inferredPdfSlugFromStoragePath(file.pdf_storage_path)
+
+  const base = normalizeAgreementSiteOrigin(origin)
+  const known = collectAgreementSiteOrigins(origin)
   if (slug && base) return `${base}/agreements/${slug}`
-  return file.pdf_public_url?.trim() || null
+
+  const rawPublic = file.pdf_public_url?.trim()
+  if (!rawPublic) return null
+  return filterPoisonedFirstPartyAgreementPublicUrl(rawPublic, known)
 }
 
 export function resolvedPdfHref(file: GeneratedFile): string | null {

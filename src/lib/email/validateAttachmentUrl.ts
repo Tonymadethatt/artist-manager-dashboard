@@ -3,6 +3,9 @@
  * Only Supabase public objects in known buckets, or first-party /agreements/ pages.
  */
 
+import { isValidAgreementPdfShareSlug } from '../files/pdfSlugCanonical'
+import { collectAgreementSiteOrigins } from '../files/pdfShareUrl'
+
 function normalizeOrigin(input: string): string {
   return input.trim().replace(/\/$/, '')
 }
@@ -29,8 +32,17 @@ export function isAllowedAgreementPageAttachmentUrl(url: string, siteUrl: string
   try {
     const u = new URL(url.trim())
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
-    const site = new URL(normalizeOrigin(siteUrl))
-    return u.origin === site.origin && u.pathname.startsWith('/agreements/')
+    const known = collectAgreementSiteOrigins(normalizeOrigin(siteUrl))
+    if (!known.has(u.origin)) return false
+    const m = u.pathname.match(/^\/agreements\/([^/]+)\/?$/i)
+    if (!m) return false
+    let seg: string
+    try {
+      seg = decodeURIComponent(m[1])
+    } catch {
+      return false
+    }
+    return isValidAgreementPdfShareSlug(seg)
   } catch {
     return false
   }

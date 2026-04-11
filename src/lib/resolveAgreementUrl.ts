@@ -27,7 +27,11 @@
  */
 
 import type { GeneratedFile } from '../types'
-import { resolvedPdfHrefFromOrigin } from './files/pdfShareUrl'
+import { isValidAgreementPdfShareSlug } from './files/pdfSlugCanonical'
+import {
+  collectAgreementSiteOrigins,
+  resolvedPdfHrefFromOrigin,
+} from './files/pdfShareUrl'
 
 export type AgreementResolutionSource =
   | 'progress_panel'
@@ -79,6 +83,29 @@ export function isGeneratedFileInScopeForDeal(
   return true
 }
 
+/** Drop poisoned first-party `/agreements/{bad}` saved on deals; keep external links unchanged. */
+function sanitizeLegacyDealAgreementUrl(legacy: string, siteOrigin: string): string | null {
+  const trimmed = legacy.trim()
+  if (!trimmed) return null
+  try {
+    const u = new URL(trimmed)
+    const known = collectAgreementSiteOrigins(siteOrigin)
+    const m = u.pathname.match(/^\/agreements\/([^/]+)\/?$/i)
+    if (m && known.has(u.origin)) {
+      let seg: string
+      try {
+        seg = decodeURIComponent(m[1])
+      } catch {
+        return null
+      }
+      if (!isValidAgreementPdfShareSlug(seg)) return null
+    }
+    return trimmed
+  } catch {
+    return trimmed
+  }
+}
+
 export function computeResolvedAgreement(params: {
   siteOrigin: string
   progressPanelUrl?: string | null
@@ -113,7 +140,10 @@ export function computeResolvedAgreement(params: {
 
   const legacy = params.dealAgreementUrl?.trim()
   if (legacy) {
-    return { url: legacy, source: 'deal_url_string', syncGeneratedFileId: null }
+    const sanitized = sanitizeLegacyDealAgreementUrl(legacy, origin)
+    if (sanitized) {
+      return { url: sanitized, source: 'deal_url_string', syncGeneratedFileId: null }
+    }
   }
 
   return { url: null, source: 'none', syncGeneratedFileId: null }

@@ -1,5 +1,9 @@
 import type { GeneratedFile } from '../../types'
-import { resolvedPdfHrefFromOrigin } from './pdfShareUrl'
+import {
+  collectAgreementSiteOrigins,
+  filterPoisonedFirstPartyAgreementPublicUrl,
+  resolvedPdfHrefFromOrigin,
+} from './pdfShareUrl'
 
 export type GeneratedFileSource = 'generated' | 'upload'
 
@@ -11,7 +15,11 @@ export function resolveGeneratedFileDownloadUrl(file: GeneratedFile, siteOrigin:
     return u || null
   }
   if (file.output_format === 'pdf') {
-    return resolvedPdfHrefFromOrigin(file, siteOrigin) || file.pdf_public_url?.trim() || null
+    const fromResolved = resolvedPdfHrefFromOrigin(file, siteOrigin)
+    if (fromResolved) return fromResolved
+    const raw = file.pdf_public_url?.trim()
+    if (!raw) return null
+    return filterPoisonedFirstPartyAgreementPublicUrl(raw, collectAgreementSiteOrigins(siteOrigin))
   }
   return null
 }

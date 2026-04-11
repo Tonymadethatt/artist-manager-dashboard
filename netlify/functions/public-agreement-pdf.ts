@@ -1,5 +1,6 @@
 import type { Handler, HandlerEvent } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
+import { isValidAgreementPdfShareSlug } from '../../src/lib/files/pdfSlugCanonical'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 
 /**
@@ -68,7 +69,7 @@ const handler: Handler = async event => {
     return { statusCode: 400, body: 'Missing slug', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
-  if (slug.length > 220 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+  if (!isValidAgreementPdfShareSlug(slug)) {
     return { statusCode: 400, body: 'Invalid slug', headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
   }
 
