@@ -1,6 +1,7 @@
 import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '../../types'
 import { isDealPricingSnapshot } from '../../types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
+import { utcIsoToPacificDateAndTime } from '@/lib/calendar/pacificWallTime'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -32,6 +33,7 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     if (dt?.set_length) out.set_length = String(dt.set_length)
     if (dt?.load_in_time) out.load_in_time = String(dt.load_in_time)
     if (dt?.notes) out.notes = String(dt.notes)
+    if (venue.capacity?.trim()) out.venue_capacity = venue.capacity.trim()
   }
   if (profile) {
     out.artist_name = profile.artist_name
@@ -71,21 +73,55 @@ export function pricingSnapshotAgreementFields(deal: Deal): Record<string, strin
   }
 }
 
+function pacificWallParts(iso: string | null | undefined): { date: string; time: string } | null {
+  if (!iso) return null
+  return utcIsoToPacificDateAndTime(iso)
+}
+
 /** Prefill for File Builder: venue, profile, optional deal, optional contact for merge fields. */
 export function buildAgreementPrefill(
   venue: Venue | null,
   profile: ArtistProfile | null,
   deal: Deal | null,
-  mergeContact: Contact | null
+  mergeContact: Contact | null,
+  onsiteContact: Contact | null = null,
 ): Record<string, string> {
   const out = { ...buildVenueProfilePrefill(venue, profile) }
 
   if (deal) {
     out.deal_description = deal.description
+    out.event_name = deal.description
     if (deal.event_date) {
       out.deal_event_date = deal.event_date
       out.event_date = deal.event_date
     }
+    const evS = pacificWallParts(deal.event_start_at)
+    const evE = pacificWallParts(deal.event_end_at)
+    if (evS) {
+      out.event_start_time = evS.time
+      out.event_date_display = deal.event_date?.trim() || evS.date
+    }
+    if (evE) out.event_end_time = evE.time
+    if (evS && evE) {
+      out.event_window_display = `${evS.date} ${evS.time}–${evE.time}`
+    } else if (evS) {
+      out.event_window_display = `${evS.date} ${evS.time}`
+    }
+
+    const pfS = pacificWallParts(deal.performance_start_at)
+    const pfE = pacificWallParts(deal.performance_end_at)
+    if (pfS) {
+      out.performance_start_time = pfS.time
+      out.performance_date_display = deal.event_date?.trim() || pfS.date
+    }
+    if (pfE) out.performance_end_time = pfE.time
+    if (pfS && pfE) {
+      out.performance_window_display = `${pfS.date} ${pfS.time}–${pfE.time}`
+    } else if (pfS) {
+      out.performance_window_display = `${pfS.date} ${pfS.time}`
+    }
+    if (deal.performance_genre?.trim()) out.performance_genre = deal.performance_genre.trim()
+
     out.gross_amount = String(deal.gross_amount)
     out.gross_amount_display = usd.format(deal.gross_amount)
     // Match Earnings UI: stored as fraction (0.2), agreements show as percent (20%)
@@ -98,6 +134,12 @@ export function buildAgreementPrefill(
     if (deal.agreement_url) out.agreement_url = deal.agreement_url
     if (deal.notes?.trim()) out.deal_notes = deal.notes.trim()
     Object.assign(out, pricingSnapshotAgreementFields(deal))
+
+    const cap =
+      venue?.capacity?.trim() ||
+      deal.venue?.capacity?.trim() ||
+      ''
+    if (cap) out.venue_capacity = cap
   }
 
   if (mergeContact) {
@@ -111,6 +153,14 @@ export function buildAgreementPrefill(
       // Many templates use {{company_name}} for the counterparty; fill from contact when Settings artist company is empty.
       if (!out.company_name?.trim()) out.company_name = co
     }
+  }
+
+  if (onsiteContact) {
+    out.onsite_contact_name = onsiteContact.name
+    if (onsiteContact.role?.trim()) out.onsite_contact_role = onsiteContact.role.trim()
+    if (onsiteContact.email?.trim()) out.onsite_contact_email = onsiteContact.email.trim()
+    if (onsiteContact.phone?.trim()) out.onsite_contact_phone = onsiteContact.phone.trim()
+    if (onsiteContact.company?.trim()) out.onsite_contact_company = onsiteContact.company.trim()
   }
 
   return out

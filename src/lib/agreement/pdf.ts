@@ -107,36 +107,35 @@ export async function htmlDocumentToPdfBlob(html: string): Promise<Blob> {
 
     const pxFullHeight = canvas.height
     const pxPageHeight = Math.floor(canvas.width * ratio)
-    const nPages = Math.max(1, Math.ceil(pxFullHeight / pxPageHeight))
+    const overlap = Math.min(56, Math.max(16, Math.floor(pxPageHeight * 0.05)))
 
     const pageCanvas = document.createElement('canvas')
     pageCanvas.width = canvas.width
-    pageCanvas.height = pxPageHeight
     const pageCtx = pageCanvas.getContext('2d')
     if (!pageCtx) throw new Error('Could not get canvas context')
 
     const jpegQuality = 0.92
 
-    for (let page = 0; page < nPages; page++) {
-      let pdfPageHeightMm = innerHeight
-      if (page === nPages - 1 && pxFullHeight % pxPageHeight !== 0) {
-        const rem = pxFullHeight % pxPageHeight
-        pageCanvas.height = rem
-        pdfPageHeightMm = (rem * innerWidth) / canvas.width
-      } else {
-        pageCanvas.height = pxPageHeight
-        pdfPageHeightMm = innerHeight
-      }
+    let sliceTop = 0
+    let page = 0
+    while (sliceTop < pxFullHeight) {
+      const sliceH = Math.min(pxPageHeight, pxFullHeight - sliceTop)
+      pageCanvas.height = sliceH
 
       const w = pageCanvas.width
       const h = pageCanvas.height
       pageCtx.fillStyle = '#ffffff'
       pageCtx.fillRect(0, 0, w, h)
-      pageCtx.drawImage(canvas, 0, page * pxPageHeight, w, h, 0, 0, w, h)
+      pageCtx.drawImage(canvas, 0, sliceTop, w, h, 0, 0, w, h)
 
+      const pdfPageHeightMm = (sliceH * innerWidth) / canvas.width
       const imgData = pageCanvas.toDataURL('image/jpeg', jpegQuality)
       if (page > 0) pdf.addPage()
       pdf.addImage(imgData, 'JPEG', ml, mt, innerWidth, pdfPageHeightMm)
+
+      sliceTop += sliceH
+      if (sliceTop < pxFullHeight) sliceTop -= overlap
+      page += 1
     }
 
     const blob = pdf.output('blob')

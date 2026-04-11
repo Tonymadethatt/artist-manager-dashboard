@@ -127,8 +127,10 @@ The in-app template editor seeds this layout when you add or switch a section to
 
 **Rendering:**
 
-- **HTML / PDF:** Values are **HTML-escaped** when substituted, so user data cannot inject markup. If a key is missing from the map, the literal **`[token_name]`** is inserted (after escape, it still displays as bracketed text).
-- **Plain-text export path** (if used): same `[token_name]` fallback for missing keys.
+- **HTML / PDF:** Values are **HTML-escaped** when substituted, so user data cannot inject markup. If a key is missing from the map, the literal **`[token_name]`** is inserted for `{{token_name}}` placeholders (after escape, it still displays as bracketed text).
+- **Bracket tokens:** For **catalog** variable names only, `[token_name]` in section HTML is also replaced when that key exists in the merge map (helps AI exports that used square brackets). Keys outside the catalog are left unchanged.
+- **Import:** JSON import rewrites known **`[catalog_token]`** segments to **`{{catalog_token}}`** so merges run consistently.
+- **Plain-text export path** (if used): same `[token_name]` fallback for missing `{{}}` keys; catalog bracket substitution applies when the key is present in the map.
 
 ---
 
@@ -166,13 +168,29 @@ Each row: **Token**, **Meaning**, **Primary data source**, **Example value** (il
 | `set_length` | Set length | `deal_terms.set_length` | 90 min | 90 min |
 | `load_in_time` | Load-in | `deal_terms.load_in_time` | 5:00 PM | 5:00 PM |
 | `notes` | Venue terms notes | `deal_terms.notes` | Parking rear | Parking rear |
+| `venue_capacity` | Capacity (flex text) | `venues.capacity` | 500 | 500 |
 
 ### Deal (`deals` row when selected in File Builder)
 
 | Token | Meaning | Source | Example value | Rendered example |
 |-------|---------|--------|---------------|------------------|
 | `deal_description` | Deal title/description | `deals.description` | June 15 — Blue Room | June 15 — Blue Room |
+| `event_name` | Same as deal description | `deals.description` | June 15 — Blue Room | June 15 — Blue Room |
 | `deal_event_date` | Deal event date | `deals.event_date` | 2026-06-15 | 2026-06-15 |
+| `event_start_time` | Event start (Pacific time) | `deals.event_start_at` | 21:00 | 9:00 PM |
+| `event_end_time` | Event end (Pacific time) | `deals.event_end_at` | 02:00 | 2:00 AM |
+| `event_date_display` | Event date (deal date or Pacific date) | `deals.event_date` or wall from `event_start_at` | 2026-06-15 | 2026-06-15 |
+| `event_window_display` | Date + start–end times | derived | — | 2026-06-15 9:00 PM–2:00 AM |
+| `performance_genre` | Set / performance genre | `deals.performance_genre` | House | House |
+| `performance_start_time` | Set start (Pacific) | `deals.performance_start_at` | 22:00 | 10:00 PM |
+| `performance_end_time` | Set end (Pacific) | `deals.performance_end_at` | 01:00 | 1:00 AM |
+| `performance_date_display` | Set date display | deal `event_date` or wall from performance start | 2026-06-15 | 2026-06-15 |
+| `performance_window_display` | Set date + times | derived | — | 2026-06-15 10:00 PM–1:00 AM |
+| `onsite_contact_name` | On-site contact | `contacts` via `deals.onsite_contact_id` | Pat Lee | Pat Lee |
+| `onsite_contact_role` | On-site role | `contacts.role` | Production | Production |
+| `onsite_contact_email` | On-site email | `contacts.email` | pat@… | pat@… |
+| `onsite_contact_phone` | On-site phone | `contacts.phone` | 555-0142 | 555-0142 |
+| `onsite_contact_company` | On-site company | `contacts.company` | Venue LLC | Venue LLC |
 | `gross_amount` | Gross (raw) | `deals.gross_amount` | 5000 | 5000 |
 | `gross_amount_display` | Gross USD | formatted | $5,000.00 | $5,000.00 |
 | `commission_rate` | Commission % for display | `deals.commission_rate` fraction × 100 + `%` | 20% | 20% |

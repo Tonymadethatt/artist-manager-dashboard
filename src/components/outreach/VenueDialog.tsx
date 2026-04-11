@@ -67,6 +67,7 @@ const EMPTY: VenueFormState = {
   status: 'not_contacted',
   outreach_track: 'pipeline',
   follow_up_date: null,
+  capacity: null,
 }
 
 export function VenueDialog({ open, onClose, onSave, initialData, templates, onApplyTemplate }: VenueDialogProps) {
@@ -90,6 +91,7 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
         status: initialData.status,
         outreach_track: initialData.outreach_track ?? 'pipeline',
         follow_up_date: initialData.follow_up_date,
+        capacity: initialData.capacity ?? null,
       } : EMPTY)
       setSelectedTemplate('__none__')
       setError(null)
@@ -112,6 +114,7 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
       region: form.region?.trim() || null,
       postal_code: form.postal_code?.trim() || null,
       country: form.country?.trim() || null,
+      capacity: form.capacity?.trim() || null,
       deal_terms: initialData
         ? normalizeDealTermsForSave(initialData.deal_terms)
         : null,
@@ -162,6 +165,19 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
               {form.outreach_track === 'pipeline'
                 ? 'Pipeline — you sourced this venue. Commission applies to deals.'
                 : 'Community — artist\'s existing network. Nurture work; base fee only.'}
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="v-capacity">Capacity (optional)</Label>
+            <Input
+              id="v-capacity"
+              value={form.capacity ?? ''}
+              onChange={e => set('capacity', e.target.value.trim() ? e.target.value : null)}
+              placeholder="e.g. 500 or ~200 standing"
+            />
+            <p className="text-[11px] text-neutral-600 leading-snug">
+              Shown in agreement merge fields as venue_capacity.
             </p>
           </div>
 

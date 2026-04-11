@@ -7,7 +7,7 @@
       "id": "sec_header_main",
       "label": "",
       "section_kind": "header",
-      "content": "<p><strong>Event:</strong> {{deal_description}} · <strong>Date:</strong> {{deal_event_date}}</p><p><strong>Venue:</strong> {{venue_name}}, {{city}}</p>",
+      "content": "<p><strong>Event:</strong> {{event_name}} · <strong>Date:</strong> {{deal_event_date}}</p><p><strong>Venue:</strong> {{venue_name}}, {{city}} · Cap: {{venue_capacity}}</p><p><strong>Windows:</strong> Event {{event_window_display}} · Set {{performance_window_display}} ({{performance_genre}}) · On-site: {{onsite_contact_name}}</p>",
       "header_logo_url": null
     },
     {

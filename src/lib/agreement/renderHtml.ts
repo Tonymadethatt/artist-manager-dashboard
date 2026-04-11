@@ -1,6 +1,6 @@
 import DOMPurify, { type Config as DomPurifyConfig } from 'dompurify'
 import type { TemplateSection } from '@/types'
-import { mergeSectionContent, partitionAgreementSections } from './merge'
+import { mergeBracketTokens, mergeSectionContent, partitionAgreementSections } from './merge'
 import { escapeAttr, escapeHtml, isHtmlContent, isSafeImageUrl } from './sanitize'
 
 /** Fetch logo from site root and return a data URL for reliable html2canvas rendering. */
@@ -135,7 +135,11 @@ function mergeHtmlVars(content: string, vars: Record<string, string>): string {
     const safe = escapeHtml(val || `[${key}]`)
     out = out.replaceAll(`{{${key}}}`, safe)
   }
-  return out
+  const bracketVars: Record<string, string> = {}
+  for (const [key, val] of Object.entries(vars)) {
+    bracketVars[key] = escapeHtml(val ?? '')
+  }
+  return mergeBracketTokens(out, bracketVars)
 }
 
 function sectionBlocksToHtml(
@@ -234,7 +238,7 @@ export function renderAgreementHtmlDocument(opts: {
   .header-block { color: #262626; font-size: 10pt; margin-bottom: 10px; }
   .company { font-size: 14pt; font-weight: 700; letter-spacing: 0.04em; color: #0a0a0a; }
   .tag { font-size: 9pt; color: #525252; margin-top: 4px; font-weight: 500; }
-  .sec { page-break-inside: avoid; margin-bottom: 16px; }
+  .sec { page-break-inside: auto; margin-bottom: 16px; }
   h2 {
     font-size: 11pt;
     font-weight: 800;
@@ -265,6 +269,8 @@ export function renderAgreementHtmlDocument(opts: {
     border: 1px solid #d4d4d4;
     padding: 5px 8px;
     text-align: left;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .body th {
     background: #f5f5f5;

@@ -45,6 +45,7 @@ export function useVenues() {
         outreach_track: venue.outreach_track ?? 'pipeline',
         follow_up_date: venue.follow_up_date,
         deal_terms: venue.deal_terms,
+        capacity: venue.capacity ?? null,
       })
       .select()
       .single()

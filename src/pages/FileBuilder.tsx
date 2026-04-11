@@ -71,9 +71,27 @@ export default function FileBuilder() {
     return contacts.find(c => c.id === id) ?? contacts[0] ?? null
   }, [contacts, selectedContactId, primaryContact])
 
+  const selectedDeal = useMemo(
+    () => (selectedDealId ? deals.find(d => d.id === selectedDealId) ?? null : null),
+    [deals, selectedDealId],
+  )
+
+  const onsiteContactForPrefill = useMemo(() => {
+    const id = selectedDeal?.onsite_contact_id
+    if (!id) return null
+    return contacts.find(c => c.id === id) ?? null
+  }, [contacts, selectedDeal?.onsite_contact_id])
+
   useEffect(() => {
     setSelectedContactId(null)
   }, [selectedVenueId])
+
+  useEffect(() => {
+    if (!selectedDealId || !selectedDeal) return
+    if (selectedDeal.venue_id && selectedVenueId && selectedDeal.venue_id !== selectedVenueId) return
+    const id = selectedDeal.onsite_contact_id
+    if (id) setSelectedContactId(id)
+  }, [selectedDealId, selectedDeal, selectedVenueId])
 
   useEffect(() => {
     if (!selectedDealId) setSetAsDealAgreement(false)
@@ -115,7 +133,7 @@ export default function FileBuilder() {
     }
     const venue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
     const deal = selectedDealId ? deals.find(d => d.id === selectedDealId) ?? null : null
-    const pre = buildAgreementPrefill(venue, profile ?? null, deal, mergeContact)
+    const pre = buildAgreementPrefill(venue, profile ?? null, deal, mergeContact, onsiteContactForPrefill)
     const next: Record<string, string> = {}
     for (const key of variables) {
       next[key] = pre[key] ?? ''
@@ -131,6 +149,7 @@ export default function FileBuilder() {
     venues,
     deals,
     mergeContact,
+    onsiteContactForPrefill,
     variables,
   ])
 

@@ -3,6 +3,7 @@
   publish = "dist"
   functions = "netlify/functions"
 
+# Requires SUPABASE_SERVICE_ROLE_KEY (and Supabase URL/anon) for public-agreement-pdf — see netlify/functions/supabaseServerEnv.
 [[redirects]]
   from = "/agreements/*"
   to = "/.netlify/functions/public-agreement-pdf?slug=:splat"

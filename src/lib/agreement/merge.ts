@@ -1,4 +1,7 @@
 import type { TemplateSection } from '@/types'
+import { catalogKeysUnion } from './variableCatalog'
+
+const BRACKET_KEYS: readonly string[] = catalogKeysUnion([])
 
 /** Split sections for rendering when any section uses header/footer/signatures layout. */
 export function partitionAgreementSections(sections: TemplateSection[]): {
@@ -23,13 +26,26 @@ export function partitionAgreementSections(sections: TemplateSection[]): {
   return { headers, bodies, signatures, footers }
 }
 
+/**
+ * Replace `[token]` for catalog keys when `vars` supplies that key (AI / legacy templates).
+ * Plain-text path — no HTML escaping.
+ */
+export function mergeBracketTokens(text: string, vars: Record<string, string>): string {
+  let out = text
+  for (const key of BRACKET_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(vars, key)) continue
+    out = out.replaceAll(`[${key}]`, vars[key] ?? '')
+  }
+  return out
+}
+
 /** Replace `{{token}}` placeholders (word chars only, same as FileBuilder). */
 export function mergePlaceholders(text: string, vars: Record<string, string>): string {
   let out = text
   for (const [key, val] of Object.entries(vars)) {
     out = out.replaceAll(`{{${key}}}`, val || `[${key}]`)
   }
-  return out
+  return mergeBracketTokens(out, vars)
 }
 
 export function mergeSectionContent(

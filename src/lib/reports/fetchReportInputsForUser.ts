@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { DEAL_VENUE_EMBED } from '@/lib/deals/dealVenueSelect'
 import type { Deal, Metric, MonthlyFee, MonthlyFeePayment, PerformanceReport, Task, Venue } from '../../types'
 
 /**
@@ -25,7 +26,7 @@ export async function fetchReportInputsForUser(
     { data: perfRaw, error: pErr },
   ] = await Promise.all([
     client.from('venues').select('*').eq('user_id', userId),
-    client.from('deals').select('*, venue:venues(id, name, outreach_track, status)').eq('user_id', userId),
+    client.from('deals').select(`*, venue:venues(${DEAL_VENUE_EMBED})`).eq('user_id', userId),
     client.from('metrics').select('*').eq('user_id', userId),
     client.from('monthly_fees').select('*').eq('user_id', userId).order('month', { ascending: false }),
     client.from('tasks').select('*').eq('user_id', userId),

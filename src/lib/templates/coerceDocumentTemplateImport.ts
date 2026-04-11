@@ -1,4 +1,5 @@
 import { nanoid } from '@/lib/nanoid'
+import { catalogKeysUnion } from '@/lib/agreement/variableCatalog'
 import { isHtmlContent, isSafeImageUrl } from '@/lib/agreement/sanitize'
 import type { TemplateSection, TemplateSectionKind, TemplateType } from '@/types'
 
@@ -41,6 +42,15 @@ function coerceSectionContent(raw: string): string {
     return normalizeHeadingTagsInHtml(trimmed)
   }
   return plainTextToHtmlParagraphs(trimmed)
+}
+
+/** Rewrite `[catalog_token]` → `{{catalog_token}}` so merge runs on imported AI templates. */
+function bracketCatalogTokensToMustache(html: string): string {
+  let out = html
+  for (const key of catalogKeysUnion([])) {
+    out = out.replaceAll(`[${key}]`, `{{${key}}}`)
+  }
+  return out
 }
 
 function uniqueSectionId(preferred: unknown, used: Set<string>): string {
@@ -150,7 +160,7 @@ export function coerceDocumentTemplateImport(raw: unknown): ParseDocumentTemplat
       return { ok: false, message: `sections[${i}].content must be a string.` }
     }
     const contentRaw = typeof s.content === 'string' ? s.content : ''
-    const content = coerceSectionContent(contentRaw)
+    const content = bracketCatalogTokensToMustache(coerceSectionContent(contentRaw))
 
     let header_logo_url: string | null = null
     if (section_kind === 'header') {

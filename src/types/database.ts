@@ -33,6 +33,7 @@ export interface Database {
           outreach_track: OutreachTrack
           follow_up_date: string | null
           deal_terms: DealTerms | null
+          capacity: string | null
           created_at: string
           updated_at: string
         }
@@ -52,6 +53,7 @@ export interface Database {
           outreach_track?: OutreachTrack
           follow_up_date?: string | null
           deal_terms?: DealTerms | null
+          capacity?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -71,6 +73,7 @@ export interface Database {
           outreach_track?: OutreachTrack
           follow_up_date?: string | null
           deal_terms?: DealTerms | null
+          capacity?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -274,6 +277,10 @@ export interface Database {
           calendar_first_listed_at: string | null
           ics_invite_sent_at: string | null
           reminder_24h_queued_at: string | null
+          performance_genre: string | null
+          performance_start_at: string | null
+          performance_end_at: string | null
+          onsite_contact_id: string | null
           gross_amount: number
           commission_tier: CommissionTier
           commission_rate: number
@@ -307,6 +314,10 @@ export interface Database {
           calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
+          performance_genre?: string | null
+          performance_start_at?: string | null
+          performance_end_at?: string | null
+          onsite_contact_id?: string | null
           gross_amount: number
           commission_tier: CommissionTier
           commission_rate: number
@@ -340,6 +351,10 @@ export interface Database {
           calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
+          performance_genre?: string | null
+          performance_start_at?: string | null
+          performance_end_at?: string | null
+          onsite_contact_id?: string | null
           gross_amount?: number
           commission_tier?: CommissionTier
           commission_rate?: number
@@ -364,6 +379,12 @@ export interface Database {
             foreignKeyName: 'deals_venue_id_fkey'
             columns: ['venue_id']
             referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'deals_onsite_contact_id_fkey'
+            columns: ['onsite_contact_id']
+            referencedRelation: 'contacts'
             referencedColumns: ['id']
           },
         ]

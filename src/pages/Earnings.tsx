@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { Deal, CommissionTier, PaymentMethod, DealPricingFinalSource } from '@/types'
+import type { Contact, Deal, CommissionTier, PaymentMethod, DealPricingFinalSource } from '@/types'
 import { isDealPricingSnapshot } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS, COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, PAYMENT_METHOD_LABELS } from '@/types'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
@@ -614,6 +614,11 @@ const EMPTY_FORM = {
   agreement_generated_file_id: '',
   deposit_paid_amount: '',
   notes: '',
+  performance_genre: '',
+  performance_start_time: '',
+  performance_end_time: '',
+  onsite_contact_id: '',
+  venue_capacity: '',
 }
 
 function fmtMoney(n: number) {
@@ -658,7 +663,7 @@ export default function Earnings() {
   const pricingPanelRef = useRef<EarningsPricingPanelHandle>(null)
   const [pricingToolbarError, setPricingToolbarError] = useState<string | null>(null)
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid, refetch } = useDeals()
-  const { venues } = useVenues()
+  const { venues, updateVenue, refetch: refetchVenues } = useVenues()
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
   const { fees } = useMonthlyFees()
@@ -685,6 +690,7 @@ export default function Earnings() {
   const [artistPromiseCustomLines, setArtistPromiseCustomLines] = useState<string[]>([''])
   const [dealFormTab, setDealFormTab] = useState<DealFormTab>('basics')
   const [addonPickerOpen, setAddonPickerOpen] = useState(false)
+  const [venueContacts, setVenueContacts] = useState<Contact[]>([])
 
   const [pricingBaseMode, setPricingBaseMode] = useState<'package' | 'hourly'>('hourly')
   const [pricingPackageId, setPricingPackageId] = useState<string | null>(null)
@@ -703,6 +709,27 @@ export default function Earnings() {
   useEffect(() => {
     if (!addOpen) setAddonPickerOpen(false)
   }, [addOpen])
+
+  useEffect(() => {
+    if (!addOpen) return
+    let cancelled = false
+    async function loadContacts() {
+      if (!form.venue_id) {
+        setVenueContacts([])
+        return
+      }
+      const { data } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('venue_id', form.venue_id)
+        .order('created_at')
+      if (!cancelled) setVenueContacts((data ?? []) as Contact[])
+    }
+    void loadContacts()
+    return () => {
+      cancelled = true
+    }
+  }, [addOpen, form.venue_id])
 
   const goEarningsSection = useCallback(
     (s: 'deals' | 'pricing') => {
@@ -913,6 +940,22 @@ export default function Earnings() {
           ? String(deal.deposit_paid_amount)
           : '',
       notes: deal.notes ?? '',
+      performance_genre: deal.performance_genre ?? '',
+      performance_start_time: (() => {
+        const ps = deal.performance_start_at ? utcIsoToPacificDateAndTime(deal.performance_start_at) : null
+        const pe = deal.performance_end_at ? utcIsoToPacificDateAndTime(deal.performance_end_at) : null
+        return ps && pe ? ps.time : ''
+      })(),
+      performance_end_time: (() => {
+        const ps = deal.performance_start_at ? utcIsoToPacificDateAndTime(deal.performance_start_at) : null
+        const pe = deal.performance_end_at ? utcIsoToPacificDateAndTime(deal.performance_end_at) : null
+        return ps && pe ? pe.time : ''
+      })(),
+      onsite_contact_id: deal.onsite_contact_id ?? '',
+      venue_capacity:
+        (deal.venue_id
+          ? venues.find(v => v.id === deal.venue_id)?.capacity ?? deal.venue?.capacity ?? ''
+          : '') || '',
     })
     setPromisePresets(presetToggleStateFromDealDoc(deal.promise_lines ?? null))
     const customs = customLabelsFromDealDoc(deal.promise_lines ?? null)
@@ -944,6 +987,8 @@ export default function Earnings() {
   const handleVenueSelect = (venueId: string) => {
     setField('venue_id', venueId)
     const v = venues.find(vn => vn.id === venueId)
+    setField('venue_capacity', v?.capacity ?? '')
+    setField('onsite_contact_id', '')
     if (v && (v.outreach_track ?? 'pipeline') === 'community') {
       setField('commission_tier', 'artist_network')
     } else if (v && !editDeal) {
@@ -966,6 +1011,21 @@ export default function Earnings() {
       return
     }
     setSaving(true)
+
+    if (form.venue_id) {
+      const cur = venues.find(v => v.id === form.venue_id)
+      const cap = form.venue_capacity.trim() || null
+      if (cur && (cur.capacity ?? null) !== cap) {
+        const ur = await updateVenue(form.venue_id, { capacity: cap })
+        if (ur.error) {
+          setSaving(false)
+          showFormToast(ur.error.message ?? 'Could not update venue capacity')
+          return
+        }
+        await refetchVenues()
+      }
+    }
+
     let agreementUrl: string | null = form.agreement_url.trim() || null
     const agreementFileId = form.agreement_generated_file_id.trim() || null
     if (agreementFileId) {
@@ -1005,6 +1065,33 @@ export default function Earnings() {
         event_start_at = sIso
         event_end_at = eIso
       }
+    }
+
+    let performance_start_at: string | null = null
+    let performance_end_at: string | null = null
+    const pst = form.performance_start_time.trim()
+    const pet = form.performance_end_time.trim()
+    if (showDate && pst && pet) {
+      const [psh, psm] = pst.split(':').map(Number)
+      const [peh, pem] = pet.split(':').map(Number)
+      let endYmdP = showDate
+      if (Number.isFinite(psh) && Number.isFinite(psm) && Number.isFinite(peh) && Number.isFinite(pem)) {
+        if (peh * 60 + pem <= psh * 60 + psm) endYmdP = addCalendarDaysPacific(showDate, 1)
+      }
+      const psIso = pacificWallToUtcIso(showDate, pst)
+      const peIso = pacificWallToUtcIso(endYmdP, pet)
+      if (psIso && peIso) {
+        performance_start_at = psIso
+        performance_end_at = peIso
+      }
+    }
+
+    let onsite_contact_id: string | null = form.onsite_contact_id.trim() || null
+    if (onsite_contact_id && form.venue_id) {
+      const ok = venueContacts.some(c => c.id === onsite_contact_id && c.venue_id === form.venue_id)
+      if (!ok) onsite_contact_id = null
+    } else if (!form.venue_id) {
+      onsite_contact_id = null
     }
 
     const tentativeId = editDeal?.id ?? '__new__'
@@ -1050,6 +1137,10 @@ export default function Earnings() {
       event_date: showDate || null,
       event_start_at,
       event_end_at,
+      performance_genre: form.performance_genre.trim() || null,
+      performance_start_at,
+      performance_end_at,
+      onsite_contact_id,
       gross_amount: gross,
       commission_tier: commissionTier,
       payment_due_date: form.payment_due_date || null,
@@ -1567,6 +1658,77 @@ export default function Earnings() {
                   If end is earlier than start on the same day, end is treated as the next calendar day (overnight gig).
                 </p>
                 <div className="space-y-1">
+                  <Label>Genre (performance)</Label>
+                  <Input
+                    value={form.performance_genre}
+                    onChange={e => setField('performance_genre', e.target.value)}
+                    placeholder="e.g. House, open format"
+                  />
+                </div>
+                <p className="text-[10px] font-medium text-neutral-500">DJ / performance set (optional)</p>
+                <p className="text-[10px] text-neutral-600 leading-snug -mt-1">
+                  Uses the same show date as above. Leave blank if the set matches the event window.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Set start</Label>
+                    <Input
+                      type="time"
+                      value={form.performance_start_time}
+                      onChange={e => setField('performance_start_time', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Set end</Label>
+                    <Input
+                      type="time"
+                      value={form.performance_end_time}
+                      onChange={e => setField('performance_end_time', e.target.value)}
+                    />
+                  </div>
+                </div>
+                {form.venue_id ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Venue capacity</Label>
+                      <Input
+                        value={form.venue_capacity}
+                        onChange={e => setField('venue_capacity', e.target.value)}
+                        placeholder="e.g. 500"
+                      />
+                      <p className="text-[10px] text-neutral-600 leading-snug">
+                        Saved on the venue record. You can also edit under{' '}
+                        <a href="/outreach" className="text-neutral-400 underline hover:text-neutral-200">
+                          Outreach
+                        </a>
+                        .
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>On-site contact</Label>
+                      <Select
+                        value={form.onsite_contact_id || '__none__'}
+                        onValueChange={v =>
+                          setField('onsite_contact_id', v === '__none__' ? '' : v)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Optional — defaults in File Builder" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">None (use primary in File Builder)</SelectItem>
+                          {venueContacts.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                              {c.role ? ` · ${c.role}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : null}
+                <div className="space-y-1">
                   <Label>Notes</Label>
                   <Input
                     value={form.notes}
@@ -1657,6 +1819,15 @@ export default function Earnings() {
                           value={pricingPerformanceHours}
                           onChange={e => setPricingPerformanceHours(Number(e.target.value) || 0)}
                         />
+                        {pricingBaseMode === 'hourly' &&
+                          pricingCatalog.doc.policies.minimumBillableHours > 0 &&
+                          pricingPerformanceHours < pricingCatalog.doc.policies.minimumBillableHours ? (
+                          <p className="text-[10px] text-amber-500/90 leading-snug">
+                            Billable hours for pricing use the catalog minimum (
+                            {pricingCatalog.doc.policies.minimumBillableHours} h). You entered{' '}
+                            {pricingPerformanceHours} h — the calculator uses the higher of the two.
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     {pricingCatalog.doc.addons.length > 0 && (
@@ -1765,6 +1936,11 @@ export default function Earnings() {
                 )}
                 <div className="space-y-1">
                   <Label>Gross amount ($) *</Label>
+                  <p className="text-[10px] text-neutral-600 leading-snug">
+                    Agreement tokens: <span className="font-mono text-[10px]">gross_amount_display</span> is this
+                    field. <span className="font-mono text-[10px]">pricing_total_display</span> comes from the saved
+                    calculator snapshot when present.
+                  </p>
                   <Input
                     type="number"
                     min="0"
@@ -1872,7 +2048,9 @@ export default function Earnings() {
                     preferScoped
                   />
                   <p className="text-[10px] text-neutral-600 leading-snug">
-                    Links the deal to a generated PDF; the public share URL is saved on save. Use the field below for an external link (DocuSign, Drive) instead, or clear the PDF.
+                    Pick a PDF already in Files to attach to this deal for emails. File Builder can also set this when
+                    you save a PDF to the deal. On save, the first-party share URL is stored when available. Use the
+                    field below for an external link (DocuSign, Drive), or clear the PDF.
                   </p>
                 </div>
                 <div className="space-y-1">

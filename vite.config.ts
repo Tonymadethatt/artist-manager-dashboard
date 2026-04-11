@@ -26,6 +26,15 @@ export default defineConfig({
           return `/.netlify/functions/venue-email-ack?token=${encodeURIComponent(token)}`
         },
       },
+      // Mirrors production Netlify redirect: /agreements/:slug → public-agreement-pdf (needs `netlify dev`).
+      '/agreements': {
+        target: process.env.VITE_NETLIFY_FUNCTIONS_URL ?? 'http://127.0.0.1:8888',
+        changeOrigin: true,
+        rewrite: path => {
+          const slug = path.replace(/^\/agreements\//, '').split('?')[0] ?? ''
+          return `/.netlify/functions/public-agreement-pdf?slug=${encodeURIComponent(slug)}`
+        },
+      },
     },
   },
 })

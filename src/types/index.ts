@@ -301,6 +301,8 @@ export interface Venue {
   outreach_track: OutreachTrack
   follow_up_date: string | null
   deal_terms: DealTerms | null
+  /** Capacity for agreements (flexible text). */
+  capacity: string | null
   created_at: string
   updated_at: string
 }
@@ -514,6 +516,11 @@ export interface Deal {
   calendar_first_listed_at: string | null
   ics_invite_sent_at: string | null
   reminder_24h_queued_at: string | null
+  performance_genre: string | null
+  /** DJ/performance set window (UTC ISO); separate from event_start_at/event_end_at. */
+  performance_start_at: string | null
+  performance_end_at: string | null
+  onsite_contact_id: string | null
   gross_amount: number
   commission_tier: CommissionTier
   commission_rate: number
@@ -535,7 +542,7 @@ export interface Deal {
   notes: string | null
   created_at: string
   updated_at: string
-  venue?: Pick<Venue, 'id' | 'name' | 'outreach_track' | 'status'> | null
+  venue?: Pick<Venue, 'id' | 'name' | 'outreach_track' | 'status' | 'capacity' | 'deal_terms'> | null
 }
 
 export type VenueEmailType =

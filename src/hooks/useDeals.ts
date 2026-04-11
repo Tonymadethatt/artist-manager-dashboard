@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import type { Deal, CommissionTier } from '@/types'
 import { COMMISSION_TIER_RATES as RATES } from '@/types'
+import { DEAL_VENUE_EMBED } from '@/lib/deals/dealVenueSelect'
 
 type DealUpdate = Database['public']['Tables']['deals']['Update']
 
@@ -15,7 +16,7 @@ export function useDeals() {
     setLoading(true)
     const { data, error } = await supabase
       .from('deals')
-      .select('*, venue:venues(id, name, outreach_track, status)')
+      .select(`*, venue:venues(${DEAL_VENUE_EMBED})`)
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setDeals((data ?? []) as Deal[])
@@ -41,6 +42,10 @@ export function useDeals() {
     deposit_due_amount?: number | null
     deposit_paid_amount?: number
     notes: string | null
+    performance_genre?: string | null
+    performance_start_at?: string | null
+    performance_end_at?: string | null
+    onsite_contact_id?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -69,8 +74,12 @@ export function useDeals() {
         deposit_due_amount: deal.deposit_due_amount ?? null,
         deposit_paid_amount: deal.deposit_paid_amount ?? 0,
         notes: deal.notes,
+        performance_genre: deal.performance_genre ?? null,
+        performance_start_at: deal.performance_start_at ?? null,
+        performance_end_at: deal.performance_end_at ?? null,
+        onsite_contact_id: deal.onsite_contact_id ?? null,
       })
-      .select('*, venue:venues(id, name, outreach_track, status)')
+      .select(`*, venue:venues(${DEAL_VENUE_EMBED})`)
       .single()
     if (error) return { error }
     setDeals(prev => [data as Deal, ...prev])
@@ -94,7 +103,7 @@ export function useDeals() {
       .from('deals')
       .update(patch)
       .eq('id', id)
-      .select('*, venue:venues(id, name, outreach_track, status)')
+      .select(`*, venue:venues(${DEAL_VENUE_EMBED})`)
       .single()
     if (error) return { error }
     setDeals(prev => prev.map(d => d.id === id ? data as Deal : d))
