@@ -43,13 +43,6 @@ function ymdFromIso(iso: string | null): string | null {
   return iso.slice(0, 10)
 }
 
-function appendDescriptionFooter(desc: string | undefined, summary: string): string {
-  const base = (desc ?? '').trim()
-  const line = '\n\n— Synced via Artist Manager from your shared Google calendar.'
-  if (!base) return `${summary}${line}`
-  return `${base}${line}`
-}
-
 async function listAllEvents(args: {
   accessToken: string
   calendarId: string
@@ -83,43 +76,9 @@ async function listAllEvents(args: {
   return out
 }
 
-async function insertDestinationEvent(args: {
-  accessToken: string
-  calendarId: string
-  source: GCalEvent
-}): Promise<{ id: string }> {
-  const cal = encodeURIComponent(args.calendarId)
-  const body = {
-    summary: args.source.summary ?? '(No title)',
-    description: appendDescriptionFooter(
-      args.source.description,
-      args.source.summary ?? '(No title)',
-    ),
-    location: args.source.location ?? undefined,
-    start: args.source.start,
-    end: args.source.end,
-  }
-  const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${cal}/events`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${args.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    },
-  )
-  if (!res.ok) {
-    const t = await res.text()
-    throw new Error(`events.insert ${res.status}: ${t}`)
-  }
-  return res.json() as Promise<{ id: string }>
-}
-
 /**
  * POST with Authorization: Bearer <Supabase JWT>.
- * Copies events from source_calendar_id to destination_calendar_id within configured window.
+ * Imports events from the shared source calendar into the app (calendar_sync_event + Gig calendar). No Google copy.
  */
 export const handler: Handler = async event => {
   if (event.httpMethod !== 'POST') {
@@ -187,9 +146,7 @@ export const handler: Handler = async event => {
 
   const { data: conn, error: connErr } = await supabase
     .from('google_calendar_connection')
-    .select(
-      'source_calendar_id, destination_calendar_id, sync_past_days, sync_future_days',
-    )
+    .select('source_calendar_id, sync_past_days, sync_future_days')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -212,7 +169,6 @@ export const handler: Handler = async event => {
     }
   }
 
-  const destCal = (conn.destination_calendar_id ?? 'primary').trim() || 'primary'
   const pastDays = Math.max(0, Math.min(365, Number(conn.sync_past_days ?? 7)))
   const futureDays = Math.max(0, Math.min(730, Number(conn.sync_future_days ?? 180)))
 
@@ -289,7 +245,7 @@ export const handler: Handler = async event => {
 
   const venues = venueRows ?? []
 
-  let copied = 0
+  let imported = 0
   let skipped = 0
   let tasksCreated = 0
   const errors: string[] = []
@@ -310,20 +266,6 @@ export const handler: Handler = async event => {
     const summary = ev.summary ?? '(No title)'
     const location = ev.location ?? null
 
-    let destId: string
-    try {
-      const created = await insertDestinationEvent({
-        accessToken: accessToken!,
-        calendarId: destCal,
-        source: ev,
-      })
-      destId = created.id
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      errors.push(`${eid}: ${msg}`)
-      continue
-    }
-
     const match = matchVenueForCalendarEvent(summary, location, venues)
 
     const { data: syncRow, error: syncInsErr } = await supabase
@@ -332,8 +274,8 @@ export const handler: Handler = async event => {
         user_id: userId,
         source_calendar_id: sourceCal,
         source_event_id: eid,
-        destination_calendar_id: destCal,
-        destination_event_id: destId,
+        destination_calendar_id: null,
+        destination_event_id: null,
         event_start_at: start,
         event_end_at: end,
         summary,
@@ -350,7 +292,7 @@ export const handler: Handler = async event => {
     }
 
     mapped.add(eid)
-    copied++
+    imported++
 
     let taskId: string | null = null
     if (!match) {
@@ -396,7 +338,8 @@ export const handler: Handler = async event => {
   }
 
   const summaryPayload = {
-    copied,
+    imported,
+    copied: imported,
     skipped,
     tasksCreated,
     errors: errors.slice(0, 12),

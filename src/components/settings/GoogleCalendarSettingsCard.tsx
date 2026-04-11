@@ -22,7 +22,6 @@ export function GoogleCalendarSettingsCard({
   const [loading, setLoading] = useState(true)
   const [connection, setConnection] = useState<ConnectionRow | null>(null)
   const [sourceCal, setSourceCal] = useState('')
-  const [destCal, setDestCal] = useState('primary')
   const [pastDays, setPastDays] = useState('7')
   const [futureDays, setFutureDays] = useState('180')
   const [saving, setSaving] = useState(false)
@@ -53,7 +52,6 @@ export function GoogleCalendarSettingsCard({
     setConnection(data)
     if (data) {
       setSourceCal(data.source_calendar_id ?? '')
-      setDestCal(data.destination_calendar_id ?? 'primary')
       setPastDays(String(data.sync_past_days ?? 7))
       setFutureDays(String(data.sync_future_days ?? 180))
     }
@@ -68,7 +66,7 @@ export function GoogleCalendarSettingsCard({
     const q = params.get('calendar_oauth')
     if (!q) return
     const messages: Record<string, string> = {
-      success: 'Google Calendar connected. Add your shared calendar ID below, then sync.',
+      success: 'Google Calendar connected. Add your shared calendar ID below, then import events to the dashboard.',
       denied: 'Google sign-in was cancelled.',
       invalid: 'OAuth callback missing parameters.',
       bad_state: 'OAuth session expired. Try connecting again.',
@@ -121,7 +119,6 @@ export function GoogleCalendarSettingsCard({
       .from('google_calendar_connection')
       .update({
         source_calendar_id: sourceCal.trim(),
-        destination_calendar_id: destCal.trim() || 'primary',
         sync_past_days: p,
         sync_future_days: f,
         updated_at: new Date().toISOString(),
@@ -157,6 +154,7 @@ export function GoogleCalendarSettingsCard({
     })
     const j = (await res.json().catch(() => ({}))) as {
       error?: string
+      imported?: number
       copied?: number
       skipped?: number
       tasksCreated?: number
@@ -167,8 +165,9 @@ export function GoogleCalendarSettingsCard({
       showToast(j.error ?? 'Sync failed.', 'err')
       return
     }
+    const added = j.imported ?? j.copied ?? 0
     showToast(
-      `Synced: ${j.copied ?? 0} copied, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`,
+      `Synced: ${added} added to dashboard, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`,
       'ok',
     )
     void load()
@@ -190,6 +189,7 @@ export function GoogleCalendarSettingsCard({
 
   const summary = connection?.last_sync_summary as
     | {
+        imported?: number
         copied?: number
         skipped?: number
         tasksCreated?: number
@@ -212,8 +212,8 @@ export function GoogleCalendarSettingsCard({
       <header className="space-y-1 border-b border-neutral-800/80 pb-3 md:pb-4">
         <h2 className="text-sm font-semibold tracking-tight text-neutral-100">Google Calendar sync</h2>
         <p className="text-xs text-neutral-500 leading-relaxed max-w-prose">
-          Copy events from a shared Google calendar into your primary calendar (or another calendar you choose).
-          Events that don&apos;t match a venue in this app get a Pipeline task to set them up.
+          Import events from your shared Google calendar into the Gig calendar on this dashboard. Nothing is written back to Google.
+          Events that don&apos;t match a venue get a Pipeline task to set them up.
         </p>
       </header>
 
@@ -284,19 +284,6 @@ export function GoogleCalendarSettingsCard({
             />
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="gcal-dest">Destination calendar ID</Label>
-            <Input
-              id="gcal-dest"
-              value={destCal}
-              onChange={e => setDestCal(e.target.value)}
-              placeholder="primary"
-              disabled={!connected}
-              className="bg-neutral-950 border-neutral-700"
-            />
-            <p className={hint}>Usually <code className="text-neutral-500">primary</code> for your main calendar.</p>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="gcal-past">Sync past (days)</Label>
@@ -352,7 +339,8 @@ export function GoogleCalendarSettingsCard({
             <div className="rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-xs text-neutral-400 space-y-1">
               <p className="text-neutral-300 font-medium">Last sync · {new Date(connection.last_sync_at).toLocaleString()}</p>
               <p>
-                Listed {summary.listed ?? '—'} · Copied {summary.copied ?? 0} · Skipped {summary.skipped ?? 0} · Tasks{' '}
+                Listed {summary.listed ?? '—'} · Added {summary.imported ?? summary.copied ?? 0} · Skipped{' '}
+                {summary.skipped ?? 0} · Tasks{' '}
                 {summary.tasksCreated ?? 0}
                 {(summary.errorCount ?? 0) > 0 && (
                   <span className="text-amber-400"> · {summary.errorCount} errors</span>

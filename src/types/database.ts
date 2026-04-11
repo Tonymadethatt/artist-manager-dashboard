@@ -793,8 +793,8 @@ export interface Database {
           user_id: string
           source_calendar_id: string
           source_event_id: string
-          destination_calendar_id: string
-          destination_event_id: string
+          destination_calendar_id: string | null
+          destination_event_id: string | null
           event_start_at: string | null
           event_end_at: string | null
           summary: string | null
@@ -809,8 +809,8 @@ export interface Database {
           user_id: string
           source_calendar_id: string
           source_event_id: string
-          destination_calendar_id: string
-          destination_event_id: string
+          destination_calendar_id?: string | null
+          destination_event_id?: string | null
           event_start_at?: string | null
           event_end_at?: string | null
           summary?: string | null
@@ -825,8 +825,8 @@ export interface Database {
           user_id?: string
           source_calendar_id?: string
           source_event_id?: string
-          destination_calendar_id?: string
-          destination_event_id?: string
+          destination_calendar_id?: string | null
+          destination_event_id?: string | null
           event_start_at?: string | null
           event_end_at?: string | null
           summary?: string | null
