@@ -39,7 +39,8 @@ export function formatVenuePostalLine(
 }
 
 /**
- * Calendar API `location` field: postal line when present, else venue name so Maps still has a target.
+ * Calendar API `location` field: full postal line when present; otherwise best-effort from any
+ * structured fields + venue name (so partial addresses and “name + city” still map in Google).
  */
 export function formatVenueAddressForGoogleCalendar(
   v: VenueAddressForGoogle | null | undefined,
@@ -47,5 +48,53 @@ export function formatVenueAddressForGoogleCalendar(
   if (!v) return undefined
   const postal = formatVenuePostalLine(v)
   if (postal) return postal
-  return v.name?.trim() || undefined
+
+  const name = v.name?.trim()
+  const crumbs = [
+    v.location?.trim(),
+    v.address_line2?.trim(),
+    v.city?.trim(),
+    v.region?.trim(),
+    v.postal_code?.trim(),
+    v.country?.trim(),
+  ].filter(Boolean) as string[]
+
+  if (crumbs.length) {
+    const tail = crumbs.join(', ')
+    return name ? `${name} — ${tail}` : tail
+  }
+  return name || undefined
+}
+
+/**
+ * Multi-line block for event description / notes: venue name + address lines Google may not echo from `location` alone.
+ */
+export function formatVenueDescriptionBlock(
+  v: VenueAddressForGoogle | null | undefined,
+): string | undefined {
+  if (!v) return undefined
+  const lines: string[] = []
+  const name = v.name?.trim()
+  if (name) lines.push(`Venue: ${name}`)
+
+  const line1 = v.location?.trim()
+  const line2 = v.address_line2?.trim()
+  if (line1) lines.push(line1)
+  if (line2) lines.push(line2)
+
+  const city = v.city?.trim()
+  const region = v.region?.trim()
+  const zip = v.postal_code?.trim()
+  let cityLine = ''
+  if (city && region && zip) cityLine = `${city}, ${region} ${zip}`
+  else if (city && region) cityLine = `${city}, ${region}`
+  else if (city && zip) cityLine = `${city} ${zip}`
+  else cityLine = [city, region, zip].filter(Boolean).join(' ').trim()
+  if (cityLine) lines.push(cityLine)
+
+  const country = v.country?.trim()
+  if (country) lines.push(country)
+
+  const text = lines.join('\n').trim()
+  return text.length ? text : undefined
 }
