@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { Plus, Trash2, Loader2, Upload, Download, Copy, FileText } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { Plus, Trash2, Loader2, Download, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,10 +28,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { PricingCatalogHook } from '@/hooks/usePricingCatalog'
-import {
-  parsePricingCatalogFromJsonText,
-  serializePricingCatalogDoc,
-} from '@/lib/pricing/coercePricingCatalogDoc'
+import { parsePricingCatalogFromJsonText } from '@/lib/pricing/coercePricingCatalogDoc'
+
+export type EarningsPricingPanelHandle = {
+  openImport: () => void
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -70,7 +71,8 @@ function catalogSummaryLines(doc: PricingCatalogDoc): string[] {
   ]
 }
 
-export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook }) {
+export const EarningsPricingPanel = forwardRef<EarningsPricingPanelHandle, { catalog: PricingCatalogHook }>(
+  function EarningsPricingPanel({ catalog }, ref) {
   const { doc, setDocAndAutosave, replaceAndSave, loading, saving, error, lastSavedAt } = catalog
   const toastRef = useRef<string | null>(null)
 
@@ -78,7 +80,6 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
   const [importText, setImportText] = useState('')
   const [importPreview, setImportPreview] = useState<PricingCatalogDoc | null>(null)
   const [importParseError, setImportParseError] = useState<string | null>(null)
-  const [exportError, setExportError] = useState<string | null>(null)
   const [templateError, setTemplateError] = useState<string | null>(null)
 
   const resetImportDialog = useCallback(() => {
@@ -107,26 +108,16 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
     }
   }, [importPreview, replaceAndSave, resetImportDialog])
 
-  const exportDownload = useCallback(() => {
-    setExportError(null)
-    const blob = new Blob([serializePricingCatalogDoc(doc)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'pricing-catalog.json'
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [doc])
-
-  const exportCopy = useCallback(async () => {
-    setExportError(null)
-    const text = serializePricingCatalogDoc(doc).trimEnd()
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      setExportError('Could not copy to clipboard. Try Export file or copy from a downloaded JSON.')
-    }
-  }, [doc])
+  useImperativeHandle(
+    ref,
+    () => ({
+      openImport: () => {
+        resetImportDialog()
+        setImportOpen(true)
+      },
+    }),
+    [resetImportDialog],
+  )
 
   const downloadAiSpec = useCallback(async () => {
     setTemplateError(null)
@@ -306,59 +297,6 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
         </p>
       )}
 
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 space-y-3">
-        <SectionTitle>Import / export</SectionTitle>
-        <p className="text-[11px] text-neutral-500 leading-relaxed">
-          Export JSON to edit offline, then import to replace the entire catalog. Keep line-item{' '}
-          <code className="text-neutral-400">id</code> values when possible so existing deal pricing snapshots stay aligned;
-          new or changed ids may require reopening logged deals.
-        </p>
-        <p className="text-[11px] text-neutral-500 leading-relaxed">
-          <span className="text-neutral-400 font-medium">For another AI:</span> download the Markdown spec (rules + limits)
-          and the example JSON, then have it produce a catalog file you import here.
-        </p>
-        {exportError ? (
-          <p className="text-xs text-red-400">{exportError}</p>
-        ) : null}
-        {templateError ? (
-          <p className="text-xs text-red-400">{templateError}</p>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void exportCopy()}>
-            <Copy className="h-3.5 w-3.5" /> Copy JSON
-          </Button>
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={exportDownload}>
-            <Download className="h-3.5 w-3.5" /> Download JSON
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5"
-            onClick={() => {
-              resetImportDialog()
-              setImportOpen(true)
-            }}
-          >
-            <Upload className="h-3.5 w-3.5" /> Import…
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1 border-t border-neutral-800">
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void downloadAiSpec()}>
-            <FileText className="h-3.5 w-3.5" /> AI import spec (.md)
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5"
-            onClick={() => void downloadExampleCatalog()}
-          >
-            <Download className="h-3.5 w-3.5" /> Example catalog (.json)
-          </Button>
-        </div>
-      </div>
-
       <Dialog
         open={importOpen}
         onOpenChange={open => {
@@ -372,30 +310,32 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
           </DialogHeader>
           <div className="space-y-3 py-2 overflow-y-auto flex-1 min-h-0">
             <div className="rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 space-y-2">
-              <p className="text-[11px] text-neutral-500">
-                Need the full rules or a starter file for an AI? Download the spec and example (same as Import / export
-                above).
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => void downloadAiSpec()}
-                >
-                  <FileText className="h-3.5 w-3.5" /> AI spec
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() => void downloadExampleCatalog()}
-                >
-                  <Download className="h-3.5 w-3.5" /> Example JSON
-                </Button>
+              <div className="flex flex-wrap items-center gap-2 justify-between">
+                <span className="text-[11px] text-neutral-500">AI / tooling templates</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => void downloadAiSpec()}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Spec (.md)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => void downloadExampleCatalog()}
+                  >
+                    <Download className="h-3.5 w-3.5" /> Example (.json)
+                  </Button>
+                </div>
               </div>
+              {templateError ? (
+                <p className="text-xs text-red-400">{templateError}</p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label className="text-neutral-400">Paste JSON</Label>
@@ -749,4 +689,4 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
       </div>
     </div>
   )
-}
+})

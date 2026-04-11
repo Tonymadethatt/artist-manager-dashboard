@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw } from 'lucide-react'
+import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw, Copy, Download, Upload } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { useMonthlyFees } from '@/hooks/useMonthlyFees'
@@ -46,7 +46,11 @@ import {
   defaultArtistPromisePresets,
 } from '@/lib/showReportCatalog'
 import { usePricingCatalog } from '@/hooks/usePricingCatalog'
-import { EarningsPricingPanel } from '@/components/earnings/EarningsPricingPanel'
+import {
+  EarningsPricingPanel,
+  type EarningsPricingPanelHandle,
+} from '@/components/earnings/EarningsPricingPanel'
+import { copyCatalogJsonToClipboard, triggerDownloadCatalogJson } from '@/lib/pricing/catalogExportActions'
 import {
   catalogHasMinimumForDealLogging,
   computeDealPrice,
@@ -650,6 +654,8 @@ export default function Earnings() {
   const location = useLocation()
   const navigate = useNavigate()
   const pricingCatalog = usePricingCatalog()
+  const pricingPanelRef = useRef<EarningsPricingPanelHandle>(null)
+  const [pricingToolbarError, setPricingToolbarError] = useState<string | null>(null)
   const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid, refetch } = useDeals()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
@@ -694,6 +700,7 @@ export default function Earnings() {
 
   const goEarningsSection = useCallback(
     (s: 'deals' | 'pricing') => {
+      setPricingToolbarError(null)
       const p = new URLSearchParams(location.search)
       if (s === 'pricing') p.set('tab', 'pricing')
       else p.delete('tab')
@@ -703,6 +710,22 @@ export default function Earnings() {
     },
     [location.pathname, location.search, navigate],
   )
+
+  const onPricingCopyJson = useCallback(async () => {
+    if (pricingCatalog.loading) return
+    setPricingToolbarError(null)
+    try {
+      await copyCatalogJsonToClipboard(pricingCatalog.doc)
+    } catch {
+      setPricingToolbarError('Could not copy.')
+    }
+  }, [pricingCatalog.doc, pricingCatalog.loading])
+
+  const onPricingDownloadJson = useCallback(() => {
+    if (pricingCatalog.loading) return
+    setPricingToolbarError(null)
+    triggerDownloadCatalogJson(pricingCatalog.doc)
+  }, [pricingCatalog.doc, pricingCatalog.loading])
 
   function showFormToast(msg: string) {
     setFormToast(msg)
@@ -1095,7 +1118,7 @@ export default function Earnings() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex rounded-lg border border-neutral-800 p-0.5 bg-neutral-900/80">
           <button
             type="button"
@@ -1118,15 +1141,38 @@ export default function Earnings() {
             Pricing &amp; fees
           </button>
         </div>
+        {earningsSection === 'pricing' && !pricingCatalog.loading ? (
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {pricingToolbarError ? (
+              <span className="text-xs text-red-400 max-w-[200px] sm:max-w-none">{pricingToolbarError}</span>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => void onPricingCopyJson()}
+            >
+              <Copy className="h-3.5 w-3.5" /> Copy JSON
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={onPricingDownloadJson}>
+              <Download className="h-3.5 w-3.5" /> Download JSON
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => pricingPanelRef.current?.openImport()}
+            >
+              <Upload className="h-3.5 w-3.5" /> Import…
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {earningsSection === 'pricing' && (
-        <div className="space-y-3">
-          <p className="text-xs text-neutral-500">
-            Your reusable packages, rates, and add-ons. Changes save automatically.
-          </p>
-          <EarningsPricingPanel catalog={pricingCatalog} />
-        </div>
+        <EarningsPricingPanel ref={pricingPanelRef} catalog={pricingCatalog} />
       )}
 
       {earningsSection === 'deals' && (
