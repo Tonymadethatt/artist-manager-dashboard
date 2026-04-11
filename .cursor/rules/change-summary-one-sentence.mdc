@@ -1,0 +1,8 @@
+---
+description: After substantive work, summarize what changed in one plain sentence
+alwaysApply: true
+---
+
+# Change summary (closing)
+
+When you complete substantive work (implementation, fixes, or multi-step tasks), end your reply with **exactly one short sentence** in plain language that says **what changed** for the user—same style as a simple changelog blurb, not a bullet list, unless they explicitly asked for more detail.
