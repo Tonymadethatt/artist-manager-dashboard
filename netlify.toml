@@ -27,3 +27,8 @@
 [[schedule]]
   cron = "5 * * * *"
   function = "enqueue-gig-calendar-digest"
+
+# Every 12 minutes — import shared Google calendars + dedup scan (see docs/CRON_FIX_HANDOFF.md for external cron fallback).
+[[schedule]]
+  cron = "*/12 * * * *"
+  function = "google-calendar-background-sync"

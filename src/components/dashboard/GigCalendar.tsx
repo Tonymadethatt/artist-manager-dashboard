@@ -34,6 +34,8 @@ export type CalendarSyncEventChip = {
   event_end_at: string | null
   summary: string | null
   location: string | null
+  /** Google event description / notes (synced on import). */
+  description: string | null
   matched_venue_id: string | null
   display_status: 'visible' | 'hidden_duplicate' | 'needs_review'
   dedup_pair_deal_id: string | null
@@ -916,6 +918,14 @@ export function GigCalendar({
                   <section className={sectionWrap}>
                     <h3 className={sectionTitle}>Location</h3>
                     <p className="text-white text-sm whitespace-pre-wrap">{selectedSync.location}</p>
+                  </section>
+                )}
+                {selectedSync.description?.trim() && (
+                  <section className={sectionWrap}>
+                    <h3 className={sectionTitle}>Notes</h3>
+                    <p className="text-white text-sm whitespace-pre-wrap max-h-48 overflow-y-auto pr-1">
+                      {selectedSync.description}
+                    </p>
                   </section>
                 )}
                 <section className={sectionWrap}>

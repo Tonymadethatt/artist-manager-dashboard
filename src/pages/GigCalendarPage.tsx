@@ -25,7 +25,7 @@ export default function GigCalendarPage() {
     end.setUTCDate(end.getUTCDate() + 400)
     const { data, error } = await supabase
       .from('calendar_sync_event')
-      .select('id, event_start_at, event_end_at, summary, location, matched_venue_id, display_status, dedup_pair_deal_id')
+      .select('id, event_start_at, event_end_at, summary, location, description, matched_venue_id, display_status, dedup_pair_deal_id')
       .eq('user_id', user.id)
       .neq('display_status', 'hidden_duplicate')
       .gte('event_start_at', start.toISOString())
@@ -45,6 +45,7 @@ export default function GigCalendarPage() {
           event_end_at: row.event_end_at,
           summary: row.summary,
           location: row.location,
+          description: row.description ?? null,
           matched_venue_id: row.matched_venue_id,
           display_status: (row.display_status ?? 'visible') as 'visible' | 'hidden_duplicate' | 'needs_review',
           dedup_pair_deal_id: row.dedup_pair_deal_id ?? null,
@@ -65,6 +66,24 @@ export default function GigCalendarPage() {
     window.addEventListener('calendar-sync-events-changed', onChange)
     return () => window.removeEventListener('calendar-sync-events-changed', onChange)
   }, [loadSync])
+
+  /** Light polling while tab visible so scheduled server sync shows up without a full refresh. */
+  useEffect(() => {
+    if (!user?.id) return
+    const intervalMs = 120_000
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void loadSync()
+    }, intervalMs)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void loadSync()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [user?.id, loadSync])
 
   return (
     <div className="max-w-5xl space-y-4">

@@ -157,6 +157,7 @@ export function GoogleCalendarSettingsCard({
       error?: string
       imported?: number
       copied?: number
+      refreshed?: number
       skipped?: number
       tasksCreated?: number
       errorCount?: number
@@ -167,8 +168,11 @@ export function GoogleCalendarSettingsCard({
       return
     }
     const added = j.imported ?? j.copied ?? 0
+    const refreshed = j.refreshed ?? 0
     showToast(
-      `Synced: ${added} added to dashboard, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`,
+      refreshed > 0
+        ? `Synced: ${added} added, ${refreshed} updated from Google, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`
+        : `Synced: ${added} added to dashboard, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`,
       'ok',
     )
     void load()
@@ -226,6 +230,7 @@ export function GoogleCalendarSettingsCard({
     | {
         imported?: number
         copied?: number
+        refreshed?: number
         skipped?: number
         tasksCreated?: number
         errorCount?: number
@@ -249,7 +254,9 @@ export function GoogleCalendarSettingsCard({
         <p className="text-xs text-neutral-500 leading-relaxed max-w-prose">
           Use one shared calendar ID (the one you share with your DJ). Events import into the Gig calendar here; when you book a gig in Earnings,
           it is also created or updated on that same Google calendar. Your Google account must have write access to that calendar.
-          Imports that don&apos;t match a venue get a Pipeline task. Use Scan for duplicates to tidy overlapping imports vs booked deals.
+          Imports that don&apos;t match a venue get a Pipeline task. The server also runs import + duplicate scan on a schedule (about every 12 minutes)
+          for connected accounts, so the Gig calendar stays fresh without opening this page. Use <strong className="text-neutral-400">Sync now</strong> and{' '}
+          <strong className="text-neutral-400">Scan for duplicates</strong> when you want an immediate refresh.
         </p>
       </header>
 
@@ -397,8 +404,8 @@ export function GoogleCalendarSettingsCard({
             <div className="rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-xs text-neutral-400 space-y-1">
               <p className="text-neutral-300 font-medium">Last sync · {new Date(connection.last_sync_at).toLocaleString()}</p>
               <p>
-                Listed {summary.listed ?? '—'} · Added {summary.imported ?? summary.copied ?? 0} · Skipped{' '}
-                {summary.skipped ?? 0} · Tasks{' '}
+                Listed {summary.listed ?? '—'} · Added {summary.imported ?? summary.copied ?? 0}
+                {(summary.refreshed ?? 0) > 0 && <> · Refreshed {summary.refreshed}</>} · Skipped {summary.skipped ?? 0} · Tasks{' '}
                 {summary.tasksCreated ?? 0}
                 {(summary.errorCount ?? 0) > 0 && (
                   <span className="text-amber-400"> · {summary.errorCount} errors</span>

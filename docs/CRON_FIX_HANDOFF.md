@@ -15,6 +15,16 @@ A complete handoff for an AI assistant with access to a **cron-job MCP server** 
 
 - **`enqueue-gig-calendar-digest`** is still wired in **`netlify.toml`** (`cron = "5 * * * *"`). If Netlify scheduled functions remain flaky on your plan, add a **second** external cron (e.g. **hourly** POST to `https://artist-manager-dashboard.netlify.app/.netlify/functions/enqueue-gig-calendar-digest` with the same **`X-Queue-Secret`**). The handler only inserts rows when America/Los_Angeles is Sunday **5:00**–**5:59**; other hours no-op.
 
+### Google calendar background sync (import + dedup)
+
+- **`google-calendar-background-sync`** runs **import** from each user’s shared Google calendar into `calendar_sync_event`, then **duplicate scan** (same rules as Settings → Scan for duplicates). Eligible users are derived in the function from **`google_calendar_credentials`** (has `refresh_token`) and **`google_calendar_connection`** (non-empty `source_calendar_id`, `connected_at` set). There is **no** client-supplied `userId`.
+- **Netlify schedule:** `netlify.toml` includes `[[schedule]]` with `cron = "*/12 * * * *"` for this function. If scheduled functions are unreliable on the site plan (same caveats as `process-email-queue`), add an **external cron**:
+  - **URL:** `https://artist-manager-dashboard.netlify.app/.netlify/functions/google-calendar-background-sync`
+  - **Method:** `POST`
+  - **Header:** `X-Queue-Secret` matching Netlify **`PROCESS_QUEUE_SECRET`** (same secret as the email queue worker).
+  - **Schedule:** e.g. every **10–15 minutes** (avoid hammering Google Calendar API if many users connect later).
+- Each invocation processes up to **35** users (stable sort by `user_id`); if you grow beyond that, add a second staggered cron or raise the cap with a longer function timeout on a plan that supports it.
+
 ---
 
 ## The problem

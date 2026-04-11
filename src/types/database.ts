@@ -811,6 +811,7 @@ export interface Database {
           event_end_at: string | null
           summary: string | null
           location: string | null
+          description: string | null
           matched_venue_id: string | null
           follow_up_task_id: string | null
           display_status: string
@@ -831,6 +832,7 @@ export interface Database {
           event_end_at?: string | null
           summary?: string | null
           location?: string | null
+          description?: string | null
           matched_venue_id?: string | null
           follow_up_task_id?: string | null
           display_status?: string
@@ -851,6 +853,7 @@ export interface Database {
           event_end_at?: string | null
           summary?: string | null
           location?: string | null
+          description?: string | null
           matched_venue_id?: string | null
           follow_up_task_id?: string | null
           display_status?: string
