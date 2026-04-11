@@ -108,6 +108,13 @@ export function utcIsoToPacificDateAndTime(iso: string): { date: string; time: s
   return { date: `${y}-${mo}-${d}`, time: `${h}:${mi}` }
 }
 
+/** Google Calendar API timed event (Pacific wall) from a UTC instant. */
+export function googleTimedEventFromUtcIso(iso: string): { dateTime: string; timeZone: string } | null {
+  const x = utcIsoToPacificDateAndTime(iso)
+  if (!x) return null
+  return { dateTime: `${x.date}T${x.time}:00`, timeZone: LA }
+}
+
 /** Calendar day key (YYYY-MM-DD) in LA for an instant. */
 export function pacificDateKeyFromUtcIso(iso: string): string | null {
   const x = utcIsoToPacificDateAndTime(iso)

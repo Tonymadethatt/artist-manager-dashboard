@@ -25,8 +25,9 @@ export default function GigCalendarPage() {
     end.setUTCDate(end.getUTCDate() + 400)
     const { data, error } = await supabase
       .from('calendar_sync_event')
-      .select('id, event_start_at, event_end_at, summary, location, matched_venue_id')
+      .select('id, event_start_at, event_end_at, summary, location, matched_venue_id, display_status, dedup_pair_deal_id')
       .eq('user_id', user.id)
+      .neq('display_status', 'hidden_duplicate')
       .gte('event_start_at', start.toISOString())
       .lte('event_start_at', end.toISOString())
       .order('event_start_at', { ascending: true })
@@ -45,6 +46,8 @@ export default function GigCalendarPage() {
           summary: row.summary,
           location: row.location,
           matched_venue_id: row.matched_venue_id,
+          display_status: (row.display_status ?? 'visible') as 'visible' | 'hidden_duplicate' | 'needs_review',
+          dedup_pair_deal_id: row.dedup_pair_deal_id ?? null,
         })),
     )
   }, [user?.id])

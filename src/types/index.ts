@@ -357,6 +357,10 @@ export interface Deal {
   event_end_at: string | null
   /** When set, show is off the calendar (cancelled) but deal row kept for earnings history. */
   event_cancelled_at: string | null
+  /** Google Calendar event id on the shared DJ calendar (server-written). */
+  google_shared_calendar_event_id: string | null
+  /** Etag for Calendar API conditional patch. */
+  google_shared_calendar_event_etag: string | null
   /** Set when the deal first becomes calendar-eligible; drives sidebar Calendar badge vs nav_badges.seen_at. */
   calendar_first_listed_at: string | null
   ics_invite_sent_at: string | null

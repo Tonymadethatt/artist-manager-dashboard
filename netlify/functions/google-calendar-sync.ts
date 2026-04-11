@@ -238,6 +238,18 @@ export const handler: Handler = async event => {
 
   const mapped = new Set((existingRows ?? []).map(r => r.source_event_id as string))
 
+  const { data: dealOwnedRows } = await supabase
+    .from('deals')
+    .select('google_shared_calendar_event_id')
+    .eq('user_id', userId)
+    .not('google_shared_calendar_event_id', 'is', null)
+
+  const ownedGoogleEventIds = new Set(
+    (dealOwnedRows ?? [])
+      .map(r => r.google_shared_calendar_event_id as string)
+      .filter(Boolean),
+  )
+
   const { data: venueRows } = await supabase
     .from('venues')
     .select('id, name, location, city')
@@ -258,6 +270,10 @@ export const handler: Handler = async event => {
       continue
     }
     if (mapped.has(eid)) {
+      skipped++
+      continue
+    }
+    if (ownedGoogleEventIds.has(eid)) {
       skipped++
       continue
     }

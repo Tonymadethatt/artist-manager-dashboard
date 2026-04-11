@@ -46,7 +46,7 @@ import {
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
 } from '@/lib/calendar/pacificWallTime'
-import { syncDealCalendarEmails } from '@/lib/calendar/queueGigCalendarEmails'
+import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
 import { useNavBadges } from '@/context/NavBadgesContext'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
@@ -678,7 +678,7 @@ export default function Earnings() {
     if (saved) {
       const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
       const vBefore = d0.venue_id ? venues.find(v => v.id === d0.venue_id) ?? d0.venue : d0.venue
-      await syncDealCalendarEmails({
+      await syncDealCalendarSideEffects({
         beforeDeal: d0,
         afterDeal: saved,
         venueBefore: vBefore ?? null,
@@ -895,7 +895,7 @@ export default function Earnings() {
       const vBefore = editDeal
         ? venues.find(v => v.id === editDeal.venue_id) ?? editDeal.venue
         : null
-      await syncDealCalendarEmails({
+      await syncDealCalendarSideEffects({
         beforeDeal: editDeal,
         afterDeal: saved,
         venueBefore: vBefore,

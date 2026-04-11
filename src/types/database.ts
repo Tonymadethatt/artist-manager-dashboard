@@ -257,6 +257,8 @@ export interface Database {
           event_start_at: string | null
           event_end_at: string | null
           event_cancelled_at: string | null
+          google_shared_calendar_event_id: string | null
+          google_shared_calendar_event_etag: string | null
           calendar_first_listed_at: string | null
           ics_invite_sent_at: string | null
           reminder_24h_queued_at: string | null
@@ -285,6 +287,8 @@ export interface Database {
           event_start_at?: string | null
           event_end_at?: string | null
           event_cancelled_at?: string | null
+          google_shared_calendar_event_id?: string | null
+          google_shared_calendar_event_etag?: string | null
           calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
@@ -313,6 +317,8 @@ export interface Database {
           event_start_at?: string | null
           event_end_at?: string | null
           event_cancelled_at?: string | null
+          google_shared_calendar_event_id?: string | null
+          google_shared_calendar_event_etag?: string | null
           calendar_first_listed_at?: string | null
           ics_invite_sent_at?: string | null
           reminder_24h_queued_at?: string | null
@@ -758,6 +764,8 @@ export interface Database {
           sync_future_days: number
           last_sync_at: string | null
           last_sync_summary: Record<string, unknown> | null
+          last_deal_push_at: string | null
+          last_deal_push_error: string | null
           connected_at: string | null
           updated_at: string
         }
@@ -770,6 +778,8 @@ export interface Database {
           sync_future_days?: number
           last_sync_at?: string | null
           last_sync_summary?: Record<string, unknown> | null
+          last_deal_push_at?: string | null
+          last_deal_push_error?: string | null
           connected_at?: string | null
           updated_at?: string
         }
@@ -782,6 +792,8 @@ export interface Database {
           sync_future_days?: number
           last_sync_at?: string | null
           last_sync_summary?: Record<string, unknown> | null
+          last_deal_push_at?: string | null
+          last_deal_push_error?: string | null
           connected_at?: string | null
           updated_at?: string
         }
@@ -801,6 +813,10 @@ export interface Database {
           location: string | null
           matched_venue_id: string | null
           follow_up_task_id: string | null
+          display_status: string
+          dedup_pair_deal_id: string | null
+          dedup_rule: string | null
+          dedup_score: number | null
           created_at: string
           updated_at: string
         }
@@ -817,6 +833,10 @@ export interface Database {
           location?: string | null
           matched_venue_id?: string | null
           follow_up_task_id?: string | null
+          display_status?: string
+          dedup_pair_deal_id?: string | null
+          dedup_rule?: string | null
+          dedup_score?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -833,6 +853,10 @@ export interface Database {
           location?: string | null
           matched_venue_id?: string | null
           follow_up_task_id?: string | null
+          display_status?: string
+          dedup_pair_deal_id?: string | null
+          dedup_rule?: string | null
+          dedup_score?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -847,6 +871,12 @@ export interface Database {
             foreignKeyName: 'calendar_sync_event_follow_up_task_id_fkey'
             columns: ['follow_up_task_id']
             referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'calendar_sync_event_dedup_pair_deal_id_fkey'
+            columns: ['dedup_pair_deal_id']
+            referencedRelation: 'deals'
             referencedColumns: ['id']
           },
         ]

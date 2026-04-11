@@ -26,6 +26,7 @@ export function GoogleCalendarSettingsCard({
   const [futureDays, setFutureDays] = useState('180')
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [dedupScanning, setDedupScanning] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
   /** `google_email` can be null if an older OAuth flow lacked email scopes; tokens still work. */
@@ -174,6 +175,40 @@ export function GoogleCalendarSettingsCard({
     window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
   }
 
+  const handleDedupScan = async () => {
+    if (!connected) {
+      showToast('Connect Google first.', 'err')
+      return
+    }
+    const token = await getAccessToken()
+    if (!token) {
+      showToast('Sign in again.', 'err')
+      return
+    }
+    setDedupScanning(true)
+    const res = await fetch(fnPath('google-calendar-dedup-scan'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const j = (await res.json().catch(() => ({}))) as {
+      error?: string
+      scanned?: number
+      hidden_duplicates?: number
+      needs_review?: number
+    }
+    setDedupScanning(false)
+    if (!res.ok) {
+      showToast(j.error ?? 'Duplicate scan failed.', 'err')
+      return
+    }
+    showToast(
+      `Duplicate scan: ${j.hidden_duplicates ?? 0} hidden as duplicates, ${j.needs_review ?? 0} flagged for review (${j.scanned ?? 0} rows).`,
+      'ok',
+    )
+    void load()
+    window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
+  }
+
   const handleDisconnect = async () => {
     const token = await getAccessToken()
     if (!token) return
@@ -212,8 +247,9 @@ export function GoogleCalendarSettingsCard({
       <header className="space-y-1 border-b border-neutral-800/80 pb-3 md:pb-4">
         <h2 className="text-sm font-semibold tracking-tight text-neutral-100">Google Calendar sync</h2>
         <p className="text-xs text-neutral-500 leading-relaxed max-w-prose">
-          Import events from your shared Google calendar into the Gig calendar on this dashboard. Nothing is written back to Google.
-          Events that don&apos;t match a venue get a Pipeline task to set them up.
+          Use one shared calendar ID (the one you share with your DJ). Events import into the Gig calendar here; when you book a gig in Earnings,
+          it is also created or updated on that same Google calendar. Your Google account must have write access to that calendar.
+          Imports that don&apos;t match a venue get a Pipeline task. Use Scan for duplicates to tidy overlapping imports vs booked deals.
         </p>
       </header>
 
@@ -273,7 +309,7 @@ export function GoogleCalendarSettingsCard({
           </p>
 
           <div className="space-y-1">
-            <Label htmlFor="gcal-source">Shared source calendar ID</Label>
+            <Label htmlFor="gcal-source">Shared calendar ID (import + publish)</Label>
             <Input
               id="gcal-source"
               value={sourceCal}
@@ -333,7 +369,29 @@ export function GoogleCalendarSettingsCard({
             >
               {syncing ? 'Syncing…' : 'Sync now'}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-neutral-700"
+              disabled={!connected || dedupScanning}
+              onClick={() => void handleDedupScan()}
+            >
+              {dedupScanning ? 'Scanning…' : 'Scan for duplicates'}
+            </Button>
           </div>
+
+          {connection?.last_deal_push_error && (
+            <div className="rounded-md border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-100/90">
+              <p className="font-medium text-amber-50">Last gig publish to Google failed</p>
+              <p className="mt-1 text-amber-100/85">{connection.last_deal_push_error}</p>
+              {connection.last_deal_push_at && (
+                <p className="mt-1 text-[11px] text-amber-200/70">
+                  {new Date(connection.last_deal_push_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
 
           {connection?.last_sync_at && summary && (
             <div className="rounded-md border border-neutral-800 bg-neutral-950/60 p-3 text-xs text-neutral-400 space-y-1">

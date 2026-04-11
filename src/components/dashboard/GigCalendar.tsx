@@ -35,6 +35,8 @@ export type CalendarSyncEventChip = {
   summary: string | null
   location: string | null
   matched_venue_id: string | null
+  display_status: 'visible' | 'hidden_duplicate' | 'needs_review'
+  dedup_pair_deal_id: string | null
 }
 
 type CalendarDeal = Deal & {
@@ -286,13 +288,17 @@ export function GigCalendar({
     return end < nowMs ? 'past' : 'upcoming'
   }
 
-  function syncChipClass(compact: boolean, isPast: boolean) {
+  function syncChipClass(row: CalendarSyncEventChip, compact: boolean, isPast: boolean) {
+    const review = row.display_status === 'needs_review'
     const base = cn(
       'block w-full text-left rounded-md font-medium border border-dashed text-[10px] sm:text-[11px] leading-tight transition-colors hover:brightness-110',
       compact ? 'truncate px-1 py-0.5' : 'px-2 py-1.5 text-xs',
-      isPast
-        ? 'border-neutral-700 bg-neutral-950 text-neutral-400'
-        : 'border-neutral-600 bg-neutral-900/90 text-neutral-200',
+      review &&
+        'border-amber-600/90 border-dashed ring-1 ring-amber-900/50 bg-amber-950/25 text-amber-100/95',
+      !review &&
+        (isPast
+          ? 'border-neutral-700 bg-neutral-950 text-neutral-400'
+          : 'border-neutral-600 bg-neutral-900/90 text-neutral-200'),
     )
     return base
   }
@@ -512,7 +518,7 @@ export function GigCalendar({
                               key={`sync-${ch.row.id}-${i}`}
                               type="button"
                               onClick={() => setSelectedSync(ch.row)}
-                              className={syncChipClass(true, isPastDay)}
+                              className={syncChipClass(ch.row, true, isPastDay)}
                             >
                               {shortSyncTitle(ch.row)}
                             </button>
@@ -603,7 +609,7 @@ export function GigCalendar({
                         key={row.id}
                         type="button"
                         onClick={() => setSelectedSync(row)}
-                        className={syncChipClass(true, isPastDay)}
+                        className={syncChipClass(row, true, isPastDay)}
                       >
                         {shortSyncTitle(row)}
                       </button>
@@ -670,7 +676,7 @@ export function GigCalendar({
                     <button
                       type="button"
                       onClick={() => setSelectedSync(row)}
-                      className={cn(syncChipClass(false, dayIsPastForPanel), 'w-full text-left')}
+                      className={cn(syncChipClass(row, false, dayIsPastForPanel), 'w-full text-left')}
                     >
                       <span className="font-medium block text-inherit">{longSyncTitle(row)}</span>
                       {row.event_start_at && row.event_end_at && (
@@ -875,6 +881,24 @@ export function GigCalendar({
                 <p className="text-xs text-neutral-500">
                   Imported from your shared Google calendar (see Settings). Dashed chips on the grid are these events.
                 </p>
+                {selectedSync.display_status === 'needs_review' && (
+                  <div className="rounded-md border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-100/95">
+                    Possible duplicate with a booked gig — review times and titles in Earnings vs this import. Run{' '}
+                    <strong className="text-amber-50">Scan for duplicates</strong> in Settings after you clean up.
+                    {selectedSync.dedup_pair_deal_id && (
+                      <>
+                        {' '}
+                        <Link
+                          className="underline font-medium text-amber-200 hover:text-white"
+                          to={`/earnings#earnings-deal-${selectedSync.dedup_pair_deal_id}`}
+                          onClick={() => setSelectedSync(null)}
+                        >
+                          Open related deal
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
                 <section className={sectionWrap}>
                   <h3 className={sectionTitle}>Schedule</h3>
                   {selectedSync.event_start_at && selectedSync.event_end_at ? (
