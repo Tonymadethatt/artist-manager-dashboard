@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RefreshCw, ScanLine } from 'lucide-react'
 import type { Deal, Venue } from '@/types'
 import { COMMISSION_TIER_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_TRACK_LABELS } from '@/types'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
@@ -121,17 +121,29 @@ function longSyncTitle(row: CalendarSyncEventChip): string {
   return (row.summary ?? 'Calendar event').trim() || 'Calendar event'
 }
 
+export type GigCalendarGoogleToolbarProps = {
+  onSync: () => void
+  onDedup: () => void
+  syncing: boolean
+  dedupScanning: boolean
+  syncDisabled: boolean
+  dedupDisabled: boolean
+}
+
 export function GigCalendar({
   deals,
   venues,
   calendarSyncEvents = [],
   loading,
+  googleCalendarToolbar,
 }: {
   deals: CalendarDeal[]
   venues: Venue[]
   /** Copied from shared Google Calendar (see Settings → Google Calendar sync). */
   calendarSyncEvents?: CalendarSyncEventChip[]
   loading?: boolean
+  /** Optional icon actions (same Netlify handlers as Settings → Google Calendar). */
+  googleCalendarToolbar?: GigCalendarGoogleToolbarProps
 }) {
   const [cursor, setCursor] = useState(() => new Date())
   const [view, setView] = useState<ViewMode>('week')
@@ -374,7 +386,7 @@ export function GigCalendar({
             </p>
           </div>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 w-full lg:w-auto min-w-0">
           <div className="flex rounded-md border border-neutral-700 overflow-hidden w-fit max-w-full">
             {(['day', 'week', 'month'] as const).map(v => (
               <button
@@ -390,7 +402,7 @@ export function GigCalendar({
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 sm:flex-initial">
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={goToday}>
               Today
             </Button>
@@ -411,6 +423,59 @@ export function GigCalendar({
             >
               Edit gigs →
             </Link>
+            {googleCalendarToolbar && (
+              <div className="flex items-center gap-0.5 sm:ml-auto shrink-0 border-t border-neutral-800 pt-2 mt-1 w-full justify-end sm:border-t-0 sm:pt-0 sm:mt-0 sm:w-auto sm:border-l sm:pl-2 sm:ml-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-neutral-400 hover:text-neutral-100"
+                  disabled={
+                    googleCalendarToolbar.syncDisabled ||
+                    googleCalendarToolbar.syncing ||
+                    googleCalendarToolbar.dedupScanning
+                  }
+                  aria-label="Import events from Google Calendar"
+                  title={
+                    googleCalendarToolbar.syncDisabled
+                      ? 'Connect Google Calendar in Settings and set a shared calendar ID'
+                      : 'Import events from Google Calendar'
+                  }
+                  onClick={() => googleCalendarToolbar.onSync()}
+                >
+                  <RefreshCw
+                    className={cn('h-4 w-4', googleCalendarToolbar.syncing && 'animate-spin')}
+                    aria-hidden
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-neutral-400 hover:text-neutral-100"
+                  disabled={
+                    googleCalendarToolbar.dedupDisabled ||
+                    googleCalendarToolbar.dedupScanning ||
+                    googleCalendarToolbar.syncing
+                  }
+                  aria-label="Scan calendar for duplicates"
+                  title={
+                    googleCalendarToolbar.dedupDisabled
+                      ? 'Connect Google Calendar in Settings first'
+                      : 'Scan calendar for duplicates'
+                  }
+                  onClick={() => googleCalendarToolbar.onDedup()}
+                >
+                  <ScanLine
+                    className={cn(
+                      'h-4 w-4',
+                      googleCalendarToolbar.dedupScanning && 'animate-pulse text-neutral-200',
+                    )}
+                    aria-hidden
+                  />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

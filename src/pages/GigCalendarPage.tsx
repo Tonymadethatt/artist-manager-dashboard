@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { GigCalendar, type CalendarSyncEventChip } from '@/components/dashboard/GigCalendar'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { supabase } from '@/lib/supabase'
+
+function netlifyFunctionPath(name: string): string {
+  return `/.netlify/functions/${name}`
+}
 
 export default function GigCalendarPage() {
   const { user } = useAuth()
@@ -13,6 +17,60 @@ export default function GigCalendarPage() {
   const { markSeen } = useNavBadges()
   const loading = dealsLoading || venuesLoading
   const [calendarSyncEvents, setCalendarSyncEvents] = useState<CalendarSyncEventChip[]>([])
+  const [gcalConn, setGcalConn] = useState<{
+    connected_at: string | null
+    source_calendar_id: string
+  } | null>(null)
+  const [gcalConnLoading, setGcalConnLoading] = useState(true)
+  const [googleSyncing, setGoogleSyncing] = useState(false)
+  const [googleDedupScanning, setGoogleDedupScanning] = useState(false)
+  const [gcalToast, setGcalToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const gcalToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showGcalToast = useCallback((msg: string, type: 'ok' | 'err') => {
+    if (gcalToastTimer.current) clearTimeout(gcalToastTimer.current)
+    setGcalToast({ msg, type })
+    gcalToastTimer.current = setTimeout(() => setGcalToast(null), 3200)
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (gcalToastTimer.current) clearTimeout(gcalToastTimer.current)
+    },
+    [],
+  )
+
+  const loadGcalConnection = useCallback(async () => {
+    if (!user?.id) {
+      setGcalConn(null)
+      setGcalConnLoading(false)
+      return
+    }
+    setGcalConnLoading(true)
+    const { data, error } = await supabase
+      .from('google_calendar_connection')
+      .select('connected_at, source_calendar_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    setGcalConnLoading(false)
+    if (error) {
+      console.warn('[GigCalendarPage] google_calendar_connection', error)
+      setGcalConn(null)
+      return
+    }
+    setGcalConn(
+      data
+        ? {
+            connected_at: data.connected_at ?? null,
+            source_calendar_id: data.source_calendar_id ?? '',
+          }
+        : null,
+    )
+  }, [user?.id])
+
+  useEffect(() => {
+    void loadGcalConnection()
+  }, [loadGcalConnection])
 
   const loadSync = useCallback(async () => {
     if (!user?.id) {
@@ -85,13 +143,111 @@ export default function GigCalendarPage() {
     }
   }, [user?.id, loadSync])
 
+  const googleConnected = !!gcalConn?.connected_at
+  const sourceCalReady = !!(gcalConn?.source_calendar_id ?? '').trim()
+
+  const handleGoogleToolbarSync = useCallback(async () => {
+    if (!googleConnected || !sourceCalReady) {
+      showGcalToast('Connect Google Calendar in Settings and set a shared calendar ID.', 'err')
+      return
+    }
+    const { data, error } = await supabase.auth.getSession()
+    if (error || !data.session?.access_token) {
+      showGcalToast('Sign in again to sync.', 'err')
+      return
+    }
+    setGoogleSyncing(true)
+    const res = await fetch(netlifyFunctionPath('google-calendar-sync'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    })
+    const j = (await res.json().catch(() => ({}))) as {
+      error?: string
+      imported?: number
+      copied?: number
+      refreshed?: number
+      skipped?: number
+      tasksCreated?: number
+    }
+    setGoogleSyncing(false)
+    if (!res.ok) {
+      showGcalToast(j.error ?? 'Sync failed.', 'err')
+      return
+    }
+    const added = j.imported ?? j.copied ?? 0
+    const refreshed = j.refreshed ?? 0
+    showGcalToast(
+      refreshed > 0
+        ? `Synced: ${added} added, ${refreshed} updated, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} tasks.`
+        : `Synced: ${added} added, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} tasks.`,
+      'ok',
+    )
+    void loadSync()
+    void loadGcalConnection()
+    window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
+  }, [googleConnected, sourceCalReady, loadSync, loadGcalConnection, showGcalToast])
+
+  const handleGoogleToolbarDedup = useCallback(async () => {
+    if (!googleConnected) {
+      showGcalToast('Connect Google Calendar in Settings first.', 'err')
+      return
+    }
+    const { data, error } = await supabase.auth.getSession()
+    if (error || !data.session?.access_token) {
+      showGcalToast('Sign in again.', 'err')
+      return
+    }
+    setGoogleDedupScanning(true)
+    const res = await fetch(netlifyFunctionPath('google-calendar-dedup-scan'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    })
+    const j = (await res.json().catch(() => ({}))) as {
+      error?: string
+      scanned?: number
+      hidden_duplicates?: number
+      needs_review?: number
+    }
+    setGoogleDedupScanning(false)
+    if (!res.ok) {
+      showGcalToast(j.error ?? 'Duplicate scan failed.', 'err')
+      return
+    }
+    showGcalToast(
+      `Duplicates: ${j.hidden_duplicates ?? 0} hidden, ${j.needs_review ?? 0} need review (${j.scanned ?? 0} rows).`,
+      'ok',
+    )
+    void loadSync()
+    window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
+  }, [googleConnected, loadSync, showGcalToast])
+
   return (
-    <div className="max-w-5xl space-y-4">
+    <div className="max-w-5xl space-y-4 relative">
+      {gcalToast && (
+        <div
+          className={`fixed top-4 right-4 z-50 max-w-[min(20rem,calc(100vw-2rem))] px-3 py-2 rounded-lg text-xs font-medium shadow-lg border ${
+            gcalToast.type === 'ok'
+              ? 'bg-neutral-900 border-emerald-500/30 text-emerald-300'
+              : 'bg-neutral-900 border-red-500/30 text-red-300'
+          }`}
+          role="status"
+        >
+          {gcalToast.msg}
+        </div>
+      )}
       <GigCalendar
         deals={deals}
         venues={venues}
         calendarSyncEvents={calendarSyncEvents}
         loading={loading}
+        googleCalendarToolbar={{
+          onSync: () => void handleGoogleToolbarSync(),
+          onDedup: () => void handleGoogleToolbarDedup(),
+          syncing: googleSyncing,
+          dedupScanning: googleDedupScanning,
+          syncDisabled: gcalConnLoading || !googleConnected || !sourceCalReady,
+          dedupDisabled: gcalConnLoading || !googleConnected,
+        }}
       />
     </div>
   )
