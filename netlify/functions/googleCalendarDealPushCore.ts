@@ -200,6 +200,24 @@ async function googleInsertEvent(args: {
   return res.json() as Promise<{ id: string; etag?: string }>
 }
 
+async function googleGetEvent(args: {
+  accessToken: string
+  calendarId: string
+  eventId: string
+}): Promise<{ id: string; etag?: string }> {
+  const cal = encodeURIComponent(args.calendarId)
+  const eid = encodeURIComponent(args.eventId)
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${cal}/events/${eid}`,
+    { headers: { Authorization: `Bearer ${args.accessToken}` } },
+  )
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`events.get ${res.status}: ${t}`)
+  }
+  return res.json() as Promise<{ id: string; etag?: string }>
+}
+
 async function googlePatchEvent(args: {
   accessToken: string
   calendarId: string
@@ -227,6 +245,46 @@ async function googlePatchEvent(args: {
     throw new Error(`events.patch ${res.status}: ${t}`)
   }
   return res.json() as Promise<{ id: string; etag?: string }>
+}
+
+/**
+ * Stale stored etag (edits in Google UI, import, etc.) yields 412 Precondition Failed.
+ * Refresh etag via GET, retry PATCH; if still 412, PATCH without If-Match (last resort).
+ */
+async function googlePatchEventWithStaleEtagRetry(args: {
+  accessToken: string
+  calendarId: string
+  eventId: string
+  etag: string | null
+  body: Record<string, unknown>
+}): Promise<{ id: string; etag?: string }> {
+  const patch = (etag: string | null) =>
+    googlePatchEvent({
+      accessToken: args.accessToken,
+      calendarId: args.calendarId,
+      eventId: args.eventId,
+      etag,
+      body: args.body,
+    })
+
+  try {
+    return await patch(args.etag)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (!msg.includes('412')) throw e
+    const fresh = await googleGetEvent({
+      accessToken: args.accessToken,
+      calendarId: args.calendarId,
+      eventId: args.eventId,
+    })
+    try {
+      return await patch(fresh.etag ?? null)
+    } catch (e2) {
+      const msg2 = e2 instanceof Error ? e2.message : String(e2)
+      if (!msg2.includes('412')) throw e2
+      return await patch(null)
+    }
+  }
 }
 
 function buildEventPayload(deal: DealPushRow, venue: VenuePushRow | null): Record<string, unknown> {
@@ -405,7 +463,7 @@ export async function performGoogleCalendarDealPush(args: {
         ?.google_shared_calendar_event_etag ?? null
 
     if (existingId) {
-      const patched = await googlePatchEvent({
+      const patched = await googlePatchEventWithStaleEtagRetry({
         accessToken,
         calendarId,
         eventId: existingId,
@@ -460,7 +518,7 @@ export async function performGoogleCalendarDealPush(args: {
       } | null
       const oid = row?.google_shared_calendar_event_id
       if (oid) {
-        await googlePatchEvent({
+        await googlePatchEventWithStaleEtagRetry({
           accessToken,
           calendarId,
           eventId: oid,
