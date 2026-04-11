@@ -8,10 +8,7 @@ import { refreshAccessToken } from './googleCalendarOAuthShared'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { googleTimedEventFromUtcIso } from '../../src/lib/calendar/pacificWallTime'
 import type { DealTerms, OutreachStatus } from '../../src/types/index'
-import {
-  formatVenueAddressForGoogleCalendar,
-  formatVenueDescriptionBlock,
-} from '../../src/lib/calendar/venueAddressForGoogle'
+import { formatVenueAddressForGoogleCalendar } from '../../src/lib/calendar/venueAddressForGoogle'
 
 export type DealPushRow = {
   id: string
@@ -89,11 +86,6 @@ function normalizeEmbeddedVenue(raw: unknown): { status: OutreachStatus } | null
 
 function buildGoogleEventDescription(deal: DealPushRow, venue: VenuePushRow | null): string | undefined {
   const parts: string[] = []
-
-  if (venue) {
-    const locBlock = formatVenueDescriptionBlock(venue)
-    if (locBlock) parts.push(locBlock)
-  }
 
   const notes = deal.notes?.trim()
   if (notes) parts.push(notes)
@@ -295,10 +287,6 @@ function buildEventPayload(deal: DealPushRow, venue: VenuePushRow | null): Recor
   }
   const base = deal.description.trim() || 'Gig'
   const summary = venue ? `${base} · ${venue.name}` : base
-  const location =
-    venue != null
-      ? (formatVenueAddressForGoogleCalendar(venue)?.trim() || venue.name.trim())
-      : undefined
   const description = buildGoogleEventDescription(deal, venue)
   const payload: Record<string, unknown> = {
     summary,
@@ -306,7 +294,10 @@ function buildEventPayload(deal: DealPushRow, venue: VenuePushRow | null): Recor
     start,
     end,
   }
-  if (location) payload.location = location
+  if (venue != null) {
+    payload.location =
+      (formatVenueAddressForGoogleCalendar(venue)?.trim() || venue.name.trim()) || 'Venue'
+  }
   return payload
 }
 

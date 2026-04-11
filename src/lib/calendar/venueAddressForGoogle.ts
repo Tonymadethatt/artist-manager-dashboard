@@ -65,36 +65,3 @@ export function formatVenueAddressForGoogleCalendar(
   }
   return name || undefined
 }
-
-/**
- * Multi-line block for event description / notes: venue name + address lines Google may not echo from `location` alone.
- */
-export function formatVenueDescriptionBlock(
-  v: VenueAddressForGoogle | null | undefined,
-): string | undefined {
-  if (!v) return undefined
-  const lines: string[] = []
-  const name = v.name?.trim()
-  if (name) lines.push(`Venue: ${name}`)
-
-  const line1 = v.location?.trim()
-  const line2 = v.address_line2?.trim()
-  if (line1) lines.push(line1)
-  if (line2) lines.push(line2)
-
-  const city = v.city?.trim()
-  const region = v.region?.trim()
-  const zip = v.postal_code?.trim()
-  let cityLine = ''
-  if (city && region && zip) cityLine = `${city}, ${region} ${zip}`
-  else if (city && region) cityLine = `${city}, ${region}`
-  else if (city && zip) cityLine = `${city} ${zip}`
-  else cityLine = [city, region, zip].filter(Boolean).join(' ').trim()
-  if (cityLine) lines.push(cityLine)
-
-  const country = v.country?.trim()
-  if (country) lines.push(country)
-
-  const text = lines.join('\n').trim()
-  return text.length ? text : undefined
-}
