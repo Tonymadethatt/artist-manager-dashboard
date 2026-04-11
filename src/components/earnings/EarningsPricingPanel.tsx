@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { Plus, Trash2, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Plus, Trash2, Loader2, Upload, Download, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,7 +20,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import type { PricingCatalogHook } from '@/hooks/usePricingCatalog'
+import {
+  parsePricingCatalogFromJsonText,
+  serializePricingCatalogDoc,
+} from '@/lib/pricing/coercePricingCatalogDoc'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -30,9 +41,71 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
+function catalogSummaryLines(doc: PricingCatalogDoc): string[] {
+  const p = doc.policies
+  return [
+    `Policies: deposit ${p.defaultDepositPercent}% · tax ${p.salesTaxPercent}% · min billable ${p.minimumBillableHours}h`,
+    `Packages: ${doc.packages.length} · Services: ${doc.services.length} · Add-ons: ${doc.addons.length}`,
+    `Discounts: ${doc.discounts.length} · Surcharges: ${doc.surcharges.length}`,
+  ]
+}
+
 export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook }) {
-  const { doc, setDocAndAutosave, loading, saving, error, lastSavedAt } = catalog
+  const { doc, setDocAndAutosave, replaceAndSave, loading, saving, error, lastSavedAt } = catalog
   const toastRef = useRef<string | null>(null)
+
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importPreview, setImportPreview] = useState<PricingCatalogDoc | null>(null)
+  const [importParseError, setImportParseError] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  const resetImportDialog = useCallback(() => {
+    setImportText('')
+    setImportPreview(null)
+    setImportParseError(null)
+  }, [])
+
+  const runImportPreview = useCallback(() => {
+    const result = parsePricingCatalogFromJsonText(importText)
+    if (!result.ok) {
+      setImportPreview(null)
+      setImportParseError(result.message)
+      return
+    }
+    setImportParseError(null)
+    setImportPreview(result.doc)
+  }, [importText])
+
+  const confirmImport = useCallback(async () => {
+    if (!importPreview) return
+    const { error: err } = await replaceAndSave(importPreview)
+    if (!err) {
+      setImportOpen(false)
+      resetImportDialog()
+    }
+  }, [importPreview, replaceAndSave, resetImportDialog])
+
+  const exportDownload = useCallback(() => {
+    setExportError(null)
+    const blob = new Blob([serializePricingCatalogDoc(doc)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'pricing-catalog.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [doc])
+
+  const exportCopy = useCallback(async () => {
+    setExportError(null)
+    const text = serializePricingCatalogDoc(doc).trimEnd()
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      setExportError('Could not copy to clipboard. Try Export file or copy from a downloaded JSON.')
+    }
+  }, [doc])
 
   useEffect(() => {
     if (!lastSavedAt || saving) return
@@ -187,6 +260,133 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
           <Loader2 className="h-3 w-3 animate-spin" /> Saving…
         </p>
       )}
+
+      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 space-y-3">
+        <SectionTitle>Import / export</SectionTitle>
+        <p className="text-[11px] text-neutral-500 leading-relaxed">
+          Export JSON to edit offline, then import to replace the entire catalog. Keep line-item{' '}
+          <code className="text-neutral-400">id</code> values when possible so existing deal pricing snapshots stay aligned;
+          new or changed ids may require reopening logged deals.
+        </p>
+        {exportError ? (
+          <p className="text-xs text-red-400">{exportError}</p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void exportCopy()}>
+            <Copy className="h-3.5 w-3.5" /> Copy JSON
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={exportDownload}>
+            <Download className="h-3.5 w-3.5" /> Download JSON
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => {
+              resetImportDialog()
+              setImportOpen(true)
+            }}
+          >
+            <Upload className="h-3.5 w-3.5" /> Import…
+          </Button>
+        </div>
+      </div>
+
+      <Dialog
+        open={importOpen}
+        onOpenChange={open => {
+          setImportOpen(open)
+          if (!open) resetImportDialog()
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0">
+          <DialogHeader>
+            <DialogTitle>Import pricing catalog</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 overflow-y-auto flex-1 min-h-0">
+            <div className="flex flex-col gap-2">
+              <Label className="text-neutral-400">Paste JSON</Label>
+              <textarea
+                className={cn(
+                  'w-full min-h-[160px] rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-sm font-mono',
+                )}
+                value={importText}
+                onChange={e => {
+                  setImportText(e.target.value)
+                  setImportPreview(null)
+                  setImportParseError(null)
+                }}
+                placeholder='{ "v": 1, "policies": { ... }, ... }'
+                spellCheck={false}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-8" onClick={runImportPreview}>
+                Review import
+              </Button>
+              <label className="text-xs text-neutral-400 cursor-pointer border border-neutral-700 rounded-md px-2 py-1.5 hover:bg-neutral-800">
+                Choose file
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="sr-only"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      const t = typeof reader.result === 'string' ? reader.result : ''
+                      setImportText(t)
+                      setImportPreview(null)
+                      setImportParseError(null)
+                    }
+                    reader.onerror = () => {
+                      setImportParseError('Could not read file.')
+                      setImportPreview(null)
+                    }
+                    reader.readAsText(file, 'UTF-8')
+                  }}
+                />
+              </label>
+            </div>
+            {importParseError ? (
+              <p className="rounded border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-300 whitespace-pre-wrap break-words">
+                {importParseError}
+              </p>
+            ) : null}
+            {importPreview ? (
+              <div className="rounded border border-neutral-700 bg-neutral-950/80 px-3 py-2 space-y-1.5">
+                <p className="text-xs font-medium text-neutral-300">Ready to replace your catalog with:</p>
+                <ul className="text-[11px] text-neutral-400 list-disc pl-4 space-y-0.5">
+                  {catalogSummaryLines(importPreview).map(line => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!importPreview || saving}
+              onClick={() => void confirmImport()}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…
+                </>
+              ) : (
+                'Confirm replace catalog'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 space-y-3">
         <SectionTitle>Policies</SectionTitle>

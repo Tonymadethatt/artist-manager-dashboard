@@ -111,6 +111,41 @@ export function usePricingCatalog() {
     })
   }, [flushScheduled, saveNow])
 
+  /** Replace catalog and persist immediately; clears pending debounced save to avoid races. */
+  const replaceAndSave = useCallback(
+    async (next: PricingCatalogDoc): Promise<{ error?: Error }> => {
+      flushScheduled()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        const err = new Error('Not authenticated')
+        setError(err.message)
+        return { error: err }
+      }
+      setSaving(true)
+      setError(null)
+      const { error: upErr } = await supabase
+        .from('user_pricing_catalog')
+        .upsert(
+          {
+            user_id: user.id,
+            doc: next as unknown as Record<string, unknown>,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' },
+        )
+      setSaving(false)
+      if (upErr) {
+        setError(upErr.message)
+        return { error: upErr }
+      }
+      setDoc(next)
+      docRef.current = next
+      setLastSavedAt(new Date())
+      return {}
+    },
+    [flushScheduled],
+  )
+
   useEffect(() => () => {
     flushScheduled()
   }, [flushScheduled])
@@ -120,6 +155,7 @@ export function usePricingCatalog() {
     setDoc,
     setDocAndAutosave,
     saveNow: async () => saveNow(docRef.current),
+    replaceAndSave,
     loading,
     saving,
     error,
