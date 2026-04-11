@@ -269,7 +269,7 @@ export function isDealPricingSnapshot(x: unknown): x is DealPricingSnapshot {
   return !!x && typeof x === 'object' && (x as DealPricingSnapshot).v === 1
 }
 
-export type TemplateSectionKind = 'header' | 'body' | 'footer'
+export type TemplateSectionKind = 'header' | 'body' | 'footer' | 'signatures'
 
 export interface TemplateSection {
   id: string

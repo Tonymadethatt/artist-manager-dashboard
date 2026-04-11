@@ -47,7 +47,7 @@ function templateImportSummaryLines(payload: DocumentTemplateImportPayload): str
   return [
     `Name: ${payload.name}`,
     `Type: ${payload.type}`,
-    `Sections: ${payload.sections.length} (header ${kinds.header ?? 0}, body ${kinds.body ?? 0}, footer ${kinds.footer ?? 0})`,
+    `Sections: ${payload.sections.length} (header ${kinds.header ?? 0}, body ${kinds.body ?? 0}, signatures ${kinds.signatures ?? 0}, footer ${kinds.footer ?? 0})`,
   ]
 }
 

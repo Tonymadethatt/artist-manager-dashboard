@@ -1,24 +1,26 @@
 import type { TemplateSection } from '@/types'
 
-/** Split sections for rendering when any section uses header/footer layout. */
+/** Split sections for rendering when any section uses header/footer/signatures layout. */
 export function partitionAgreementSections(sections: TemplateSection[]): {
   headers: TemplateSection[]
   bodies: TemplateSection[]
+  signatures: TemplateSection[]
   footers: TemplateSection[]
 } {
   const anyMarked = sections.some(
     s => s.section_kind != null && s.section_kind !== 'body'
   )
   if (!anyMarked) {
-    return { headers: [], bodies: sections, footers: [] }
+    return { headers: [], bodies: sections, signatures: [], footers: [] }
   }
   const headers = sections.filter(s => (s.section_kind ?? 'body') === 'header')
   const footers = sections.filter(s => (s.section_kind ?? 'body') === 'footer')
+  const signatures = sections.filter(s => (s.section_kind ?? 'body') === 'signatures')
   const bodies = sections.filter(s => {
     const k = s.section_kind ?? 'body'
-    return k !== 'header' && k !== 'footer'
+    return k !== 'header' && k !== 'footer' && k !== 'signatures'
   })
-  return { headers, bodies, footers }
+  return { headers, bodies, signatures, footers }
 }
 
 /** Replace `{{token}}` placeholders (word chars only, same as FileBuilder). */

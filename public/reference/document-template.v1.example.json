@@ -35,6 +35,12 @@
       "content": "<p>{{tagline}}</p><p>Web: {{website}} · Phone: {{phone}} · Social: {{social_handle}}</p><p>Emails: {{artist_email}} · reply-to {{reply_to_email}} · from {{from_email}}</p><p>Management: {{manager_name}} — {{manager_email}}</p>"
     },
     {
+      "id": "sec_signatures",
+      "label": "Signatures",
+      "section_kind": "signatures",
+      "content": "<p><em>IN WITNESS WHEREOF</em>, the parties have executed this agreement as of the date last written below.</p><table><tbody><tr><td><p>________________________________________</p><p><strong>Artist / Performer</strong></p><p>{{artist_name}}</p><p>Date: _________________________________________</p></td><td><p>________________________________________</p><p><strong>Venue / Authorized representative</strong></p><p>{{venue_name}}</p><p>By: _________________________________________</p><p>Title: _______________________________________</p><p>Date: _________________________________________</p></td></tr></tbody></table>"
+    },
+    {
       "id": "sec_footer",
       "label": "",
       "section_kind": "footer",

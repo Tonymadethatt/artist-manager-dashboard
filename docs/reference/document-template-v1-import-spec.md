@@ -2,7 +2,7 @@
 
 **Purpose:** Canonical reference for generating JSON that the Artist Manager app accepts via **Documents → Import JSON**. Give this file (and the paired example JSON) to an AI or external tool as the single source of truth so imports validate on first try and render correctly in **File Builder** (HTML preview and PDF).
 
-**Paired file:** `document-template.v1.example.json` — download from the import dialog (**Spec** / **Example** buttons), or open `/reference/document-template.v1.example.json` on your deployed site. The example is a **maximal** illustration: header + multiple body sections + footer, rich formatting, every merge token category, and an intentional `<h1>` to demonstrate heading normalization.
+**Paired file:** `document-template.v1.example.json` — download from the import dialog (**Spec** / **Example** buttons), or open `/reference/document-template.v1.example.json` on your deployed site. The example is a **maximal** illustration: header + multiple body sections + a **`signatures`** execution block + footer, rich formatting, every merge token category, an intentional `<h1>` to demonstrate heading normalization, and a two-column signature table with `{{artist_name}}` / `{{venue_name}}`.
 
 ---
 
@@ -24,8 +24,8 @@
 | **`name`** | Non-empty string after trim. |
 | **`type`** | Exactly **`"agreement"`** or **`"invoice"`** (string). |
 | **`sections`** | Non-empty array; every element must be an object (not an array). |
-| **Body labels** | Each section with `section_kind` **`body`** (or omitted, defaulting to body) must have a **non-empty** `label` (trimmed). Shown as a document heading (`<h2>`) in PDF/HTML output. |
-| **`section_kind`** | If present, must be **`"header"`**, **`"body"`**, or **`"footer"`**. Invalid string → error. Omitted → **`"body"`**. |
+| **Body / signatures labels** | Each section with `section_kind` **`body`** or **`signatures`** (or omitted, defaulting to body) must have a **non-empty** `label` (trimmed). Shown as a section title in PDF/HTML (body uses the standard section heading style; signatures use a formal execution-block title style). |
+| **`section_kind`** | If present, must be **`"header"`**, **`"body"`**, **`"footer"`**, or **`"signatures"`**. Invalid string → error. Omitted → **`"body"`**. |
 | **`content`** | If present, must be a **string** (may be empty). |
 | **`label`** | If present, must be a **string**. |
 | **`header_logo_url`** | On **header** sections only: must be `null`, omitted, or a **string**. If non-empty, must be `https://`, `http://`, or `data:image/…` (same rules as the in-app logo field). |
@@ -59,14 +59,31 @@
 | Field | Required | Type | Default / notes |
 |-------|----------|------|------------------|
 | `id` | recommended | string | Stable id helps you diff re-imports; if missing or duplicate, a new id is generated. |
-| `label` | yes for body | string | **Header/footer:** may be empty (internal only, not shown as a heading on the PDF). **Body:** must be non-empty — becomes the section title in the rendered document. |
-| `section_kind` | no | string | `header` \| `body` \| `footer`. Omitted → `body`. |
+| `label` | yes for body / signatures | string | **Header/footer:** may be empty (internal only, not shown as a big section title). **Body / signatures:** must be non-empty — becomes the section title above that block (e.g. “Signatures” or “Execution”). |
+| `section_kind` | no | string | `header` \| `body` \| `footer` \| `signatures`. Omitted → `body`. |
 | `content` | no | string | HTML fragment and/or plain text (see below). Omitted → `""`. |
 | `header_logo_url` | no | string \| null | Only meaningful when `section_kind` is `header`. For other kinds, coerced to `null` on import. |
 
-**Ordering:** Preserved. Header sections are rendered in the **document header** region (under the logo), body sections in the main document, footer sections above the generated timestamp line.
+**Ordering:** Preserved. Render pipeline order: **headers** (under logo) → **bodies** → **signatures** → **footer** sections → generated timestamp line.
 
-**Layout split:** If **any** section has `section_kind` `header` or `footer`, the app partitions sections: all headers first (in order), then bodies, then footers. If **no** section declares header/footer, **legacy behavior** applies: every section is treated as **body** (all get titled with their labels).
+**Layout split:** If **any** section has `section_kind` other than **`body`** (i.e. `header`, `footer`, or `signatures`), the app partitions sections: all headers first (in order), then bodies, then signatures, then footers. If **every** section is body (or `section_kind` omitted), **legacy behavior** applies: every section is treated as **body** (all get titled with their labels).
+
+---
+
+## Signatures (`section_kind: "signatures"`)
+
+Use this for a **professional execution block** at the end of the agreement (signature lines, printed names, dates, titles). It is **not** the same as **footer**: footers are small-print / boilerplate above the “Generated …” line; **signatures** is a full-width block with its own typography (top rule, subdued title, two-column table layout for print).
+
+**Label:** Required, non-empty — shown as the section title above the block (e.g. `Signatures`, `Execution`, `Counterparts`).
+
+**Content:** HTML (or plain text coerced to paragraphs) — typically:
+
+- A short **witness** line (`<em>IN WITNESS WHEREOF</em>, …`).
+- A **two-column `<table>`**: Artist / Performer vs Venue / Authorized representative, underscore lines for wet signatures, `{{artist_name}}`, `{{venue_name}}`, date lines, and optional “By:” / “Title:” lines for the venue side.
+
+The in-app template editor seeds this layout when you add or switch a section to **Signatures**; you can replace it entirely or merge extra tokens (e.g. `{{contact_name}}`).
+
+**Styling:** The PDF/HTML stylesheet applies `.signatures-sec` rules: top border, restrained title, borderless two-column table, monospace-style underscore line for the first line in each cell. Inner markup is still run through the same sanitizer as body content.
 
 ---
 
@@ -123,9 +140,10 @@ The print layout (`renderAgreementHtmlDocument`) uses:
 2. **Company line:** `company_name` from Settings, else `artist_name`.
 3. **Tagline:** profile tagline when set.
 4. **Body sections:** Each body section’s **`label`** is rendered as an **`<h2>`** (uppercase styling in CSS), then sanitized `content` in a `.body` div.
-5. **Footer:** Footer sections (inline, like headers), then a generated **timestamp** line (`Generated …`).
+5. **Signatures sections:** After all body sections, each **signatures** section’s **`label`** and **`content`** are rendered inside **`<section class="sec signatures-sec">`** with dedicated CSS (formal agreement look).
+6. **Footer:** Footer sections (inline, like headers), then a generated **timestamp** line (`Generated …`).
 
-So: **body labels are customer-facing headings**; **header/footer labels are internal** and not printed as section titles.
+So: **body and signatures labels are customer-facing section titles**; **header/footer labels are internal** and not printed as those big section headings.
 
 ---
 
@@ -235,7 +253,7 @@ Any `{{my_custom_field}}` **will** round-trip in the template and appear in File
 | Symptom | Likely cause |
 |---------|----------------|
 | Import says invalid `section_kind` | Value not `header` / `body` / `footer`. |
-| Body label error | Empty `label` on a body section. |
+| Body / signatures label error | Empty `label` on a body or signatures section. |
 | Headings missing in PDF | Used `<h1>`/`<h2>` without re-import — re-import normalizes; or used unsupported heading levels (`h5+`). |
 | `[token]` in output | No value in prefill (no venue/deal/profile data); fill in File Builder or fix selection. |
 | Logo not in PDF | `header_logo_url` not https/http/data image, or CORS blocked fetch — use public https URL or upload in editor after import. |

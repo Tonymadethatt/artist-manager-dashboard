@@ -13,6 +13,7 @@ import {
 import type { Template, TemplateSection, TemplateSectionKind, TemplateType } from '@/types'
 import { nanoid } from '@/lib/nanoid'
 import { catalogKeysUnion, extractVariableNames } from '@/lib/agreement'
+import { DEFAULT_SIGNATURE_SECTION_HTML } from '@/lib/agreement/signatureDefaults'
 import { uploadTemplateLogo } from '@/lib/storage/uploadTemplateLogo'
 import { VariableSlashTextarea } from './VariableSlashTextarea'
 import { RichBodyEditor } from './RichBodyEditor'
@@ -20,6 +21,12 @@ import { RichBodyEditor } from './RichBodyEditor'
 const DEFAULT_SECTIONS = (): TemplateSection[] => [
   { id: nanoid(), label: '', content: '', section_kind: 'header', header_logo_url: null },
   { id: nanoid(), label: 'Introduction', content: '', section_kind: 'body' },
+  {
+    id: nanoid(),
+    label: 'Signatures',
+    content: DEFAULT_SIGNATURE_SECTION_HTML,
+    section_kind: 'signatures',
+  },
   { id: nanoid(), label: '', content: '', section_kind: 'footer' },
 ]
 
@@ -73,8 +80,13 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Template name is required.'); return }
-    if (sections.some(s => (s.section_kind ?? 'body') === 'body' && !s.label.trim())) {
-      setError('Body sections need a label.')
+    if (
+      sections.some(s => {
+        const k = s.section_kind ?? 'body'
+        return (k === 'body' || k === 'signatures') && !s.label.trim()
+      })
+    ) {
+      setError('Body and signature sections need a label.')
       return
     }
     setSaving(true)
@@ -124,7 +136,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         <span>
           Use <code className="bg-neutral-800 px-1 rounded text-neutral-300">{'{{variable_name}}'}</code> or type{' '}
           <code className="bg-neutral-800 px-1 rounded text-neutral-300">/</code> for a variable menu.
-          Header and footer regions control the top/bottom of the document — their labels are internal and do not appear on the final file. Body section labels appear as headings. Upload your logo on a header section to replace the default.
+          Header and footer regions: labels are internal (not shown as big headings). Body and <strong className="text-neutral-300">Signatures</strong> labels appear as section titles. The Signatures layout prints after the body with a formal execution block (editable). Upload your logo on a header section to replace the default.
         </span>
       </div>
 
@@ -156,19 +168,31 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
                         value={section.label}
                         onChange={e => updateSection(section.id, { label: e.target.value })}
                         placeholder={
-                          kind === 'body'
-                            ? `Section ${idx + 1} label *`
+                          kind === 'body' || kind === 'signatures'
+                            ? kind === 'signatures'
+                              ? 'e.g. Signatures *'
+                              : `Section ${idx + 1} label *`
                             : `${kind === 'header' ? 'Header' : 'Footer'} label (internal, not shown)`
                         }
                         className="font-medium"
                       />
                     </div>
-                    <div className="w-[130px]">
+                    <div className="w-[142px] min-w-[142px]">
                       <Select
                         value={kind}
-                        onValueChange={v =>
-                          updateSection(section.id, { section_kind: v as TemplateSectionKind })
-                        }
+                        onValueChange={v => {
+                          const nextKind = v as TemplateSectionKind
+                          const patch: Partial<TemplateSection> = { section_kind: nextKind }
+                          if (nextKind === 'signatures' && !section.content.trim()) {
+                            patch.content = DEFAULT_SIGNATURE_SECTION_HTML
+                          }
+                          if (nextKind !== 'header') {
+                            patch.header_logo_url = null
+                          } else if (section.header_logo_url === undefined) {
+                            patch.header_logo_url = null
+                          }
+                          updateSection(section.id, patch)
+                        }}
                       >
                         <SelectTrigger className="h-9 text-xs">
                           <SelectValue />
@@ -176,6 +200,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
                         <SelectContent>
                           <SelectItem value="header">Header</SelectItem>
                           <SelectItem value="body">Body</SelectItem>
+                          <SelectItem value="signatures">Signatures</SelectItem>
                           <SelectItem value="footer">Footer</SelectItem>
                         </SelectContent>
                       </Select>
@@ -268,12 +293,16 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
                     </div>
                   )}
 
-                  {kind === 'body' ? (
+                  {kind === 'body' || kind === 'signatures' ? (
                     <RichBodyEditor
                       value={section.content}
                       onChange={v => updateSection(section.id, { content: v })}
                       variableKeys={slashKeys}
-                      placeholder="Section content…"
+                      placeholder={
+                        kind === 'signatures'
+                          ? 'Signature block — preamble, lines, and {{variables}}. Use the table tools if you rearrange columns.'
+                          : 'Section content…'
+                      }
                     />
                   ) : (
                     <VariableSlashTextarea

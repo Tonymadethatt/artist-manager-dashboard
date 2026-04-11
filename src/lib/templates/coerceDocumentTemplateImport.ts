@@ -63,7 +63,7 @@ function coerceTemplateType(raw: unknown): TemplateType | null {
 
 function coerceSectionKind(raw: unknown): TemplateSectionKind | null {
   if (raw == null || raw === '') return 'body'
-  if (raw === 'header' || raw === 'body' || raw === 'footer') return raw
+  if (raw === 'header' || raw === 'body' || raw === 'footer' || raw === 'signatures') return raw
   return null
 }
 
@@ -137,7 +137,7 @@ export function coerceDocumentTemplateImport(raw: unknown): ParseDocumentTemplat
     if (coercedKind === null) {
       return {
         ok: false,
-        message: `sections[${i}]: invalid section_kind (use "header", "body", or "footer").`,
+        message: `sections[${i}]: invalid section_kind (use "header", "body", "footer", or "signatures").`,
       }
     }
     const section_kind = coercedKind
@@ -182,10 +182,10 @@ export function coerceDocumentTemplateImport(raw: unknown): ParseDocumentTemplat
   for (let i = 0; i < sections.length; i++) {
     const sec = sections[i]
     const kind = sec.section_kind ?? 'body'
-    if (kind === 'body' && !sec.label.trim()) {
+    if ((kind === 'body' || kind === 'signatures') && !sec.label.trim()) {
       return {
         ok: false,
-        message: `Body section at index ${i} needs a non-empty label (shown as document heading).`,
+        message: `Body or signatures section at index ${i} needs a non-empty label (shown as document heading).`,
       }
     }
   }

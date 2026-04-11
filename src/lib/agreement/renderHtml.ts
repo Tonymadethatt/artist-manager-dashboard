@@ -138,7 +138,11 @@ function mergeHtmlVars(content: string, vars: Record<string, string>): string {
   return out
 }
 
-function sectionBlocksToHtml(sections: TemplateSection[], vars: Record<string, string>): string {
+function sectionBlocksToHtml(
+  sections: TemplateSection[],
+  vars: Record<string, string>,
+  extraSectionClass?: string
+): string {
   return sections
     .map(s => {
       const label = s.label
@@ -150,7 +154,8 @@ function sectionBlocksToHtml(sections: TemplateSection[], vars: Record<string, s
         // Legacy plain text — safe-escape and convert newlines
         bodyHtml = escapeHtml(merged).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
       }
-      return `<section class="sec"><h2>${escapeHtml(label)}</h2><div class="body">${bodyHtml}</div></section>`
+      const secClass = extraSectionClass ? `sec ${extraSectionClass}` : 'sec'
+      return `<section class="${secClass}"><h2>${escapeHtml(label)}</h2><div class="body">${bodyHtml}</div></section>`
     })
     .join('')
 }
@@ -188,13 +193,15 @@ export function renderAgreementHtmlDocument(opts: {
     generatedAtLabel,
   } = opts
 
-  const { headers, bodies, footers } = partitionAgreementSections(sections)
+  const { headers, bodies, signatures, footers } = partitionAgreementSections(sections)
   const logoBlock = buildLogoImg(logoDataUrl, logoSrcUrl ?? null, invertLogoForPrint)
 
   const headerExtraHtml =
     headers.length > 0 ? inlineBlocksToHtml(headers, vars) : ''
 
   const bodyBlocks = sectionBlocksToHtml(bodies, vars)
+  const signatureBlocks =
+    signatures.length > 0 ? sectionBlocksToHtml(signatures, vars, 'signatures-sec') : ''
 
   const footerExtraHtml =
     footers.length > 0 ? inlineBlocksToHtml(footers, vars) : ''
@@ -269,6 +276,44 @@ export function renderAgreementHtmlDocument(opts: {
     color: #525252;
     margin: 6px 0;
   }
+  .signatures-sec {
+    page-break-inside: avoid;
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 2px solid #e5e5e5;
+  }
+  .signatures-sec h2 {
+    font-size: 10pt;
+    font-weight: 700;
+    margin: 0 0 12px;
+    text-transform: none;
+    letter-spacing: 0.06em;
+    color: #0a0a0a;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 6px;
+  }
+  .signatures-sec .body { font-size: 10pt; color: #262626; }
+  .signatures-sec .body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0 0;
+    border: none;
+  }
+  .signatures-sec .body td {
+    border: none;
+    vertical-align: top;
+    width: 50%;
+    padding: 6px 20px 6px 0;
+    font-size: 10pt;
+  }
+  .signatures-sec .body td:last-child { padding-left: 20px; padding-right: 0; }
+  .signatures-sec .body td p { margin: 0 0 6px; }
+  .signatures-sec .body td p:first-of-type {
+    font-family: ui-monospace, "Cascadia Code", monospace;
+    letter-spacing: 0.02em;
+    color: #171717;
+    margin-bottom: 10px;
+  }
   .footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #f5f5f5; font-size: 8pt; color: #737373; }
   .footer-meta { margin-top: 8px; }
 </style></head><body><div class="doc">
@@ -277,6 +322,7 @@ export function renderAgreementHtmlDocument(opts: {
 ${taglineLine ? `<div class="tag">${escapeHtml(taglineLine)}</div>` : ''}
 </div>
 ${bodyBlocks}
+${signatureBlocks}
 <div class="footer">${footerInner}</div>
 </div></body></html>`
 }
