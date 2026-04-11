@@ -10,6 +10,7 @@ import {
   refreshAccessToken,
 } from './googleCalendarOAuthShared'
 import { matchVenueForCalendarEvent } from '../../src/lib/calendar/googleCalendarVenueMatch'
+import { formatVenuePostalLine } from '../../src/lib/calendar/venueAddressForGoogle'
 
 const DESCRIPTION_MAX_LEN = 32_000
 
@@ -243,10 +244,24 @@ export async function runGoogleCalendarImportForUser(
 
   const { data: venueRows } = await supabase
     .from('venues')
-    .select('id, name, location, city')
+    .select('id, name, location, city, address_line2, region, postal_code, country')
     .eq('user_id', userId)
 
-  const venues = venueRows ?? []
+  const venues = (venueRows ?? []).map(v => ({
+    id: v.id as string,
+    name: v.name as string,
+    location: v.location as string | null,
+    city: v.city as string | null,
+    postal_line: formatVenuePostalLine({
+      name: v.name as string,
+      location: v.location as string | null,
+      city: v.city as string | null,
+      address_line2: v.address_line2 as string | null,
+      region: v.region as string | null,
+      postal_code: v.postal_code as string | null,
+      country: v.country as string | null,
+    }) ?? null,
+  }))
 
   let imported = 0
   let refreshed = 0

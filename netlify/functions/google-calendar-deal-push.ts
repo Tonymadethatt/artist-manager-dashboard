@@ -7,7 +7,8 @@ import {
 } from './googleCalendarOAuthShared'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { googleTimedEventFromUtcIso } from '../../src/lib/calendar/pacificWallTime'
-import type { OutreachStatus } from '../../src/types/index'
+import type { DealTerms, OutreachStatus } from '../../src/types/index'
+import { formatVenueAddressForGoogleCalendar } from '../../src/lib/calendar/venueAddressForGoogle'
 
 type DealRow = {
   id: string
@@ -28,6 +29,35 @@ type VenueRow = {
   name: string
   location: string | null
   city: string | null
+  address_line2: string | null
+  region: string | null
+  postal_code: string | null
+  country: string | null
+  deal_terms: DealTerms | null
+}
+
+function buildGoogleEventDescription(deal: DealRow, venue: VenueRow | null): string | undefined {
+  const parts: string[] = []
+  const notes = deal.notes?.trim()
+  if (notes) parts.push(notes)
+
+  const dt = venue?.deal_terms
+  if (dt && typeof dt === 'object' && !Array.isArray(dt)) {
+    const extras: string[] = []
+    if (typeof dt.set_length === 'string' && dt.set_length.trim()) {
+      extras.push(`Set length: ${dt.set_length.trim()}`)
+    }
+    if (typeof dt.load_in_time === 'string' && dt.load_in_time.trim()) {
+      extras.push(`Load-in: ${dt.load_in_time.trim()}`)
+    }
+    if (typeof dt.notes === 'string' && dt.notes.trim()) {
+      extras.push(dt.notes.trim())
+    }
+    if (extras.length) parts.push(extras.join('\n'))
+  }
+
+  const out = parts.join('\n\n').trim()
+  return out.length ? out.slice(0, 8000) : undefined
 }
 
 async function ensureAccessToken(args: {
@@ -150,12 +180,8 @@ function buildEventPayload(deal: DealRow, venue: VenueRow | null): Record<string
   }
   const base = deal.description.trim() || 'Gig'
   const summary = venue ? `${base} · ${venue.name}` : base
-  const locParts = [venue?.location, venue?.city].filter(Boolean)
-  const location =
-    locParts.length > 0 ? locParts.join(', ') : venue?.name ? venue.name : undefined
-  const description = deal.notes?.trim()
-    ? `${deal.notes.trim().slice(0, 8000)}`
-    : undefined
+  const location = formatVenueAddressForGoogleCalendar(venue)
+  const description = buildGoogleEventDescription(deal, venue)
   return {
     summary,
     description,
@@ -301,7 +327,9 @@ export const handler: Handler = async event => {
     if (d.venue_id) {
       const { data: v } = await supabase
         .from('venues')
-        .select('id, status, name, location, city')
+        .select(
+          'id, status, name, location, city, address_line2, region, postal_code, country, deal_terms',
+        )
         .eq('id', d.venue_id)
         .eq('user_id', userId)
         .maybeSingle()

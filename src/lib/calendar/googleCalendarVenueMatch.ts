@@ -7,6 +7,8 @@ export type VenueMatchRow = {
   name: string
   location: string | null
   city: string | null
+  /** Full postal line (structured fields); helps match Google Calendar `location`. */
+  postal_line: string | null
 }
 
 function norm(s: string): string {
@@ -50,7 +52,7 @@ export function matchVenueForCalendarEvent(
   let best: { venueId: string; score: number } | null = null
 
   for (const v of venues) {
-    const parts = [v.name, v.city ?? '', v.location ?? ''].filter(Boolean)
+    const parts = [v.name, v.city ?? '', v.location ?? '', v.postal_line ?? ''].filter(Boolean)
     let score = 0
     for (const p of parts) {
       const n = norm(p)

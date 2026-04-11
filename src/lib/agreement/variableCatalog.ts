@@ -10,7 +10,7 @@ export interface VariableCatalogEntry {
 export const AGREEMENT_VARIABLE_CATALOG: VariableCatalogEntry[] = [
   { key: 'venue_name', label: 'Venue name', group: 'venue' },
   { key: 'city', label: 'City', group: 'venue' },
-  { key: 'location', label: 'Location / address', group: 'venue' },
+  { key: 'location', label: 'Street address (line 1)', group: 'venue' },
   { key: 'venue_type', label: 'Venue type (slug)', group: 'venue' },
   { key: 'venue_type_label', label: 'Venue type (label)', group: 'venue' },
   { key: 'event_date', label: 'Event date (venue terms or deal)', group: 'venue' },

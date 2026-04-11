@@ -23,6 +23,10 @@ export interface Database {
           name: string
           location: string | null
           city: string | null
+          address_line2: string | null
+          region: string | null
+          postal_code: string | null
+          country: string | null
           venue_type: VenueType
           priority: number
           status: OutreachStatus
@@ -38,6 +42,10 @@ export interface Database {
           name: string
           location?: string | null
           city?: string | null
+          address_line2?: string | null
+          region?: string | null
+          postal_code?: string | null
+          country?: string | null
           venue_type?: VenueType
           priority?: number
           status?: OutreachStatus
@@ -53,6 +61,10 @@ export interface Database {
           name?: string
           location?: string | null
           city?: string | null
+          address_line2?: string | null
+          region?: string | null
+          postal_code?: string | null
+          country?: string | null
           venue_type?: VenueType
           priority?: number
           status?: OutreachStatus

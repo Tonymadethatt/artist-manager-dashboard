@@ -49,6 +49,10 @@ const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   name: '',
   location: '',
   city: '',
+  address_line2: '',
+  region: '',
+  postal_code: '',
+  country: '',
   venue_type: 'other',
   priority: 3,
   status: 'not_contacted',
@@ -69,6 +73,10 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
         name: initialData.name,
         location: initialData.location ?? '',
         city: initialData.city ?? '',
+        address_line2: initialData.address_line2 ?? '',
+        region: initialData.region ?? '',
+        postal_code: initialData.postal_code ?? '',
+        country: initialData.country ?? '',
         venue_type: initialData.venue_type,
         priority: initialData.priority,
         status: initialData.status,
@@ -90,8 +98,12 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
     const result = await onSave({
       ...form,
       name: form.name.trim(),
-      location: form.location || null,
-      city: form.city || null,
+      location: form.location?.trim() || null,
+      city: form.city?.trim() || null,
+      address_line2: form.address_line2?.trim() || null,
+      region: form.region?.trim() || null,
+      postal_code: form.postal_code?.trim() || null,
+      country: form.country?.trim() || null,
       deal_terms: normalizeDealTermsForSave(form.deal_terms),
     })
     // Apply template if selected and we're adding (not editing)
@@ -104,7 +116,7 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-md max-h-[min(90vh,720px)] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[min(90vh,800px)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initialData ? 'Edit venue' : 'Add venue'}</DialogTitle>
         </DialogHeader>
@@ -138,24 +150,74 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2 pt-0.5 border-t border-neutral-800">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Address</p>
+            <p className="text-[11px] text-neutral-600 leading-snug">
+              Use a postal-style address so Google Calendar can show a tappable map pin. Leave blank if unknown.
+            </p>
             <div className="space-y-1">
-              <Label htmlFor="v-city">City</Label>
+              <Label htmlFor="v-street">Street address</Label>
               <Input
-                id="v-city"
-                value={form.city ?? ''}
-                onChange={e => set('city', e.target.value)}
-                placeholder="New York"
+                id="v-street"
+                value={form.location ?? ''}
+                onChange={e => set('location', e.target.value)}
+                placeholder="123 Main Street"
+                autoComplete="street-address"
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="v-location">Location / Address</Label>
+              <Label htmlFor="v-line2">Apt, suite, floor (optional)</Label>
               <Input
-                id="v-location"
-                value={form.location ?? ''}
-                onChange={e => set('location', e.target.value)}
-                placeholder="Brooklyn, NY"
+                id="v-line2"
+                value={form.address_line2 ?? ''}
+                onChange={e => set('address_line2', e.target.value)}
+                placeholder="2nd floor, Door B"
+                autoComplete="address-line2"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="v-city">City</Label>
+                <Input
+                  id="v-city"
+                  value={form.city ?? ''}
+                  onChange={e => set('city', e.target.value)}
+                  placeholder="Miami"
+                  autoComplete="address-level2"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="v-region">State / province / region</Label>
+                <Input
+                  id="v-region"
+                  value={form.region ?? ''}
+                  onChange={e => set('region', e.target.value)}
+                  placeholder="FL"
+                  autoComplete="address-level1"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="v-postal">ZIP / postal code</Label>
+                <Input
+                  id="v-postal"
+                  value={form.postal_code ?? ''}
+                  onChange={e => set('postal_code', e.target.value)}
+                  placeholder="33101"
+                  autoComplete="postal-code"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="v-country">Country (optional)</Label>
+                <Input
+                  id="v-country"
+                  value={form.country ?? ''}
+                  onChange={e => set('country', e.target.value)}
+                  placeholder="United States"
+                  autoComplete="country-name"
+                />
+              </div>
             </div>
           </div>
 

@@ -9,6 +9,7 @@ import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { formatVenuePostalLine } from '@/lib/calendar/venueAddressForGoogle'
 import { StatusBadge } from './StatusBadge'
 import { VenueDialog } from './VenueDialog'
 import { SendVenueEmailModal } from '@/components/emails/SendVenueEmailModal'
@@ -159,9 +160,10 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
               <h2 className="font-semibold text-neutral-100 text-base truncate">{venue.name}</h2>
               <StatusBadge status={venue.status} />
             </div>
-            {(venue.city || venue.location) && (
+            {(formatVenuePostalLine(venue) || venue.city || venue.location) && (
               <p className="text-xs text-neutral-400 mt-0.5">
-                {[venue.city, venue.location].filter(Boolean).join(' · ')}
+                {formatVenuePostalLine(venue)
+                  ?? [venue.city, venue.location].filter(Boolean).join(', ')}
               </p>
             )}
           </div>

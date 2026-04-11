@@ -1,4 +1,5 @@
 import type { Deal, Venue } from '@/types'
+import { formatVenueAddressForGoogleCalendar } from './venueAddressForGoogle'
 
 const CRLF = '\r\n'
 
@@ -22,7 +23,10 @@ function fmtUtc(dt: Date): string {
 
 export function buildDealIcsBlob(args: {
   deal: Pick<Deal, 'id' | 'description' | 'event_start_at' | 'event_end_at' | 'notes'>
-  venue: Pick<Venue, 'name' | 'city' | 'location'> | null | undefined
+  venue: Pick<
+    Venue,
+    'name' | 'city' | 'location' | 'address_line2' | 'region' | 'postal_code' | 'country'
+  > | null | undefined
   artistDisplayName: string
 }): string {
   const start = args.deal.event_start_at ? new Date(args.deal.event_start_at) : null
@@ -31,12 +35,12 @@ export function buildDealIcsBlob(args: {
     throw new Error('deal missing valid event_start_at / event_end_at')
   }
 
-  const venueBits = [args.venue?.name, args.venue?.city, args.venue?.location].filter(Boolean).join(', ')
-  const location = venueBits || 'TBA'
+  const mapsLine = formatVenueAddressForGoogleCalendar(args.venue ?? null)
+  const location = mapsLine ? escapeIcsText(mapsLine) : escapeIcsText('TBA')
   const summary = escapeIcsText(args.deal.description.trim() || 'Gig')
   const descParts = [
     args.deal.description.trim(),
-    venueBits ? `Venue: ${venueBits}` : '',
+    args.venue?.name?.trim() ? `Venue: ${args.venue.name.trim()}` : '',
     args.deal.notes?.trim() ? `Notes: ${args.deal.notes.trim()}` : '',
   ].filter(Boolean)
   const description = escapeIcsText(descParts.join('\\n'))

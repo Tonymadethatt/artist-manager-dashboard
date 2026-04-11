@@ -143,8 +143,15 @@ export interface Venue {
   id: string
   user_id: string
   name: string
+  /** Street address line 1 (number + street). Used first in Google Calendar location. */
   location: string | null
   city: string | null
+  /** Unit, suite, floor, or building (optional). */
+  address_line2: string | null
+  /** State, province, or region (e.g. FL, ON). */
+  region: string | null
+  postal_code: string | null
+  country: string | null
   venue_type: VenueType
   priority: number
   status: OutreachStatus
