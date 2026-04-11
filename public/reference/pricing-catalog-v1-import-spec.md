@@ -1,8 +1,8 @@
 # Pricing catalog v1 — import interchange spec
 
-**Purpose:** Canonical reference for generating JSON that the Artist Manager app accepts via **Earnings → Pricing & fees → Import**. Use this document (and the paired example file) as the single source of truth for another AI or tooling.
+**Purpose:** Canonical reference for generating JSON that the Artist Manager app accepts via **Earnings → Pricing & fees → Import**. Give this file (and the paired example JSON) to another AI or tool as the single source of truth.
 
-**Paired file:** `pricing-catalog.v1.example.json` — same folder in the repo (`docs/reference/` and `public/reference/`). In the app, download both from **Earnings → Pricing & fees → Import / export**. **Maximal, valid** example (all addon `priceType` variants, mixed services, surcharges, discounts).
+**Paired file:** `pricing-catalog.v1.example.json` — download it from the same **Import / export** panel in the app, or open `/reference/pricing-catalog.v1.example.json` on your deployed site. A **maximal, valid** example (all addon `priceType` values, mixed services, surcharges, discounts).
 
 ---
 
@@ -135,7 +135,7 @@ Array of objects. **Non-objects are skipped** (silent). Order is preserved.
 2. All enums exactly as spelled above (case-sensitive).  
 3. Prefer explicit **`id`** on every line item you care to reference from deals.  
 4. Run **Review import** in the app before **Confirm replace**.  
-5. Compare shape to `pricing-catalog.v1.example.json` (download from the app or open in `docs/reference/`).
+5. Compare shape to `pricing-catalog.v1.example.json`.
 
 ---
 

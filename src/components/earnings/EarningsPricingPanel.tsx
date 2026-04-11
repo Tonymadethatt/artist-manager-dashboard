@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Plus, Trash2, Loader2, Upload, Download, Copy } from 'lucide-react'
+import { Plus, Trash2, Loader2, Upload, Download, Copy, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,6 +41,26 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** Static templates shipped in `public/reference/` (served from site root + Vite base). */
+function publicReferenceUrl(pathFromReferenceFolder: string): string {
+  const base = import.meta.env.BASE_URL
+  const trimmedBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const path = pathFromReferenceFolder.startsWith('/') ? pathFromReferenceFolder : `/${pathFromReferenceFolder}`
+  return `${trimmedBase}${path}`.replace(/([^:]\/)\/+/g, '$1')
+}
+
+async function fetchPublicReferenceAsDownload(pathFromReferenceFolder: string, downloadAs: string): Promise<void> {
+  const res = await fetch(publicReferenceUrl(pathFromReferenceFolder))
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const a = document.createElement('a')
+  const href = URL.createObjectURL(blob)
+  a.href = href
+  a.download = downloadAs
+  a.click()
+  URL.revokeObjectURL(href)
+}
+
 function catalogSummaryLines(doc: PricingCatalogDoc): string[] {
   const p = doc.policies
   return [
@@ -59,6 +79,7 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
   const [importPreview, setImportPreview] = useState<PricingCatalogDoc | null>(null)
   const [importParseError, setImportParseError] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [templateError, setTemplateError] = useState<string | null>(null)
 
   const resetImportDialog = useCallback(() => {
     setImportText('')
@@ -106,6 +127,30 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
       setExportError('Could not copy to clipboard. Try Export file or copy from a downloaded JSON.')
     }
   }, [doc])
+
+  const downloadAiSpec = useCallback(async () => {
+    setTemplateError(null)
+    try {
+      await fetchPublicReferenceAsDownload(
+        '/reference/pricing-catalog-v1-import-spec.md',
+        'pricing-catalog-v1-import-spec.md',
+      )
+    } catch {
+      setTemplateError('Could not download the spec file. Check your connection or try again.')
+    }
+  }, [])
+
+  const downloadExampleCatalog = useCallback(async () => {
+    setTemplateError(null)
+    try {
+      await fetchPublicReferenceAsDownload(
+        '/reference/pricing-catalog.v1.example.json',
+        'pricing-catalog.v1.example.json',
+      )
+    } catch {
+      setTemplateError('Could not download the example JSON. Check your connection or try again.')
+    }
+  }, [])
 
   useEffect(() => {
     if (!lastSavedAt || saving) return
@@ -268,8 +313,15 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
           <code className="text-neutral-400">id</code> values when possible so existing deal pricing snapshots stay aligned;
           new or changed ids may require reopening logged deals.
         </p>
+        <p className="text-[11px] text-neutral-500 leading-relaxed">
+          <span className="text-neutral-400 font-medium">For another AI:</span> download the Markdown spec (rules + limits)
+          and the example JSON, then have it produce a catalog file you import here.
+        </p>
         {exportError ? (
           <p className="text-xs text-red-400">{exportError}</p>
+        ) : null}
+        {templateError ? (
+          <p className="text-xs text-red-400">{templateError}</p>
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void exportCopy()}>
@@ -291,6 +343,20 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
             <Upload className="h-3.5 w-3.5" /> Import…
           </Button>
         </div>
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-neutral-800">
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => void downloadAiSpec()}>
+            <FileText className="h-3.5 w-3.5" /> AI import spec (.md)
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => void downloadExampleCatalog()}
+          >
+            <Download className="h-3.5 w-3.5" /> Example catalog (.json)
+          </Button>
+        </div>
       </div>
 
       <Dialog
@@ -305,6 +371,32 @@ export function EarningsPricingPanel({ catalog }: { catalog: PricingCatalogHook 
             <DialogTitle>Import pricing catalog</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 overflow-y-auto flex-1 min-h-0">
+            <div className="rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 space-y-2">
+              <p className="text-[11px] text-neutral-500">
+                Need the full rules or a starter file for an AI? Download the spec and example (same as Import / export
+                above).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => void downloadAiSpec()}
+                >
+                  <FileText className="h-3.5 w-3.5" /> AI spec
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => void downloadExampleCatalog()}
+                >
+                  <Download className="h-3.5 w-3.5" /> Example JSON
+                </Button>
+              </div>
+            </div>
             <div className="flex flex-col gap-2">
               <Label className="text-neutral-400">Paste JSON</Label>
               <textarea
