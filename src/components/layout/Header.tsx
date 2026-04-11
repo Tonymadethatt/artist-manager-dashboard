@@ -6,8 +6,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/calendar': 'Calendar',
   '/outreach': 'Outreach',
   '/earnings': 'Earnings',
-  '/pipeline/templates': 'Pipeline Templates',
-  '/pipeline': 'Pipeline',
+  '/pipeline/templates': 'Task Templates',
+  '/pipeline': 'Tasks',
   '/metrics': 'Metrics',
   '/templates': 'Templates',
   '/files': 'Files',
@@ -25,9 +25,14 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const location = useLocation()
 
-  const title = Object.entries(PAGE_TITLES)
-    .reverse()
-    .find(([path]) => location.pathname.startsWith(path))?.[1] ?? 'Artist Manager'
+   const title =
+    Object.entries(PAGE_TITLES)
+      .sort((a, b) => b[0].length - a[0].length)
+      .find(([path]) =>
+        path === '/'
+          ? location.pathname === '/'
+          : location.pathname === path || location.pathname.startsWith(`${path}/`),
+      )?.[1] ?? 'Artist Manager'
 
   return (
     <header className="h-12 border-b border-neutral-800 flex items-center px-4 gap-3 bg-neutral-950 sticky top-0 z-10">

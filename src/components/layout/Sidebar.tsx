@@ -29,7 +29,7 @@ const NAV_GROUPS = [
       { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true,  badgeKey: null              },
       { to: '/calendar',            label: 'Calendar',      icon: Calendar,        end: false, badgeKey: 'calendar'        },
       { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false, badgeKey: null              },
-      { to: '/pipeline',            label: 'Pipeline',      icon: Workflow,        end: false, badgeKey: 'pipeline'        },
+      { to: '/pipeline',            label: 'Tasks',         icon: Workflow,        end: false, badgeKey: 'pipeline'        },
       { to: '/earnings',            label: 'Earnings',      icon: Banknote,        end: false, badgeKey: null              },
       { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false, badgeKey: null              },
       { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false, badgeKey: 'show-reports'    },
@@ -136,7 +136,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     )}
                   </NavLink>
 
-                  {/* Pipeline sub-item: Task Templates */}
+                  {/* Tasks sub-item: Task Templates */}
                   {to === '/pipeline' && onPipelinePath && (
                     <NavLink
                       to="/pipeline/templates"
