@@ -48,19 +48,4 @@ export function snapshotGoogleCalendarSyncResponse(
 export function logGoogleCalendarSyncClient(source: string, res: Response, body: GoogleCalendarSyncResponseBody & { error?: string }) {
   const snap = snapshotGoogleCalendarSyncResponse(res, body)
   console.info(`[ArtistManager][google-calendar-sync] ${source}`, snap)
-
-  // #region agent log
-  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '58b41d' },
-    body: JSON.stringify({
-      sessionId: '58b41d',
-      hypothesisId: 'CLIENT_SYNC',
-      location: `logGoogleCalendarSyncClient:${source}`,
-      message: 'google-calendar-sync client result',
-      data: snap,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
 }

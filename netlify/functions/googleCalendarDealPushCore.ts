@@ -317,20 +317,40 @@ export async function performGoogleCalendarDealPush(args: {
 
     const d = deal as DealPushRow
 
+    /**
+     * Use `select('*')` so qualification/payload work even when optional address columns
+     * from newer migrations are not present on the remote DB (explicit column lists can 400).
+     * Batch qualification only uses `id, status`; this path must match that outcome.
+     */
     let venue: VenuePushRow | null = null
     if (d.venue_id) {
-      const { data: v } = await supabase
+      const { data: v, error: venueErr } = await supabase
         .from('venues')
-        .select(
-          'id, status, name, location, city, address_line2, region, postal_code, country, deal_terms',
-        )
+        .select('*')
         .eq('id', d.venue_id)
         .eq('user_id', userId)
         .maybeSingle()
-      if (v) venue = v as VenuePushRow
+      if (venueErr) {
+        console.error('[performGoogleCalendarDealPush] venue load error', dealId, venueErr.message)
+      }
+      if (v) {
+        const row = v as Record<string, unknown>
+        venue = {
+          id: String(row.id),
+          status: row.status as OutreachStatus,
+          name: typeof row.name === 'string' ? row.name : '',
+          location: (row.location as string | null) ?? null,
+          city: (row.city as string | null) ?? null,
+          address_line2: (row.address_line2 as string | null) ?? null,
+          region: (row.region as string | null) ?? null,
+          postal_code: (row.postal_code as string | null) ?? null,
+          country: (row.country as string | null) ?? null,
+          deal_terms: (row.deal_terms as DealTerms | null) ?? null,
+        }
+      }
     }
 
-    const qualified = dealQualifiesForCalendar(d, venue)
+    const qualified = dealQualifiesForCalendar(d, venue ? { status: venue.status } : null)
 
     if (!qualified && d.google_shared_calendar_event_id) {
       await googleDeleteEvent({
