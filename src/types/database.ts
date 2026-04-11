@@ -748,6 +748,109 @@ export interface Database {
           },
         ]
       }
+      google_calendar_connection: {
+        Row: {
+          user_id: string
+          google_email: string | null
+          source_calendar_id: string
+          destination_calendar_id: string
+          sync_past_days: number
+          sync_future_days: number
+          last_sync_at: string | null
+          last_sync_summary: Record<string, unknown> | null
+          connected_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          google_email?: string | null
+          source_calendar_id?: string
+          destination_calendar_id?: string
+          sync_past_days?: number
+          sync_future_days?: number
+          last_sync_at?: string | null
+          last_sync_summary?: Record<string, unknown> | null
+          connected_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          google_email?: string | null
+          source_calendar_id?: string
+          destination_calendar_id?: string
+          sync_past_days?: number
+          sync_future_days?: number
+          last_sync_at?: string | null
+          last_sync_summary?: Record<string, unknown> | null
+          connected_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      calendar_sync_event: {
+        Row: {
+          id: string
+          user_id: string
+          source_calendar_id: string
+          source_event_id: string
+          destination_calendar_id: string
+          destination_event_id: string
+          event_start_at: string | null
+          event_end_at: string | null
+          summary: string | null
+          location: string | null
+          matched_venue_id: string | null
+          follow_up_task_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          source_calendar_id: string
+          source_event_id: string
+          destination_calendar_id: string
+          destination_event_id: string
+          event_start_at?: string | null
+          event_end_at?: string | null
+          summary?: string | null
+          location?: string | null
+          matched_venue_id?: string | null
+          follow_up_task_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          source_calendar_id?: string
+          source_event_id?: string
+          destination_calendar_id?: string
+          destination_event_id?: string
+          event_start_at?: string | null
+          event_end_at?: string | null
+          summary?: string | null
+          location?: string | null
+          matched_venue_id?: string | null
+          follow_up_task_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'calendar_sync_event_matched_venue_id_fkey'
+            columns: ['matched_venue_id']
+            referencedRelation: 'venues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'calendar_sync_event_follow_up_task_id_fkey'
+            columns: ['follow_up_task_id']
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       task_templates: {
         Row: {
           id: string

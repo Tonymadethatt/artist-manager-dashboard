@@ -27,6 +27,16 @@ const MAX_CHIPS = 3
 
 type ViewMode = 'month' | 'week' | 'day'
 
+/** Synced Google Calendar events (shown alongside booked deals). */
+export type CalendarSyncEventChip = {
+  id: string
+  event_start_at: string
+  event_end_at: string | null
+  summary: string | null
+  location: string | null
+  matched_venue_id: string | null
+}
+
 type CalendarDeal = Deal & {
   venue?: Pick<Venue, 'id' | 'name' | 'status' | 'outreach_track'> | null
 }
@@ -98,19 +108,32 @@ function outreachTrackForDeal(deal: CalendarDeal, venues: Venue[]): 'pipeline' |
   return null
 }
 
+function shortSyncTitle(row: CalendarSyncEventChip): string {
+  const t = (row.summary ?? 'Calendar event').trim() || 'Calendar event'
+  return t.length > 22 ? `${t.slice(0, 20)}…` : t
+}
+
+function longSyncTitle(row: CalendarSyncEventChip): string {
+  return (row.summary ?? 'Calendar event').trim() || 'Calendar event'
+}
+
 export function GigCalendar({
   deals,
   venues,
+  calendarSyncEvents = [],
   loading,
 }: {
   deals: CalendarDeal[]
   venues: Venue[]
+  /** Copied from shared Google Calendar (see Settings → Google Calendar sync). */
+  calendarSyncEvents?: CalendarSyncEventChip[]
   loading?: boolean
 }) {
   const [cursor, setCursor] = useState(() => new Date())
   const [view, setView] = useState<ViewMode>('week')
   const [dayKey, setDayKey] = useState(() => pacificTodayYmd())
   const [selectedDeal, setSelectedDeal] = useState<CalendarDeal | null>(null)
+  const [selectedSync, setSelectedSync] = useState<CalendarSyncEventChip | null>(null)
   const [dayActionsFor, setDayActionsFor] = useState<string | null>(null)
   const [calendarNotice, setCalendarNotice] = useState<string | null>(null)
   const [queueingDayEmail, setQueueingDayEmail] = useState(false)
@@ -159,6 +182,24 @@ export function GigCalendar({
     return m
   }, [calendarDeals])
 
+  const syncByDay = useMemo(() => {
+    const m = new Map<string, CalendarSyncEventChip[]>()
+    for (const row of calendarSyncEvents) {
+      const key = pacificDateKeyFromUtcIso(row.event_start_at)
+      if (!key) continue
+      const list = m.get(key) ?? []
+      list.push(row)
+      m.set(key, list)
+    }
+    for (const [, list] of m) {
+      list.sort(
+        (a, b) =>
+          new Date(a.event_start_at).getTime() - new Date(b.event_start_at).getTime(),
+      )
+    }
+    return m
+  }, [calendarSyncEvents])
+
   const nowMs = Date.now()
   const todayYmd = pacificDateKeyFromUtcIso(new Date().toISOString()) ?? pacificTodayYmd()
 
@@ -189,6 +230,7 @@ export function GigCalendar({
   }, [cursor])
 
   const dayList = useMemo(() => dealsByDay.get(dayKey) ?? [], [dealsByDay, dayKey])
+  const daySyncList = useMemo(() => syncByDay.get(dayKey) ?? [], [syncByDay, dayKey])
   const dayIsPastForPanel = isPastPacificYmd(dayKey, todayYmd)
 
   const openDay = useCallback((ymd: string) => {
@@ -242,6 +284,17 @@ export function GigCalendar({
   function cellTone(deal: CalendarDeal): 'past' | 'upcoming' {
     const end = deal.event_end_at ? new Date(deal.event_end_at).getTime() : 0
     return end < nowMs ? 'past' : 'upcoming'
+  }
+
+  function syncChipClass(compact: boolean, isPast: boolean) {
+    const base = cn(
+      'block w-full text-left rounded-md font-medium border border-dashed text-[10px] sm:text-[11px] leading-tight transition-colors hover:brightness-110',
+      compact ? 'truncate px-1 py-0.5' : 'px-2 py-1.5 text-xs',
+      isPast
+        ? 'border-neutral-700 bg-neutral-950 text-neutral-400'
+        : 'border-neutral-600 bg-neutral-900/90 text-neutral-200',
+    )
+    return base
   }
 
   function chipClass(deal: CalendarDeal, compact: boolean) {
@@ -304,10 +357,12 @@ export function GigCalendar({
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-neutral-100 truncate">Gig calendar</h2>
             <p className="text-[11px] text-neutral-500 truncate">
-              Booked shows · Pacific time ·{' '}
+              Booked shows · Google sync · Pacific time ·{' '}
               <span className="text-blue-400 font-semibold">Pipeline</span>
               {' / '}
               <span className="text-amber-300 font-semibold">Community</span>
+              {' · '}
+              <span className="text-neutral-400">dashed = calendar import</span>
             </p>
           </div>
         </div>
@@ -378,7 +433,22 @@ export function GigCalendar({
               </div>
             ))}
             {monthCells.map((c, idx) => {
-              const list = c.key ? dealsByDay.get(c.key) ?? [] : []
+              const dealList = c.key ? dealsByDay.get(c.key) ?? [] : []
+              const syncList = c.key ? syncByDay.get(c.key) ?? [] : []
+              const chips: Array<
+                | { kind: 'deal'; deal: CalendarDeal }
+                | { kind: 'sync'; row: CalendarSyncEventChip }
+              > = []
+              for (const d of dealList) {
+                if (chips.length >= MAX_CHIPS) break
+                chips.push({ kind: 'deal', deal: d })
+              }
+              for (const s of syncList) {
+                if (chips.length >= MAX_CHIPS) break
+                chips.push({ kind: 'sync', row: s })
+              }
+              const totalCount = dealList.length + syncList.length
+              const hidden = totalCount - chips.length
               const isTodayCell = c.key === todayYmd
               const isPastDay = c.key ? isPastPacificYmd(c.key, todayYmd) : false
               return (
@@ -427,17 +497,28 @@ export function GigCalendar({
                         className={cn('space-y-0.5 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
                         onClick={e => e.stopPropagation()}
                       >
-                        {list.slice(0, MAX_CHIPS).map(deal => (
-                          <button
-                            key={deal.id}
-                            type="button"
-                            onClick={() => setSelectedDeal(deal)}
-                            className={chipClass(deal, true)}
-                          >
-                            {shortTitle(deal)}
-                          </button>
-                        ))}
-                        {list.length > MAX_CHIPS && (
+                        {chips.map((ch, i) =>
+                          ch.kind === 'deal' ? (
+                            <button
+                              key={ch.deal.id}
+                              type="button"
+                              onClick={() => setSelectedDeal(ch.deal)}
+                              className={chipClass(ch.deal, true)}
+                            >
+                              {shortTitle(ch.deal)}
+                            </button>
+                          ) : (
+                            <button
+                              key={`sync-${ch.row.id}-${i}`}
+                              type="button"
+                              onClick={() => setSelectedSync(ch.row)}
+                              className={syncChipClass(true, isPastDay)}
+                            >
+                              {shortSyncTitle(ch.row)}
+                            </button>
+                          ),
+                        )}
+                        {hidden > 0 && (
                           <button
                             type="button"
                             onClick={() => openDay(c.key!)}
@@ -446,7 +527,7 @@ export function GigCalendar({
                               isPastDay ? 'text-neutral-600 hover:text-neutral-400' : 'text-neutral-400 hover:text-neutral-200',
                             )}
                           >
-                            +{list.length - MAX_CHIPS} more · open day
+                            +{hidden} more · open day
                           </button>
                         )}
                       </div>
@@ -461,7 +542,8 @@ export function GigCalendar({
         <div className="p-2 sm:p-3 overflow-x-auto">
           <div className="grid grid-cols-7 gap-1 sm:gap-2 min-w-[36rem] md:min-w-0">
             {weekKeys.map(key => {
-              const list = dealsByDay.get(key) ?? []
+              const dealList = dealsByDay.get(key) ?? []
+              const syncList = syncByDay.get(key) ?? []
               const isTodayCell = key === todayYmd
               const isPastDay = isPastPacificYmd(key, todayYmd)
               const label = `${WEEKDAYS[weekdaySunday0PacificYmd(key)]} ${parseInt(key.slice(8), 10)}`
@@ -506,7 +588,7 @@ export function GigCalendar({
                     className={cn('space-y-1 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
                     onClick={e => e.stopPropagation()}
                   >
-                    {list.map(deal => (
+                    {dealList.map(deal => (
                       <button
                         key={deal.id}
                         type="button"
@@ -514,6 +596,16 @@ export function GigCalendar({
                         className={chipClass(deal, true)}
                       >
                         {shortTitle(deal)}
+                      </button>
+                    ))}
+                    {syncList.map(row => (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => setSelectedSync(row)}
+                        className={syncChipClass(true, isPastDay)}
+                      >
+                        {shortSyncTitle(row)}
                       </button>
                     ))}
                   </div>
@@ -546,13 +638,13 @@ export function GigCalendar({
                 Day actions
               </Button>
             </div>
-            {dayList.length === 0 ? (
+            {dayList.length === 0 && daySyncList.length === 0 ? (
               <div className="py-10 text-center rounded-md border border-dashed border-neutral-700">
                 <p className={cn('text-sm', dayIsPastForPanel ? 'text-neutral-500' : 'text-neutral-400')}>
-                  No booked gigs on this day.
+                  No booked gigs or calendar imports on this day.
                 </p>
                 <p className={cn('text-xs mt-1', dayIsPastForPanel ? 'text-neutral-600/80' : 'text-neutral-600')}>
-                  Use month/week to pick another day, or add a deal in Earnings.
+                  Use month/week to pick another day, add a deal in Earnings, or sync from Settings → Google Calendar.
                 </p>
               </div>
             ) : (
@@ -569,6 +661,25 @@ export function GigCalendar({
                         <span className="text-[11px] block mt-0.5 font-medium text-inherit">
                           {formatPacificTimeRangeReadable(deal.event_start_at, deal.event_end_at)}
                         </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+                {daySyncList.map(row => (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSync(row)}
+                      className={cn(syncChipClass(false, dayIsPastForPanel), 'w-full text-left')}
+                    >
+                      <span className="font-medium block text-inherit">{longSyncTitle(row)}</span>
+                      {row.event_start_at && row.event_end_at && (
+                        <span className="text-[11px] block mt-0.5 font-medium text-inherit">
+                          {formatPacificTimeRangeReadable(row.event_start_at, row.event_end_at)}
+                        </span>
+                      )}
+                      {row.location?.trim() && (
+                        <span className="text-[11px] block mt-0.5 text-inherit opacity-90">{row.location}</span>
                       )}
                     </button>
                   </li>
@@ -741,6 +852,77 @@ export function GigCalendar({
                 )}
               </div>
             </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedSync} onOpenChange={v => !v && setSelectedSync(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto border-neutral-800 bg-neutral-900 p-5 gap-0">
+          <DialogHeader className="pb-3 space-y-0">
+            <DialogTitle className="text-base text-white pr-8 leading-snug">
+              {selectedSync ? longSyncTitle(selectedSync) : 'Calendar event'}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedSync && (() => {
+            const matchedVenue = selectedSync.matched_venue_id
+              ? venues.find(v => v.id === selectedSync.matched_venue_id)
+              : null
+            const sectionWrap = 'rounded-md border border-neutral-800 bg-neutral-950/60 p-3 space-y-2'
+            const sectionTitle = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-400'
+            return (
+              <div className="flex flex-col gap-3 text-sm">
+                <p className="text-xs text-neutral-500">
+                  Imported from your shared Google calendar (see Settings). Dashed chips on the grid are these events.
+                </p>
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>Schedule</h3>
+                  {selectedSync.event_start_at && selectedSync.event_end_at ? (
+                    <p className="text-white text-sm leading-snug">
+                      {formatPacificTimeRangeReadable(
+                        selectedSync.event_start_at,
+                        selectedSync.event_end_at,
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-neutral-400 text-sm">Times not available</p>
+                  )}
+                </section>
+                {selectedSync.location?.trim() && (
+                  <section className={sectionWrap}>
+                    <h3 className={sectionTitle}>Location</h3>
+                    <p className="text-white text-sm whitespace-pre-wrap">{selectedSync.location}</p>
+                  </section>
+                )}
+                <section className={sectionWrap}>
+                  <h3 className={sectionTitle}>Venue in app</h3>
+                  {matchedVenue ? (
+                    <p className="text-white font-medium">{matchedVenue.name}</p>
+                  ) : (
+                    <p className="text-neutral-400 text-sm">
+                      No matching venue — a Pipeline task may have been created to add this one.
+                    </p>
+                  )}
+                </section>
+                <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4 sm:flex-row">
+                  {matchedVenue && (
+                    <Button asChild variant="default" className="flex-1 h-9 text-sm">
+                      <Link
+                        to="/pipeline"
+                        state={{ openVenueId: matchedVenue.id }}
+                        onClick={() => setSelectedSync(null)}
+                      >
+                        Open venue
+                      </Link>
+                    </Button>
+                  )}
+                  <Button asChild variant="outline" className="flex-1 h-9 text-sm">
+                    <Link to="/outreach" onClick={() => setSelectedSync(null)}>
+                      Add venue
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             )
           })()}
         </DialogContent>

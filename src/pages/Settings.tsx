@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
+import { useAuth } from '@/hooks/useAuth'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
 import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
@@ -16,6 +17,7 @@ import {
   clampEmailQueueBufferMinutes,
   type EmailQueueBufferMinutes,
 } from '@/lib/emailQueueBuffer'
+import { GoogleCalendarSettingsCard } from '@/components/settings/GoogleCalendarSettingsCard'
 import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
 type FormState = {
@@ -137,6 +139,7 @@ function SectionCard({
 }
 
 export default function Settings() {
+  const { user } = useAuth()
   const { profile, loading, updateProfile } = useArtistProfile()
   const { presetsFor, addPreset, deletePreset } = useProfileFieldPresets(profile?.user_id ?? null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -444,6 +447,8 @@ export default function Settings() {
             </div>
           </div>
         </SectionCard>
+
+        <GoogleCalendarSettingsCard userId={user?.id ?? null} showToast={showToast} />
 
         <SectionCard
           title="Email queue"
