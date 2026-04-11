@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { DEAL_VENUE_EMBED } from '@/lib/deals/dealVenueSelect'
+import { DEAL_VENUE_EMBED } from '../deals/dealVenueSelect'
 import type { Deal, Metric, MonthlyFee, MonthlyFeePayment, PerformanceReport, Task, Venue } from '../../types'
 
 /**
