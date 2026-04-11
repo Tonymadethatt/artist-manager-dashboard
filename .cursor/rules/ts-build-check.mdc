@@ -1,0 +1,24 @@
+---
+description: Enforce correct TypeScript pre-commit check for this Vite + project-references setup
+alwaysApply: true
+---
+
+# TypeScript Pre-Commit Check
+
+This project uses TypeScript project references. The root `tsconfig.json` has `"files": []`.
+
+**NEVER** run `npx tsc --noEmit` alone — it compiles zero files and always exits 0, giving a false clean signal.
+
+**ALWAYS** run this before every `git commit`:
+
+```bash
+npx tsc -p tsconfig.app.json --noEmit
+```
+
+This is the only command that activates `noUnusedLocals`, `noUnusedParameters`, `strict`, and all other checks from `tsconfig.app.json`.
+
+## Additional rules
+
+- When extending any union type (e.g. `VenueEmailType`, `ArtistEmailType`, `OutreachStatus`), immediately grep the entire codebase for `Record<ThatType` and update **every match** in the same commit. Missing a single `Record` entry is a build-blocking error.
+- Each branch of a JSX ternary must return a **single root element** — wrap siblings in `<>...</>` if needed. Never place two sibling JSX elements inside one ternary branch.
+- When removing a function, remove every variable or destructured import that was exclusively used by that function in the same edit.

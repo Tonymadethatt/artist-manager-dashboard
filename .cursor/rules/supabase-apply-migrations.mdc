@@ -1,0 +1,15 @@
+---
+description: After adding or editing Supabase SQL migrations, apply them to the linked project via MCP—do not defer to the user.
+alwaysApply: true
+---
+
+# Supabase migrations — apply, don’t hand off
+
+When this repo’s `supabase/migrations/*.sql` gains **new or changed DDL** (or a feature clearly depends on columns/policies/RLS in those files):
+
+1. **Apply it yourself** using the **user-supabase** MCP `apply_migration` (preferred for DDL). Use `list_migrations` on the correct project afterward to confirm the version appears.
+2. **Project:** default is **`artist-manager-dashboard`** (`voghreoyuebgrvvavlxn`). If `list_projects` shows multiple candidates, pick the one that matches this product; do not guess a different org’s DB.
+3. **Name:** use snake_case derived from the migration purpose (e.g. `performance_report_provenance`), not the numeric prefix.
+4. **Do not** end with “run this in the SQL editor” as the only step when MCP migration apply is available **unless** the tool fails or the user’s environment has no Supabase MCP—then use `supabase db push` / dashboard SQL and state why.
+
+Never ask the user to manually apply schema for routine migrations you can push through automation.

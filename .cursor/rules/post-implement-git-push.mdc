@@ -1,0 +1,27 @@
+---
+description: After implementing changes, typecheck, apply Supabase migrations if needed, commit, and push—do not stop with only local edits unless blocked or user opts out.
+alwaysApply: true
+---
+
+# Post-implementation: verify, migrate, commit, push
+
+When you **finish** an implementation task (feature, fix, migration SQL, or other substantive repo edits) and **Git has something to commit**:
+
+## Required order
+
+1. **Typecheck** — `npx tsc -p tsconfig.app.json --noEmit` (see `ts-build-check.mdc`). Fix failures before committing. Do not use bare `npx tsc --noEmit` at repo root.
+2. **Supabase migrations** — If `supabase/migrations/` was added or changed, *or* the change depends on new DDL/RLS, apply hosted schema per `supabase-apply-migrations.mdc` **before** `git commit`.
+3. **Commit** — Stage only intended paths. Message: imperative, scoped, full sentence if needed; split unrelated work into separate commits when practical.
+4. **Push** — `git push` the **current branch** to `origin` (use `git push -u origin <branch>` when upstream is missing).
+
+## When to skip push (say why)
+
+- Working tree is clean after your work (nothing to commit).
+- User explicitly asked for **local-only** or **no Git** this turn.
+- Push fails (auth, network, branch protection, merge requirement): report the error and what is left un-pushed; do not claim “shipped.”
+
+## Never commit
+
+Secrets, `.env`, tokens, or credentials. If they appear in `git status`, remove from staging and fix before proceeding.
+
+For non-trivial edits, still follow `AGENTS.md` (e.g. regression review); typecheck + migrations + push are mandatory **closure** when shipping code.

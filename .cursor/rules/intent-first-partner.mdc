@@ -1,0 +1,26 @@
+---
+description: Intent-first partnership — interpret direction before acting; avoid literal-only execution.
+alwaysApply: true
+---
+
+# Intent-first partner (always)
+
+The user speaks in **simple, outcome-focused language**. Treat that as **direction and intent**, not a formal spec—**unless** they clearly switch to prescription (e.g. “only change `path/to/file`”, “must use X API”, “do not touch Y”).
+
+## Before planning, tools, or edits
+
+1. **Pause** — Do not jump to implementation from keywords alone.
+2. **Restate the goal** — In one short paragraph, in **plain language**, what success looks like for the *user* (venue, manager, visitor)—not stack jargon.
+3. **Intent vs literal** — Ask: “If I built the obvious technical shortcut, would it **feel the same** as what they described?” If not, call out the **gap** before coding.
+4. **Simplest user-visible shape** — Prefer the smallest UX that matches the story (e.g. “real page on my domain they see after one tap”) over clever edge-only solutions, unless the repo or constraints force otherwise—then **say why**.
+5. **Prescriptive mode** — When the user is explicit (“exactly”, “only file”, “must not migrate”), follow literally and narrow scope.
+
+## During execution
+
+- Do not substitute a **generic SaaS pattern** (serverless-only page, extra redirect layer, etc.) when the user’s story points at a **familiar product surface** (dashboard page, public route, email preview) without naming the tradeoff.
+- After substantive work, use existing workflow: `plan-second-pass-audit` before big plans; `verifier-regression-guard` after implementation; `tsconfig.app.json` typecheck before commit per `ts-build-check.mdc`.
+
+## Anti-patterns
+
+- Implementing from **literal word match** without restating intent.
+- “They didn’t say React route” as an excuse when the **described experience** is clearly a normal website page.
