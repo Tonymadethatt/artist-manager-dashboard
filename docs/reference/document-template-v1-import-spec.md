@@ -127,10 +127,14 @@ The in-app template editor seeds this layout when you add or switch a section to
 
 **Rendering:**
 
-- **HTML / PDF:** Values are **HTML-escaped** when substituted, so user data cannot inject markup. If a key is missing from the map, the literal **`[token_name]`** is inserted for `{{token_name}}` placeholders (after escape, it still displays as bracketed text).
+- **HTML / PDF:** Values are **HTML-escaped** when substituted, so user data cannot inject markup. **Exception:** `{{pricing_fee_transparency_table_html}}` is app-generated markup only; it is passed through **DOMPurify** with the same allowlist as body HTML (including `<table>`), not character-escaped. If a key is missing from the map, the literal **`[token_name]`** is inserted for `{{token_name}}` placeholders (after escape, it still displays as bracketed text).
 - **Bracket tokens:** For **catalog** variable names only, `[token_name]` in section HTML is also replaced when that key exists in the merge map (helps AI exports that used square brackets). Keys outside the catalog are left unchanged.
 - **Import:** JSON import rewrites known **`[catalog_token]`** segments to **`{{catalog_token}}`** so merges run consistently.
 - **Plain-text export path** (if used): same `[token_name]` fallback for missing `{{}}` keys; catalog bracket substitution applies when the key is present in the map.
+
+**Cancellation / full fee:** Use `{{full_fee_display}}` (or `{{cancellation_full_fee_display}}`) inside your clause text, e.g. `Full fee ({{full_fee_display}}) is due, as the Artist will have turned down other bookings to hold this date.`
+
+**Fee transparency:** Near the payment schedule, add `{{pricing_fee_transparency_table_html}}` for a compact table (performance & agreed scope, bundled production/scheduling/compliance line when applicable, contract total). Optional: `{{pricing_fee_breakdown_note}}` when the deal gross was adjusted after the quote. Requires a deal with pricing snapshot; catalog loaded in File Builder fills scope/bundle rows.
 
 ---
 

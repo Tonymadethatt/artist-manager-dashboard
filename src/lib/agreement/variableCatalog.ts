@@ -108,6 +108,28 @@ export const AGREEMENT_VARIABLE_CATALOG: VariableCatalogEntry[] = [
   { key: 'pricing_package_price_display', label: 'Package base price (currency)', group: 'deal' },
   { key: 'pricing_addons_line', label: 'Add-ons and surcharges (names, from snapshot + catalog)', group: 'deal' },
   { key: 'pricing_discounts_line', label: 'Discounts applied (names)', group: 'deal' },
+  {
+    key: 'pricing_fee_transparency_table_html',
+    label: 'Fee breakdown table (HTML; app-generated; scope / bundled ops / total)',
+    group: 'deal',
+  },
+  {
+    key: 'pricing_fee_transparency_plain',
+    label: 'Fee breakdown (plain lines: scope, optional bundle, total)',
+    group: 'deal',
+  },
+  { key: 'pricing_fee_scope_amount_display', label: 'Performance & agreed scope — amount (USD, whole dollars)', group: 'deal' },
+  {
+    key: 'pricing_fee_operations_bundle_amount_display',
+    label: 'Production & compliance bundle — amount (empty if under $1 delta)',
+    group: 'deal',
+  },
+  { key: 'pricing_fee_total_display', label: 'Contract total from deal gross (USD, whole dollars)', group: 'deal' },
+  {
+    key: 'pricing_fee_breakdown_note',
+    label: 'Note when contract gross differs from saved quote total',
+    group: 'deal',
+  },
 
   { key: 'contact_name', label: 'Contact name', group: 'contact' },
   { key: 'contact_role', label: 'Contact role', group: 'contact' },

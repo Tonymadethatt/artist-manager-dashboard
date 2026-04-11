@@ -122,22 +122,33 @@ const PURIFY_CONFIG: DomPurifyConfig = {
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
     'blockquote', 'pre', 'code',
   ],
-  ALLOWED_ATTR: ['colspan', 'rowspan'],
+  ALLOWED_ATTR: ['colspan', 'rowspan', 'class', 'scope'],
+}
+
+/** App-generated HTML only; never user-authored. Sanitized, not escapeHtml'd. */
+const MERGE_TRUSTED_HTML_KEYS = new Set<string>(['pricing_fee_transparency_table_html'])
+
+function mergeVarValueForHtml(key: string, val: string | undefined, placeholder: string): string {
+  const v = val ?? ''
+  if (MERGE_TRUSTED_HTML_KEYS.has(key)) {
+    return DOMPurify.sanitize(v, PURIFY_CONFIG) as unknown as string
+  }
+  return escapeHtml(v || placeholder)
 }
 
 /**
  * Merge `{{token}}` placeholders in HTML body content with HTML-escaped values.
- * Prevents variable values from injecting markup.
+ * Trusted keys (allowlist) are sanitized with DOMPurify instead so limited markup (e.g. tables) renders.
  */
 function mergeHtmlVars(content: string, vars: Record<string, string>): string {
   let out = content
   for (const [key, val] of Object.entries(vars)) {
-    const safe = escapeHtml(val || `[${key}]`)
+    const safe = mergeVarValueForHtml(key, val, `[${key}]`)
     out = out.replaceAll(`{{${key}}}`, safe)
   }
   const bracketVars: Record<string, string> = {}
   for (const [key, val] of Object.entries(vars)) {
-    bracketVars[key] = escapeHtml(val ?? '')
+    bracketVars[key] = mergeVarValueForHtml(key, val, '')
   }
   return mergeBracketTokens(out, bracketVars)
 }

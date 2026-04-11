@@ -1,8 +1,10 @@
 import type {
+  Deal,
   DealPricingSnapshot,
   PricingCatalogDoc,
   PricingService,
 } from '@/types'
+import { isDealPricingSnapshot } from '@/types'
 
 /** Whole-dollar rounding for quotes (discovery). */
 export function roundUsd(n: number): number {
@@ -52,6 +54,40 @@ export interface ComputeDealPriceResult {
   gross: number
 }
 
+/** Intermediate ladder; same rounding order as `computeDealPrice`. */
+export interface DealPriceBreakdownLadder {
+  rawPerformanceHours: number
+  billableHours: number
+  afterBase: number
+  afterAddons: number
+  afterSurcharges: number
+  afterDiscounts: number
+  taxAmount: number
+  total: number
+  depositDue: number
+}
+
+/** Build calculator input from a persisted deal snapshot + catalog (for agreement transparency). */
+export function computeDealPriceInputFromSnapshot(
+  deal: Pick<Deal, 'event_date' | 'pricing_snapshot'>,
+  catalog: PricingCatalogDoc,
+): ComputeDealPriceInput | null {
+  if (!deal.pricing_snapshot || !isDealPricingSnapshot(deal.pricing_snapshot)) return null
+  const s = deal.pricing_snapshot
+  return {
+    catalog,
+    eventDate: deal.event_date?.trim() || null,
+    baseMode: s.baseMode,
+    packageId: s.packageId,
+    serviceId: s.serviceId,
+    overtimeServiceId: s.overtimeServiceId,
+    performanceHours: s.performanceHours,
+    addonQuantities: { ...s.addonQuantities },
+    surchargeIds: [...s.surchargeIds],
+    discountIds: [...s.discountIds],
+  }
+}
+
 function addonLineTotal(
   catalog: PricingCatalogDoc,
   addonId: string,
@@ -93,7 +129,7 @@ function baseSubtotal(
 /**
  * Order: base → add-ons → surcharges (multiplicative) → discounts (sequential %) → tax on pre-tax total.
  */
-export function computeDealPrice(input: ComputeDealPriceInput): ComputeDealPriceResult {
+export function computeDealPriceBreakdown(input: ComputeDealPriceInput): DealPriceBreakdownLadder {
   const policies = input.catalog.policies
   const rawHours = Number.isFinite(input.performanceHours) ? input.performanceHours : 0
   const billable = roundUsd(Math.max(rawHours, policies.minimumBillableHours))
@@ -128,24 +164,39 @@ export function computeDealPrice(input: ComputeDealPriceInput): ComputeDealPrice
   const depPct = Math.max(0, policies.defaultDepositPercent)
   const depositDue = roundUsd(total * (depPct / 100))
 
-  const snapshot: Omit<DealPricingSnapshot, 'finalSource' | 'computedAt'> = {
-    v: 1,
-    subtotalBeforeTax: afterDiscounts,
+  return {
+    rawPerformanceHours: rawHours,
+    billableHours: billable,
+    afterBase,
+    afterAddons,
+    afterSurcharges,
+    afterDiscounts,
     taxAmount,
     total,
     depositDue,
+  }
+}
+
+export function computeDealPrice(input: ComputeDealPriceInput): ComputeDealPriceResult {
+  const b = computeDealPriceBreakdown(input)
+  const snapshot: Omit<DealPricingSnapshot, 'finalSource' | 'computedAt'> = {
+    v: 1,
+    subtotalBeforeTax: b.afterDiscounts,
+    taxAmount: b.taxAmount,
+    total: b.total,
+    depositDue: b.depositDue,
     baseMode: input.baseMode,
     packageId: input.packageId,
     serviceId: input.serviceId,
     overtimeServiceId: input.overtimeServiceId,
-    performanceHours: rawHours,
+    performanceHours: b.rawPerformanceHours,
     addonQuantities: { ...input.addonQuantities },
     surchargeIds: [...input.surchargeIds],
     discountIds: [...input.discountIds],
-    lastCalculatedTotal: total,
+    lastCalculatedTotal: b.total,
   }
 
-  return { snapshot, gross: total }
+  return { snapshot, gross: b.total }
 }
 
 export function catalogHasMinimumForDealLogging(catalog: PricingCatalogDoc): boolean {

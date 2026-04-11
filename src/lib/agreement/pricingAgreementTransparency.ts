@@ -1,5 +1,10 @@
 import type { Deal, DealPricingSnapshot, PricingCatalogDoc, PricingService } from '../../types'
 import { isDealPricingSnapshot } from '../../types'
+import {
+  computeDealPriceBreakdown,
+  computeDealPriceInputFromSnapshot,
+  roundUsd,
+} from '../pricing/computeDealPrice'
 
 const usd0 = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -48,6 +53,83 @@ const ENGAGEMENT_SCOPE =
 const ADDITIONAL_TIME_LEAD_IN =
   'If the Artist continues beyond the booked performance window, additional time may be offered subject to schedule, site approval, and Artist availability.'
 
+const FEE_LABEL_SCOPE = 'Performance & agreed scope'
+const FEE_LABEL_BUNDLE = 'Production, scheduling & compliance'
+const FEE_LABEL_TOTAL = 'Contract total'
+
+const PRICING_FEE_DRIFT_NOTE =
+  'Contract total reflects the agreed fee on this deal; line items reflect the saved quote structure.'
+
+function appendFeeTransparencyNoSnapshot(deal: Deal, out: Record<string, string>): void {
+  const gross = roundUsd(Number(deal.gross_amount))
+  out.pricing_fee_total_display = usd0.format(gross)
+  out.pricing_fee_scope_amount_display = ''
+  out.pricing_fee_operations_bundle_amount_display = ''
+  out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+  out.pricing_fee_transparency_table_html =
+    `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+  out.pricing_fee_breakdown_note = ''
+}
+
+function appendFeeTransparencyFromSnapshot(
+  deal: Deal,
+  catalog: PricingCatalogDoc | null,
+  snapshot: DealPricingSnapshot,
+  out: Record<string, string>,
+): void {
+  const gross = roundUsd(Number(deal.gross_amount))
+  out.pricing_fee_total_display = usd0.format(gross)
+
+  if (!catalog) {
+    out.pricing_fee_scope_amount_display = ''
+    out.pricing_fee_operations_bundle_amount_display = ''
+    out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+    out.pricing_fee_transparency_table_html =
+      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+    out.pricing_fee_breakdown_note =
+      Math.abs(gross - snapshot.total) >= 1 ? PRICING_FEE_DRIFT_NOTE : ''
+    return
+  }
+
+  const input = computeDealPriceInputFromSnapshot(deal, catalog)
+  if (!input) {
+    out.pricing_fee_scope_amount_display = ''
+    out.pricing_fee_operations_bundle_amount_display = ''
+    out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+    out.pricing_fee_transparency_table_html =
+      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+    out.pricing_fee_breakdown_note =
+      Math.abs(gross - snapshot.total) >= 1 ? PRICING_FEE_DRIFT_NOTE : ''
+    return
+  }
+
+  const b = computeDealPriceBreakdown(input)
+  const afterAddons = b.afterAddons
+  const bundle = gross - afterAddons
+
+  out.pricing_fee_scope_amount_display = usd0.format(afterAddons)
+  out.pricing_fee_operations_bundle_amount_display =
+    Math.abs(bundle) >= 1 ? usd0.format(bundle) : ''
+
+  const rows: { label: string; amount: string }[] = [
+    { label: FEE_LABEL_SCOPE, amount: usd0.format(afterAddons) },
+  ]
+  if (Math.abs(bundle) >= 1) {
+    rows.push({ label: FEE_LABEL_BUNDLE, amount: usd0.format(bundle) })
+  }
+  rows.push({ label: FEE_LABEL_TOTAL, amount: usd0.format(gross) })
+
+  out.pricing_fee_transparency_plain = rows.map(r => `${r.label}: ${r.amount}`).join('\n')
+
+  const trs = rows
+    .map(r => `<tr><th scope="row">${r.label}</th><td>${r.amount}</td></tr>`)
+    .join('')
+  out.pricing_fee_transparency_table_html = `<table class="fee-transparency"><tbody>${trs}</tbody></table>`
+
+  out.pricing_fee_breakdown_note =
+    Math.abs(gross - snapshot.total) >= 1 ? PRICING_FEE_DRIFT_NOTE : ''
+}
+
 /** Merge fields for agreements: what the client is buying, reference rates, and extended-time language. */
 export function buildPricingAgreementTransparency(
   deal: Deal,
@@ -62,6 +144,7 @@ export function buildPricingAgreementTransparency(
     out.pricing_additional_time_paragraph = genericAdditional
     out.pricing_client_facing_fee_paragraph = [ENGAGEMENT_SCOPE, genericAdditional].join('\n\n')
     out.pricing_discounts_line = ''
+    appendFeeTransparencyNoSnapshot(deal, out)
     return out
   }
 
@@ -182,6 +265,8 @@ export function buildPricingAgreementTransparency(
   ].filter(Boolean)
 
   out.pricing_client_facing_fee_paragraph = comboParts.join('\n\n')
+
+  appendFeeTransparencyFromSnapshot(deal, catalog, s, out)
 
   return out
 }
