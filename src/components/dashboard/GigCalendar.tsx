@@ -146,7 +146,10 @@ export function GigCalendar({
   googleCalendarToolbar?: GigCalendarGoogleToolbarProps
 }) {
   const [cursor, setCursor] = useState(() => new Date())
-  const [view, setView] = useState<ViewMode>('week')
+  /** Default month on tablet/desktop; day only below Tailwind `sm` (640px) where the month grid is too tight. */
+  const [view, setView] = useState<ViewMode>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches ? 'day' : 'month',
+  )
   const [dayKey, setDayKey] = useState(() => pacificTodayYmd())
   const [selectedDeal, setSelectedDeal] = useState<CalendarDeal | null>(null)
   const [selectedSync, setSelectedSync] = useState<CalendarSyncEventChip | null>(null)
@@ -155,20 +158,11 @@ export function GigCalendar({
   const [queueingDayEmail, setQueueingDayEmail] = useState(false)
 
   useEffect(() => {
-    const mqLg = window.matchMedia('(min-width: 1024px)')
-    const mqMd = window.matchMedia('(min-width: 768px)')
-    const apply = () => {
-      if (mqLg.matches) setView('month')
-      else if (mqMd.matches) setView('week')
-      else setView('day')
-    }
+    const mqNarrow = window.matchMedia('(max-width: 639px)')
+    const apply = () => setView(mqNarrow.matches ? 'day' : 'month')
     apply()
-    mqLg.addEventListener('change', apply)
-    mqMd.addEventListener('change', apply)
-    return () => {
-      mqLg.removeEventListener('change', apply)
-      mqMd.removeEventListener('change', apply)
-    }
+    mqNarrow.addEventListener('change', apply)
+    return () => mqNarrow.removeEventListener('change', apply)
   }, [])
 
   const calendarDeals = useMemo(() => {
