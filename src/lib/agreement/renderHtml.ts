@@ -1,6 +1,6 @@
 import DOMPurify, { type Config as DomPurifyConfig } from 'dompurify'
 import type { TemplateSection } from '@/types'
-import { mergeBracketTokens, mergeSectionContent, partitionAgreementSections } from './merge'
+import { mergeBracketTokens, partitionAgreementSections } from './merge'
 import { escapeAttr, escapeHtml, isHtmlContent, isSafeImageUrl } from './sanitize'
 
 /** Fetch logo from site root and return a data URL for reliable html2canvas rendering. */
@@ -142,6 +142,15 @@ function mergeHtmlVars(content: string, vars: Record<string, string>): string {
   return mergeBracketTokens(out, bracketVars)
 }
 
+/** Header/footer/body: merge vars, then sanitize HTML or escape plain text (must match body sections). */
+function mergedContentToSafeInnerHtml(content: string, vars: Record<string, string>): string {
+  const merged = mergeHtmlVars(content, vars)
+  if (isHtmlContent(merged)) {
+    return DOMPurify.sanitize(merged, PURIFY_CONFIG) as unknown as string
+  }
+  return escapeHtml(merged).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
+}
+
 function sectionBlocksToHtml(
   sections: TemplateSection[],
   vars: Record<string, string>,
@@ -150,14 +159,7 @@ function sectionBlocksToHtml(
   return sections
     .map(s => {
       const label = s.label
-      const merged = mergeHtmlVars(s.content, vars)
-      let bodyHtml: string
-      if (isHtmlContent(merged)) {
-        bodyHtml = DOMPurify.sanitize(merged, PURIFY_CONFIG) as unknown as string
-      } else {
-        // Legacy plain text — safe-escape and convert newlines
-        bodyHtml = escapeHtml(merged).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
-      }
+      const bodyHtml = mergedContentToSafeInnerHtml(s.content, vars)
       const secClass = extraSectionClass ? `sec ${extraSectionClass}` : 'sec'
       return `<section class="${secClass}"><h2>${escapeHtml(label)}</h2><div class="body">${bodyHtml}</div></section>`
     })
@@ -167,8 +169,7 @@ function sectionBlocksToHtml(
 function inlineBlocksToHtml(sections: TemplateSection[], vars: Record<string, string>): string {
   return sections
     .map(s => {
-      const { body } = mergeSectionContent(s, vars)
-      const bodyHtml = escapeHtml(body).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
+      const bodyHtml = mergedContentToSafeInnerHtml(s.content, vars)
       return `<div class="header-block">${bodyHtml}</div>`
     })
     .join('')
@@ -236,6 +237,8 @@ export function renderAgreementHtmlDocument(opts: {
   .header { border-bottom: 1px solid #e5e5e5; padding-bottom: 14px; margin-bottom: 22px; }
   .logo { display: block; max-width: 100px; height: auto; margin-bottom: 10px; }
   .header-block { color: #262626; font-size: 10pt; margin-bottom: 10px; }
+  .header-block p { margin: 0 0 6px; }
+  .header-block ul, .header-block ol { margin: 6px 0 6px 20px; padding: 0; }
   .company { font-size: 14pt; font-weight: 700; letter-spacing: 0.04em; color: #0a0a0a; }
   .tag { font-size: 9pt; color: #525252; margin-top: 4px; font-weight: 500; }
   .sec { page-break-inside: auto; margin-bottom: 16px; }

@@ -133,7 +133,14 @@ export default function FileBuilder() {
     }
     const venue = selectedVenueId ? venues.find(v => v.id === selectedVenueId) ?? null : null
     const deal = selectedDealId ? deals.find(d => d.id === selectedDealId) ?? null : null
-    const pre = buildAgreementPrefill(venue, profile ?? null, deal, mergeContact, onsiteContactForPrefill)
+    const pre = buildAgreementPrefill(
+      venue,
+      profile ?? null,
+      deal,
+      mergeContact,
+      onsiteContactForPrefill,
+      selectedVenueId ? contacts : null,
+    )
     const next: Record<string, string> = {}
     for (const key of variables) {
       next[key] = pre[key] ?? ''
@@ -150,6 +157,8 @@ export default function FileBuilder() {
     deals,
     mergeContact,
     onsiteContactForPrefill,
+    contacts,
+    selectedVenueId,
     variables,
   ])
 

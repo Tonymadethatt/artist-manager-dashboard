@@ -5,6 +5,29 @@ import { utcIsoToPacificDateAndTime } from '../calendar/pacificWallTime'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
+/** Pretty US phone for agreements; non‑10/11-digit input returned trimmed as-is. */
+export function formatPhoneDisplay(raw: string | null | undefined): string {
+  if (!raw?.trim()) return ''
+  const d = raw.replace(/\D/g, '')
+  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+  if (d.length === 11 && d[0] === '1') return `+1 (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}`
+  return raw.trim()
+}
+
+function durationBetweenUtcIso(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start || !end) return ''
+  const a = new Date(start).getTime()
+  const b = new Date(end).getTime()
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return ''
+  const mins = Math.round((b - a) / 60000)
+  if (mins <= 0) return ''
+  if (mins < 60) return `${mins} minutes`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (m === 0) return h === 1 ? '1 hour' : `${h} hours`
+  return `${h} h ${m} min`
+}
+
 /** Variable names referenced as `{{name}}` in section bodies. */
 export function extractVariableNames(sections: TemplateSection[]): string[] {
   const combined = sections.map(s => s.content).join('\n')
@@ -40,7 +63,12 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     if (profile.company_name) out.company_name = profile.company_name
     if (profile.tagline) out.tagline = profile.tagline
     if (profile.website) out.website = profile.website
-    if (profile.phone) out.phone = profile.phone
+    if (profile.phone) {
+      const p = profile.phone.trim()
+      const disp = formatPhoneDisplay(p) || p
+      out.phone = disp
+      out.phone_display = disp
+    }
     if (profile.reply_to_email) out.reply_to_email = profile.reply_to_email
     if (profile.artist_email) out.artist_email = profile.artist_email
     if (profile.social_handle) out.social_handle = profile.social_handle
@@ -85,6 +113,8 @@ export function buildAgreementPrefill(
   deal: Deal | null,
   mergeContact: Contact | null,
   onsiteContact: Contact | null = null,
+  /** Other venue contacts: used to fill `contact_phone` when the selected contact has no phone. */
+  venueContactsFallback: Contact[] | null = null,
 ): Record<string, string> {
   const out = { ...buildVenueProfilePrefill(venue, profile) }
 
@@ -122,6 +152,29 @@ export function buildAgreementPrefill(
     }
     if (deal.performance_genre?.trim()) out.performance_genre = deal.performance_genre.trim()
 
+    const perfStartIso = deal.performance_start_at
+    const perfEndIso = deal.performance_end_at
+    const evtStartIso = deal.event_start_at
+    const evtEndIso = deal.event_end_at
+    const setStartWall = pacificWallParts(perfStartIso || evtStartIso)
+    const setEndWall = pacificWallParts(perfEndIso || evtEndIso)
+    if (setStartWall) out.set_start_time = setStartWall.time
+    if (setEndWall) out.set_end_time = setEndWall.time
+    let setDur = durationBetweenUtcIso(perfStartIso, perfEndIso)
+    if (!setDur) setDur = durationBetweenUtcIso(evtStartIso, evtEndIso)
+    if (!setDur && venue?.deal_terms?.set_length?.trim()) {
+      setDur = venue.deal_terms.set_length.trim()
+    }
+    if (setDur) out.set_duration = setDur
+
+    const paid = Number(deal.deposit_paid_amount ?? 0)
+    const grossN = Number(deal.gross_amount ?? 0)
+    const balanceDue = Math.max(0, Math.round((grossN - paid) * 100) / 100)
+    out.balance_amount = String(balanceDue)
+    out.balance_amount_display = usd.format(balanceDue)
+    out.remaining_balance = out.balance_amount
+    out.remaining_balance_display = out.balance_amount_display
+
     out.gross_amount = String(deal.gross_amount)
     out.gross_amount_display = usd.format(deal.gross_amount)
     // Match Earnings UI: stored as fraction (0.2), agreements show as percent (20%)
@@ -146,20 +199,41 @@ export function buildAgreementPrefill(
     out.contact_name = mergeContact.name
     if (mergeContact.role) out.contact_role = mergeContact.role
     if (mergeContact.email) out.contact_email = mergeContact.email
-    if (mergeContact.phone) out.contact_phone = mergeContact.phone
+    const phoneRaw =
+      mergeContact.phone?.trim() ||
+      venueContactsFallback?.find(c => c.phone?.trim())?.phone?.trim() ||
+      ''
+    const phoneDisp = phoneRaw ? formatPhoneDisplay(phoneRaw) || phoneRaw : ''
+    if (phoneDisp) {
+      out.contact_phone = phoneDisp
+      out.contact_phone_display = phoneDisp
+    }
     if (mergeContact.company?.trim()) {
       const co = mergeContact.company.trim()
       out.contact_company = co
       // Many templates use {{company_name}} for the counterparty; fill from contact when Settings artist company is empty.
       if (!out.company_name?.trim()) out.company_name = co
     }
+    out.client_name = mergeContact.name
+    if (mergeContact.role) out.client_role = mergeContact.role
+    if (mergeContact.email) out.client_email = mergeContact.email
+    if (phoneDisp) {
+      out.client_phone = phoneDisp
+      out.client_phone_display = phoneDisp
+    }
+    if (mergeContact.company?.trim()) out.client_company = mergeContact.company.trim()
   }
 
   if (onsiteContact) {
     out.onsite_contact_name = onsiteContact.name
     if (onsiteContact.role?.trim()) out.onsite_contact_role = onsiteContact.role.trim()
     if (onsiteContact.email?.trim()) out.onsite_contact_email = onsiteContact.email.trim()
-    if (onsiteContact.phone?.trim()) out.onsite_contact_phone = onsiteContact.phone.trim()
+    if (onsiteContact.phone?.trim()) {
+      const op = onsiteContact.phone.trim()
+      const od = formatPhoneDisplay(op) || op
+      out.onsite_contact_phone = od
+      out.onsite_contact_phone_display = od
+    }
     if (onsiteContact.company?.trim()) out.onsite_contact_company = onsiteContact.company.trim()
   }
 
