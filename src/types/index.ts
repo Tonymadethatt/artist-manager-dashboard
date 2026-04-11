@@ -388,6 +388,8 @@ export interface ArtistProfile {
   /** Shown under manager name in email footers (e.g. Artist Manager). */
   manager_title: string | null
   manager_email: string | null
+  /** Manager phone for agreements and correspondence. */
+  manager_phone: string | null
   from_email: string
   company_name: string | null
   website: string | null
@@ -401,13 +403,14 @@ export interface ArtistProfile {
   updated_at: string
 }
 
-/** Keys in `profile_field_preset.field_key` — keep in sync with migration 021 CHECK constraint. */
+/** Keys in `profile_field_preset.field_key` — keep in sync with migration 048 CHECK constraint. */
 export type ProfileFieldPresetKey =
   | 'artist_name'
   | 'artist_email'
   | 'manager_name'
   | 'manager_title'
   | 'manager_email'
+  | 'manager_phone'
   | 'from_email'
   | 'company_name'
   | 'website'

@@ -93,6 +93,35 @@ export function formatPacificTimeRangeReadable(startIso: string, endIso: string)
   return `${formatPacificInstantReadable(startIso)} – ${formatPacificInstantReadable(endIso)}`
 }
 
+/** Calendar date in LA as a readable phrase, e.g. "Wednesday, April 9, 2026". */
+export function formatPacificDateLongFromIso(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: LA,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(ms))
+}
+
+/** `YYYY-MM-DD` interpreted at noon LA → long calendar date string. */
+export function formatPacificDateLongFromYmd(ymd: string): string {
+  const trimmed = ymd.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const iso = pacificWallToUtcIso(trimmed, '12:00')
+  if (!iso) return trimmed
+  return formatPacificDateLongFromIso(iso)
+}
+
+/** Time only, 12-hour in LA, e.g. "7:30 PM" (drops redundant :00 on the hour). */
+export function formatPacificTime12h(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  return stripOnTheHourMinutes12h(FRIENDLY_TIME_ONLY.format(new Date(ms)))
+}
+
 /** UTC ISO → { date: YYYY-MM-DD, time: HH:mm } in LA. */
 export function utcIsoToPacificDateAndTime(iso: string): { date: string; time: string } | null {
   const ms = new Date(iso).getTime()

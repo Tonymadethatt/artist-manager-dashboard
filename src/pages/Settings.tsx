@@ -26,6 +26,7 @@ type FormState = {
   manager_name: string
   manager_title: string
   manager_email: string
+  manager_phone: string
   from_email: string
   company_name: string
   website: string
@@ -43,6 +44,7 @@ const EMPTY_FORM: FormState = {
   manager_name: '',
   manager_title: '',
   manager_email: '',
+  manager_phone: '',
   from_email: '',
   company_name: '',
   website: '',
@@ -59,6 +61,7 @@ function formFromProfile(p: ArtistProfile): FormState {
     manager_name: p.manager_name ?? '',
     manager_title: p.manager_title ?? '',
     manager_email: p.manager_email ?? '',
+    manager_phone: p.manager_phone ?? '',
     from_email: p.from_email,
     company_name: p.company_name ?? '',
     website: p.website ?? '',
@@ -85,6 +88,8 @@ function buildPartial(key: FormKey, f: FormState): Partial<Omit<ArtistProfile, '
       return { manager_title: t(f.manager_title) || null }
     case 'manager_email':
       return { manager_email: t(f.manager_email) || null }
+    case 'manager_phone':
+      return { manager_phone: t(f.manager_phone) || null }
     case 'company_name':
       return { company_name: t(f.company_name) || null }
     case 'website':
@@ -429,6 +434,17 @@ export default function Settings() {
                 placeholder="you@example.com"
                 {...presetControls('manager_email')}
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Your phone (manager)</Label>
+              <FieldWithPresets
+                value={form.manager_phone}
+                onChange={v => setField('manager_phone', v)}
+                onBlur={blur('manager_phone')}
+                placeholder="+1 (555) 000-0000"
+                {...presetControls('manager_phone')}
+              />
+              <p className={hint}>Used in agreements as the manager phone merge field.</p>
             </div>
             <p className={cn(hint, fieldFull)}>Used for CC on reports and test sends.</p>
             <div className={cn('space-y-1', fieldFull)}>

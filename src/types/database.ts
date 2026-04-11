@@ -415,6 +415,7 @@ export interface Database {
           manager_name: string | null
           manager_title: string | null
           manager_email: string | null
+          manager_phone: string | null
           from_email: string
           company_name: string | null
           website: string | null
@@ -433,6 +434,7 @@ export interface Database {
           manager_name?: string | null
           manager_title?: string | null
           manager_email?: string | null
+          manager_phone?: string | null
           from_email?: string
           company_name?: string | null
           website?: string | null
@@ -451,6 +453,7 @@ export interface Database {
           manager_name?: string | null
           manager_title?: string | null
           manager_email?: string | null
+          manager_phone?: string | null
           from_email?: string
           company_name?: string | null
           website?: string | null

@@ -6,6 +6,7 @@ import { useTemplates } from '@/hooks/useTemplates'
 import { useVenues, useVenueDetail } from '@/hooks/useVenues'
 import { useFiles } from '@/hooks/useFiles'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { usePricingCatalog } from '@/hooks/usePricingCatalog'
 import { useDeals } from '@/hooks/useDeals'
 import { resolvedPdfHref } from '@/lib/files/pdfShareUrl'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ export default function FileBuilder() {
   const { templates, loading: tplLoading } = useTemplates()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
+  const pricingCatalog = usePricingCatalog()
   const { deals, updateDeal } = useDeals()
   const { addTextFile, addPdfFile } = useFiles()
 
@@ -140,6 +142,7 @@ export default function FileBuilder() {
       mergeContact,
       onsiteContactForPrefill,
       selectedVenueId ? contacts : null,
+      pricingCatalog.loading ? null : pricingCatalog.doc,
     )
     const next: Record<string, string> = {}
     for (const key of variables) {
@@ -160,6 +163,8 @@ export default function FileBuilder() {
     contacts,
     selectedVenueId,
     variables,
+    pricingCatalog.loading,
+    pricingCatalog.doc,
   ])
 
   const rendered = selectedTemplate ? renderAgreementText(selectedTemplate.sections, vars) : ''

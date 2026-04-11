@@ -9,6 +9,7 @@ const DEFAULTS: Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'> = {
   manager_name: null,
   manager_title: null,
   manager_email: null,
+  manager_phone: null,
   from_email: 'management@djluijay.live',
   company_name: null,
   website: null,

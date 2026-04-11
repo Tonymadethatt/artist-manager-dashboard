@@ -1,7 +1,14 @@
-import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '../../types'
+import type { ArtistProfile, Contact, Deal, PricingCatalogDoc, TemplateSection, Venue } from '../../types'
 import { isDealPricingSnapshot } from '../../types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
-import { utcIsoToPacificDateAndTime } from '../calendar/pacificWallTime'
+import {
+  formatPacificDateLongFromIso,
+  formatPacificDateLongFromYmd,
+  formatPacificInstantReadable,
+  formatPacificTime12h,
+  formatPacificTimeRangeReadable,
+} from '../calendar/pacificWallTime'
+import { buildPricingAgreementTransparency } from './pricingAgreementTransparency'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -19,13 +26,34 @@ function durationBetweenUtcIso(start: string | null | undefined, end: string | n
   const a = new Date(start).getTime()
   const b = new Date(end).getTime()
   if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return ''
-  const mins = Math.round((b - a) / 60000)
-  if (mins <= 0) return ''
-  if (mins < 60) return `${mins} minutes`
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  const minsTotal = Math.floor((b - a) / 60000)
+  if (minsTotal <= 0) return ''
+  if (minsTotal < 60) return minsTotal === 1 ? '1 minute' : `${minsTotal} minutes`
+  const h = Math.floor(minsTotal / 60)
+  const m = minsTotal % 60
   if (m === 0) return h === 1 ? '1 hour' : `${h} hours`
   return `${h} h ${m} min`
+}
+
+/** Decimal hours between instants, e.g. "2" or "2.5" (empty if invalid). */
+function durationHoursBetweenUtcIso(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start || !end) return ''
+  const a = new Date(start).getTime()
+  const b = new Date(end).getTime()
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return ''
+  const hours = (b - a) / 3600000
+  const rounded = Math.round(hours * 100) / 100
+  if (rounded <= 0) return ''
+  if (Number.isInteger(rounded)) return String(rounded)
+  return String(rounded)
+}
+
+function durationFromPerformanceHours(h: number): string {
+  if (!Number.isFinite(h) || h <= 0) return ''
+  if (h === 1) return '1 hour'
+  if (Number.isInteger(h)) return `${h} hours`
+  const r = Math.round(h * 100) / 100
+  return `${r} hours`
 }
 
 /** Variable names referenced as `{{name}}` in section bodies. */
@@ -48,7 +76,15 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     out.venue_type = venue.venue_type
     out.venue_type_label = VENUE_TYPE_LABELS[venue.venue_type]
     const dt = venue.deal_terms
-    if (dt?.event_date) out.event_date = String(dt.event_date)
+    if (dt?.event_date) {
+      const raw = String(dt.event_date).trim()
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        out.event_date_iso = raw
+        out.event_date = formatPacificDateLongFromYmd(raw)
+      } else {
+        out.event_date = raw
+      }
+    }
     if (dt?.pay != null) {
       out.artist_pay = String(dt.pay)
       if (!Number.isNaN(dt.pay)) out.artist_pay_display = usd.format(dt.pay)
@@ -75,6 +111,12 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     if (profile.from_email) out.from_email = profile.from_email
     if (profile.manager_name) out.manager_name = profile.manager_name
     if (profile.manager_email) out.manager_email = profile.manager_email
+    if (profile.manager_phone?.trim()) {
+      const p = profile.manager_phone.trim()
+      const disp = formatPhoneDisplay(p) || p
+      out.manager_phone = disp
+      out.manager_phone_display = disp
+    }
   }
   return out
 }
@@ -101,11 +143,6 @@ export function pricingSnapshotAgreementFields(deal: Deal): Record<string, strin
   }
 }
 
-function pacificWallParts(iso: string | null | undefined): { date: string; time: string } | null {
-  if (!iso) return null
-  return utcIsoToPacificDateAndTime(iso)
-}
-
 /** Prefill for File Builder: venue, profile, optional deal, optional contact for merge fields. */
 export function buildAgreementPrefill(
   venue: Venue | null,
@@ -115,40 +152,64 @@ export function buildAgreementPrefill(
   onsiteContact: Contact | null = null,
   /** Other venue contacts: used to fill `contact_phone` when the selected contact has no phone. */
   venueContactsFallback: Contact[] | null = null,
+  /** When set, enriches pricing merge fields (hourly reference, package line, extended-time clause). */
+  pricingCatalog: PricingCatalogDoc | null = null,
 ): Record<string, string> {
   const out = { ...buildVenueProfilePrefill(venue, profile) }
 
   if (deal) {
     out.deal_description = deal.description
     out.event_name = deal.description
-    if (deal.event_date) {
-      out.deal_event_date = deal.event_date
-      out.event_date = deal.event_date
-    }
-    const evS = pacificWallParts(deal.event_start_at)
-    const evE = pacificWallParts(deal.event_end_at)
-    if (evS) {
-      out.event_start_time = evS.time
-      out.event_date_display = deal.event_date?.trim() || evS.date
-    }
-    if (evE) out.event_end_time = evE.time
-    if (evS && evE) {
-      out.event_window_display = `${evS.date} ${evS.time}–${evE.time}`
-    } else if (evS) {
-      out.event_window_display = `${evS.date} ${evS.time}`
+    if (deal.event_date?.trim()) {
+      const isoYmd = deal.event_date.trim()
+      out.deal_event_date_iso = isoYmd
+      if (/^\d{4}-\d{2}-\d{2}$/.test(isoYmd)) {
+        const pretty = formatPacificDateLongFromYmd(isoYmd)
+        out.deal_event_date = pretty
+        out.event_date = pretty
+      } else {
+        out.deal_event_date = isoYmd
+        out.event_date = isoYmd
+      }
     }
 
-    const pfS = pacificWallParts(deal.performance_start_at)
-    const pfE = pacificWallParts(deal.performance_end_at)
-    if (pfS) {
-      out.performance_start_time = pfS.time
-      out.performance_date_display = deal.event_date?.trim() || pfS.date
+    if (deal.event_start_at) {
+      out.event_start_time = formatPacificTime12h(deal.event_start_at)
     }
-    if (pfE) out.performance_end_time = pfE.time
-    if (pfS && pfE) {
-      out.performance_window_display = `${pfS.date} ${pfS.time}–${pfE.time}`
-    } else if (pfS) {
-      out.performance_window_display = `${pfS.date} ${pfS.time}`
+    if (deal.event_end_at) {
+      out.event_end_time = formatPacificTime12h(deal.event_end_at)
+    }
+    if (deal.event_date?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(deal.event_date.trim())) {
+      out.event_date_display = formatPacificDateLongFromYmd(deal.event_date.trim())
+    } else if (deal.event_start_at) {
+      out.event_date_display = formatPacificDateLongFromIso(deal.event_start_at)
+    }
+    if (deal.event_start_at && deal.event_end_at) {
+      out.event_window_display = formatPacificTimeRangeReadable(deal.event_start_at, deal.event_end_at)
+    } else if (deal.event_start_at) {
+      out.event_window_display = formatPacificInstantReadable(deal.event_start_at)
+    }
+
+    if (deal.performance_start_at) {
+      out.performance_start_time = formatPacificTime12h(deal.performance_start_at)
+    }
+    if (deal.performance_end_at) {
+      out.performance_end_time = formatPacificTime12h(deal.performance_end_at)
+    }
+    if (deal.event_date?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(deal.event_date.trim())) {
+      out.performance_date_display = formatPacificDateLongFromYmd(deal.event_date.trim())
+    } else if (deal.performance_start_at) {
+      out.performance_date_display = formatPacificDateLongFromIso(deal.performance_start_at)
+    } else if (deal.event_start_at) {
+      out.performance_date_display = formatPacificDateLongFromIso(deal.event_start_at)
+    }
+    if (deal.performance_start_at && deal.performance_end_at) {
+      out.performance_window_display = formatPacificTimeRangeReadable(
+        deal.performance_start_at,
+        deal.performance_end_at,
+      )
+    } else if (deal.performance_start_at) {
+      out.performance_window_display = formatPacificInstantReadable(deal.performance_start_at)
     }
     if (deal.performance_genre?.trim()) out.performance_genre = deal.performance_genre.trim()
 
@@ -156,27 +217,51 @@ export function buildAgreementPrefill(
     const perfEndIso = deal.performance_end_at
     const evtStartIso = deal.event_start_at
     const evtEndIso = deal.event_end_at
-    const setStartWall = pacificWallParts(perfStartIso || evtStartIso)
-    const setEndWall = pacificWallParts(perfEndIso || evtEndIso)
-    if (setStartWall) out.set_start_time = setStartWall.time
-    if (setEndWall) out.set_end_time = setEndWall.time
+    const setStartIso = perfStartIso || evtStartIso || null
+    const setEndIso = perfEndIso || evtEndIso || null
+    if (setStartIso) out.set_start_time = formatPacificTime12h(setStartIso)
+    if (setEndIso) out.set_end_time = formatPacificTime12h(setEndIso)
+
     let setDur = durationBetweenUtcIso(perfStartIso, perfEndIso)
-    if (!setDur) setDur = durationBetweenUtcIso(evtStartIso, evtEndIso)
+    let setDurHours = durationHoursBetweenUtcIso(perfStartIso, perfEndIso)
+    if (!setDur) {
+      setDur = durationBetweenUtcIso(evtStartIso, evtEndIso)
+      setDurHours = durationHoursBetweenUtcIso(evtStartIso, evtEndIso)
+    }
+    if (
+      !setDur &&
+      deal.pricing_snapshot &&
+      isDealPricingSnapshot(deal.pricing_snapshot) &&
+      deal.pricing_snapshot.performanceHours > 0
+    ) {
+      setDur = durationFromPerformanceHours(deal.pricing_snapshot.performanceHours)
+      const ph = deal.pricing_snapshot.performanceHours
+      setDurHours = Number.isInteger(ph) ? String(ph) : String(Math.round(ph * 100) / 100)
+    }
     if (!setDur && venue?.deal_terms?.set_length?.trim()) {
       setDur = venue.deal_terms.set_length.trim()
     }
-    if (setDur) out.set_duration = setDur
+    if (setDur) {
+      out.set_duration = setDur
+      out.set_length = setDur
+    }
+    if (setDurHours) out.set_duration_hours = setDurHours
 
     const paid = Number(deal.deposit_paid_amount ?? 0)
     const grossN = Number(deal.gross_amount ?? 0)
     const balanceDue = Math.max(0, Math.round((grossN - paid) * 100) / 100)
-    out.balance_amount = String(balanceDue)
-    out.balance_amount_display = usd.format(balanceDue)
-    out.remaining_balance = out.balance_amount
-    out.remaining_balance_display = out.balance_amount_display
+    const balanceFmt = usd.format(balanceDue)
+    out.balance_amount = balanceFmt
+    out.balance_amount_display = balanceFmt
+    out.balance_amount_numeric = String(balanceDue)
+    out.remaining_balance = balanceFmt
+    out.remaining_balance_display = balanceFmt
 
     out.gross_amount = String(deal.gross_amount)
     out.gross_amount_display = usd.format(deal.gross_amount)
+    out.full_fee_display = out.gross_amount_display
+    out.cancellation_full_fee_display = out.gross_amount_display
+    out.contract_fee_display = out.gross_amount_display
     // Match Earnings UI: stored as fraction (0.2), agreements show as percent (20%)
     out.commission_rate = `${Math.round(deal.commission_rate * 100)}%`
     out.commission_rate_fraction = String(deal.commission_rate)
@@ -187,6 +272,7 @@ export function buildAgreementPrefill(
     if (deal.agreement_url) out.agreement_url = deal.agreement_url
     if (deal.notes?.trim()) out.deal_notes = deal.notes.trim()
     Object.assign(out, pricingSnapshotAgreementFields(deal))
+    Object.assign(out, buildPricingAgreementTransparency(deal, pricingCatalog))
 
     const cap =
       venue?.capacity?.trim() ||
