@@ -27,7 +27,7 @@ export function collectAgreementSiteOrigins(primaryOrigin: string): Set<string> 
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_PUBLIC_SITE_URL) {
     add(import.meta.env.VITE_PUBLIC_SITE_URL as string)
   }
-   if (typeof window !== 'undefined' && window.location?.origin) {
+  if (typeof window !== 'undefined' && window.location?.origin) {
     add(window.location.origin)
   }
   const nodeProc = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process
@@ -86,6 +86,34 @@ export function inferredPdfSlugFromStoragePath(pdf_storage_path: string | null):
   return lower
 }
 
+/** Supabase project URL for building storage public links (browser + Netlify). */
+function supabaseProjectRootUrl(): string | null {
+  const vite =
+    typeof import.meta !== 'undefined'
+      ? (import.meta.env?.VITE_SUPABASE_URL as string | undefined)
+      : undefined
+  if (vite?.trim()) return normalizeAgreementSiteOrigin(vite)
+  const nodeProc = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process
+  const u = nodeProc?.env?.SUPABASE_URL?.trim()
+  if (u) return normalizeAgreementSiteOrigin(u)
+  return null
+}
+
+/**
+ * Direct public object URL for agreement-pdfs bucket (works when slug/share link is broken).
+ * Requires a public bucket (or anon-readable policy on the object path).
+ */
+export function agreementPdfSupabaseStoragePublicUrl(file: GeneratedFile): string | null {
+  if (file.output_format !== 'pdf') return null
+  const path = file.pdf_storage_path?.trim()
+  if (!path) return null
+  const root = supabaseProjectRootUrl()
+  if (!root) return null
+  const segments = path.split('/').filter(Boolean).map(s => encodeURIComponent(s))
+  if (segments.length === 0) return null
+  return `${root}/storage/v1/object/public/agreement-pdfs/${segments.join('/')}`
+}
+
 /**
  * Canonical href for opening/copying/previewing a PDF: first-party `/agreements/{slug}` when possible.
  */
@@ -103,12 +131,22 @@ export function resolvedPdfHrefFromOrigin(file: GeneratedFile, origin: string): 
   if (slug && base) return `${base}/agreements/${slug}`
 
   const rawPublic = file.pdf_public_url?.trim()
-  if (!rawPublic) return null
-  return filterPoisonedFirstPartyAgreementPublicUrl(rawPublic, known)
+  if (rawPublic) {
+    const filtered = filterPoisonedFirstPartyAgreementPublicUrl(rawPublic, known)
+    if (filtered) return filtered
+  }
+  return agreementPdfSupabaseStoragePublicUrl(file)
 }
 
 export function resolvedPdfHref(file: GeneratedFile): string | null {
   return resolvedPdfHrefFromOrigin(file, publicSiteOrigin())
+}
+
+/** PDF row the user can attach to a deal (picker): any file in agreement-pdfs or resolvable href. */
+export function isSelectableAgreementPdfFile(f: GeneratedFile): boolean {
+  if (f.output_format !== 'pdf') return false
+  if (f.pdf_storage_path?.trim()) return true
+  return resolvedPdfHref(f) != null
 }
 
 export function hasResolvablePdfLink(file: GeneratedFile): boolean {

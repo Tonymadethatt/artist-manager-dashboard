@@ -9,14 +9,14 @@ import {
 } from '@/components/ui/select'
 import { useFiles } from '@/hooks/useFiles'
 import type { GeneratedFile } from '@/types'
-import { hasResolvablePdfLink } from '@/lib/files/pdfShareUrl'
+import { isSelectableAgreementPdfFile } from '@/lib/files/pdfShareUrl'
 
 function pdfMatchesScope(
   f: GeneratedFile,
   venueId: string | null | undefined,
   dealId: string | null | undefined
 ): boolean {
-  if (f.output_format !== 'pdf' || !hasResolvablePdfLink(f)) return false
+  if (!isSelectableAgreementPdfFile(f)) return false
   if (venueId && f.venue_id != null && f.venue_id !== venueId) return false
   if (dealId && f.deal_id != null && f.deal_id !== dealId) return false
   return true
@@ -43,7 +43,7 @@ export function AgreementPdfPicker({
   const { files, loading } = useFiles()
 
   const { scoped, rest } = useMemo(() => {
-    const pdfs = files.filter(f => f.output_format === 'pdf' && hasResolvablePdfLink(f))
+    const pdfs = files.filter(f => isSelectableAgreementPdfFile(f))
     if (!preferScoped || (!venueId && !dealId)) {
       return { scoped: pdfs, rest: [] as GeneratedFile[] }
     }
@@ -91,7 +91,8 @@ export function AgreementPdfPicker({
         </SelectContent>
       </Select>
       <p className="text-[10px] text-neutral-600 leading-snug">
-        Overrides the deal&apos;s default agreement for this step only.{' '}
+        Lists every PDF in Files (including legacy rows with a broken share slug). Pick one, save the deal, then
+        send.{' '}
         <Link to="/files/new" className="text-neutral-400 hover:text-neutral underline-offset-2 hover:underline">
           Generate PDF
         </Link>
