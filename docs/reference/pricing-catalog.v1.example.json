@@ -1,0 +1,120 @@
+{
+  "v": 1,
+  "policies": {
+    "defaultDepositPercent": 50,
+    "salesTaxPercent": 8.25,
+    "minimumBillableHours": 3
+  },
+  "packages": [
+    {
+      "id": "pkg_standard_4h",
+      "name": "Standard evening (4h performance)",
+      "price": 2500,
+      "hoursIncluded": 4,
+      "bullets": [
+        "Up to 4 hours of performance time",
+        "Basic DJ booth + controller; venue provides PA",
+        "Arrival 90 minutes before doors for setup"
+      ]
+    },
+    {
+      "id": "pkg_premium_6h",
+      "name": "Premium (6h + extended sound support)",
+      "price": 4200,
+      "hoursIncluded": 6,
+      "bullets": []
+    }
+  ],
+  "services": [
+    {
+      "id": "svc_hourly_weekday",
+      "name": "Hourly — weekday",
+      "category": "Performance",
+      "price": 450,
+      "priceType": "per_hour",
+      "dayType": "weekday"
+    },
+    {
+      "id": "svc_hourly_weekend",
+      "name": "Hourly — weekend (Fri–Sun)",
+      "category": "Performance",
+      "price": 550,
+      "priceType": "per_hour",
+      "dayType": "weekend"
+    },
+    {
+      "id": "svc_flat_corporate",
+      "name": "Flat corporate gala (single fee)",
+      "category": "Corporate",
+      "price": 6000,
+      "priceType": "flat_rate",
+      "dayType": "any"
+    }
+  ],
+  "addons": [
+    {
+      "id": "addon_uplighting",
+      "name": "Uplighting package",
+      "category": "Production",
+      "price": 350,
+      "priceType": "flat_fee"
+    },
+    {
+      "id": "addon_per_sqft",
+      "name": "Extra coverage",
+      "category": "Production",
+      "price": 2,
+      "priceType": "per_sq_ft",
+      "unitLabel": "sq ft"
+    },
+    {
+      "id": "addon_per_event_fee",
+      "name": "Travel stipend",
+      "price": 200,
+      "priceType": "per_event"
+    },
+    {
+      "id": "addon_per_artist",
+      "name": "Second operator",
+      "price": 400,
+      "priceType": "per_artist"
+    },
+    {
+      "id": "addon_per_effect",
+      "name": "Cold spark moment",
+      "price": 150,
+      "priceType": "per_effect"
+    },
+    {
+      "id": "addon_per_setup",
+      "name": "Early load-in",
+      "price": 250,
+      "priceType": "per_setup"
+    }
+  ],
+  "discounts": [
+    {
+      "id": "disc_repeat_venue",
+      "name": "Repeat venue",
+      "clientType": "returning",
+      "percent": 10
+    },
+    {
+      "id": "disc_charity",
+      "name": "Nonprofit / charity",
+      "percent": 15
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "surge_holiday",
+      "name": "Holiday / NYE",
+      "multiplier": 1.35
+    },
+    {
+      "id": "surge_rush",
+      "name": "Short-notice booking",
+      "multiplier": 1.15
+    }
+  ]
+}
