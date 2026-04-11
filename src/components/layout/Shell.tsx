@@ -24,6 +24,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/email-templates':     'Email Templates',
   '/settings':            'Settings',
   '/forms/preview':       'Forms preview',
+  '/call-script/rafael-lamas': 'Rafael call script',
 }
 
 export function Shell() {

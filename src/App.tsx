@@ -22,6 +22,7 @@ import VenueEmailAckBridge from '@/pages/public/VenueEmailAckBridge'
 import PerformanceReports from '@/pages/PerformanceReports'
 import ManualShowReport from '@/pages/ManualShowReport'
 import FormPreviews from '@/pages/FormPreviews'
+import RafaelLamasCallScript from '@/pages/RafaelLamasCallScript'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="/performance-reports/manual" element={<ManualShowReport />} />
           <Route path="/forms/preview" element={<FormPreviews />} />
+          <Route path="/call-script/rafael-lamas" element={<RafaelLamasCallScript />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

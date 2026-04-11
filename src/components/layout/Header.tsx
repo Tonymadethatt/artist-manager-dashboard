@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/email-queue': 'Email Queue',
   '/email-templates': 'Email Templates',
   '/forms/preview': 'Forms preview',
+  '/call-script/rafael-lamas': 'Rafael call script',
 }
 
 interface HeaderProps {
