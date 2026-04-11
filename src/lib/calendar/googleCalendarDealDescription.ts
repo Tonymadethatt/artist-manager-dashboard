@@ -1,15 +1,15 @@
-import type { CommissionTier, DealTerms } from '@/types'
+import type { CommissionTier, DealTerms } from '../../types'
 import {
   COMMISSION_TIER_LABELS,
   isDealPricingSnapshot,
-} from '@/types'
-import type { DealPromiseLine } from '@/lib/showReportCatalog'
+} from '../../types'
+import type { DealPromiseLine } from '../showReportCatalog'
 import {
   SHOW_REPORT_PRESETS,
   isLineMajor,
   normalizePromiseLinesDoc,
   resolvePromiseLineDisplayLabel,
-} from '@/lib/showReportCatalog'
+} from '../showReportCatalog'
 
 const usdWhole = new Intl.NumberFormat('en-US', {
   style: 'currency',

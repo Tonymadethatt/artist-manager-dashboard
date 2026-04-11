@@ -1,5 +1,24 @@
-import type { Deal, DealPricingSnapshot, PricingCatalogDoc, Venue } from '@/types'
-import { emptyPricingCatalogDoc } from '@/types'
+import type { Deal, DealPricingSnapshot, PricingCatalogDoc, Venue } from '../../types'
+import {
+  COMMISSION_TIER_LABELS,
+  emptyPricingCatalogDoc,
+  isDealPricingSnapshot,
+  normalizePricingCatalogDoc,
+} from '../../types'
+import { pricingSnapshotAgreementFields } from '../agreement/tokens'
+import { formatVenuePostalLine } from '../calendar/venueAddressForGoogle'
+import {
+  scheduleWhenStackFromDeal,
+  whenLineCompactFromDeal,
+} from '../calendar/pacificWallTime'
+import {
+  resolveArtistPromiseLinesForDeal,
+  resolvePromiseLineDisplayLabel,
+  resolveVenuePromiseLinesForDeal,
+} from '../showReportCatalog'
+import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
+import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
+import { EMAIL_BODY_SECONDARY } from './emailDarkSurfacePalette'
 
 /** Minimum deal fields required to render gig-booked email sections (previews may pass only this). */
 export type GigBookedEmailDealInput = Pick<
@@ -15,25 +34,6 @@ export type GigBookedEmailDealInput = Pick<
   | 'pricing_snapshot'
   | 'notes'
 >
-import {
-  COMMISSION_TIER_LABELS,
-  isDealPricingSnapshot,
-  normalizePricingCatalogDoc,
-} from '@/types'
-import { pricingSnapshotAgreementFields } from '@/lib/agreement/tokens'
-import { formatVenuePostalLine } from '@/lib/calendar/venueAddressForGoogle'
-import {
-  scheduleWhenStackFromDeal,
-  whenLineCompactFromDeal,
-} from '@/lib/calendar/pacificWallTime'
-import {
-  resolveArtistPromiseLinesForDeal,
-  resolvePromiseLineDisplayLabel,
-  resolveVenuePromiseLinesForDeal,
-} from '@/lib/showReportCatalog'
-import { emailSectionCardHtml, escapeHtmlPlain } from '@/lib/email/appendBlocksHtml'
-import { stackedScheduleWhenCellHtml } from '@/lib/email/emailTableDateStack'
-import { EMAIL_BODY_SECONDARY } from '@/lib/email/emailDarkSurfacePalette'
 
 const usdWhole = new Intl.NumberFormat('en-US', {
   style: 'currency',

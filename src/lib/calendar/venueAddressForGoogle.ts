@@ -1,4 +1,4 @@
-import type { Venue } from '@/types'
+import type { Venue } from '../../types'
 
 /** Fields needed to build a single-line postal address for Google Calendar / Maps. */
 export type VenueAddressForGoogle = Pick<

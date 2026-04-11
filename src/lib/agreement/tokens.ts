@@ -1,6 +1,6 @@
-import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '@/types'
-import { isDealPricingSnapshot } from '@/types'
-import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '@/types'
+import type { ArtistProfile, Contact, Deal, TemplateSection, Venue } from '../../types'
+import { isDealPricingSnapshot } from '../../types'
+import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 

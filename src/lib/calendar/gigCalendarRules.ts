@@ -1,4 +1,4 @@
-import type { Deal, OutreachStatus, Venue } from '@/types'
+import type { Deal, OutreachStatus, Venue } from '../../types'
 
 /** Venue is far enough along that a gig on the calendar counts as “officially booked.” */
 export const CALENDAR_VENUE_STATUSES: readonly OutreachStatus[] = [
