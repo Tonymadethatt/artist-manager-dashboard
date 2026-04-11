@@ -44,6 +44,16 @@ export type DealPushResult =
     }
   | { ok: false; httpStatus: number; error: string }
 
+/** Non-PII diagnostics for calendar sync (embed vs explicit venue lookup). */
+export type DealPushScan = {
+  dealsLoaded: number
+  queryError: string | null
+  qualifiedByEmbed: number
+  qualifiedByLookup: number
+  mismatchEmbFailLookupOk: number
+  pushQueueSource: 'embed' | 'lookup'
+}
+
 export type DealPushBatchSummary = {
   dealPushAttempted: number
   dealPushInserted: number
@@ -55,9 +65,24 @@ export type DealPushBatchSummary = {
   dealPushErrors: number
   dealPushErrorSample: string | null
   dealPushTruncated: boolean
+  dealPushScan: DealPushScan
+  /** False when GOOGLE_CLIENT_ID / SECRET missing on the server. */
+  dealPushOAuthConfigured: boolean
 }
 
 const DEFAULT_BATCH_MAX = 80
+
+function normalizeEmbeddedVenue(raw: unknown): { status: OutreachStatus } | null {
+  if (raw == null) return null
+  if (Array.isArray(raw)) {
+    const first = raw[0] as { status?: OutreachStatus } | undefined
+    return first?.status != null ? { status: first.status } : null
+  }
+  if (typeof raw === 'object' && 'status' in (raw as object)) {
+    return { status: (raw as { status: OutreachStatus }).status }
+  }
+  return null
+}
 
 function buildGoogleEventDescription(deal: DealPushRow, venue: VenuePushRow | null): string | undefined {
   const parts: string[] = []
@@ -431,22 +456,11 @@ type DealListRow = Pick<
   DealPushRow,
   'id' | 'venue_id' | 'event_start_at' | 'event_end_at' | 'event_cancelled_at'
 > & {
-  venue: { status: OutreachStatus } | null
+  venue?: unknown
 }
 
-/**
- * After importing from Google, push all calendar-qualified deals so new/edited gigs appear on the shared calendar.
- * Limited per request to stay within serverless timeouts.
- */
-export async function pushAllQualifyingDealsToGoogleCalendar(args: {
-  supabase: SupabaseClient
-  userId: string
-  clientId: string
-  clientSecret: string
-  maxDeals?: number
-}): Promise<DealPushBatchSummary> {
-  const maxDeals = args.maxDeals ?? DEFAULT_BATCH_MAX
-  const empty: DealPushBatchSummary = {
+function emptyBatchSummary(oauthConfigured: boolean): DealPushBatchSummary {
+  return {
     dealPushAttempted: 0,
     dealPushInserted: 0,
     dealPushPatched: 0,
@@ -457,12 +471,34 @@ export async function pushAllQualifyingDealsToGoogleCalendar(args: {
     dealPushErrors: 0,
     dealPushErrorSample: null,
     dealPushTruncated: false,
+    dealPushOAuthConfigured: oauthConfigured,
+    dealPushScan: {
+      dealsLoaded: 0,
+      queryError: null,
+      qualifiedByEmbed: 0,
+      qualifiedByLookup: 0,
+      mismatchEmbFailLookupOk: 0,
+      pushQueueSource: 'lookup',
+    },
   }
+}
 
+/**
+ * After importing from Google, push all calendar-qualified deals so new/edited gigs appear on the shared calendar.
+ * Qualification uses an explicit `venues` lookup (same as single-deal push), not only the optional embed row.
+ * Limited per request to stay within serverless timeouts.
+ */
+export async function pushAllQualifyingDealsToGoogleCalendar(args: {
+  supabase: SupabaseClient
+  userId: string
+  clientId: string | undefined
+  clientSecret: string | undefined
+  maxDeals?: number
+}): Promise<DealPushBatchSummary> {
+  const maxDeals = args.maxDeals ?? DEFAULT_BATCH_MAX
+  const oauthConfigured = !!(args.clientId && args.clientSecret)
+  const out = emptyBatchSummary(oauthConfigured)
   const { clientId, clientSecret } = args
-  if (!clientId || !clientSecret) {
-    return empty
-  }
 
   const { data: rows, error } = await args.supabase
     .from('deals')
@@ -471,19 +507,89 @@ export async function pushAllQualifyingDealsToGoogleCalendar(args: {
     )
     .eq('user_id', args.userId)
 
-  if (error || !rows?.length) {
-    return empty
+  if (error) {
+    out.dealPushScan.queryError = error.message
+    return out
+  }
+  if (!rows?.length) {
+    return out
   }
 
-  const qualifiedIds: string[] = []
-  for (const row of rows as DealListRow[]) {
-    if (
-      dealQualifiesForCalendar(row, row.venue ? { status: row.venue.status } : null)
-    ) {
-      qualifiedIds.push(row.id)
+  out.dealPushScan.dealsLoaded = rows.length
+
+  const venueIds = [...new Set(rows.map(r => r.venue_id).filter(Boolean))] as string[]
+  const venueLookup = new Map<string, { status: OutreachStatus }>()
+  if (venueIds.length > 0) {
+    const { data: venueRows } = await args.supabase
+      .from('venues')
+      .select('id, status')
+      .eq('user_id', args.userId)
+      .in('id', venueIds)
+    for (const v of venueRows ?? []) {
+      venueLookup.set(v.id, { status: v.status as OutreachStatus })
     }
   }
 
+  const embedQualified: string[] = []
+  const lookupQualified: string[] = []
+  let mismatchEmbFailLookupOk = 0
+
+  for (const row of rows as DealListRow[]) {
+    const embVenue = normalizeEmbeddedVenue(row.venue)
+    const lkVenue = row.venue_id ? venueLookup.get(row.venue_id) ?? null : null
+    const qEmb = dealQualifiesForCalendar(row, embVenue)
+    const qLk = dealQualifiesForCalendar(row, lkVenue)
+    if (qEmb) embedQualified.push(row.id)
+    if (qLk) lookupQualified.push(row.id)
+    if (!qEmb && qLk) mismatchEmbFailLookupOk += 1
+  }
+
+  out.dealPushScan.qualifiedByEmbed = embedQualified.length
+  out.dealPushScan.qualifiedByLookup = lookupQualified.length
+  out.dealPushScan.mismatchEmbFailLookupOk = mismatchEmbFailLookupOk
+  out.dealPushScan.pushQueueSource = 'lookup'
+
+  // #region agent log
+  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '58b41d' },
+    body: JSON.stringify({
+      sessionId: '58b41d',
+      hypothesisId: 'B',
+      location: 'googleCalendarDealPushCore.ts:pushAllQualifyingDealsToGoogleCalendar',
+      message: 'deal push scan',
+      data: {
+        dealsLoaded: out.dealPushScan.dealsLoaded,
+        qualifiedByEmbed: out.dealPushScan.qualifiedByEmbed,
+        qualifiedByLookup: out.dealPushScan.qualifiedByLookup,
+        mismatchEmbFailLookupOk: out.dealPushScan.mismatchEmbFailLookupOk,
+        oauthConfigured: out.dealPushOAuthConfigured,
+        queryError: out.dealPushScan.queryError,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+
+  if (!oauthConfigured || !clientId || !clientSecret) {
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '58b41d' },
+      body: JSON.stringify({
+        sessionId: '58b41d',
+        hypothesisId: 'A',
+        location: 'googleCalendarDealPushCore.ts:pushAllQualifyingDealsToGoogleCalendar',
+        message: 'push skipped — oauth not configured on server',
+        data: { oauthConfigured: false },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
+    return out
+  }
+
+  const qualifiedIds = lookupQualified
   const truncated = qualifiedIds.length > maxDeals
   const ids = qualifiedIds.slice(0, maxDeals)
 
@@ -520,46 +626,66 @@ export async function pushAllQualifyingDealsToGoogleCalendar(args: {
       clientSecret,
       updateConnectionTelemetry: false,
     })
-    empty.dealPushAttempted += 1
+    out.dealPushAttempted += 1
     if (!r.ok) {
-      empty.dealPushErrors += 1
+      out.dealPushErrors += 1
       if (!dealPushErrorSample) dealPushErrorSample = r.error
       continue
     }
     switch (r.action) {
       case 'inserted':
-        empty.dealPushInserted += 1
+        out.dealPushInserted += 1
         break
       case 'patched':
-        empty.dealPushPatched += 1
+        out.dealPushPatched += 1
         break
       case 'patched_after_race':
-        empty.dealPushPatchedAfterRace += 1
+        out.dealPushPatchedAfterRace += 1
         break
       case 'noop':
-        empty.dealPushNoop += 1
+        out.dealPushNoop += 1
         break
       case 'deleted':
-        empty.dealPushDeleted += 1
+        out.dealPushDeleted += 1
         break
       case 'race_abandoned':
-        empty.dealPushRaceAbandoned += 1
+        out.dealPushRaceAbandoned += 1
         break
       default:
         break
     }
   }
 
-  empty.dealPushErrorSample = dealPushErrorSample
-  empty.dealPushTruncated = truncated
+  out.dealPushErrorSample = dealPushErrorSample
+  out.dealPushTruncated = truncated
 
   if (ids.length > 0) {
-    if (empty.dealPushErrors > 0) {
+    if (out.dealPushErrors > 0) {
       await recordBatchConnError((dealPushErrorSample ?? 'One or more deal pushes failed.').slice(0, 2000))
     } else {
       await recordBatchConnOk()
     }
   }
 
-  return empty
+  // #region agent log
+  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '58b41d' },
+    body: JSON.stringify({
+      sessionId: '58b41d',
+      hypothesisId: 'E',
+      location: 'googleCalendarDealPushCore.ts:pushAllQualifyingDealsToGoogleCalendar:exit',
+      message: 'batch push finished',
+      data: {
+        dealPushAttempted: out.dealPushAttempted,
+        dealPushInserted: out.dealPushInserted,
+        dealPushPatched: out.dealPushPatched,
+        dealPushErrors: out.dealPushErrors,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+
+  return out
 }

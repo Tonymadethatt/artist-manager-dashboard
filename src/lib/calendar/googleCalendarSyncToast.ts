@@ -15,6 +15,15 @@ export type GoogleCalendarSyncResponseBody = {
   dealPushErrors?: number
   dealPushErrorSample?: string | null
   dealPushTruncated?: boolean
+  dealPushOAuthConfigured?: boolean
+  dealPushScan?: {
+    dealsLoaded: number
+    queryError: string | null
+    qualifiedByEmbed: number
+    qualifiedByLookup: number
+    mismatchEmbFailLookupOk: number
+    pushQueueSource: string
+  }
 }
 
 /** Settings card copy (mentions “from Google” / follow-up tasks). */
@@ -42,14 +51,36 @@ export function googleCalendarSyncSuccessMessageGigPage(j: GoogleCalendarSyncRes
 }
 
 function dealPushSuffix(j: GoogleCalendarSyncResponseBody): string {
+  let s = ''
+  if (j.dealPushOAuthConfigured === false) {
+    s +=
+      ' Google gig push skipped: server OAuth (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) not configured for functions.'
+  }
+
+  const scan = j.dealPushScan
+  if (scan?.queryError) {
+    s += ` Deal scan error: ${scan.queryError.slice(0, 120)}.`
+  }
+
   const attempted = j.dealPushAttempted ?? 0
-  if (attempted <= 0) return ''
+  if (attempted <= 0) {
+    if (
+      scan &&
+      scan.dealsLoaded > 0 &&
+      scan.qualifiedByLookup === 0 &&
+      j.dealPushOAuthConfigured !== false
+    ) {
+      s +=
+        ' No gigs matched calendar rules (booked-stage venue + start + end + not cancelled).'
+    }
+    return s
+  }
 
   const saved =
     (j.dealPushInserted ?? 0) +
     (j.dealPushPatched ?? 0) +
     (j.dealPushPatchedAfterRace ?? 0)
-  let s = ` ${saved} gig(s) written to Google Calendar.`
+  s += ` ${saved} gig(s) written to Google Calendar.`
   if (j.dealPushTruncated) s += ' Run sync again to push more (batch limit).'
 
   const errN = j.dealPushErrors ?? 0

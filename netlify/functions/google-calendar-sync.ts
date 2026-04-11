@@ -59,22 +59,40 @@ export const handler: Handler = async event => {
   }
 
   const { clientId, clientSecret } = getGoogleOAuthEnv()
-  const dealPush =
-    clientId && clientSecret
-      ? await pushAllQualifyingDealsToGoogleCalendar({
-          supabase,
-          userId: userData.user.id,
-          clientId,
-          clientSecret,
-        })
-      : null
+  const dealPush = await pushAllQualifyingDealsToGoogleCalendar({
+    supabase,
+    userId: userData.user.id,
+    clientId,
+    clientSecret,
+  })
+
+  // #region agent log
+  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '58b41d' },
+    body: JSON.stringify({
+      sessionId: '58b41d',
+      hypothesisId: 'D',
+      location: 'google-calendar-sync.ts:handler',
+      message: 'sync response summary',
+      data: {
+        imported: result.summary.imported,
+        dealPushOAuthConfigured: dealPush.dealPushOAuthConfigured,
+        dealsLoaded: dealPush.dealPushScan.dealsLoaded,
+        qualifiedByLookup: dealPush.dealPushScan.qualifiedByLookup,
+        dealPushAttempted: dealPush.dealPushAttempted,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
 
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ...result.summary,
-      ...(dealPush ?? {}),
+      ...dealPush,
     }),
   }
 }
