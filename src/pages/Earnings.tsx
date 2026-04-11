@@ -22,6 +22,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -683,6 +684,7 @@ export default function Earnings() {
   const [artistPromisePresets, setArtistPromisePresets] = useState<Record<string, boolean>>(defaultArtistPromisePresets())
   const [artistPromiseCustomLines, setArtistPromiseCustomLines] = useState<string[]>([''])
   const [dealFormTab, setDealFormTab] = useState<DealFormTab>('basics')
+  const [addonPickerOpen, setAddonPickerOpen] = useState(false)
 
   const [pricingBaseMode, setPricingBaseMode] = useState<'package' | 'hourly'>('hourly')
   const [pricingPackageId, setPricingPackageId] = useState<string | null>(null)
@@ -697,6 +699,10 @@ export default function Earnings() {
     const t = new URLSearchParams(location.search).get('tab')
     setEarningsSection(t === 'pricing' ? 'pricing' : 'deals')
   }, [location.search])
+
+  useEffect(() => {
+    if (!addOpen) setAddonPickerOpen(false)
+  }, [addOpen])
 
   const goEarningsSection = useCallback(
     (s: 'deals' | 'pricing') => {
@@ -1091,6 +1097,7 @@ export default function Earnings() {
     }
 
     setSaving(false)
+    setAddonPickerOpen(false)
     setAddOpen(false)
     if (!editDeal) setDealsPage(1)
   }
@@ -1478,7 +1485,15 @@ export default function Earnings() {
       <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
 
       {/* Add / Edit dialog — tabbed so it fits the viewport */}
-      <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={open => {
+          if (!open) {
+            setAddonPickerOpen(false)
+            setAddOpen(false)
+          }
+        }}
+      >
         <DialogContent className="flex h-[min(92dvh,52rem)] max-h-[min(92dvh,52rem)] w-full max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="shrink-0 space-y-0 border-b border-neutral-800 px-6 pb-3 pt-6 pr-14">
             <DialogTitle>{editDeal ? 'Edit deal' : 'Log a deal'}</DialogTitle>
@@ -1645,30 +1660,36 @@ export default function Earnings() {
                       </div>
                     </div>
                     {pricingCatalog.doc.addons.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="text-[10px] text-neutral-500">Add-ons (qty)</span>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
-                          {pricingCatalog.doc.addons.map(a => (
-                            <div key={a.id} className="flex items-center gap-2">
-                              <span className="text-xs text-neutral-300 flex-1 min-w-0 truncate">{a.name}</span>
-                              <Input
-                                className="w-16 h-8"
-                                type="number"
-                                min={0}
-                                value={pricingAddonQty[a.id] ?? ''}
-                                onChange={e => {
-                                  const n = Number(e.target.value)
-                                  setPricingAddonQty(prev => {
-                                    const next = { ...prev }
-                                    if (!e.target.value.trim() || n <= 0) delete next[a.id]
-                                    else next[a.id] = n
-                                    return next
-                                  })
-                                }}
-                              />
-                            </div>
-                          ))}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-neutral-500">Add-ons</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 text-xs"
+                            onClick={() => setAddonPickerOpen(true)}
+                          >
+                            {(() => {
+                              const n = pricingCatalog.doc.addons.filter(
+                                a => (pricingAddonQty[a.id] ?? 0) > 0,
+                              ).length
+                              return n > 0 ? `${n} selected` : 'Choose add-ons…'
+                            })()}
+                          </Button>
                         </div>
+                        {(() => {
+                          const lines = pricingCatalog.doc.addons
+                            .filter(a => (pricingAddonQty[a.id] ?? 0) > 0)
+                            .map(a => `${a.name} ×${pricingAddonQty[a.id]}`)
+                          if (lines.length === 0) return null
+                          const text = lines.join(' · ')
+                          return (
+                            <p className="text-[10px] text-neutral-500 leading-snug line-clamp-2" title={text}>
+                              {text}
+                            </p>
+                          )
+                        })()}
                       </div>
                     )}
                     {pricingCatalog.doc.surcharges.length > 0 && (
@@ -2000,6 +2021,81 @@ export default function Earnings() {
               {saving ? 'Saving…' : editDeal ? 'Save changes' : 'Log deal'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addonPickerOpen} onOpenChange={setAddonPickerOpen}>
+        <DialogContent
+          overlayClassName="z-[100] bg-black/50"
+          className="z-[100] flex max-h-[min(88dvh,36rem)] w-[calc(100vw-1.5rem)] max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+        >
+          <DialogHeader className="shrink-0 space-y-1 border-b border-neutral-800 px-5 pb-3 pt-5 pr-12">
+            <DialogTitle>Add-ons</DialogTitle>
+            <DialogDescription className="text-xs text-neutral-500">
+              Set quantity for each line. Empty or 0 removes it from the quote.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3">
+            <div className="space-y-3">
+              {pricingCatalog.doc.addons.map(a => (
+                <div key={a.id} className="flex items-start gap-3 border-b border-neutral-800/80 pb-3 last:border-0 last:pb-0">
+                  <div className="min-w-0 flex-1 pt-1">
+                    <p className="text-sm font-medium text-neutral-200 leading-tight">{a.name}</p>
+                    <p className="text-[10px] text-neutral-500 mt-0.5">
+                      ${a.price}
+                      {a.priceType === 'flat_fee'
+                        ? ' flat'
+                        : a.priceType === 'per_event'
+                          ? ' / event'
+                          : a.priceType === 'per_artist'
+                            ? ' / artist'
+                            : a.priceType === 'per_sq_ft'
+                              ? ` / ${a.unitLabel ?? 'sq ft'}`
+                              : a.priceType === 'per_effect'
+                                ? ' / effect'
+                                : a.priceType === 'per_setup'
+                                  ? ' / setup'
+                                  : ''}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <Label className="text-[10px] text-neutral-500 sr-only sm:not-sr-only sm:mb-0">Qty</Label>
+                    <Input
+                      className="h-9 w-[4.5rem] text-center tabular-nums"
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={pricingAddonQty[a.id] ?? ''}
+                      onChange={e => {
+                        const raw = e.target.value
+                        const n = Number(raw)
+                        setPricingAddonQty(prev => {
+                          const next = { ...prev }
+                          if (!raw.trim() || n <= 0) delete next[a.id]
+                          else next[a.id] = Math.floor(n)
+                          return next
+                        })
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-row items-center justify-between gap-2 border-t border-neutral-800 bg-neutral-950/90 px-5 py-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-neutral-400 hover:text-neutral-200"
+              onClick={() => setPricingAddonQty({})}
+            >
+              Clear all
+            </Button>
+            <Button type="button" size="sm" onClick={() => setAddonPickerOpen(false)}>
+              Done
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       </div>
