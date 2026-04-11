@@ -5,8 +5,7 @@ import {
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
-import { emailFooterArtistPersonaSublineHtml } from './emailFooterPersonaLines'
-import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
+import { buildArtistBrandedEmailFooterHtml } from './artistBrandedEmailFooterHtml'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -42,9 +41,7 @@ export function buildRetainerReceivedEmailHtml(
   siteUrl: string,
 ): string {
   const managerName = profile.manager_name || 'Management'
-  const footerSubline = emailFooterArtistPersonaSublineHtml(profile.manager_title)
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
-  const igIconUrl = `${siteUrl}/icons/icon-ig.png`
 
   const defaultRecap =
     'Just confirming on our side: your management retainer payment is accounted for. Thank you for staying on top of it.'
@@ -136,11 +133,14 @@ export function buildRetainerReceivedEmailHtml(
     <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;">${escapeHtmlEnt(managerName)}</p>`}
   </div>
 
-  <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlEnt(managerName)}</div>
-    ${footerSubline}
-    ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
-  </div>
+  ${buildArtistBrandedEmailFooterHtml({
+    logoBaseUrl: siteUrl,
+    managerName,
+    managerTitle: profile.manager_title,
+    website: profile.website,
+    social_handle: profile.social_handle,
+    phone: profile.phone,
+  })}
 
 </div>
 </body>

@@ -1,11 +1,10 @@
-import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import { renderAppendBlocksHtml } from './appendBlocksHtml'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
-import { emailFooterArtistPersonaSublineHtml } from './emailFooterPersonaLines'
-import { buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
+import { buildArtistBrandedEmailFooterHtml } from './artistBrandedEmailFooterHtml'
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 
 function logoUrls(base: string) {
@@ -20,6 +19,7 @@ const mobileStyles = `
   @media only screen and (max-width: 600px) {
     .wrapper { margin: 0 !important; border-radius: 0 !important; }
     .email-body { padding: 22px 18px !important; }
+    .email-footer { padding: 16px 18px !important; }
   }`
 
 export type ArtistBrandedEmailShellInput = {
@@ -60,10 +60,16 @@ export function buildArtistBrandedEmailHtml(input: ArtistBrandedEmailShellInput)
     phone,
   } = input
 
-  const { logo: logoUrl, ig: igUrl } = logoUrls(logoBaseUrl)
+  const { logo: logoUrl } = logoUrls(logoBaseUrl)
   const appendHtml = renderAppendBlocksHtml(layout.appendBlocks)
-  const footerLinksHtml = buildProfileFooterLinksRowHtml(igUrl, website, socialHandle, phone)
-  const footerSubline = emailFooterArtistPersonaSublineHtml(managerTitle)
+  const footerHtml = buildArtistBrandedEmailFooterHtml({
+    logoBaseUrl,
+    managerName,
+    managerTitle,
+    website,
+    social_handle: socialHandle,
+    phone,
+  })
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -94,11 +100,7 @@ ${mobileStyles}
     ${appendHtml}
     <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-top:8px;">${closingInnerHtml}</p>
   </div>
-  <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;">${escapeHtmlPlain(managerName)}</div>
-    ${footerSubline}
-    ${footerLinksHtml}
-  </div>
+  ${footerHtml}
 </div>
 </body>
 </html>`

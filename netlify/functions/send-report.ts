@@ -10,8 +10,7 @@ import {
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from '../../src/lib/email/emailDarkSurfacePalette'
-import { emailFooterArtistPersonaSublineHtml } from '../../src/lib/email/emailFooterPersonaLines'
-import { buildProfileFooterLinksRowHtml } from '../../src/lib/email/profileFooterLinksHtml'
+import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
 
 function escapeHtmlEnt(s: string): string {
@@ -65,10 +64,8 @@ function sectionCard(title: string, content: string, accentColor: string = '#60a
 
 function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, dateRange: { start: string; end: string }, L: EmailTemplateLayoutV1): string {
   const managerName = profile.manager_name || 'Management'
-  const footerPersonaSubline = emailFooterArtistPersonaSublineHtml(profile.manager_title)
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
-  const igIconUrl = `${siteUrl}/icons/icon-ig.png`
   const { outreach, artistEarnings, deals, retainer, metrics, tasks, performance } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = fmtDate(dateRange.start)
@@ -264,12 +261,14 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
 
   </div>
 
-  <!-- Footer -->
-  <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;">${managerName}</div>
-    ${footerPersonaSubline}
-    ${buildProfileFooterLinksRowHtml(igIconUrl, profile.website, profile.social_handle, profile.phone)}
-  </div>
+  ${buildArtistBrandedEmailFooterHtml({
+    logoBaseUrl: siteUrl,
+    managerName,
+    managerTitle: profile.manager_title,
+    website: profile.website,
+    social_handle: profile.social_handle,
+    phone: profile.phone,
+  })}
 
 </div>
 </body>

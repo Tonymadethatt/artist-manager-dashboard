@@ -3,13 +3,12 @@ import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { renderAppendBlocksHtml } from '../../src/lib/email/appendBlocksHtml'
 import {
   EMAIL_BODY_SECONDARY,
-  EMAIL_FOOTER_MUTED,
   EMAIL_HINT,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
 } from '../../src/lib/email/emailDarkSurfacePalette'
-import { emailFooterArtistPersonaSublineHtml } from '../../src/lib/email/emailFooterPersonaLines'
+import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 
 interface RequestBody {
   token: string
@@ -21,6 +20,9 @@ interface RequestBody {
   replyToEmail: string
   managerName: string
   managerTitle?: string | null
+  website?: string | null
+  social_handle?: string | null
+  phone?: string | null
   custom_subject?: string | null
   custom_intro?: string | null
   layout?: unknown | null
@@ -156,12 +158,14 @@ const handler: Handler = async (event) => {
     <p style="font-size:13px;color:${EMAIL_HINT};line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>
 
-  <div class="email-footer" style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:4px;">${escapeHtmlEnt(body.managerName)}</div>
-    ${emailFooterArtistPersonaSublineHtml(body.managerTitle ?? null)}
-    <div style="font-size:0;line-height:0;height:8px;">&nbsp;</div>
-    <a href="mailto:${body.replyToEmail}?subject=${encodeURIComponent('Re: ' + subject)}" style="display:inline-block;background:#1e1e1e;color:${EMAIL_BODY_SECONDARY};font-size:12px;font-weight:600;padding:9px 18px;border-radius:6px;border:1px solid #333333;text-decoration:none;">Reply to This Email</a>
-  </div>
+  ${buildArtistBrandedEmailFooterHtml({
+    logoBaseUrl: siteUrl,
+    managerName: body.managerName,
+    managerTitle: body.managerTitle ?? null,
+    website: body.website ?? null,
+    social_handle: body.social_handle ?? null,
+    phone: body.phone ?? null,
+  })}
 
 </div>
 </body>

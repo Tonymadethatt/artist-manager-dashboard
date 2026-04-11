@@ -14,6 +14,7 @@ import {
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
 } from '@/lib/email/emailDarkSurfacePalette'
+import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmailFooterHtml'
 import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
 
 function escapeHtmlPlain(s: string): string {
@@ -30,7 +31,6 @@ function artistEmailPreviewGreetingName(fullName: string): string {
 }
 
 const logoUrl = '/dj-luijay-logo-email.png'
-const igIconUrl = '/icons/icon-ig.png'
 
 function money(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -65,19 +65,15 @@ const sharedHeader = `
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
 
-const sharedFooter = `
-  <div style="background:#0a0a0a;border-top:1px solid #1e1e1e;padding:20px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#ffffff;">Front Office</div>
-    <div style="font-size:11px;color:${EMAIL_FOOTER_MUTED};margin-top:3px;letter-spacing:0.3px;">Front Office&#8482; Brand Growth &amp; Management</div>
-    <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:0;">
-      <a href="https://djluijay.com" style="color:${EMAIL_FOOTER_MUTED};text-decoration:none;font-size:11px;">djluijay.com</a>
-      <span style="color:#6a6a6a;margin:0 8px;">|</span>
-      <a href="https://instagram.com/djluijay" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;vertical-align:middle;">
-        <img src="${igIconUrl}" alt="IG" width="13" height="13" style="display:inline-block;vertical-align:middle;opacity:0.75;" />
-        <span style="font-size:11px;color:${EMAIL_FOOTER_MUTED};">@djluijay</span>
-      </a>
-    </div>
-  </div>`
+/** Matches live transactional footers; preview uses empty base URL so asset paths are site-root relative. */
+const previewFooterHtml = buildArtistBrandedEmailFooterHtml({
+  logoBaseUrl: '',
+  managerName: 'Front Office',
+  managerTitle: null,
+  website: 'https://djluijay.com',
+  social_handle: 'djluijay',
+  phone: null,
+})
 
 const sharedStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -164,7 +160,7 @@ export function buildManagementReportHtml(
     ${renderAppendBlocksHtml(L.appendBlocks)}
     <p style="font-size:13px;color:${EMAIL_FOOTER_MUTED};line-height:1.75;margin-top:10px;">${closer}</p>
   </div>
-  ${sharedFooter}
+  ${previewFooterHtml}
 </div>
 </body>
 </html>`
@@ -252,7 +248,7 @@ export function buildRetainerReminderHtml(
     : `<p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;margin-bottom:12px;">Whenever you are able to send something over, even a partial, just shoot it through and let me know. Happy to work with whatever works for you right now.</p>
     <p style="font-size:14px;color:${EMAIL_BODY_SECONDARY};line-height:1.8;">Appreciate you, let us keep this momentum going. Big things ahead.</p>`}
   </div>
-  ${sharedFooter}
+  ${previewFooterHtml}
   </div>
 </body>
 </html>`
@@ -335,7 +331,7 @@ export function buildPerformanceReportRequestHtml(
 
     <p style="font-size:13px;color:${EMAIL_HINT};line-height:1.7;">This link is personal to you and only works once. If you have any issues, reply to this email.</p>
   </div>
-  ${sharedFooter}
+  ${previewFooterHtml}
 </div>
 </body>
 </html>`
