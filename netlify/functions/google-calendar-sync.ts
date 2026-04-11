@@ -1,11 +1,14 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
+import { getGoogleOAuthEnv } from './googleCalendarOAuthShared'
+import { pushAllQualifyingDealsToGoogleCalendar } from './googleCalendarDealPushCore'
 import { runGoogleCalendarImportForUser } from './googleCalendarSyncCore'
 
 /**
  * POST with Authorization: Bearer <Supabase JWT>.
- * Imports events from the shared source calendar into the app (calendar_sync_event + Gig calendar). No Google copy.
+ * Imports events from the shared source calendar into the app (calendar_sync_event + Gig calendar),
+ * then pushes calendar-qualified deals to Google so new/edited gigs appear on the shared calendar.
  */
 export const handler: Handler = async event => {
   if (event.httpMethod !== 'POST') {
@@ -55,9 +58,23 @@ export const handler: Handler = async event => {
     }
   }
 
+  const { clientId, clientSecret } = getGoogleOAuthEnv()
+  const dealPush =
+    clientId && clientSecret
+      ? await pushAllQualifyingDealsToGoogleCalendar({
+          supabase,
+          userId: userData.user.id,
+          clientId,
+          clientSecret,
+        })
+      : null
+
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(result.summary),
+    body: JSON.stringify({
+      ...result.summary,
+      ...(dealPush ?? {}),
+    }),
   }
 }

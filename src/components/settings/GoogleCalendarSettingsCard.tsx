@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import type { GoogleCalendarSyncResponseBody } from '@/lib/calendar/googleCalendarSyncToast'
+import { googleCalendarSyncSuccessMessageSettings } from '@/lib/calendar/googleCalendarSyncToast'
 import type { Database } from '@/types/database'
 
 type ConnectionRow = Database['public']['Tables']['google_calendar_connection']['Row']
@@ -153,28 +155,15 @@ export function GoogleCalendarSettingsCard({
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
-    const j = (await res.json().catch(() => ({}))) as {
+    const j = (await res.json().catch(() => ({}))) as GoogleCalendarSyncResponseBody & {
       error?: string
-      imported?: number
-      copied?: number
-      refreshed?: number
-      skipped?: number
-      tasksCreated?: number
-      errorCount?: number
     }
     setSyncing(false)
     if (!res.ok) {
       showToast(j.error ?? 'Sync failed.', 'err')
       return
     }
-    const added = j.imported ?? j.copied ?? 0
-    const refreshed = j.refreshed ?? 0
-    showToast(
-      refreshed > 0
-        ? `Synced: ${added} added, ${refreshed} updated from Google, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`
-        : `Synced: ${added} added to dashboard, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} follow-up tasks.`,
-      'ok',
-    )
+    showToast(googleCalendarSyncSuccessMessageSettings(j), 'ok')
     void load()
     window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
   }

@@ -3,6 +3,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
 import { GigCalendar, type CalendarSyncEventChip } from '@/components/dashboard/GigCalendar'
+import type { GoogleCalendarSyncResponseBody } from '@/lib/calendar/googleCalendarSyncToast'
+import { googleCalendarSyncSuccessMessageGigPage } from '@/lib/calendar/googleCalendarSyncToast'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { supabase } from '@/lib/supabase'
 
@@ -161,27 +163,15 @@ export default function GigCalendarPage() {
       method: 'POST',
       headers: { Authorization: `Bearer ${data.session.access_token}` },
     })
-    const j = (await res.json().catch(() => ({}))) as {
+    const j = (await res.json().catch(() => ({}))) as GoogleCalendarSyncResponseBody & {
       error?: string
-      imported?: number
-      copied?: number
-      refreshed?: number
-      skipped?: number
-      tasksCreated?: number
     }
     setGoogleSyncing(false)
     if (!res.ok) {
       showGcalToast(j.error ?? 'Sync failed.', 'err')
       return
     }
-    const added = j.imported ?? j.copied ?? 0
-    const refreshed = j.refreshed ?? 0
-    showGcalToast(
-      refreshed > 0
-        ? `Synced: ${added} added, ${refreshed} updated, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} tasks.`
-        : `Synced: ${added} added, ${j.skipped ?? 0} skipped, ${j.tasksCreated ?? 0} tasks.`,
-      'ok',
-    )
+    showGcalToast(googleCalendarSyncSuccessMessageGigPage(j), 'ok')
     void loadSync()
     void loadGcalConnection()
     window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
