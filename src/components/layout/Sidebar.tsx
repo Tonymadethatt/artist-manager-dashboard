@@ -38,7 +38,7 @@ const NAV_GROUPS = [
   {
     label: 'Content',
     items: [
-      { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
+      { to: '/templates', label: 'Documents', icon: FileText,   end: false, badgeKey: null },
       { to: '/files',     label: 'Files',     icon: FolderOpen, end: false, badgeKey: null },
     ],
   },

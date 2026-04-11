@@ -1,0 +1,44 @@
+{
+  "v": 1,
+  "name": "Example performance agreement (JSON import sample)",
+  "type": "agreement",
+  "sections": [
+    {
+      "id": "sec_header_main",
+      "label": "",
+      "section_kind": "header",
+      "content": "<p><strong>Event:</strong> {{deal_description}} · <strong>Date:</strong> {{deal_event_date}}</p><p><strong>Venue:</strong> {{venue_name}}, {{city}}</p>",
+      "header_logo_url": null
+    },
+    {
+      "id": "sec_body_intro",
+      "label": "Parties and purpose",
+      "section_kind": "body",
+      "content": "<p>This <em>performance agreement</em> is entered into between <strong>{{artist_name}}</strong> (\"Artist\") and <strong>{{venue_name}}</strong> (\"Venue\") for services described below.</p><p>Artist company: {{company_name}} · Contact: {{contact_name}}, {{contact_role}} · {{contact_email}} · {{contact_phone}}</p>"
+    },
+    {
+      "id": "sec_body_terms",
+      "label": "Commercial terms",
+      "section_kind": "body",
+      "content": "<h1>AI tools often emit H1 — import rewrites to H3</h1><h3>Fee and schedule</h3><ul><li>Gross: {{gross_amount_display}} (raw {{gross_amount}})</li><li>Commission: {{commission_rate}} (fraction {{commission_rate_fraction}}) → {{commission_amount_display}}</li><li>Tier: {{commission_tier}}</li><li>Payment due: {{payment_due_date}}</li><li>Pricing snapshot total: {{pricing_total_display}} · Deposit: {{pricing_deposit_display}}</li></ul><ol><li>Load-in: {{load_in_time}}</li><li>Set length: {{set_length}}</li><li>Artist pay (terms): {{artist_pay_display}}</li></ol>"
+    },
+    {
+      "id": "sec_body_table",
+      "label": "Summary table",
+      "section_kind": "body",
+      "content": "<table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody><tr><td>Venue address</td><td>{{location}}, {{city}}</td></tr><tr><td>Venue type</td><td>{{venue_type_label}} ({{venue_type}})</td></tr><tr><td>Event date (terms)</td><td>{{event_date}}</td></tr><tr><td>Notes</td><td>{{notes}}</td></tr><tr><td>Agreement link</td><td>{{agreement_url}}</td></tr><tr><td>Pricing lines</td><td>{{pricing_summary_text}}</td></tr><tr><td>Deal notes</td><td>{{deal_notes}}</td></tr></tbody></table>"
+    },
+    {
+      "id": "sec_body_artist",
+      "label": "Artist profile block",
+      "section_kind": "body",
+      "content": "<p>{{tagline}}</p><p>Web: {{website}} · Phone: {{phone}} · Social: {{social_handle}}</p><p>Emails: {{artist_email}} · reply-to {{reply_to_email}} · from {{from_email}}</p><p>Management: {{manager_name}} — {{manager_email}}</p>"
+    },
+    {
+      "id": "sec_footer",
+      "label": "",
+      "section_kind": "footer",
+      "content": "<p>Counterparty company on file: {{contact_company}}. Venue notes: {{notes}}</p>"
+    }
+  ]
+}

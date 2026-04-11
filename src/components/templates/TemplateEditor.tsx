@@ -25,7 +25,9 @@ const DEFAULT_SECTIONS = (): TemplateSection[] => [
 
 interface TemplateEditorProps {
   template: Template | null
-  onSave: (data: Omit<Template, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<void>
+  onSave: (
+    data: Omit<Template, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+  ) => Promise<void | { error: string }>
   onCancel: () => void
 }
 
@@ -76,8 +78,12 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
       return
     }
     setSaving(true)
-    await onSave({ name: name.trim(), type, sections })
+    setError(null)
+    const result = await onSave({ name: name.trim(), type, sections })
     setSaving(false)
+    if (result && typeof result === 'object' && 'error' in result && result.error) {
+      setError(result.error)
+    }
   }
 
   return (
@@ -87,7 +93,7 @@ export function TemplateEditor({ template, onSave, onCancel }: TemplateEditorPro
         className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to templates
+        Back to documents
       </button>
 
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4 space-y-3">
