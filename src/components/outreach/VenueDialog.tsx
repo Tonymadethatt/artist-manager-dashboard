@@ -26,6 +26,14 @@ const VENUE_TYPES: { value: VenueType; label: string }[] = VENUE_TYPE_ORDER.map(
   label: VENUE_TYPE_LABELS[value],
 }))
 
+function errorMessageFromSave(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const m = (err as { message?: unknown }).message
+    if (typeof m === 'string' && m.trim()) return m.trim()
+  }
+  return 'Could not save venue. If this persists, check that your database includes the latest venue migrations.'
+}
+
 function normalizeDealTermsForSave(dt: DealTerms | null): DealTerms | null {
   if (!dt) return null
   const out: DealTerms = {}
@@ -94,6 +102,7 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Venue name is required.'); return }
     setSaving(true)
+    setError(null)
     const result = await onSave({
       ...form,
       name: form.name.trim(),
@@ -107,6 +116,11 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
         ? normalizeDealTermsForSave(initialData.deal_terms)
         : null,
     })
+    if (result?.error) {
+      setSaving(false)
+      setError(errorMessageFromSave(result.error))
+      return
+    }
     // Apply template if selected and we're adding (not editing)
     if (!initialData && selectedTemplate !== '__none__' && result?.data?.id && onApplyTemplate) {
       await onApplyTemplate(selectedTemplate, result.data.id)

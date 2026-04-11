@@ -514,11 +514,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
       <VenueDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        onSave={async data => {
-          const result = await onUpdate(venue.id, data)
-          setEditOpen(false)
-          return result
-        }}
+        onSave={data => onUpdate(venue.id, data)}
         initialData={venue}
       />
 
