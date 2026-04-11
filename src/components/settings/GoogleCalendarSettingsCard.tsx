@@ -29,7 +29,8 @@ export function GoogleCalendarSettingsCard({
   const [syncing, setSyncing] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
-  const connected = !!(connection?.connected_at && connection?.google_email)
+  /** `google_email` can be null if an older OAuth flow lacked email scopes; tokens still work. */
+  const connected = !!connection?.connected_at
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -81,7 +82,8 @@ export function GoogleCalendarSettingsCard({
     params.delete('calendar_oauth')
     const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`
     window.history.replaceState({}, '', next)
-  }, [showToast])
+    if (q === 'success') void load()
+  }, [showToast, load])
 
   const getAccessToken = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession()
@@ -224,7 +226,15 @@ export function GoogleCalendarSettingsCard({
           <div className="flex flex-wrap items-center gap-2">
             {connected ? (
               <p className="text-sm text-neutral-300">
-                Connected as <span className="text-white font-medium">{connection?.google_email}</span>
+                Connected
+                {connection?.google_email ? (
+                  <>
+                    {' '}
+                    as <span className="text-white font-medium">{connection.google_email}</span>
+                  </>
+                ) : (
+                  <span className="text-neutral-500"> (open email not stored — use Sync or reconnect to refresh)</span>
+                )}
               </p>
             ) : (
               <p className="text-sm text-neutral-500">Not connected to Google.</p>
@@ -246,6 +256,12 @@ export function GoogleCalendarSettingsCard({
               </Button>
             )}
           </div>
+
+          <p className={hint}>
+            If the app said you connected but this page looked empty before, refresh after deploy — or use{' '}
+            <strong className="text-neutral-400">Disconnect</strong> then <strong className="text-neutral-400">Connect</strong>{' '}
+            once so Google grants email + calendar permissions together.
+          </p>
 
           <p className={hint}>
             In Google Calendar → Settings → your shared calendar → <strong className="text-neutral-400">Integrate calendar</strong>{' '}

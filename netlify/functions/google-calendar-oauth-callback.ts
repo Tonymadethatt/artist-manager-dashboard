@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 import {
   calendarOAuthBaseUrl,
+  emailFromGoogleIdToken,
   exchangeCodeForTokens,
   fetchGoogleEmail,
   getGoogleOAuthEnv,
@@ -63,6 +64,7 @@ export const handler: Handler = async event => {
   let accessToken: string
   let refreshToken: string | undefined
   let expiresIn: number
+  let idToken: string | undefined
   try {
     const tokens = await exchangeCodeForTokens({
       code,
@@ -73,6 +75,7 @@ export const handler: Handler = async event => {
     accessToken = tokens.access_token
     refreshToken = tokens.refresh_token
     expiresIn = tokens.expires_in
+    idToken = tokens.id_token
   } catch {
     return {
       statusCode: 302,
@@ -129,7 +132,8 @@ export const handler: Handler = async event => {
     }
   }
 
-  const email = await fetchGoogleEmail(accessToken)
+  const email =
+    (await fetchGoogleEmail(accessToken)) ?? emailFromGoogleIdToken(idToken) ?? null
 
   const { data: existingConn } = await supabase
     .from('google_calendar_connection')

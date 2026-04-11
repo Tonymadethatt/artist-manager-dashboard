@@ -4,7 +4,7 @@ import { getSupabaseServerEnv } from './supabaseServerEnv'
 import {
   calendarOAuthBaseUrl,
   getGoogleOAuthEnv,
-  GOOGLE_CALENDAR_EVENTS_SCOPE,
+  GOOGLE_OAUTH_SCOPES,
   signOAuthState,
 } from './googleCalendarOAuthShared'
 
@@ -63,7 +63,7 @@ export const handler: Handler = async event => {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: GOOGLE_CALENDAR_EVENTS_SCOPE,
+    scope: GOOGLE_OAUTH_SCOPES,
     access_type: 'offline',
     prompt: 'consent',
     state,

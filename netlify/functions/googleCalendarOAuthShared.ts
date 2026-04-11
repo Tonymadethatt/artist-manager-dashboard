@@ -23,7 +23,12 @@ export function getGoogleOAuthEnv(): {
   }
 }
 
-export const GOOGLE_CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
+/** Calendar read/write + email (required for userinfo; calendar.events alone does not include email). */
+export const GOOGLE_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'openid',
+].join(' ')
 
 export function signOAuthState(userId: string, secret: string): string {
   const payload = JSON.stringify({
@@ -96,7 +101,22 @@ export async function exchangeCodeForTokens(args: {
     access_token: string
     refresh_token?: string
     expires_in: number
+    id_token?: string
   }>
+}
+
+/** Decode email from OIDC id_token (no signature verify — Google-issued, short-lived). */
+export function emailFromGoogleIdToken(idToken: string | undefined): string | null {
+  if (!idToken) return null
+  const parts = idToken.split('.')
+  if (parts.length < 2) return null
+  try {
+    const json = Buffer.from(parts[1], 'base64url').toString('utf8')
+    const payload = JSON.parse(json) as { email?: string }
+    return typeof payload.email === 'string' ? payload.email : null
+  } catch {
+    return null
+  }
 }
 
 export async function refreshAccessToken(args: {
