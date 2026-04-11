@@ -2062,7 +2062,9 @@ export default function Earnings() {
                     placeholder="https://…"
                   />
                   <p className="text-[10px] text-neutral-600">
-                    If both PDF and URL are set, the PDF share link wins on save unless you clear the PDF.
+                    If both PDF and URL are set, saving uses the PDF (first-party link when valid, otherwise the
+                    Supabase file URL). Clear this field if it still shows an old broken &quot;/agreements/…&quot; link,
+                    pick the PDF above, and save again.
                   </p>
                 </div>
               </div>
