@@ -9,7 +9,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -18,6 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { DealTerms, Venue, VenueType, OutreachStatus, OutreachTrack, TaskTemplate } from '@/types'
+
+type VenueFormState = Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deal_terms'>
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER, VENUE_TYPE_ORDER, VENUE_TYPE_LABELS } from '@/types'
 
 const VENUE_TYPES: { value: VenueType; label: string }[] = VENUE_TYPE_ORDER.map(value => ({
@@ -45,7 +46,7 @@ interface VenueDialogProps {
   onApplyTemplate?: (templateId: string, venueId: string) => Promise<void>
 }
 
-const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
+const EMPTY: VenueFormState = {
   name: '',
   location: '',
   city: '',
@@ -58,11 +59,10 @@ const EMPTY: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   status: 'not_contacted',
   outreach_track: 'pipeline',
   follow_up_date: null,
-  deal_terms: null,
 }
 
 export function VenueDialog({ open, onClose, onSave, initialData, templates, onApplyTemplate }: VenueDialogProps) {
-  const [form, setForm] = useState<Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>>(EMPTY)
+  const [form, setForm] = useState<VenueFormState>(EMPTY)
   const [selectedTemplate, setSelectedTemplate] = useState('__none__')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,7 +82,6 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
         status: initialData.status,
         outreach_track: initialData.outreach_track ?? 'pipeline',
         follow_up_date: initialData.follow_up_date,
-        deal_terms: initialData.deal_terms,
       } : EMPTY)
       setSelectedTemplate('__none__')
       setError(null)
@@ -104,7 +103,9 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
       region: form.region?.trim() || null,
       postal_code: form.postal_code?.trim() || null,
       country: form.country?.trim() || null,
-      deal_terms: normalizeDealTermsForSave(form.deal_terms),
+      deal_terms: initialData
+        ? normalizeDealTermsForSave(initialData.deal_terms)
+        : null,
     })
     // Apply template if selected and we're adding (not editing)
     if (!initialData && selectedTemplate !== '__none__' && result?.data?.id && onApplyTemplate) {
@@ -267,94 +268,6 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
                 type="date"
                 value={form.follow_up_date ?? ''}
                 onChange={e => set('follow_up_date', e.target.value || null)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-1 border-t border-neutral-800">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Booking terms (optional)</p>
-            <p className="text-[11px] text-neutral-600 leading-snug">
-              Saved on the venue for templates (e.g. {'{{event_date}}'}, {'{{artist_pay}}'}). You can edit later in the venue panel.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="v-dt-date">Event date</Label>
-                <Input
-                  id="v-dt-date"
-                  type="date"
-                  value={form.deal_terms?.event_date ?? ''}
-                  onChange={e =>
-                    setForm(prev => ({
-                      ...prev,
-                      deal_terms: { ...(prev.deal_terms ?? {}), event_date: e.target.value || undefined },
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="v-dt-pay">Pay ($)</Label>
-                <Input
-                  id="v-dt-pay"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.deal_terms?.pay ?? ''}
-                  onChange={e =>
-                    setForm(prev => ({
-                      ...prev,
-                      deal_terms: {
-                        ...(prev.deal_terms ?? {}),
-                        pay: e.target.value === '' ? undefined : Number(e.target.value),
-                      },
-                    }))
-                  }
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="v-dt-set">Set length</Label>
-                <Input
-                  id="v-dt-set"
-                  value={form.deal_terms?.set_length ?? ''}
-                  onChange={e =>
-                    setForm(prev => ({
-                      ...prev,
-                      deal_terms: { ...(prev.deal_terms ?? {}), set_length: e.target.value || undefined },
-                    }))
-                  }
-                  placeholder="45 min"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="v-dt-load">Load-in time</Label>
-                <Input
-                  id="v-dt-load"
-                  value={form.deal_terms?.load_in_time ?? ''}
-                  onChange={e =>
-                    setForm(prev => ({
-                      ...prev,
-                      deal_terms: { ...(prev.deal_terms ?? {}), load_in_time: e.target.value || undefined },
-                    }))
-                  }
-                  placeholder="6:00 PM"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="v-dt-notes">Notes</Label>
-              <Textarea
-                id="v-dt-notes"
-                value={form.deal_terms?.notes ?? ''}
-                onChange={e =>
-                  setForm(prev => ({
-                    ...prev,
-                    deal_terms: { ...(prev.deal_terms ?? {}), notes: e.target.value || undefined },
-                  }))
-                }
-                placeholder="Offer details…"
-                className="min-h-[56px] text-sm"
               />
             </div>
           </div>
