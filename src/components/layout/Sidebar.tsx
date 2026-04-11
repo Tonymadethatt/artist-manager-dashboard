@@ -17,6 +17,7 @@ import {
   ClipboardList,
   Eye,
   Calendar,
+  Mic2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -46,6 +47,7 @@ const NAV_GROUPS = [
     label: 'Forms',
     items: [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
+      { to: '/forms/intake', label: 'Intake', icon: Mic2, end: false, badgeKey: null },
     ],
   },
   {

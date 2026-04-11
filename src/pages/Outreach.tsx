@@ -1,6 +1,10 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
-import { Plus, Search, SlidersHorizontal, Star } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { Plus, Search, SlidersHorizontal, Star, Upload } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
+import { useBookingIntakes } from '@/hooks/useBookingIntakes'
+import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
+import { mapIntakeVenueBundleToVenueRow, intakeContactsForVenue } from '@/lib/intake/mapIntakeToVenue'
+import { supabase } from '@/lib/supabase'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { StatusBadge } from '@/components/outreach/StatusBadge'
 import { VenueDialog } from '@/components/outreach/VenueDialog'
@@ -33,6 +37,7 @@ function fmtFollowUp(dateStr: string) {
 }
 
 export default function Outreach() {
+  const bookingIntakes = useBookingIntakes()
   const { venues, loading, addVenue, updateVenue, deleteVenue } = useVenues()
   const { templates, applyTemplate } = useTaskTemplates()
   const [search, setSearch] = useState('')
@@ -41,6 +46,15 @@ export default function Outreach() {
   const [filterTrack, setFilterTrack] = useState<OutreachTrack | 'all'>('all')
   const [sortBy, setSortBy] = useState<'updated' | 'priority' | 'name' | 'follow_up'>('updated')
   const [addOpen, setAddOpen] = useState(false)
+  const [intakeVenuePickerOpen, setIntakeVenuePickerOpen] = useState(false)
+  const [venueAddSeed, setVenueAddSeed] = useState<Omit<
+    Venue,
+    'id' | 'user_id' | 'created_at' | 'updated_at'
+  > | null>(null)
+  const [venueAddSeedNonce, setVenueAddSeedNonce] = useState(0)
+  const pendingVenueContactsRef = useRef<
+    Array<{ name: string; role: string | null; email: string | null; phone: string | null; company: string | null }>
+  >([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
 
   // Inline follow-up date editing
@@ -131,6 +145,33 @@ export default function Outreach() {
 
   const today = new Date().toISOString().split('T')[0]
 
+  const addVenueWithIntakeContacts = useCallback(
+    async (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+      const result = await addVenue(venue)
+      const pending = pendingVenueContactsRef.current
+      if (result.data && pending.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const rows = pending.map(c => ({
+            user_id: user.id,
+            venue_id: result.data!.id,
+            name: c.name,
+            role: c.role,
+            email: c.email,
+            phone: c.phone,
+            company: c.company,
+          }))
+          const { error: ce } = await supabase.from('contacts').insert(rows)
+          if (ce) showToast(ce.message ?? 'Venue saved but contacts failed')
+          else showToast(`Venue added · ${pending.length} contact${pending.length !== 1 ? 's' : ''}`)
+        }
+        pendingVenueContactsRef.current = []
+      }
+      return result
+    },
+    [addVenue],
+  )
+
   return (
     <div className="space-y-4">
       {/* Top-right toast */}
@@ -201,7 +242,17 @@ export default function Outreach() {
             </SelectContent>
           </Select>
 
-          <Button onClick={() => setAddOpen(true)}>
+          <Button variant="outline" onClick={() => setIntakeVenuePickerOpen(true)}>
+            <Upload className="h-3.5 w-3.5" />
+            Import from intake
+          </Button>
+          <Button
+            onClick={() => {
+              setVenueAddSeed(null)
+              pendingVenueContactsRef.current = []
+              setAddOpen(true)
+            }}
+          >
             <Plus className="h-3.5 w-3.5" />
             Add venue
           </Button>
@@ -335,10 +386,36 @@ export default function Outreach() {
         </div>
       )}
 
+      <IntakePickerDialog
+        open={intakeVenuePickerOpen}
+        onOpenChange={setIntakeVenuePickerOpen}
+        title="Import venue from intake"
+        mode="venue"
+        intakes={bookingIntakes.intakes}
+        showsByIntake={bookingIntakes.showsByIntake}
+        loading={bookingIntakes.loading}
+        onPickVenue={intakeId => {
+          const row = bookingIntakes.intakes.find(i => i.id === intakeId)
+          if (!row) return
+          const bundle = bookingIntakes.parseVenue(row)
+          setVenueAddSeed(mapIntakeVenueBundleToVenueRow(bundle))
+          pendingVenueContactsRef.current = intakeContactsForVenue(bundle)
+          setVenueAddSeedNonce(n => n + 1)
+          setAddOpen(true)
+        }}
+        onPickDeal={() => {}}
+      />
+
       <VenueDialog
         open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSave={addVenue}
+        onClose={() => {
+          setAddOpen(false)
+          setVenueAddSeed(null)
+          pendingVenueContactsRef.current = []
+        }}
+        onSave={addVenueWithIntakeContacts}
+        addFormSeed={venueAddSeed}
+        addFormSeedNonce={venueAddSeedNonce}
         templates={templates}
         onApplyTemplate={async (templateId, venueId) => {
           await applyTemplate(templateId, venueId)

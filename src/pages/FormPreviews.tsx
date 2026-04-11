@@ -4,7 +4,7 @@ import { ShowReportWizard, type ShowReportFormContext } from '@/components/perfo
 import { brandingFromArtistProfileRow } from '@/lib/publicFormBranding'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { cn } from '@/lib/utils'
-import { RafaelLamasCallScriptChecklist } from '@/pages/RafaelLamasCallScript'
+import { CallIntakeScriptChecklist } from '@/lib/intake/CallIntakeScriptChecklist'
 
 const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   venueName: 'Skyline Bar',
@@ -13,7 +13,7 @@ const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   dealGrossAmount: 1200,
 }
 
-type PreviewKind = 'show-report' | 'rafael-script'
+type PreviewKind = 'show-report' | 'call-intake-script'
 
 const PREVIEWS: { id: PreviewKind; label: string; description: string; icon: LucideIcon }[] = [
   {
@@ -23,8 +23,8 @@ const PREVIEWS: { id: PreviewKind; label: string; description: string; icon: Luc
     icon: ClipboardList,
   },
   {
-    id: 'rafael-script',
-    label: 'Rafael Lamas call',
+    id: 'call-intake-script',
+    label: 'Call intake (preview)',
     description: 'Internal call script checklist',
     icon: Phone,
   },
@@ -120,16 +120,16 @@ export default function FormPreviews() {
             </>
           )}
 
-          {active === 'rafael-script' && (
+          {active === 'call-intake-script' && (
             <>
               <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0">
                 <Phone className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
-                <span className="text-xs font-medium text-neutral-400">Internal — Rafael Lamas call script</span>
+                <span className="text-xs font-medium text-neutral-400">Internal — call script checklist</span>
                 <span className="text-[10px] text-neutral-600">Checklist only · nothing saved</span>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto bg-neutral-950">
                 <div className="max-w-3xl mx-auto px-4 py-4">
-                  <RafaelLamasCallScriptChecklist embedded />
+                  <CallIntakeScriptChecklist embedded />
                 </div>
               </div>
             </>

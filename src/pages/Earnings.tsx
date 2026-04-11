@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useBookingIntakes } from '@/hooks/useBookingIntakes'
+import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
+import { mapShowBundleToEarningsImport } from '@/lib/intake/mapIntakeToDealForm'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw, Copy, Download, Upload } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
@@ -670,6 +673,9 @@ export default function Earnings() {
   const { fees } = useMonthlyFees()
   const { requests: bookingRequests, loading: bookingRequestsLoading, deleteRequest: deleteBookingRequest } = useBookingRequests()
   const { refreshNavBadges } = useNavBadges()
+  const bookingIntakes = useBookingIntakes()
+  const dealIntakeLinkRef = useRef<{ showId: string } | null>(null)
+  const [dealIntakePickerOpen, setDealIntakePickerOpen] = useState(false)
   const [earningsSection, setEarningsSection] = useState<'deals' | 'pricing'>(() =>
     new URLSearchParams(window.location.search).get('tab') === 'pricing' ? 'pricing' : 'deals',
   )
@@ -909,6 +915,7 @@ export default function Earnings() {
       goEarningsSection('pricing')
       return
     }
+    dealIntakeLinkRef.current = null
     setForm(EMPTY_FORM)
     setEditDeal(null)
     setPromisePresets(defaultPromisePresets())
@@ -921,6 +928,7 @@ export default function Earnings() {
   }
 
   const openEdit = (deal: Deal) => {
+    dealIntakeLinkRef.current = null
     const sPart = deal.event_start_at ? utcIsoToPacificDateAndTime(deal.event_start_at) : null
     const ePart = deal.event_end_at ? utcIsoToPacificDateAndTime(deal.event_end_at) : null
     const hasTimes = sPart && ePart
@@ -1173,6 +1181,12 @@ export default function Earnings() {
     }
 
     if (saved) {
+      if (!editDeal && dealIntakeLinkRef.current) {
+        const { showId } = dealIntakeLinkRef.current
+        await supabase.from('booking_intake_shows').update({ imported_deal_id: saved.id }).eq('id', showId)
+        dealIntakeLinkRef.current = null
+        void bookingIntakes.refetch()
+      }
       const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
       const vBefore = editDeal
         ? venues.find(v => v.id === editDeal.venue_id) ?? editDeal.venue
@@ -1582,13 +1596,28 @@ export default function Earnings() {
         onOpenChange={open => {
           if (!open) {
             setAddonPickerOpen(false)
+            dealIntakeLinkRef.current = null
             setAddOpen(false)
           }
         }}
       >
         <DialogContent className="flex h-[min(92dvh,52rem)] max-h-[min(92dvh,52rem)] w-full max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="shrink-0 space-y-0 border-b border-neutral-800 px-6 pb-3 pt-6 pr-14">
-            <DialogTitle>{editDeal ? 'Edit deal' : 'Log a deal'}</DialogTitle>
+            <div className="flex flex-wrap items-start justify-between gap-2 pr-2">
+              <DialogTitle>{editDeal ? 'Edit deal' : 'Log a deal'}</DialogTitle>
+              {!editDeal && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs shrink-0"
+                  onClick={() => setDealIntakePickerOpen(true)}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1" />
+                  Import from intake
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           <div
@@ -2204,6 +2233,38 @@ export default function Earnings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <IntakePickerDialog
+        open={dealIntakePickerOpen}
+        onOpenChange={setDealIntakePickerOpen}
+        title="Import deal from intake"
+        mode="deal"
+        intakes={bookingIntakes.intakes}
+        showsByIntake={bookingIntakes.showsByIntake}
+        loading={bookingIntakes.loading}
+        onPickVenue={() => {}}
+        onPickDeal={(intakeId, showId) => {
+          const show = bookingIntakes.showsByIntake[intakeId]?.find(s => s.id === showId)
+          if (!show) return
+          const r = mapShowBundleToEarningsImport(show.show_data, pricingCatalog.doc)
+          setForm({ ...EMPTY_FORM, ...r.form })
+          setPromisePresets(r.promisePresets)
+          setPromiseCustomLines([''])
+          setArtistPromisePresets(defaultArtistPromisePresets())
+          setArtistPromiseCustomLines([''])
+          setPricingBaseMode(r.pricing.pricingBaseMode)
+          setPricingPackageId(r.pricing.pricingPackageId)
+          setPricingServiceId(r.pricing.pricingServiceId)
+          setPricingOvertimeServiceId(r.pricing.pricingOvertimeServiceId)
+          setPricingPerformanceHours(r.pricing.pricingPerformanceHours)
+          setPricingAddonQty(r.pricing.pricingAddonQty)
+          setPricingSurchargeIds(r.pricing.pricingSurchargeIds)
+          setPricingDiscountIds(r.pricing.pricingDiscountIds)
+          dealIntakeLinkRef.current = { showId }
+          if (r.warnings.length) showFormToast(r.warnings.join(' · '))
+          if (r.form.venue_id) handleVenueSelect(r.form.venue_id)
+        }}
+      />
 
       <Dialog open={addonPickerOpen} onOpenChange={setAddonPickerOpen}>
         <DialogContent

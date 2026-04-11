@@ -50,6 +50,9 @@ interface VenueDialogProps {
   onClose: () => void
   onSave: (venue: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<{ data?: Venue; error?: unknown }>
   initialData?: Venue
+  /** Add mode only: merge seed when `addFormSeedNonce` changes. */
+  addFormSeed?: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> | null
+  addFormSeedNonce?: number
   templates?: TaskTemplate[]
   onApplyTemplate?: (templateId: string, venueId: string) => Promise<void>
 }
@@ -70,7 +73,16 @@ const EMPTY: VenueFormState = {
   capacity: null,
 }
 
-export function VenueDialog({ open, onClose, onSave, initialData, templates, onApplyTemplate }: VenueDialogProps) {
+export function VenueDialog({
+  open,
+  onClose,
+  onSave,
+  initialData,
+  addFormSeed,
+  addFormSeedNonce = 0,
+  templates,
+  onApplyTemplate,
+}: VenueDialogProps) {
   const [form, setForm] = useState<VenueFormState>(EMPTY)
   const [selectedTemplate, setSelectedTemplate] = useState('__none__')
   const [saving, setSaving] = useState(false)
@@ -78,25 +90,45 @@ export function VenueDialog({ open, onClose, onSave, initialData, templates, onA
 
   useEffect(() => {
     if (open) {
-      setForm(initialData ? {
-        name: initialData.name,
-        location: initialData.location ?? '',
-        city: initialData.city ?? '',
-        address_line2: initialData.address_line2 ?? '',
-        region: initialData.region ?? '',
-        postal_code: initialData.postal_code ?? '',
-        country: initialData.country ?? '',
-        venue_type: initialData.venue_type,
-        priority: initialData.priority,
-        status: initialData.status,
-        outreach_track: initialData.outreach_track ?? 'pipeline',
-        follow_up_date: initialData.follow_up_date,
-        capacity: initialData.capacity ?? null,
-      } : EMPTY)
+      if (initialData) {
+        setForm({
+          name: initialData.name,
+          location: initialData.location ?? '',
+          city: initialData.city ?? '',
+          address_line2: initialData.address_line2 ?? '',
+          region: initialData.region ?? '',
+          postal_code: initialData.postal_code ?? '',
+          country: initialData.country ?? '',
+          venue_type: initialData.venue_type,
+          priority: initialData.priority,
+          status: initialData.status,
+          outreach_track: initialData.outreach_track ?? 'pipeline',
+          follow_up_date: initialData.follow_up_date,
+          capacity: initialData.capacity ?? null,
+        })
+      } else if (addFormSeed) {
+        setForm({
+          name: addFormSeed.name,
+          location: addFormSeed.location ?? '',
+          city: addFormSeed.city ?? '',
+          address_line2: addFormSeed.address_line2 ?? '',
+          region: addFormSeed.region ?? '',
+          postal_code: addFormSeed.postal_code ?? '',
+          country: addFormSeed.country ?? '',
+          venue_type: addFormSeed.venue_type,
+          priority: addFormSeed.priority,
+          status: addFormSeed.status,
+          outreach_track: addFormSeed.outreach_track ?? 'pipeline',
+          follow_up_date: addFormSeed.follow_up_date,
+          capacity: addFormSeed.capacity ?? null,
+        })
+      } else {
+        setForm(EMPTY)
+      }
       setSelectedTemplate('__none__')
       setError(null)
     }
-  }, [open, initialData])
+  }, [open, initialData, addFormSeed, addFormSeedNonce])
 
   const set = <K extends keyof typeof form>(key: K, value: typeof form[K]) =>
     setForm(prev => ({ ...prev, [key]: value }))

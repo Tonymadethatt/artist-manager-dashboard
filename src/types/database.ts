@@ -467,6 +467,82 @@ export interface Database {
         }
         Relationships: []
       }
+      booking_intake_shows: {
+        Row: {
+          id: string
+          intake_id: string
+          label: string
+          show_data: unknown
+          sort_order: number
+          imported_deal_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          intake_id: string
+          label?: string
+          show_data?: unknown
+          sort_order?: number
+          imported_deal_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          intake_id?: string
+          label?: string
+          show_data?: unknown
+          sort_order?: number
+          imported_deal_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'booking_intake_shows_intake_id_fkey'
+            columns: ['intake_id']
+            referencedRelation: 'booking_intakes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'booking_intake_shows_imported_deal_id_fkey'
+            columns: ['imported_deal_id']
+            referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      booking_intakes: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          venue_data: unknown
+          schema_version: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string
+          venue_data?: unknown
+          schema_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          venue_data?: unknown
+          schema_version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profile_field_preset: {
         Row: {
           id: string
