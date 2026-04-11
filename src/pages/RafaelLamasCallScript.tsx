@@ -270,7 +270,8 @@ function collectQuestionIds(): string[] {
 
 const ALL_QUESTION_IDS = collectQuestionIds()
 
-export default function RafaelLamasCallScript() {
+/** Checklist + script (used on standalone route and inside Forms → Preview). */
+export function RafaelLamasCallScriptChecklist({ embedded }: { embedded?: boolean }) {
   const [done, setDone] = useState<Set<string>>(() => new Set())
 
   const toggle = useCallback((id: string) => {
@@ -290,7 +291,7 @@ export default function RafaelLamasCallScript() {
   }, [done])
 
   return (
-    <div className="max-w-3xl mx-auto pb-12">
+    <div className={cn(embedded ? 'pb-6' : 'max-w-3xl mx-auto pb-12')}>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500 mb-1">
@@ -419,4 +420,8 @@ export default function RafaelLamasCallScript() {
       </p>
     </div>
   )
+}
+
+export default function RafaelLamasCallScript() {
+  return <RafaelLamasCallScriptChecklist />
 }

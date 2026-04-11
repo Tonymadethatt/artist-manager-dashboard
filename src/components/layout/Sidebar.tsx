@@ -17,7 +17,6 @@ import {
   ClipboardList,
   Eye,
   Calendar,
-  Phone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -47,7 +46,6 @@ const NAV_GROUPS = [
     label: 'Forms',
     items: [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
-      { to: '/call-script/rafael-lamas', label: 'Rafael script', icon: Phone, end: false, badgeKey: null },
     ],
   },
   {
