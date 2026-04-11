@@ -42,6 +42,7 @@ import { ensureQueueCaptureUrl } from '../../src/lib/emailCapture/ensureQueueCap
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { parseGigCalendarQueueNotes } from '../../src/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '../../src/lib/email/gigCalendarEmailHtml'
+import { buildGigBookedEmailMiddleHtml, catalogDocFromSupabaseRow } from '../../src/lib/email/gigBookedEmailSections'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
@@ -652,8 +653,9 @@ const handler: Handler = async (event) => {
         const deal = dealRow as Deal
         const { data: venueRow } = await supabase
           .from('venues')
-          .select('id,name,city,location,status')
+          .select('*')
           .eq('id', deal.venue_id as string)
+          .eq('user_id', email.user_id)
           .maybeSingle()
         const venue = venueRow as Venue | null
 
@@ -666,16 +668,25 @@ const handler: Handler = async (event) => {
             results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
             continue
           }
-          const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+
+          const { data: catRow } = await supabase
+            .from('user_pricing_catalog')
+            .select('doc')
+            .eq('user_id', email.user_id)
+            .maybeSingle()
+          const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
+
+          const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
+            deal,
+            venue,
+            catalog,
+          })
           const html = buildBrandedGigCalendarEmail({
             kind: 'gig_booked_ics',
             L: layoutMerged,
             logoBaseUrl: siteUrl,
             ...shellProf,
-            icsBody: {
-              dealDescription: deal.description?.trim() || 'Gig',
-              venueLine,
-            },
+            icsBody: { middleSectionsHtml },
           })
           const subj = layoutMerged.subject?.trim() || email.subject || 'Booked gig — show details'
           const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {

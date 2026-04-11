@@ -7,8 +7,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { refreshAccessToken } from './googleCalendarOAuthShared'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { googleTimedEventFromUtcIso } from '../../src/lib/calendar/pacificWallTime'
-import type { DealTerms, OutreachStatus } from '../../src/types/index'
+import type { CommissionTier, DealTerms, OutreachStatus } from '../../src/types/index'
 import { formatVenueAddressForGoogleCalendar } from '../../src/lib/calendar/venueAddressForGoogle'
+import { buildGoogleCalendarDealDescription } from '../../src/lib/calendar/googleCalendarDealDescription'
 
 export type DealPushRow = {
   id: string
@@ -21,6 +22,11 @@ export type DealPushRow = {
   notes: string | null
   google_shared_calendar_event_id: string | null
   google_shared_calendar_event_etag: string | null
+  gross_amount: number
+  payment_due_date: string | null
+  commission_tier: CommissionTier
+  promise_lines: unknown | null
+  pricing_snapshot: unknown | null
 }
 
 export type VenuePushRow = {
@@ -85,28 +91,19 @@ function normalizeEmbeddedVenue(raw: unknown): { status: OutreachStatus } | null
 }
 
 function buildGoogleEventDescription(deal: DealPushRow, venue: VenuePushRow | null): string | undefined {
-  const parts: string[] = []
-
-  const notes = deal.notes?.trim()
-  if (notes) parts.push(notes)
-
-  const dt = venue?.deal_terms
-  if (dt && typeof dt === 'object' && !Array.isArray(dt)) {
-    const extras: string[] = []
-    if (typeof dt.set_length === 'string' && dt.set_length.trim()) {
-      extras.push(`Set length: ${dt.set_length.trim()}`)
-    }
-    if (typeof dt.load_in_time === 'string' && dt.load_in_time.trim()) {
-      extras.push(`Load-in: ${dt.load_in_time.trim()}`)
-    }
-    if (typeof dt.notes === 'string' && dt.notes.trim()) {
-      extras.push(dt.notes.trim())
-    }
-    if (extras.length) parts.push(extras.join('\n'))
-  }
-
-  const out = parts.join('\n\n').trim()
-  return out.length ? out.slice(0, 8000) : undefined
+  const dt = venue?.deal_terms ?? null
+  return buildGoogleCalendarDealDescription(
+    {
+      notes: deal.notes,
+      gross_amount: deal.gross_amount,
+      payment_due_date: deal.payment_due_date,
+      commission_tier: deal.commission_tier,
+      promise_lines: deal.promise_lines,
+      pricing_snapshot: deal.pricing_snapshot,
+    },
+    dt,
+    { maxLength: 8000 },
+  )
 }
 
 async function ensureAccessToken(args: {
@@ -367,7 +364,7 @@ export async function performGoogleCalendarDealPush(args: {
     const { data: deal, error: dealErr } = await supabase
       .from('deals')
       .select(
-        'id, user_id, description, venue_id, event_start_at, event_end_at, event_cancelled_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag',
+        'id, user_id, description, venue_id, event_start_at, event_end_at, event_cancelled_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag, gross_amount, payment_due_date, commission_tier, promise_lines, pricing_snapshot',
       )
       .eq('id', dealId)
       .eq('user_id', userId)
@@ -377,7 +374,15 @@ export async function performGoogleCalendarDealPush(args: {
       return { ok: false, httpStatus: 404, error: 'Deal not found.' }
     }
 
-    const d = deal as DealPushRow
+    const dr = deal as Record<string, unknown>
+    const d: DealPushRow = {
+      ...(deal as DealPushRow),
+      gross_amount: Number(dr.gross_amount ?? 0) || 0,
+      payment_due_date: (dr.payment_due_date as string | null | undefined) ?? null,
+      commission_tier: (dr.commission_tier as CommissionTier | undefined) ?? 'artist_network',
+      promise_lines: dr.promise_lines ?? null,
+      pricing_snapshot: dr.pricing_snapshot ?? null,
+    }
 
     /**
      * Use `select('*')` so qualification/payload work even when optional address columns

@@ -33,6 +33,7 @@ import {
   type PreviewProfile,
 } from '@/lib/buildVenueEmailHtml'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
+import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
 import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
@@ -596,6 +597,37 @@ export default function EmailTemplates() {
       }
       if (selectedType === 'gig_booked_ics') {
         const Lsend = artistLayoutForSend(layout, null, null)
+        const d0 = PREVIEW_MOCK_DEAL.event_date?.trim()
+        const startIso = d0 ? pacificWallToUtcIso(d0, '20:00') : null
+        const endIso = d0 ? pacificWallToUtcIso(d0, '23:00') : null
+        const { deal: bookedDeal, venue: bookedVenue, catalog: bookedCat } = buildGigBookedPreviewBundle({
+          event_start_at: startIso,
+          event_end_at: endIso,
+          event_date: PREVIEW_MOCK_DEAL.event_date,
+          description: PREVIEW_MOCK_DEAL.description,
+          gross_amount: PREVIEW_MOCK_DEAL.gross_amount,
+          payment_due_date: PREVIEW_MOCK_DEAL.payment_due_date,
+          notes: PREVIEW_MOCK_DEAL.notes,
+          venue: {
+            name: PREVIEW_MOCK_VENUE.name,
+            city: PREVIEW_MOCK_VENUE.city,
+            location: PREVIEW_MOCK_VENUE.location ?? null,
+            address_line2: null,
+            region: 'FL',
+            postal_code: '33130',
+            country: 'USA',
+            deal_terms: {
+              set_length: '90 minutes',
+              load_in_time: '6:00 PM',
+              notes: 'Green room + guest list at door.',
+            },
+          },
+        })
+        const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
+          deal: bookedDeal,
+          venue: bookedVenue,
+          catalog: bookedCat,
+        })
         return buildBrandedGigCalendarEmail({
           kind: 'gig_booked_ics',
           L: Lsend,
@@ -606,10 +638,7 @@ export default function EmailTemplates() {
           website: artistProfile?.website ?? PREVIEW_MOCK_PROFILE.website,
           social_handle: artistProfile?.social_handle ?? PREVIEW_MOCK_PROFILE.social_handle,
           phone: artistProfile?.phone ?? PREVIEW_MOCK_PROFILE.phone,
-          icsBody: {
-            dealDescription: PREVIEW_MOCK_DEAL.description,
-            venueLine: [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city].filter(Boolean).join(', '),
-          },
+          icsBody: { middleSectionsHtml },
         })
       }
       if (selectedType === 'gig_calendar_digest_weekly') {

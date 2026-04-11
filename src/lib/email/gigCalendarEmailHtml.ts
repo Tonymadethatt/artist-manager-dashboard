@@ -112,7 +112,8 @@ export type BuildBrandedGigCalendarEmailArgs = {
   digest?: { rows: GigCalendarScheduleRow[] }
   daySummary?: { rows: GigCalendarScheduleRow[]; dayLabel: string }
   reminder?: { venueName: string; dealDescription: string; whenLine: string }
-  icsBody?: { dealDescription: string; venueLine: string }
+  /** Pre-built HTML fragment from `buildGigBookedEmailMiddleHtml` (stacked section cards). */
+  icsBody?: { middleSectionsHtml: string }
 }
 
 /** Artist gig calendar sends: same branded shell as transactional emails + per-kind body. */
@@ -178,13 +179,10 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '#22c55e',
         'Booked',
       )
-      const b = args.icsBody!
-      const bookedBody =
-        `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(b.dealDescription)}</p>`
-        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.6;">${escapeHtmlPlain(b.venueLine)}</p>`
-      middleHtml = emailSectionCardHtml('Booking confirmed', bookedBody, '#22c55e')
-      defaultIntro = 'You’ve got a new booking — quick heads-up below.'
-      defaultClosing = 'Check your calendar whenever you want to see it there and read the full details.'
+      middleHtml = args.icsBody!.middleSectionsHtml
+      defaultIntro = 'You’ve got a new booking — details below.'
+      defaultClosing =
+        'Your shared calendar shows a short summary; keep this message for the full breakdown. Reply if anything looks off.'
       break
     }
     case 'gig_day_summary_manual': {

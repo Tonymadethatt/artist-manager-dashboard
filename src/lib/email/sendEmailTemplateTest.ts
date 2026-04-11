@@ -22,6 +22,7 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
+import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
 import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
@@ -343,16 +344,40 @@ export async function sendEmailTemplateTest(
     }
 
     if (params.selectedType === 'gig_booked_ics' && startIso && endIso) {
-      const venueLine = [PREVIEW_MOCK_VENUE.name, PREVIEW_MOCK_VENUE.city, PREVIEW_MOCK_VENUE.location].filter(Boolean).join(', ')
+      const { deal: bookedDeal, venue: bookedVenue, catalog: bookedCat } = buildGigBookedPreviewBundle({
+        event_start_at: startIso,
+        event_end_at: endIso,
+        event_date: previewEventDay,
+        description: PREVIEW_MOCK_DEAL.description,
+        gross_amount: PREVIEW_MOCK_DEAL.gross_amount,
+        payment_due_date: PREVIEW_MOCK_DEAL.payment_due_date,
+        notes: PREVIEW_MOCK_DEAL.notes,
+        venue: {
+          name: PREVIEW_MOCK_VENUE.name,
+          city: PREVIEW_MOCK_VENUE.city,
+          location: PREVIEW_MOCK_VENUE.location ?? null,
+          address_line2: null,
+          region: 'FL',
+          postal_code: '33130',
+          country: 'USA',
+          deal_terms: {
+            set_length: '90 minutes',
+            load_in_time: '6:00 PM',
+            notes: 'Green room + guest list at door.',
+          },
+        },
+      })
+      const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
+        deal: bookedDeal,
+        venue: bookedVenue,
+        catalog: bookedCat,
+      })
       const html = buildBrandedGigCalendarEmail({
         kind: 'gig_booked_ics',
         L: Lsend,
         logoBaseUrl: publicSiteOrigin(),
         ...gigShell,
-        icsBody: {
-          dealDescription: PREVIEW_MOCK_DEAL.description,
-          venueLine,
-        },
+        icsBody: { middleSectionsHtml },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',

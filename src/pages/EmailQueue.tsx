@@ -39,6 +39,7 @@ import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
+import { buildGigBookedEmailMiddleHtml, catalogDocFromSupabaseRow } from '@/lib/email/gigBookedEmailSections'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
@@ -705,20 +706,24 @@ export default function EmailQueue() {
             } else {
               const { data: venueRow } = await supabase
                 .from('venues')
-                .select('id,name,city,location,status')
+                .select('*')
                 .eq('id', deal.venue_id as string)
+                .eq('user_id', user.id)
                 .maybeSingle()
               const venue = venueRow as Venue | null
-              const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+              const { data: catRow } = await supabase
+                .from('user_pricing_catalog')
+                .select('doc')
+                .eq('user_id', user.id)
+                .maybeSingle()
+              const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
+              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({ deal, venue, catalog })
               setPreviewHtml(buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
                 L: Lg,
                 logoBaseUrl: siteG,
                 ...gigShellP,
-                icsBody: {
-                  dealDescription: deal.description?.trim() || 'Gig',
-                  venueLine,
-                },
+                icsBody: { middleSectionsHtml },
               }))
             }
           } else {
@@ -1191,8 +1196,9 @@ export default function EmailQueue() {
             }
             const { data: venueRow } = await supabase
               .from('venues')
-              .select('id,name,city,location,status')
+              .select('*')
               .eq('id', deal.venue_id as string)
+              .eq('user_id', user.id)
               .maybeSingle()
             const venue = venueRow as Venue | null
             if (gigN.kind === 'gig_reminder_24h') {
@@ -1222,16 +1228,23 @@ export default function EmailQueue() {
               })
               if (!res.ok) throw new Error(await parseErr(res))
             } else {
-              const venueLine = [venue?.name, venue?.city, venue?.location].filter(Boolean).join(', ') || 'TBA'
+              const { data: catRow } = await supabase
+                .from('user_pricing_catalog')
+                .select('doc')
+                .eq('user_id', user.id)
+                .maybeSingle()
+              const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
+              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
+                deal,
+                venue,
+                catalog,
+              })
               const html = buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
                 L: Lsend,
                 logoBaseUrl: siteUrl,
                 ...shellQ,
-                icsBody: {
-                  dealDescription: deal.description?.trim() || 'Gig',
-                  venueLine,
-                },
+                icsBody: { middleSectionsHtml },
               })
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
                 method: 'POST',
