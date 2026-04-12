@@ -16,6 +16,8 @@ import {
   PAYMENT_METHOD_LABELS,
   PERFORMANCE_ROLE_OPTIONS,
   promisePresetsFromVenueLinesV3,
+  substantiveShowCaptureLines,
+  substantiveVenueCaptureLines,
   type BookingIntakeVenueDataV3,
   type PaymentMethodKeyV3,
 } from '@/lib/intake/intakePayloadV3'
@@ -246,12 +248,14 @@ export function mapShowBundleToEarningsImport(
 
     const fromVenue = venueMeta
       ? [
+          ...substantiveVenueCaptureLines(venueMeta),
           venueMeta.post_call_notes.trim(),
           venueMeta.future_intel.trim() ? `Intel: ${venueMeta.future_intel.trim()}` : '',
           venueMeta.red_flags.trim() ? `Concerns: ${venueMeta.red_flags.trim()}` : '',
         ].filter(Boolean)
       : []
     const showCaptureLines = [
+      ...substantiveShowCaptureLines(sd),
       sd.music_requests_text.trim() ? `Music requests: ${sd.music_requests_text.trim()}` : '',
       sd.custom_setlist_notes.trim() ? `Setlist / custom requests: ${sd.custom_setlist_notes.trim()}` : '',
       sd.equipment_details_text.trim() ? `Equipment: ${sd.equipment_details_text.trim()}` : '',

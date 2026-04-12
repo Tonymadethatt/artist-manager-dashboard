@@ -29,9 +29,18 @@ import {
 } from '@/lib/pricing/computeDealPrice'
 import { cn } from '@/lib/utils'
 import {
+  ADDRESS_DETAIL_LEVEL_KEYS,
+  ADDRESS_DETAIL_LEVEL_LABELS,
   CAPACITY_RANGE_OPTIONS,
+  CLOSE_ARTIFACT_TAG_KEYS,
+  CLOSE_ARTIFACT_TAG_LABELS,
+  CONTACT_MISMATCH_CONTEXT_LABELS,
   computeOvernightEvent,
   computeSetLengthHours,
+  EQUIPMENT_CAPABILITY_KEYS,
+  EQUIPMENT_CAPABILITY_LABELS,
+  EVENT_ARCHETYPE_KEYS,
+  EVENT_ARCHETYPE_LABELS,
   defaultIntakeTitleV3,
   formatSetLengthDisplay,
   INTAKE_SCHEMA_VERSION_V3,
@@ -57,13 +66,45 @@ import {
   VENUE_PROMISE_LINE_OPTIONS,
   FOLLOW_UP_TOPIC_KEYS,
   FOLLOW_UP_TOPIC_LABELS,
+  GROUND_TRANSPORT_KEYS,
+  GROUND_TRANSPORT_LABELS,
+  LINEUP_FORMAT_KEYS,
+  LINEUP_FORMAT_LABELS,
+  LOAD_ACCESS_TAG_KEYS,
+  LOAD_ACCESS_TAG_LABELS,
+  MANUAL_PRICING_REASON_KEYS,
+  MANUAL_PRICING_REASON_LABELS,
+  MUSIC_DELIVERY_KEYS,
+  MUSIC_DELIVERY_LABELS,
+  ONSITE_CONNECT_METHOD_KEYS,
+  ONSITE_CONNECT_METHOD_LABELS,
+  ONSITE_CONNECT_WINDOW_KEYS,
+  ONSITE_CONNECT_WINDOW_LABELS,
+  ONSITE_POC_ROLE_KEYS,
+  ONSITE_POC_ROLE_LABELS,
+  PARKING_ACCESS_CLASS_KEYS,
+  PARKING_ACCESS_CLASS_LABELS,
+  PREFERRED_EMAIL_CHANNEL_LABELS,
+  SETLIST_REQUEST_TAG_KEYS,
+  SETLIST_REQUEST_TAG_LABELS,
+  TRAVEL_BOOKED_BY_KEYS,
+  TRAVEL_BOOKED_BY_LABELS,
+  VENUE_ARCHETYPE_KEYS,
+  VENUE_ARCHETYPE_LABELS,
   type BookingIntakeShowDataV3,
   type BookingIntakeVenueDataV3,
   type CapacityRangeV3,
+  type LineupFormatV3,
   type InquirySourceV3,
   type KnownEventTypeV3,
   type PerformanceGenreV3,
   type PerformanceRoleV3,
+  type CloseArtifactTagV3,
+  type EquipmentCapabilityIdV3,
+  type LoadAccessTagV3,
+  type MusicDeliveryV3,
+  type Phase1ContactMismatchContextV3,
+  type Phase1PreferredEmailChannelV3,
   type Phase2SettingV3,
   type Phase3CustomSetlistV3,
   type Phase3MusicRequestsFlagV3,
@@ -86,6 +127,7 @@ import {
   type Phase7SendAgreementV3,
   type PaymentMethodKeyV3,
   type FollowUpTopicKeyV3,
+  type SetlistRequestTagV3,
   type VenuePromiseLineIdV3,
 } from '@/lib/intake/intakePayloadV3'
 import type { CommissionTier, Contact, Deal, OutreachTrack, PricingCatalogDoc, Venue, VenueType } from '@/types'
@@ -156,12 +198,13 @@ const TIME_OPTIONS_15: string[] = (() => {
 
 function pick2a(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'event_type' | 'venue_type' | 'setting' | 'event_name_flag'
+  'event_type' | 'venue_type' | 'setting' | 'event_archetype' | 'event_name_flag'
 > {
   return {
     event_type: d.event_type,
     venue_type: d.venue_type,
     setting: d.setting,
+    event_archetype: d.event_archetype,
     event_name_flag: d.event_name_flag,
   }
 }
@@ -180,23 +223,31 @@ function pick2b(d: BookingIntakeShowDataV3): Pick<
 
 function pick2c(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'venue_name_flag' | 'city_flag' | 'state_region' | 'address_status'
+  | 'venue_name_flag'
+  | 'city_flag'
+  | 'state_region'
+  | 'address_status'
+  | 'venue_archetype'
+  | 'address_detail_level'
 > {
   return {
     venue_name_flag: d.venue_name_flag,
     city_flag: d.city_flag,
     state_region: d.state_region,
     address_status: d.address_status,
+    venue_archetype: d.venue_archetype,
+    address_detail_level: d.address_detail_level,
   }
 }
 
 function pick2d(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'capacity_range' | 'exact_capacity_flag'
+  'capacity_range' | 'exact_capacity_flag' | 'approximate_headcount'
 > {
   return {
     capacity_range: d.capacity_range,
     exact_capacity_flag: d.exact_capacity_flag,
+    approximate_headcount: d.approximate_headcount,
   }
 }
 
@@ -214,71 +265,94 @@ function pick3a(d: BookingIntakeShowDataV3): Pick<
 
 function pick3b(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'genres' | 'custom_setlist' | 'music_requests_flag'
+  'genres' | 'custom_setlist' | 'setlist_request_tags' | 'music_requests_flag' | 'music_delivery'
 > {
   return {
     genres: [...d.genres],
     custom_setlist: d.custom_setlist,
+    setlist_request_tags: [...d.setlist_request_tags],
     music_requests_flag: d.music_requests_flag,
+    music_delivery: d.music_delivery,
   }
 }
 
 function pick3c(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'other_performers' | 'num_other_acts' | 'billing_priority'
+  'other_performers' | 'num_other_acts' | 'billing_priority' | 'lineup_format'
 > {
   if (d.other_performers !== 'multiple_performers') {
-    return { other_performers: d.other_performers, num_other_acts: '', billing_priority: '' }
+    return {
+      other_performers: d.other_performers,
+      num_other_acts: '',
+      billing_priority: '',
+      lineup_format: d.lineup_format,
+    }
   }
   return {
     other_performers: d.other_performers,
     num_other_acts: d.num_other_acts,
     billing_priority: d.billing_priority,
+    lineup_format: d.lineup_format,
   }
 }
 
 function pick4a(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'equipment_provider' | 'equipment_details_flag'
+  'equipment_provider' | 'equipment_details_flag' | 'equipment_capability_ids'
 > {
   return {
     equipment_provider: d.equipment_provider,
     equipment_details_flag: d.equipment_details_flag,
+    equipment_capability_ids: [...d.equipment_capability_ids],
   }
 }
 
 function pick4c(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'load_in_discussed' | 'load_in_time' | 'soundcheck'
+  'load_in_discussed' | 'load_in_time' | 'soundcheck' | 'load_in_access_tags'
 > {
   return {
     load_in_discussed: d.load_in_discussed,
     load_in_time: d.load_in_discussed === 'yes' ? d.load_in_time : '',
     soundcheck: d.soundcheck,
+    load_in_access_tags: [...d.load_in_access_tags],
   }
 }
 
 function pick4d(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'parking_status' | 'parking_details_flag'
+  'parking_status' | 'parking_details_flag' | 'parking_access_class'
 > {
   return {
     parking_status: d.parking_status,
     parking_details_flag: d.parking_details_flag,
+    parking_access_class: d.parking_access_class,
   }
 }
 
 function pick4e(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'travel_required' | 'lodging_status' | 'travel_notes_flag'
+  | 'travel_required'
+  | 'lodging_status'
+  | 'travel_notes_flag'
+  | 'travel_booked_by'
+  | 'ground_transport'
 > {
   if (d.travel_required === 'local') {
-    return { travel_required: d.travel_required, lodging_status: '', travel_notes_flag: '' }
+    return {
+      travel_required: d.travel_required,
+      lodging_status: '',
+      travel_notes_flag: '',
+      travel_booked_by: '',
+      ground_transport: '',
+    }
   }
   return {
     travel_required: d.travel_required,
     lodging_status: d.lodging_status,
     travel_notes_flag: d.travel_notes_flag,
+    travel_booked_by: d.travel_booked_by,
+    ground_transport: d.ground_transport,
   }
 }
 
@@ -351,6 +425,47 @@ function GenreChipRow({
           {PERFORMANCE_GENRE_LABELS[g]}
         </button>
       ))}
+    </div>
+  )
+}
+
+function IdChipRow<T extends string>({
+  label,
+  selected,
+  ids,
+  labels,
+  onChange,
+}: {
+  label: string
+  selected: T[]
+  ids: readonly T[]
+  labels: Record<T, string>
+  onChange: (next: T[]) => void
+}) {
+  const toggle = (id: T) => {
+    if (selected.includes(id)) onChange(selected.filter(x => x !== id))
+    else onChange([...selected, id])
+  }
+  return (
+    <div className="space-y-2">
+      <Label className="text-neutral-400 text-xs">{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {ids.map(id => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => toggle(id)}
+            className={cn(
+              'min-h-[44px] px-3 text-sm font-medium rounded-lg border transition-colors',
+              selected.includes(id)
+                ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+            )}
+          >
+            {labels[id]}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -637,6 +752,8 @@ export default function BookingIntakePage() {
         if (partial.travel_required === 'local' || next.travel_required === 'local') {
           next.lodging_status = ''
           next.travel_notes_flag = ''
+          next.travel_booked_by = ''
+          next.ground_transport = ''
         }
       }
       if (section === '5c') {
@@ -2022,13 +2139,40 @@ export default function BookingIntakePage() {
                         <Label className="text-neutral-400 text-xs">Speaking with the right person?</Label>
                         <ToggleN
                           value={data.confirmed_contact}
-                          onChange={v => patch({ confirmed_contact: v })}
+                          onChange={v =>
+                            patch(
+                              v === 'yes'
+                                ? { confirmed_contact: v, contact_mismatch_context: '' }
+                                : { confirmed_contact: v },
+                            )
+                          }
                           options={[
                             { value: 'yes' as const, label: 'Yes' },
                             { value: 'no_different_person' as const, label: 'No — different person' },
                           ]}
                         />
                       </div>
+                      {data.confirmed_contact === 'no_different_person' ? (
+                        <div className="space-y-2">
+                          <Label className="text-neutral-400 text-xs">Who are we actually speaking with?</Label>
+                          <ToggleN
+                            value={data.contact_mismatch_context}
+                            onChange={v => patch({ contact_mismatch_context: v as Phase1ContactMismatchContextV3 })}
+                            options={(
+                              [
+                                'billing',
+                                'production',
+                                'owner',
+                                'assistant',
+                                'other_party',
+                              ] as const satisfies readonly Phase1ContactMismatchContextV3[]
+                            ).map(key => ({
+                              value: key,
+                              label: CONTACT_MISMATCH_CONTEXT_LABELS[key],
+                            }))}
+                          />
+                        </div>
+                      ) : null}
                       <div className="space-y-2">
                         <Label className="text-neutral-400 text-xs">Call energy</Label>
                         <ToggleN
@@ -2083,6 +2227,19 @@ export default function BookingIntakePage() {
                             { value: 'confirmed' as const, label: 'Confirmed' },
                             { value: 'update_needed' as const, label: 'Update needed' },
                           ]}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-neutral-400 text-xs">Primary email use (best for paperwork)</Label>
+                        <ToggleN
+                          value={data.preferred_email_channel}
+                          onChange={v => patch({ preferred_email_channel: v as Phase1PreferredEmailChannelV3 })}
+                          options={(
+                            ['work', 'personal', 'billing', 'production'] as const satisfies readonly Phase1PreferredEmailChannelV3[]
+                          ).map(key => ({
+                            value: key,
+                            label: PREFERRED_EMAIL_CHANNEL_LABELS[key],
+                          }))}
                         />
                       </div>
                     </div>
@@ -2193,6 +2350,38 @@ export default function BookingIntakePage() {
                                   { value: 'no_name_yet' as const, label: 'No name yet' },
                                 ]}
                               />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">Event format (how the night runs)</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => applyShowPatch(row.id, { event_archetype: '' }, '2a')}
+                                  className={cn(
+                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                    !sd.event_archetype
+                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                  )}
+                                >
+                                  —
+                                </button>
+                                {EVENT_ARCHETYPE_KEYS.map(key => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => applyShowPatch(row.id, { event_archetype: key }, '2a')}
+                                    className={cn(
+                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                      sd.event_archetype === key
+                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                    )}
+                                  >
+                                    {EVENT_ARCHETYPE_LABELS[key]}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         )
@@ -2395,6 +2584,70 @@ export default function BookingIntakePage() {
                                 ]}
                               />
                             </div>
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">Venue / room type (what kind of room)</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => applyShowPatch(row.id, { venue_archetype: '' }, '2c')}
+                                  className={cn(
+                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                    !sd.venue_archetype
+                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                  )}
+                                >
+                                  —
+                                </button>
+                                {VENUE_ARCHETYPE_KEYS.map(key => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => applyShowPatch(row.id, { venue_archetype: key }, '2c')}
+                                    className={cn(
+                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                      sd.venue_archetype === key
+                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                    )}
+                                  >
+                                    {VENUE_ARCHETYPE_LABELS[key]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">How specific is the location right now?</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => applyShowPatch(row.id, { address_detail_level: '' }, '2c')}
+                                  className={cn(
+                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                    !sd.address_detail_level
+                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                  )}
+                                >
+                                  —
+                                </button>
+                                {ADDRESS_DETAIL_LEVEL_KEYS.map(key => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => applyShowPatch(row.id, { address_detail_level: key }, '2c')}
+                                    className={cn(
+                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                      sd.address_detail_level === key
+                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                    )}
+                                  >
+                                    {ADDRESS_DETAIL_LEVEL_LABELS[key]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         )
                       },
@@ -2472,6 +2725,54 @@ export default function BookingIntakePage() {
                                   { value: 'range_ok' as const, label: 'Range is fine' },
                                 ]}
                               />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">Approx. headcount they said (rounded)</Label>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 border-neutral-700"
+                                  onClick={() =>
+                                    applyShowPatch(
+                                      row.id,
+                                      { approximate_headcount: Math.max(0, sd.approximate_headcount - 25) },
+                                      '2d',
+                                    )
+                                  }
+                                >
+                                  −25
+                                </Button>
+                                <span className="text-sm text-neutral-200 tabular-nums min-w-[3rem] text-center">
+                                  {sd.approximate_headcount > 0 ? sd.approximate_headcount : '—'}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-10 border-neutral-700"
+                                  onClick={() =>
+                                    applyShowPatch(
+                                      row.id,
+                                      { approximate_headcount: Math.min(100_000, sd.approximate_headcount + 25) },
+                                      '2d',
+                                    )
+                                  }
+                                >
+                                  +25
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-10 text-neutral-500"
+                                  onClick={() => applyShowPatch(row.id, { approximate_headcount: 0 }, '2d')}
+                                >
+                                  Clear
+                                </Button>
+                              </div>
+                              <p className="text-[10px] text-neutral-600">Use when they give a number but you’re not capturing exact later.</p>
                             </div>
                           </div>
                         )
@@ -2654,6 +2955,26 @@ export default function BookingIntakePage() {
                                 onChange={next => applyShowPatch(row.id, { genres: next }, '3b')}
                               />
                             </div>
+                            <IdChipRow<SetlistRequestTagV3>
+                              label="Music direction & requests (tap all that apply)"
+                              selected={sd.setlist_request_tags}
+                              ids={SETLIST_REQUEST_TAG_KEYS}
+                              labels={SETLIST_REQUEST_TAG_LABELS}
+                              onChange={next => applyShowPatch(row.id, { setlist_request_tags: next }, '3b')}
+                            />
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">How will detailed requests arrive?</Label>
+                              <ToggleN
+                                value={sd.music_delivery}
+                                onChange={v => applyShowPatch(row.id, { music_delivery: v as MusicDeliveryV3 }, '3b')}
+                                options={MUSIC_DELIVERY_KEYS.filter((k): k is Exclude<MusicDeliveryV3, ''> => k !== '').map(
+                                  k => ({
+                                    value: k,
+                                    label: MUSIC_DELIVERY_LABELS[k],
+                                  }),
+                                )}
+                              />
+                            </div>
                             <div className="space-y-2">
                               <Label className="text-neutral-400 text-xs">Custom setlist</Label>
                               <ToggleN
@@ -2792,6 +3113,38 @@ export default function BookingIntakePage() {
                                 </div>
                               </>
                             ) : null}
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">Lineup / set structure</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => applyShowPatch(row.id, { lineup_format: '' }, '3c')}
+                                  className={cn(
+                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                    !sd.lineup_format
+                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                  )}
+                                >
+                                  —
+                                </button>
+                                {LINEUP_FORMAT_KEYS.filter((k): k is Exclude<LineupFormatV3, ''> => k !== '').map(key => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => applyShowPatch(row.id, { lineup_format: key }, '3c')}
+                                    className={cn(
+                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                      sd.lineup_format === key
+                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                    )}
+                                  >
+                                    {LINEUP_FORMAT_LABELS[key]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         )
                       },
@@ -2865,6 +3218,15 @@ export default function BookingIntakePage() {
                                 ]}
                               />
                             </div>
+                            <IdChipRow<EquipmentCapabilityIdV3>
+                              label="What's provided / discussed (tap all that apply)"
+                              selected={sd.equipment_capability_ids}
+                              ids={EQUIPMENT_CAPABILITY_KEYS}
+                              labels={EQUIPMENT_CAPABILITY_LABELS}
+                              onChange={next =>
+                                applyShowPatch(row.id, { equipment_capability_ids: next }, '4a')
+                              }
+                            />
                           </div>
                         )
                       },
@@ -2884,7 +3246,14 @@ export default function BookingIntakePage() {
                         onChange={v => {
                           const x = v as Phase4OnsiteSameContactV3
                           if (x === 'same') {
-                            patch({ onsite_same_contact: x, onsite_name_flag: '', onsite_phone_flag: '' })
+                            patch({
+                              onsite_same_contact: x,
+                              onsite_name_flag: '',
+                              onsite_phone_flag: '',
+                              onsite_poc_role: '',
+                              onsite_connect_method: '',
+                              onsite_connect_window: '',
+                            })
                           } else {
                             patch({ onsite_same_contact: x })
                           }
@@ -2917,6 +3286,39 @@ export default function BookingIntakePage() {
                               { value: 'capture_later' as const, label: 'They told me — capture later' },
                               { value: 'not_discussed' as const, label: 'Not discussed' },
                             ]}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-neutral-400 text-xs">Their role on site</Label>
+                          <ToggleN
+                            value={data.onsite_poc_role}
+                            onChange={v => patch({ onsite_poc_role: v })}
+                            options={ONSITE_POC_ROLE_KEYS.filter(k => k !== '').map(k => ({
+                              value: k,
+                              label: ONSITE_POC_ROLE_LABELS[k],
+                            }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-neutral-400 text-xs">How you’ll reach them</Label>
+                          <ToggleN
+                            value={data.onsite_connect_method}
+                            onChange={v => patch({ onsite_connect_method: v })}
+                            options={ONSITE_CONNECT_METHOD_KEYS.filter(k => k !== '').map(k => ({
+                              value: k,
+                              label: ONSITE_CONNECT_METHOD_LABELS[k],
+                            }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-neutral-400 text-xs">Best time window</Label>
+                          <ToggleN
+                            value={data.onsite_connect_window}
+                            onChange={v => patch({ onsite_connect_window: v })}
+                            options={ONSITE_CONNECT_WINDOW_KEYS.filter(k => k !== '').map(k => ({
+                              value: k,
+                              label: ONSITE_CONNECT_WINDOW_LABELS[k],
+                            }))}
                           />
                         </div>
                       </div>
@@ -3013,6 +3415,15 @@ export default function BookingIntakePage() {
                                 ]}
                               />
                             </div>
+                            <IdChipRow<LoadAccessTagV3>
+                              label="Load-in access (tap all that apply)"
+                              selected={sd.load_in_access_tags}
+                              ids={LOAD_ACCESS_TAG_KEYS}
+                              labels={LOAD_ACCESS_TAG_LABELS}
+                              onChange={next =>
+                                applyShowPatch(row.id, { load_in_access_tags: next }, '4c')
+                              }
+                            />
                           </div>
                         )
                       },
@@ -3081,6 +3492,26 @@ export default function BookingIntakePage() {
                                 options={[
                                   { value: 'capture_later' as const, label: 'Yes — capture later' },
                                   { value: 'no' as const, label: 'No' },
+                                ]}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-neutral-400 text-xs">Parking type (if known)</Label>
+                              <ToggleN
+                                value={sd.parking_access_class}
+                                onChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    { parking_access_class: v as BookingIntakeShowDataV3['parking_access_class'] },
+                                    '4d',
+                                  )
+                                }
+                                options={[
+                                  { value: '' as const, label: '—' },
+                                  ...PARKING_ACCESS_CLASS_KEYS.filter(k => k !== '').map(k => ({
+                                    value: k,
+                                    label: PARKING_ACCESS_CLASS_LABELS[k],
+                                  })),
                                 ]}
                               />
                             </div>
@@ -3179,6 +3610,46 @@ export default function BookingIntakePage() {
                                     options={[
                                       { value: 'capture_later' as const, label: 'Yes — capture later' },
                                       { value: 'no' as const, label: 'No' },
+                                    ]}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-neutral-400 text-xs">Who books travel</Label>
+                                  <ToggleN
+                                    value={sd.travel_booked_by}
+                                    onChange={v =>
+                                      applyShowPatch(
+                                        row.id,
+                                        { travel_booked_by: v as BookingIntakeShowDataV3['travel_booked_by'] },
+                                        '4e',
+                                      )
+                                    }
+                                    options={[
+                                      { value: '' as const, label: '—' },
+                                      ...TRAVEL_BOOKED_BY_KEYS.filter(k => k !== '').map(k => ({
+                                        value: k,
+                                        label: TRAVEL_BOOKED_BY_LABELS[k],
+                                      })),
+                                    ]}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-neutral-400 text-xs">Ground transport</Label>
+                                  <ToggleN
+                                    value={sd.ground_transport}
+                                    onChange={v =>
+                                      applyShowPatch(
+                                        row.id,
+                                        { ground_transport: v as BookingIntakeShowDataV3['ground_transport'] },
+                                        '4e',
+                                      )
+                                    }
+                                    options={[
+                                      { value: '' as const, label: '—' },
+                                      ...GROUND_TRANSPORT_KEYS.filter(k => k !== '').map(k => ({
+                                        value: k,
+                                        label: GROUND_TRANSPORT_LABELS[k],
+                                      })),
                                     ]}
                                   />
                                 </div>
@@ -3610,25 +4081,47 @@ export default function BookingIntakePage() {
                             />
                           </div>
                           {sd.pricing_source === 'manual' ? (
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Manual total (USD)</Label>
-                              <Input
-                                inputMode="decimal"
-                                className="h-11 border-neutral-800 bg-neutral-950/80 tabular-nums"
-                                value={sd.manual_gross != null ? String(sd.manual_gross) : ''}
-                                onChange={e => {
-                                  const raw = e.target.value.trim()
-                                  if (!raw) {
-                                    applyShowPatch(row.id, { manual_gross: null }, '5c')
-                                    return
+                            <>
+                              <div className="space-y-1.5">
+                                <Label className="text-neutral-400 text-xs">Manual total (USD)</Label>
+                                <Input
+                                  inputMode="decimal"
+                                  className="h-11 border-neutral-800 bg-neutral-950/80 tabular-nums"
+                                  value={sd.manual_gross != null ? String(sd.manual_gross) : ''}
+                                  onChange={e => {
+                                    const raw = e.target.value.trim()
+                                    if (!raw) {
+                                      applyShowPatch(row.id, { manual_gross: null }, '5c')
+                                      return
+                                    }
+                                    const n = Number(raw)
+                                    if (!Number.isFinite(n) || n < 0) return
+                                    applyShowPatch(row.id, { manual_gross: Math.round(n) }, '5c')
+                                  }}
+                                  placeholder="0"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-neutral-400 text-xs">Why manual (substance)</Label>
+                                <ToggleN
+                                  value={sd.manual_pricing_reason}
+                                  onChange={v =>
+                                    applyShowPatch(
+                                      row.id,
+                                      { manual_pricing_reason: v as BookingIntakeShowDataV3['manual_pricing_reason'] },
+                                      '5c',
+                                    )
                                   }
-                                  const n = Number(raw)
-                                  if (!Number.isFinite(n) || n < 0) return
-                                  applyShowPatch(row.id, { manual_gross: Math.round(n) }, '5c')
-                                }}
-                                placeholder="0"
-                              />
-                            </div>
+                                  options={[
+                                    { value: '' as const, label: '—' },
+                                    ...MANUAL_PRICING_REASON_KEYS.filter(k => k !== '').map(k => ({
+                                      value: k,
+                                      label: MANUAL_PRICING_REASON_LABELS[k],
+                                    })),
+                                  ]}
+                                />
+                              </div>
+                            </>
                           ) : null}
                         </div>
                       )
@@ -3961,6 +4454,13 @@ export default function BookingIntakePage() {
                         ]}
                       />
                     </div>
+                    <IdChipRow<CloseArtifactTagV3>
+                      label="What you're sending / holding (tap all that apply)"
+                      selected={data.close_artifact_tags}
+                      ids={CLOSE_ARTIFACT_TAG_KEYS}
+                      labels={CLOSE_ARTIFACT_TAG_LABELS}
+                      onChange={next => patch({ close_artifact_tags: next })}
+                    />
                   </>
                 ) : data.view_section === '7B' ? (
                   <>

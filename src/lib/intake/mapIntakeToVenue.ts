@@ -1,14 +1,26 @@
 import type { Venue, VenueType } from '@/types'
-import type { BookingIntakeShowDataV3, BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
+import {
+  VENUE_ARCHETYPE_LABELS,
+  type BookingIntakeShowDataV3,
+  type BookingIntakeVenueDataV3,
+  type VenueArchetypeV3,
+} from '@/lib/intake/intakePayloadV3'
 
 export function mapIntakeVenueDataV3ToVenueRow(
   data: BookingIntakeVenueDataV3,
   primaryShow?: BookingIntakeShowDataV3 | null,
 ): Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> {
   const ps = primaryShow ?? null
+  const archetypeHint =
+    ps?.venue_archetype &&
+    !ps.venue_name_text.trim() &&
+    !data.known_venue_name.trim()
+      ? VENUE_ARCHETYPE_LABELS[ps.venue_archetype as Exclude<VenueArchetypeV3, ''>]
+      : ''
   const name = (
     ps?.venue_name_text.trim() ||
     data.known_venue_name.trim() ||
+    archetypeHint ||
     data.contact_name.trim() ||
     'Untitled venue'
   ).trim()
