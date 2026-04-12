@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
-import { defaultCustomBlocksDoc } from '@/lib/email/customEmailBlocks'
+import { defaultCustomBlocksDoc, defaultCustomBlocksDocForAudience } from '@/lib/email/customEmailBlocks'
 
 export type CustomEmailAudience = 'venue' | 'artist'
 
@@ -49,7 +49,7 @@ export function useCustomEmailTemplates() {
         audience: input.audience,
         name: input.name.trim(),
         subject_template: input.subject_template?.trim() ?? 'Update from {{profile.artist_name}}',
-        blocks: (input.blocks ?? defaultCustomBlocksDoc()) as never,
+        blocks: (input.blocks ?? defaultCustomBlocksDocForAudience(input.audience)) as never,
         attachment_generated_file_id: input.attachment_generated_file_id ?? null,
         updated_at: new Date().toISOString(),
       })

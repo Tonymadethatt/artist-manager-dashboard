@@ -34,6 +34,7 @@ export function useBookingIntakes() {
     intake: ReturnType<typeof setTimeout> | null
     show: ReturnType<typeof setTimeout> | null
   }>({ intake: null, show: null })
+  const scheduleIntakeSaveRef = useRef<((intakeId: string) => void) | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -99,8 +100,28 @@ export function useBookingIntakes() {
       if (pending.venue !== undefined) patch.venue_data = pending.venue as unknown as Record<string, unknown>
       if (pending.title !== undefined) patch.title = pending.title
       const { error: up } = await supabase.from('booking_intakes').update(patch).eq('id', intakeId)
-      if (up) setError(up.message)
-      else await load()
+      if (up) {
+        setError(up.message)
+        await load()
+        return
+      }
+      // Do not call full `load()` here: it replaces all intakes from the server and can briefly
+      // overwrite newer optimistic edits (e.g. fast Yes / Different person toggles) if the
+      // refetch returns before a follow-up save or races with in-flight local state.
+      const { data: meta } = await supabase
+        .from('booking_intakes')
+        .select('updated_at')
+        .eq('id', intakeId)
+        .maybeSingle()
+      if (meta?.updated_at != null) {
+        setIntakes(prev =>
+          prev.map(i => (i.id === intakeId ? { ...i, updated_at: meta.updated_at! } : i)),
+        )
+      }
+      const nextPending = pendingIntakeRef.current.get(intakeId)
+      if (nextPending && (nextPending.venue !== undefined || nextPending.title !== undefined)) {
+        scheduleIntakeSaveRef.current?.(intakeId)
+      }
     },
     [load],
   )
@@ -115,6 +136,7 @@ export function useBookingIntakes() {
     },
     [flushIntake],
   )
+  scheduleIntakeSaveRef.current = scheduleIntakeSave
 
   const flushIntakeImmediate = useCallback(
     async (intakeId: string) => {

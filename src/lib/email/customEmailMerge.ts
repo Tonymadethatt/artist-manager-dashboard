@@ -51,16 +51,28 @@ const KEY_SETS: Record<CustomMergeAudience, ReadonlySet<string>> = {
   artist: new Set(ARTIST_CUSTOM_MERGE_KEYS),
 }
 
+/** Map common shorthand / legacy tokens to canonical whitelist keys (subject, greeting, prose, etc.). */
+function canonicalMergeKey(raw: string): string {
+  const k = raw.trim()
+  const aliases: Record<string, string> = {
+    firstName: 'recipient.firstName',
+    client_name: 'recipient.firstName',
+    CLIENT_NAME: 'recipient.firstName',
+  }
+  return aliases[k] ?? k
+}
+
 /** Resolve a whitelisted merge key from context (for key_value rows). */
 export function resolveMergeKey(
   key: string | null | undefined,
   ctx: CustomEmailMergeContext,
   audience: CustomMergeAudience,
 ): string {
-  if (!key || !KEY_SETS[audience].has(key)) return ''
+  const k = canonicalMergeKey(key ?? '')
+  if (!k || !KEY_SETS[audience].has(k)) return ''
   const firstName = (ctx.recipient.name ?? '').split(/\s+/)[0] || ''
   const venueName = ctx.venue?.name ?? ctx.deal?.description ?? ''
-  switch (key) {
+  switch (k) {
     case 'recipient.firstName':
       return firstName
     case 'venue.name':
@@ -91,7 +103,7 @@ export function resolveMergeKey(
  */
 export function applyMergeToText(template: string, ctx: CustomEmailMergeContext, audience: CustomMergeAudience): string {
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey: string) => {
-    const k = rawKey.trim()
+    const k = canonicalMergeKey(rawKey)
     return resolveMergeKey(k, ctx, audience)
   })
 }

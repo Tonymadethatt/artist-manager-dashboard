@@ -62,6 +62,23 @@ export const CALL_VIBE_LABELS: Record<Exclude<Phase1CallVibeV3, ''>, string> = {
   all_over_the_place: 'Scattered / multi-tasking',
   very_formal: 'Very formal / corporate',
 }
+
+/** Single-row chip UI (emoji + one word). Full sentence labels stay in `CALL_VIBE_LABELS` for exports. */
+export const CALL_VIBE_CHIP_META: Record<Exclude<Phase1CallVibeV3, ''>, { emoji: string; word: string }> = {
+  excited: { emoji: '\u2728', word: 'Excited' },
+  business: { emoji: '\u{1F4BC}', word: 'Business' },
+  rushed: { emoji: '\u26A1', word: 'Rushed' },
+  warm_easy: { emoji: '\u{1F91D}', word: 'Warm' },
+  guarded_testing_us: { emoji: '\u{1F6E1}\uFE0F', word: 'Guarded' },
+  time_crunched: { emoji: '\u23F0', word: 'Distracted' },
+  all_over_the_place: { emoji: '\u{1F300}', word: 'Scattered' },
+  very_formal: { emoji: '\u{1F3A9}', word: 'Formal' },
+}
+
+export const CALL_VIBE_ORDER_NONEMPTY = CALL_VIBE_KEYS.filter(
+  (k): k is Exclude<Phase1CallVibeV3, ''> => k !== '',
+)
+
 export type Phase1PhoneConfirmedV3 = '' | 'confirmed' | 'update_needed'
 export type Phase1EmailConfirmedV3 = '' | 'confirmed' | 'update_needed' | 'need_to_get'
 export type Phase1CompanyConfirmedV3 = '' | 'confirmed' | 'update_needed'
@@ -125,22 +142,48 @@ export type Phase7ClientEnergyV3 = '' | 'very_excited' | 'positive' | 'neutral' 
 export type Phase7HasFollowUpsV3 = '' | 'yes' | 'all_clear'
 export type Phase7CallStatusV3 = '' | 'full' | 'partial' | 'voicemail'
 
-/** Phase 1 — substantive context (venue_data). */
-export type Phase1ContactMismatchContextV3 =
-  | ''
-  | 'billing'
-  | 'production'
-  | 'owner'
-  | 'assistant'
-  | 'other_party'
+/** Phase 1 — substantive context (venue_data). Who’s on the line when not the contact on file. */
+export const CONTACT_MISMATCH_CONTEXT_KEYS = [
+  '',
+  'talent_buyer',
+  'event_planner',
+  'day_of_coordinator',
+  'wedding_planner',
+  'agency_rep',
+  'venue_manager',
+  'production',
+  'hospitality_manager',
+  'marketing_pr',
+  'billing',
+  'owner',
+  'assistant',
+  'security_box',
+  'other_party',
+] as const
+
+export type Phase1ContactMismatchContextV3 = (typeof CONTACT_MISMATCH_CONTEXT_KEYS)[number]
 
 export const CONTACT_MISMATCH_CONTEXT_LABELS: Record<Exclude<Phase1ContactMismatchContextV3, ''>, string> = {
-  billing: 'Actually billing / AP contact',
-  production: 'Production / technical contact',
+  talent_buyer: 'Talent buyer / booker',
+  event_planner: 'Event planner / producer',
+  day_of_coordinator: 'Day-of coordinator',
+  wedding_planner: 'Wedding / private planner',
+  agency_rep: 'Agency / rep',
+  venue_manager: 'Venue manager / ops',
+  production: 'Production / tech',
+  hospitality_manager: 'Hospitality / F&B',
+  marketing_pr: 'Marketing / PR',
+  billing: 'Billing / AP',
   owner: 'Owner / principal',
   assistant: 'Assistant / coordinator',
-  other_party: 'Other — wrong person on file',
+  security_box: 'Security / box office / door',
+  other_party: 'Other',
 }
+
+/** Non-empty keys in call-flow order (dropdowns). */
+export const CONTACT_MISMATCH_ROLE_ORDER = CONTACT_MISMATCH_CONTEXT_KEYS.filter(
+  (k): k is Exclude<Phase1ContactMismatchContextV3, ''> => k !== '',
+)
 
 export type Phase1PreferredEmailChannelV3 = '' | 'work' | 'personal' | 'billing' | 'production'
 
@@ -794,9 +837,9 @@ export type BookingIntakeVenueDataV3 = {
   phone_confirmed: Phase1PhoneConfirmedV3
   email_confirmed: Phase1EmailConfirmedV3
   company_confirmed: Phase1CompanyConfirmedV3
-  /** Substantive: who we’re actually talking to when `confirmed_contact === 'no_different_person'`. */
+  /** Substantive: their role/title when `confirmed_contact === 'no_different_person'`. */
   contact_mismatch_context: Phase1ContactMismatchContextV3
-  /** Required in UI when `confirmed_contact === 'no_different_person'` — who / role / context in plain language. */
+  /** Their name on the call when not the contact on file (single line). */
   contact_mismatch_note: string
   /** Preferred channel for the email we’ll use (when multiple in play). */
   preferred_email_channel: Phase1PreferredEmailChannelV3
@@ -1483,7 +1526,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     company_confirmed: parsePhase1Enum(o.company_confirmed, ['', 'confirmed', 'update_needed'], ''),
     contact_mismatch_context: parsePhase1Enum(
       o.contact_mismatch_context,
-      ['', 'billing', 'production', 'owner', 'assistant', 'other_party'],
+      [...CONTACT_MISMATCH_CONTEXT_KEYS],
       '',
     ),
     contact_mismatch_note: typeof o.contact_mismatch_note === 'string' ? o.contact_mismatch_note : '',
@@ -1962,13 +2005,14 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
 
 export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): string[] {
   const lines: string[] = []
-  if (v.confirmed_contact === 'no_different_person' && v.contact_mismatch_context) {
-    lines.push(
-      `Contact context: ${CONTACT_MISMATCH_CONTEXT_LABELS[v.contact_mismatch_context as Exclude<Phase1ContactMismatchContextV3, ''>]}`,
-    )
-  }
-  if (v.contact_mismatch_note.trim()) {
-    lines.push(`Contact note: ${v.contact_mismatch_note.trim()}`)
+  if (v.confirmed_contact === 'no_different_person') {
+    const name = v.contact_mismatch_note.trim()
+    const roleKey = v.contact_mismatch_context
+    const role =
+      roleKey ? CONTACT_MISMATCH_CONTEXT_LABELS[roleKey as Exclude<Phase1ContactMismatchContextV3, ''>] : ''
+    if (name && role) lines.push(`On-call: ${name} (${role})`)
+    else if (name) lines.push(`On-call name: ${name}`)
+    else if (role) lines.push(`On-call role: ${role}`)
   }
   if (v.call_vibe) {
     lines.push(`Call energy: ${CALL_VIBE_LABELS[v.call_vibe as Exclude<Phase1CallVibeV3, ''>]}`)

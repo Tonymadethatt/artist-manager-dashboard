@@ -31,12 +31,11 @@ import { cn } from '@/lib/utils'
 import {
   ADDRESS_DETAIL_LEVEL_KEYS,
   ADDRESS_DETAIL_LEVEL_LABELS,
-  CALL_VIBE_KEYS,
-  CALL_VIBE_LABELS,
   CAPACITY_RANGE_OPTIONS,
   CLOSE_ARTIFACT_TAG_KEYS,
   CLOSE_ARTIFACT_TAG_LABELS,
   CONTACT_MISMATCH_CONTEXT_LABELS,
+  CONTACT_MISMATCH_ROLE_ORDER,
   computeOvernightEvent,
   computeSetLengthHours,
   EQUIPMENT_CAPABILITY_KEYS,
@@ -160,9 +159,10 @@ import {
 } from '@/components/ui/select'
 import {
   IntakeBranchPanel,
+  IntakeCallVibeChips,
   IntakeCompactChipRow,
   IntakeCompactDual,
-  IntakeScriptCaptureTabs,
+  IntakeLiveScriptCaptureStack,
   IntakeYesNoPair,
 } from '@/pages/booking-intake/intakeLivePrimitives'
 
@@ -175,6 +175,28 @@ const LIVE_PHASES = [
   { id: '6', label: 'Commitments' },
   { id: '7', label: 'Close' },
 ] as const
+
+/** Map saved venue contact role text to intake mismatch title enum (best effort). */
+function mapContactRoleToMismatchContext(
+  role: string | null | undefined,
+): Exclude<Phase1ContactMismatchContextV3, ''> {
+  const r = (role ?? '').toLowerCase()
+  if (!r) return 'other_party'
+  if (/(billing|\bap\b|a\/p|accounts? payable)/i.test(r)) return 'billing'
+  if (/(production|technical|\ba1\b|audio)/i.test(r)) return 'production'
+  if (/(owner|principal|partner)/i.test(r)) return 'owner'
+  if (/(assistant|coordinator|admin)/i.test(r)) return 'assistant'
+  if (/(buyer|booker|talent)/i.test(r)) return 'talent_buyer'
+  if (/(planner|producer)/i.test(r)) return 'event_planner'
+  if (/(day[- ]of|showcaller)/i.test(r)) return 'day_of_coordinator'
+  if (/wedding/i.test(r)) return 'wedding_planner'
+  if (/(agency|rep)/i.test(r)) return 'agency_rep'
+  if (/(venue|manager|\bgm\b|operations)/i.test(r)) return 'venue_manager'
+  if (/(hospitality|f&b|fb\b|catering)/i.test(r)) return 'hospitality_manager'
+  if (/(marketing|\bpr\b|public relations)/i.test(r)) return 'marketing_pr'
+  if (/(security|door|box office)/i.test(r)) return 'security_box'
+  return 'other_party'
+}
 
 const INQUIRY_OPTIONS: { value: InquirySourceV3; label: string }[] = [
   { value: 'instagram_dm', label: 'Instagram DM' },
@@ -505,8 +527,9 @@ export default function BookingIntakePage() {
   const [endCallBusy, setEndCallBusy] = useState(false)
   const [importBusyKey, setImportBusyKey] = useState<string | null>(null)
   const [importBanner, setImportBanner] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
-  const [liveUiTab, setLiveUiTab] = useState<'script' | 'capture'>('script')
   const [advanceNudge, setAdvanceNudge] = useState<string | null>(null)
+  /** Live 1A: user chose “Add new” for different-person flow (skip venue contact chips). */
+  const [mismatchAddNewChosen, setMismatchAddNewChosen] = useState(false)
 
   const selectedRow = useMemo(
     () => booking.intakes.find(i => i.id === selectedId) ?? null,
@@ -612,6 +635,40 @@ export default function BookingIntakePage() {
       setContactsForVenue((rows ?? []) as Contact[])
     })()
   }, [data?.existing_venue_id])
+
+  /** Venue contacts excluding the intake’s primary selected contact — candidates for “who’s on the line”. */
+  const otherVenueContactsForMismatch = useMemo(() => {
+    if (!data?.existing_venue_id) return []
+    const sid = data.selected_contact_id
+    return contactsForVenue.filter(c => (sid ? c.id !== sid : true))
+  }, [data?.existing_venue_id, data?.selected_contact_id, contactsForVenue])
+
+  useEffect(() => {
+    if (data?.confirmed_contact !== 'no_different_person') setMismatchAddNewChosen(false)
+  }, [data?.confirmed_contact])
+
+  const live1aShowVenueContactPick = useMemo(() => {
+    if (!data || data.view_section !== '1A' || data.confirmed_contact !== 'no_different_person') return false
+    return (
+      otherVenueContactsForMismatch.length > 0 &&
+      !mismatchAddNewChosen &&
+      !data.contact_mismatch_note.trim() &&
+      !data.contact_mismatch_context.trim()
+    )
+  }, [
+    data,
+    data?.view_section,
+    data?.confirmed_contact,
+    data?.contact_mismatch_note,
+    data?.contact_mismatch_context,
+    otherVenueContactsForMismatch,
+    mismatchAddNewChosen,
+  ])
+
+  const live1aShowMismatchForm = useMemo(() => {
+    if (!data || data.view_section !== '1A') return false
+    return data.confirmed_contact === 'no_different_person' && !live1aShowVenueContactPick
+  }, [data, data?.view_section, data?.confirmed_contact, live1aShowVenueContactPick])
 
   const filteredVenues = useMemo(() => {
     const q = venueSearch.trim().toLowerCase()
@@ -1179,10 +1236,14 @@ export default function BookingIntakePage() {
     if (v === '7C') return
 
     if (v === '1A' && data.confirmed_contact === 'no_different_person') {
-      const gaps: string[] = []
-      if (!data.contact_mismatch_context.trim()) gaps.push('Select who you’re actually speaking with.')
-      if (!data.contact_mismatch_note.trim()) gaps.push('Add a short note (who / role).')
-      setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
+      if (live1aShowVenueContactPick) {
+        setAdvanceNudge('Pick who is on the line, or Add new.')
+      } else {
+        const gaps: string[] = []
+        if (!data.contact_mismatch_note.trim()) gaps.push('Enter the caller’s name.')
+        if (!data.contact_mismatch_context.trim()) gaps.push('Select their title / role.')
+        setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
+      }
     } else {
       setAdvanceNudge(null)
     }
@@ -1213,7 +1274,7 @@ export default function BookingIntakePage() {
         booking.updateVenueData(selectedId, { last_active_section: v, view_section: v })
       }
     }
-  }, [selectedId, data, booking, pathSections])
+  }, [selectedId, data, booking, pathSections, live1aShowVenueContactPick])
 
   const handleLiveBack = useCallback(() => {
     if (!selectedId || !data) return
@@ -1254,7 +1315,6 @@ export default function BookingIntakePage() {
 
   useEffect(() => {
     if (!data || data.session_mode !== 'live_call') return
-    setLiveUiTab('script')
     setAdvanceNudge(null)
   }, [data?.view_section, data?.session_mode])
 
@@ -1716,7 +1776,7 @@ export default function BookingIntakePage() {
     if (s === '7C') return talking7c
     if (s.startsWith('__stub_'))
       return `This phase isn’t wired yet — use the sidebar to stay on an earlier step.`
-    return `Work through ${liveSectionTitle(s)} with the client, then capture the details on the Capture tab.`
+    return `Work through ${liveSectionTitle(s)} with the client, then capture the details in the section below.`
   })()
 
   const depositOptions: { value: Phase5DepositPercentV3; label: string }[] = [
@@ -2103,17 +2163,19 @@ export default function BookingIntakePage() {
           </div>
         </div>
       ) : data.session_mode === 'live_call' ? (
-        <div className="flex-1 flex min-h-0 relative">
-          <aside className="w-[248px] shrink-0 border-r border-neutral-800 flex flex-col py-3 px-2 bg-neutral-950">
-            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-2">Call</p>
-            <nav className="space-y-0.5 flex-1">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 relative">
+          <aside className="w-full md:w-[248px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 flex flex-col py-2 md:py-3 px-2 bg-neutral-950">
+            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-1.5 md:mb-2 shrink-0">
+              Call
+            </p>
+            <nav className="flex md:flex-col flex-row gap-0.5 md:space-y-0.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0 -mx-0.5 px-0.5 md:mx-0 md:px-0 flex-1 md:min-h-0">
               {LIVE_PHASES.map((ph, idx) => (
                 <button
                   key={ph.id}
                   type="button"
                   onClick={() => handleJumpPhase(idx)}
                   className={cn(
-                    'w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-colors',
+                    'shrink-0 md:w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-colors',
                     idx === viewPhaseIndex
                       ? 'bg-neutral-100 text-neutral-950 font-semibold'
                       : 'text-neutral-400 hover:bg-neutral-900/80 hover:text-neutral-200',
@@ -2131,24 +2193,20 @@ export default function BookingIntakePage() {
             </nav>
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
-            <div className="flex-1 overflow-y-auto flex justify-center p-6 pb-24">
+            <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-4 pb-24 sm:p-6 items-start">
               <div
                 key={data.view_section}
-                className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
+                className="w-full max-w-2xl shrink-0 rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 sm:p-5 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
               >
-                <IntakeScriptCaptureTabs
-                  tab={liveUiTab}
-                  onTabChange={setLiveUiTab}
+                <IntakeLiveScriptCaptureStack
+                  stepTitle={liveSectionTitle(data.view_section)}
                   script={
-                    <p className="text-sm text-neutral-200 leading-relaxed">{liveScriptParagraph}</p>
+                    <p className="text-[15px] sm:text-sm text-neutral-100 leading-relaxed">{liveScriptParagraph}</p>
                   }
                   capture={
                     <>
                       {data.view_section.startsWith('__stub_') ? (
                         <>
-                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
-                            {LIVE_PHASES[viewPhaseIndex]?.label ?? 'Phase'}
-                          </p>
                           <p className="text-sm text-neutral-300">
                             This part of the call flow is not built yet. Use Return or the sidebar to go back to
                             Opening.
@@ -2156,106 +2214,133 @@ export default function BookingIntakePage() {
                         </>
                       ) : data.view_section === '1A' ? (
                         <>
-                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
-                            Section 1A · The greeting
-                          </p>
-                          <div className="border-t border-white/[0.06] pt-3 space-y-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Speaking with the right person?</Label>
-                              <IntakeYesNoPair
-                                value={data.confirmed_contact}
-                                onChange={v =>
-                                  patch(
-                                    v === 'yes'
-                                      ? {
-                                          confirmed_contact: v,
-                                          contact_mismatch_context: '',
-                                          contact_mismatch_note: '',
+                          <div className="space-y-3">
+                            <div className="space-y-1.5 min-w-0">
+                              <Label className="text-neutral-400 text-xs">
+                                Speaking with the right person?
+                              </Label>
+                              <div className="flex min-w-0 flex-col gap-3 sm:gap-2 lg:flex-row lg:flex-wrap lg:items-end">
+                                <div className="shrink-0">
+                                  <IntakeYesNoPair
+                                    value={data.confirmed_contact}
+                                    onChange={v => {
+                                      setMismatchAddNewChosen(false)
+                                      patch(
+                                        v === 'yes'
+                                          ? {
+                                              confirmed_contact: v,
+                                              contact_mismatch_context: '',
+                                              contact_mismatch_note: '',
+                                            }
+                                          : {
+                                              confirmed_contact: v,
+                                              contact_mismatch_context: '',
+                                              contact_mismatch_note: '',
+                                            },
+                                      )
+                                    }}
+                                    yesValue="yes"
+                                    noValue="no_different_person"
+                                    yesLabel="Yes"
+                                    noLabel="Different person"
+                                  />
+                                </div>
+                                {live1aShowVenueContactPick ? (
+                                  <div className="flex min-w-0 flex-wrap items-end gap-1.5">
+                                    {otherVenueContactsForMismatch.map(c => (
+                                      <button
+                                        key={c.id}
+                                        type="button"
+                                        title={c.role ? `${c.name} · ${c.role}` : c.name}
+                                        onClick={() => {
+                                          setMismatchAddNewChosen(false)
+                                          patch({
+                                            contact_mismatch_note: c.name,
+                                            contact_mismatch_context: mapContactRoleToMismatchContext(c.role),
+                                          })
+                                        }}
+                                        className={cn(
+                                          'max-w-[9.5rem] truncate rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                          'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/[0.14] hover:text-neutral-100',
+                                        )}
+                                      >
+                                        {c.name}
+                                      </button>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMismatchAddNewChosen(true)
+                                        patch({ contact_mismatch_context: '', contact_mismatch_note: '' })
+                                      }}
+                                      className={cn(
+                                        'rounded-md border border-dashed border-white/[0.18] bg-neutral-900/30 px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200',
+                                      )}
+                                    >
+                                      Add new
+                                    </button>
+                                  </div>
+                                ) : null}
+                                {live1aShowMismatchForm ? (
+                                  <>
+                                    <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[6.5rem] sm:flex-initial sm:w-36">
+                                      <Label className="text-neutral-400 text-[10px] sm:text-xs">Name</Label>
+                                      <Input
+                                        className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                        value={data.contact_mismatch_note}
+                                        onChange={e => patch({ contact_mismatch_note: e.target.value })}
+                                        placeholder="Their name"
+                                        autoComplete="name"
+                                        aria-label="Name of person on the call"
+                                      />
+                                    </div>
+                                    <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[11rem] sm:max-w-md sm:flex-1">
+                                      <Label className="text-neutral-400 text-[10px] sm:text-xs">Title</Label>
+                                      <Select
+                                        value={
+                                          data.contact_mismatch_context.trim()
+                                            ? data.contact_mismatch_context
+                                            : '__none__'
                                         }
-                                      : { confirmed_contact: v },
-                                  )
-                                }
-                                yesValue="yes"
-                                noValue="no_different_person"
-                                yesLabel="Yes"
-                                noLabel="Different person"
-                              />
+                                        onValueChange={v =>
+                                          patch({
+                                            contact_mismatch_context:
+                                              v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                                          })
+                                        }
+                                      >
+                                        <SelectTrigger
+                                          className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                          aria-label="Their title or role"
+                                        >
+                                          <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
+                                            <SelectItem key={key} value={key}>
+                                              {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </>
+                                ) : null}
+                              </div>
                             </div>
-                            <IntakeBranchPanel
-                              open={data.confirmed_contact === 'no_different_person'}
-                              title="Not the contact on file"
-                            >
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Who are we actually speaking with?</Label>
-                                <Select
-                                  value={data.contact_mismatch_context.trim() ? data.contact_mismatch_context : '__none__'}
-                                  onValueChange={v =>
-                                    patch({
-                                      contact_mismatch_context:
-                                        v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue placeholder="Select" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">—</SelectItem>
-                                    {(
-                                      [
-                                        'billing',
-                                        'production',
-                                        'owner',
-                                        'assistant',
-                                        'other_party',
-                                      ] as const satisfies readonly Phase1ContactMismatchContextV3[]
-                                    ).map(key => (
-                                        <SelectItem key={key} value={key}>
-                                          {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Quick note (required)</Label>
-                                <Textarea
-                                  className="min-h-[72px] border-neutral-800 bg-neutral-950/80 text-sm"
-                                  value={data.contact_mismatch_note}
-                                  onChange={e => patch({ contact_mismatch_note: e.target.value })}
-                                  placeholder="Name, role, how they relate to the booking…"
-                                />
-                              </div>
-                            </IntakeBranchPanel>
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               <Label className="text-neutral-400 text-xs">Call energy</Label>
-                              <Select
-                                value={data.call_vibe.trim() ? data.call_vibe : '__none__'}
-                                onValueChange={v =>
-                                  patch({ call_vibe: v === '__none__' ? '' : (v as BookingIntakeVenueDataV3['call_vibe']) })
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {CALL_VIBE_KEYS.filter(k => k !== '').map(key => (
-                                    <SelectItem key={key} value={key}>
-                                      {CALL_VIBE_LABELS[key]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <IntakeCallVibeChips
+                                value={data.call_vibe}
+                                onChange={v => patch({ call_vibe: v })}
+                              />
                             </div>
                           </div>
                         </>
                       ) : data.view_section === '1B' ? (
                         <>
-                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
-                            Section 1B · Confirm what you know
-                          </p>
-                          <div className="border-t border-white/[0.06] pt-3 space-y-4">
+                          <div className="space-y-4">
                             <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Phone</Label>
                               <Input
@@ -2367,7 +2452,6 @@ export default function BookingIntakePage() {
                         </>
                       ) : data.view_section === '2A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 2A · Event identity</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same details for all shows</span>
@@ -2529,7 +2613,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '2B' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 2B · When</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same schedule for all shows</span>
@@ -2627,7 +2710,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '2C' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 2C · Where</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same location for all shows</span>
@@ -2819,7 +2901,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '2D' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 2D · Scale</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same capacity for all shows</span>
@@ -2942,7 +3023,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '3A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3A · Role &amp; slot</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same role &amp; set for all shows</span>
@@ -3069,7 +3149,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '3B' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3B · Music &amp; vibe</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same music details for all shows</span>
@@ -3163,7 +3242,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '3C' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3C · Other performers</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same lineup context for all shows</span>
@@ -3296,7 +3374,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4A · Equipment</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same equipment details for all shows</span>
@@ -3373,7 +3450,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4B' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4B · On-site contact</p>
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Same as main contact?</Label>
                       <IntakeYesNoPair
@@ -3464,9 +3540,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4C' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">
-                      Section 4C · Load-in &amp; soundcheck
-                    </p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same load-in plan for all shows</span>
@@ -3565,7 +3638,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4D' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4D · Parking &amp; access</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same parking / access for all shows</span>
@@ -3657,7 +3729,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4E' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4E · Travel &amp; lodging</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same travel details for all shows</span>
@@ -3788,7 +3859,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5A · Pricing setup</p>
                     {!catalogHasMinimumForDealLogging(pricingCatalog) ? (
                       <p className="text-sm text-amber-200/90 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2">
                         Add at least one package or hourly rate in Earnings → Pricing so quotes can run here.
@@ -3972,7 +4042,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5B' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5B · Add-ons &amp; adjustments</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const inp = buildPriceInputForShow(sd, pricingCatalog)
@@ -4129,7 +4198,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5C' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5C · The number</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const inp = buildPriceInputForShow(sd, pricingCatalog)
@@ -4240,7 +4308,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5D' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5D · Deposit &amp; payment</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const total = totalUsdForShow(sd)
@@ -4368,7 +4435,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5E' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5E · Invoicing</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Invoice to main contact?</Label>
                       <ToggleN
@@ -4441,7 +4507,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '6A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 6A · Venue promise lines</p>
                     <p className="text-[11px] text-neutral-500">
                       Quick taps only — confirm what you discussed; leave lines unset or mark not discussed. Items with
                       an <span className="text-amber-500/90">Auto</span> tag were prefilled from earlier sections.
@@ -4512,7 +4577,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '7A' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7A · Next steps</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Agreement</Label>
                       <ToggleN
@@ -4558,7 +4622,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '7B' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7B · Follow-ups</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Follow-ups?</Label>
                       <ToggleN
@@ -4615,7 +4678,6 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '7C' ? (
                   <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7C · End call</p>
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Call completed?</Label>
                       <Select
@@ -4730,17 +4792,19 @@ export default function BookingIntakePage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex min-h-0">
-          <aside className="w-[248px] shrink-0 border-r border-neutral-800 flex flex-col py-3 px-2 bg-neutral-950">
-            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-2">Post-call</p>
-            <nav className="space-y-0.5 flex-1 overflow-y-auto">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0">
+          <aside className="w-full md:w-[248px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 flex flex-col py-2 md:py-3 px-2 bg-neutral-950">
+            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-1.5 md:mb-2 shrink-0">
+              Post-call
+            </p>
+            <nav className="flex md:flex-col flex-row gap-0.5 md:space-y-0.5 overflow-x-auto md:overflow-y-auto md:overflow-x-visible pb-1 md:pb-0 flex-1 md:min-h-0">
               {POST_CALL_SECTION_ORDER.map(id => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => patch({ view_section: id })}
                   className={cn(
-                    'w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-colors',
+                    'shrink-0 md:w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-colors',
                     postCallSection === id
                       ? 'bg-neutral-100 text-neutral-950 font-semibold'
                       : 'text-neutral-400 hover:bg-neutral-900/80 hover:text-neutral-200',
@@ -4753,10 +4817,10 @@ export default function BookingIntakePage() {
             </nav>
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="flex-1 overflow-y-auto flex justify-center p-6 pb-24">
+            <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-4 pb-24 sm:p-6 items-start">
               <div
                 key={postCallSection}
-                className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
+                className="w-full max-w-2xl shrink-0 rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 sm:p-5 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
               >
                 <div>
                   <p className="text-xs text-neutral-500 uppercase tracking-wide">Phase 8</p>
@@ -4800,14 +4864,44 @@ export default function BookingIntakePage() {
                         onChange={e => patch({ contact_name: e.target.value })}
                         placeholder="Name on the account"
                       />
-                      <div className="space-y-1.5 pt-1">
-                        <Label className="text-neutral-400 text-xs">Who / role (from call)</Label>
-                        <Textarea
-                          className="min-h-[64px] border-neutral-800 bg-neutral-950/80 text-sm"
-                          value={data.contact_mismatch_note}
-                          onChange={e => patch({ contact_mismatch_note: e.target.value })}
-                          placeholder="Context you captured live"
-                        />
+                      <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 sm:items-end">
+                        <div className="space-y-1.5 min-w-0">
+                          <Label className="text-neutral-400 text-xs">On-call name</Label>
+                          <Input
+                            className="h-10 border-neutral-800 bg-neutral-950/80 text-sm"
+                            value={data.contact_mismatch_note}
+                            onChange={e => patch({ contact_mismatch_note: e.target.value })}
+                            placeholder="Name they gave on the call"
+                          />
+                        </div>
+                        <div className="space-y-1.5 min-w-0">
+                          <Label className="text-neutral-400 text-xs">Title</Label>
+                          <Select
+                            value={
+                              data.contact_mismatch_context.trim()
+                                ? data.contact_mismatch_context
+                                : '__none__'
+                            }
+                            onValueChange={v =>
+                              patch({
+                                contact_mismatch_context:
+                                  v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80 text-sm">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">—</SelectItem>
+                              {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
+                                <SelectItem key={key} value={key}>
+                                  {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </div>
                   ) : null}

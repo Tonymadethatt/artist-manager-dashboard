@@ -69,6 +69,7 @@ import {
   normalizeTableBlock,
 } from '@/lib/email/customEmailBlocks'
 import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
+import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 
 const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
@@ -1285,36 +1286,42 @@ export default function EmailTemplates() {
                 </div>
                 <div>
                   <p className={EYEBROW}>Subject</p>
-                  <Input
+                  <VariableSlashTextarea
                     value={customSubjectDraft}
-                    onChange={e => setCustomSubjectDraft(e.target.value)}
-                    placeholder="Use merge tokens like {{venue.name}}"
-                    className="text-sm mt-1"
+                    onChange={setCustomSubjectDraft}
+                    variableKeys={[...mergeKeyOptions]}
+                    placeholder="e.g. Update from {{profile.artist_name}} — type / to insert a field"
+                    rows={2}
+                    minHeightClass="min-h-[2.75rem]"
+                    className="mt-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 shadow-none focus-visible:ring-1 focus-visible:ring-neutral-500"
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
-                    Allowed tokens: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                    Type / for the variable menu. Allowed: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                    Shortcuts also work: {'{{firstName}}'}, {'{{client_name}}'} → recipient first name.
                   </p>
                 </div>
                 <div>
                   <p className={EYEBROW}>Opening line</p>
-                  <Input
+                  <VariableSlashTextarea
                     value={customBlocksDraft.greeting ?? ''}
-                    onChange={e => {
-                      const v = e.target.value
+                    onChange={v => {
                       setCustomBlocksDraft(prev => ({
                         ...prev,
                         greeting: v === '' ? undefined : v,
                       }))
                     }}
+                    variableKeys={[...mergeKeyOptions]}
                     placeholder={
                       activeGroup === 'client'
-                        ? 'Default: Hi + contact first name'
-                        : 'Default: Hey {{profile.artist_name}},'
+                        ? 'Hi {{recipient.firstName}},'
+                        : 'Hey {{profile.artist_name}},'
                     }
-                    className="text-sm mt-1"
+                    rows={2}
+                    minHeightClass="min-h-[2.75rem]"
+                    className="mt-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 shadow-none focus-visible:ring-1 focus-visible:ring-neutral-500"
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
-                    Optional. Same merge tokens as subject. Leave empty for the default.
+                    Optional. Type / to insert. Leave empty to use the built-in default (client: Hi + first name). For an explicit merge, use {'{{recipient.firstName}}'} (or {'{{firstName}}'} / {'{{client_name}}'}).
                   </p>
                 </div>
                 {selectedCustomRow.audience === 'venue' && (

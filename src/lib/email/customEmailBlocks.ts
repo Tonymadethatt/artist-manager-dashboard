@@ -110,6 +110,15 @@ export function defaultCustomBlocksDoc(): CustomEmailBlocksDoc {
   return { version: 1, blocks: [{ kind: 'prose', title: null, body: '' }] }
 }
 
+/** Defaults when inserting a new row: opening line includes merge-safe recipient / artist greeting. */
+export function defaultCustomBlocksDocForAudience(audience: 'venue' | 'artist'): CustomEmailBlocksDoc {
+  const base = defaultCustomBlocksDoc()
+  if (audience === 'venue') {
+    return { ...base, greeting: 'Hi {{recipient.firstName}},' }
+  }
+  return { ...base, greeting: 'Hey {{profile.artist_name}},' }
+}
+
 export type CustomTableBlock = Extract<CustomEmailBlock, { kind: 'table' }>
 
 /** Ensures every row has exactly `headers.length` string cells (pads with '' or truncates). */
