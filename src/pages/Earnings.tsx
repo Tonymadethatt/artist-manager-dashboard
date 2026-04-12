@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useBookingIntakes } from '@/hooks/useBookingIntakes'
+import { useBookingIntakes, isV3IntakeRow } from '@/hooks/useBookingIntakes'
 import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
 import { mapShowBundleToEarningsImport } from '@/lib/intake/mapIntakeToDealForm'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -674,6 +674,7 @@ export default function Earnings() {
   const { requests: bookingRequests, loading: bookingRequestsLoading, deleteRequest: deleteBookingRequest } = useBookingRequests()
   const { refreshNavBadges } = useNavBadges()
   const bookingIntakes = useBookingIntakes()
+  const v3Intakes = useMemo(() => bookingIntakes.intakes.filter(isV3IntakeRow), [bookingIntakes.intakes])
   const dealIntakeLinkRef = useRef<{ showId: string } | null>(null)
   const [dealIntakePickerOpen, setDealIntakePickerOpen] = useState(false)
   const [earningsSection, setEarningsSection] = useState<'deals' | 'pricing'>(() =>
@@ -2239,14 +2240,17 @@ export default function Earnings() {
         onOpenChange={setDealIntakePickerOpen}
         title="Import deal from intake"
         mode="deal"
-        intakes={bookingIntakes.intakes}
+        intakes={v3Intakes}
         showsByIntake={bookingIntakes.showsByIntake}
         loading={bookingIntakes.loading}
         onPickVenue={() => {}}
         onPickDeal={(intakeId, showId) => {
           const show = bookingIntakes.showsByIntake[intakeId]?.find(s => s.id === showId)
           if (!show) return
-          const r = mapShowBundleToEarningsImport(show.show_data, pricingCatalog.doc)
+          const intakeRow = bookingIntakes.intakes.find(i => i.id === intakeId)
+          const venueMeta =
+            intakeRow && isV3IntakeRow(intakeRow) ? bookingIntakes.parseVenue(intakeRow) : null
+          const r = mapShowBundleToEarningsImport(show.show_data, pricingCatalog.doc, venueMeta)
           setForm({ ...EMPTY_FORM, ...r.form })
           setPromisePresets(r.promisePresets)
           setPromiseCustomLines([''])

@@ -2,18 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import {
-  emptyShowBundle,
-  emptyVenueBundle,
-  parseShowBundle,
-  parseVenueBundle,
-  type ShowIntakeBundle,
-  type VenueIntakeBundle,
-} from '@/lib/intake/intakePayload'
+  emptyShowDataV3,
+  emptyVenueDataV3,
+  INTAKE_SCHEMA_VERSION_V3,
+  parseShowDataV3,
+  parseVenueDataV3,
+  type BookingIntakeShowDataV3,
+  type BookingIntakeVenueDataV3,
+} from '@/lib/intake/intakePayloadV3'
 
 export type BookingIntakeRow = Database['public']['Tables']['booking_intakes']['Row']
 export type BookingIntakeShowRow = Database['public']['Tables']['booking_intake_shows']['Row']
 
 const DEBOUNCE_MS = 400
+
+export function isV3IntakeRow(row: BookingIntakeRow): boolean {
+  return row.schema_version >= INTAKE_SCHEMA_VERSION_V3
+}
+
+type IntakePending = { venue?: BookingIntakeVenueDataV3; title?: string }
 
 export function useBookingIntakes() {
   const [intakes, setIntakes] = useState<BookingIntakeRow[]>([])
@@ -21,9 +28,8 @@ export function useBookingIntakes() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  type IntakePending = { venue?: VenueIntakeBundle; title?: string }
   const pendingIntakeRef = useRef<Map<string, IntakePending>>(new Map())
-  const pendingShowRef = useRef<Map<string, ShowIntakeBundle>>(new Map())
+  const pendingShowRef = useRef<Map<string, BookingIntakeShowDataV3>>(new Map())
   const timersRef = useRef<{
     intake: ReturnType<typeof setTimeout> | null
     show: ReturnType<typeof setTimeout> | null
@@ -84,17 +90,20 @@ export function useBookingIntakes() {
     }
   }, [load])
 
-  const flushIntake = useCallback(async (intakeId: string) => {
-    const pending = pendingIntakeRef.current.get(intakeId)
-    if (!pending || (pending.venue === undefined && pending.title === undefined)) return
-    pendingIntakeRef.current.delete(intakeId)
-    const patch: Record<string, unknown> = {}
-    if (pending.venue !== undefined) patch.venue_data = pending.venue as unknown as Record<string, unknown>
-    if (pending.title !== undefined) patch.title = pending.title
-    const { error: up } = await supabase.from('booking_intakes').update(patch).eq('id', intakeId)
-    if (up) setError(up.message)
-    else await load()
-  }, [load])
+  const flushIntake = useCallback(
+    async (intakeId: string) => {
+      const pending = pendingIntakeRef.current.get(intakeId)
+      if (!pending || (pending.venue === undefined && pending.title === undefined)) return
+      pendingIntakeRef.current.delete(intakeId)
+      const patch: Record<string, unknown> = { schema_version: INTAKE_SCHEMA_VERSION_V3 }
+      if (pending.venue !== undefined) patch.venue_data = pending.venue as unknown as Record<string, unknown>
+      if (pending.title !== undefined) patch.title = pending.title
+      const { error: up } = await supabase.from('booking_intakes').update(patch).eq('id', intakeId)
+      if (up) setError(up.message)
+      else await load()
+    },
+    [load],
+  )
 
   const scheduleIntakeSave = useCallback(
     (intakeId: string) => {
@@ -107,12 +116,40 @@ export function useBookingIntakes() {
     [flushIntake],
   )
 
-  const updateVenueBundle = useCallback(
-    (intakeId: string, bundle: VenueIntakeBundle) => {
-      const cur = pendingIntakeRef.current.get(intakeId) ?? {}
-      pendingIntakeRef.current.set(intakeId, { ...cur, venue: bundle })
+  const flushIntakeImmediate = useCallback(
+    async (intakeId: string) => {
+      if (timersRef.current.intake) {
+        clearTimeout(timersRef.current.intake)
+        timersRef.current.intake = null
+      }
+      await flushIntake(intakeId)
+    },
+    [flushIntake],
+  )
+
+  const updateVenueData = useCallback(
+    (intakeId: string, patch: Partial<BookingIntakeVenueDataV3>) => {
+      setIntakes(prev => {
+        const row = prev.find(i => i.id === intakeId)
+        if (!row) return prev
+        const cur = parseVenueDataV3(row.venue_data, row.schema_version)
+        const next: BookingIntakeVenueDataV3 = { ...cur, ...patch, _v: 3 }
+        const p = pendingIntakeRef.current.get(intakeId) ?? {}
+        pendingIntakeRef.current.set(intakeId, { ...p, venue: next })
+        return prev.map(i => (i.id === intakeId ? { ...i, venue_data: next as unknown, schema_version: INTAKE_SCHEMA_VERSION_V3 } : i))
+      })
+      scheduleIntakeSave(intakeId)
+    },
+    [scheduleIntakeSave],
+  )
+
+  const replaceVenueData = useCallback(
+    (intakeId: string, data: BookingIntakeVenueDataV3) => {
+      const next = { ...data, _v: 3 as const }
+      const p = pendingIntakeRef.current.get(intakeId) ?? {}
+      pendingIntakeRef.current.set(intakeId, { ...p, venue: next })
       setIntakes(prev =>
-        prev.map(i => (i.id === intakeId ? { ...i, venue_data: bundle as unknown } : i)),
+        prev.map(i => (i.id === intakeId ? { ...i, venue_data: next as unknown, schema_version: INTAKE_SCHEMA_VERSION_V3 } : i)),
       )
       scheduleIntakeSave(intakeId)
     },
@@ -162,14 +199,13 @@ export function useBookingIntakes() {
     [flushShow],
   )
 
-  const updateShowBundle = useCallback(
-    (showId: string, intakeId: string, bundle: ShowIntakeBundle) => {
-      pendingShowRef.current.set(showId, bundle)
+  const updateShowData = useCallback(
+    (showId: string, intakeId: string, data: BookingIntakeShowDataV3) => {
+      const next = { ...data, _v: 3 as const }
+      pendingShowRef.current.set(showId, next)
       setShowsByIntake(prev => ({
         ...prev,
-        [intakeId]: (prev[intakeId] ?? []).map(s =>
-          s.id === showId ? { ...s, show_data: bundle as unknown } : s,
-        ),
+        [intakeId]: (prev[intakeId] ?? []).map(s => (s.id === showId ? { ...s, show_data: next as unknown } : s)),
       }))
       scheduleShowSave(showId, intakeId)
     },
@@ -191,17 +227,37 @@ export function useBookingIntakes() {
     [],
   )
 
+  const flushAllPending = useCallback(async () => {
+    if (timersRef.current.intake) {
+      clearTimeout(timersRef.current.intake)
+      timersRef.current.intake = null
+    }
+    if (timersRef.current.show) {
+      clearTimeout(timersRef.current.show)
+      timersRef.current.show = null
+    }
+    const intakeIds = [...pendingIntakeRef.current.keys()]
+    for (const id of intakeIds) await flushIntake(id)
+    const showIds = [...pendingShowRef.current.keys()]
+    for (const showId of showIds) {
+      const { data: row } = await supabase.from('booking_intake_shows').select('intake_id').eq('id', showId).maybeSingle()
+      const intakeId = row?.intake_id
+      if (intakeId) await flushShow(showId, intakeId)
+    }
+  }, [flushIntake, flushShow])
+
   const createIntake = useCallback(async (): Promise<BookingIntakeRow | null> => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
-    const venuePayload = emptyVenueBundle()
-    const showPayload = emptyShowBundle()
+    const venuePayload = emptyVenueDataV3()
+    const showPayload = emptyShowDataV3(0)
     const { data: intake, error: ie } = await supabase
       .from('booking_intakes')
       .insert({
         user_id: user.id,
-        title: 'New intake',
+        title: 'Booking Intake',
         venue_data: venuePayload as unknown as Database['public']['Tables']['booking_intakes']['Insert']['venue_data'],
+        schema_version: INTAKE_SCHEMA_VERSION_V3,
       })
       .select()
       .single()
@@ -222,6 +278,7 @@ export function useBookingIntakes() {
       .single()
     if (se || !showRow) {
       setError(se?.message ?? 'Could not create show draft')
+      await load()
       return row
     }
     await load()
@@ -237,39 +294,68 @@ export function useBookingIntakes() {
     [load],
   )
 
-  const addShowDraft = useCallback(
-    async (intakeId: string) => {
-      const list = showsByIntake[intakeId] ?? []
-      const nextOrder = list.length === 0 ? 0 : Math.max(...list.map(s => s.sort_order)) + 1
-      const showPayload = emptyShowBundle()
-      const { data, error: ie } = await supabase
+  /** Ensures exactly `count` show rows (sort_order 0..count-1). Creates or deletes as needed. */
+  const ensureShowCount = useCallback(
+    async (intakeId: string, count: 1 | 2 | 3) => {
+      const { data: rows } = await supabase
         .from('booking_intake_shows')
-        .insert({
-          intake_id: intakeId,
-          label: `Show ${list.length + 1}`,
-          sort_order: nextOrder,
-          show_data: showPayload as unknown as Database['public']['Tables']['booking_intake_shows']['Insert']['show_data'],
-        })
-        .select()
-        .single()
-      if (ie || !data) {
-        setError(ie?.message ?? 'Could not add show')
-        return null
+        .select('*')
+        .eq('intake_id', intakeId)
+        .order('sort_order', { ascending: true })
+      const list = (rows ?? []) as BookingIntakeShowRow[]
+      if (list.length === count) return
+
+      if (list.length > count) {
+        for (const s of list.slice(count)) {
+          const { error: de } = await supabase.from('booking_intake_shows').delete().eq('id', s.id)
+          if (de) setError(de.message)
+        }
+      } else {
+        for (let i = list.length; i < count; i++) {
+          const showPayload = emptyShowDataV3(i)
+          const { error: ins } = await supabase.from('booking_intake_shows').insert({
+            intake_id: intakeId,
+            label: `Show ${i + 1}`,
+            sort_order: i,
+            show_data: showPayload as unknown as Database['public']['Tables']['booking_intake_shows']['Insert']['show_data'],
+          })
+          if (ins) setError(ins.message)
+        }
+      }
+
+      const { data: after } = await supabase
+        .from('booking_intake_shows')
+        .select('*')
+        .eq('intake_id', intakeId)
+        .order('sort_order', { ascending: true })
+      const sorted = (after ?? []) as BookingIntakeShowRow[]
+      for (let idx = 0; idx < sorted.length; idx++) {
+        if (sorted[idx].sort_order !== idx) {
+          await supabase.from('booking_intake_shows').update({ sort_order: idx }).eq('id', sorted[idx].id)
+        }
       }
       await load()
-      return data as BookingIntakeShowRow
     },
-    [load, showsByIntake],
+    [load],
   )
 
-  const setImportedDealId = useCallback(async (showId: string, dealId: string | null) => {
-    const { error: up } = await supabase
-      .from('booking_intake_shows')
-      .update({ imported_deal_id: dealId })
-      .eq('id', showId)
-    if (up) setError(up.message)
-    else await load()
-  }, [load])
+  const setImportedDealId = useCallback(
+    async (showId: string, dealId: string | null) => {
+      const { error: up } = await supabase
+        .from('booking_intake_shows')
+        .update({ imported_deal_id: dealId })
+        .eq('id', showId)
+      if (up) setError(up.message)
+      else await load()
+    },
+    [load],
+  )
+
+  const parseVenue = useCallback((row: BookingIntakeRow) => parseVenueDataV3(row.venue_data, row.schema_version), [])
+  const parseShow = useCallback(
+    (row: BookingIntakeShowRow) => parseShowDataV3(row.show_data, row.sort_order),
+    [],
+  )
 
   return {
     intakes,
@@ -277,15 +363,18 @@ export function useBookingIntakes() {
     loading,
     error,
     refetch: load,
-    parseVenue: (row: BookingIntakeRow) => parseVenueBundle(row.venue_data),
-    parseShow: (row: BookingIntakeShowRow) => parseShowBundle(row.show_data),
+    parseVenue,
+    parseShow,
     createIntake,
     deleteIntake,
-    updateVenueBundle,
+    updateVenueData,
+    replaceVenueData,
     updateTitle,
-    updateShowBundle,
+    updateShowData,
     updateShowLabel,
-    addShowDraft,
+    ensureShowCount,
     setImportedDealId,
+    flushIntakeImmediate,
+    flushAllPending,
   }
 }

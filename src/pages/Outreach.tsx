@@ -1,9 +1,9 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { Plus, Search, SlidersHorizontal, Star, Upload } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
-import { useBookingIntakes } from '@/hooks/useBookingIntakes'
+import { useBookingIntakes, isV3IntakeRow } from '@/hooks/useBookingIntakes'
 import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
-import { mapIntakeVenueBundleToVenueRow, intakeContactsForVenue } from '@/lib/intake/mapIntakeToVenue'
+import { mapIntakeVenueDataV3ToVenueRow, intakeContactsFromVenueDataV3 } from '@/lib/intake/mapIntakeToVenue'
 import { supabase } from '@/lib/supabase'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { StatusBadge } from '@/components/outreach/StatusBadge'
@@ -38,6 +38,7 @@ function fmtFollowUp(dateStr: string) {
 
 export default function Outreach() {
   const bookingIntakes = useBookingIntakes()
+  const v3Intakes = useMemo(() => bookingIntakes.intakes.filter(isV3IntakeRow), [bookingIntakes.intakes])
   const { venues, loading, addVenue, updateVenue, deleteVenue } = useVenues()
   const { templates, applyTemplate } = useTaskTemplates()
   const [search, setSearch] = useState('')
@@ -391,15 +392,18 @@ export default function Outreach() {
         onOpenChange={setIntakeVenuePickerOpen}
         title="Import venue from intake"
         mode="venue"
-        intakes={bookingIntakes.intakes}
+        intakes={v3Intakes}
         showsByIntake={bookingIntakes.showsByIntake}
         loading={bookingIntakes.loading}
         onPickVenue={intakeId => {
           const row = bookingIntakes.intakes.find(i => i.id === intakeId)
-          if (!row) return
-          const bundle = bookingIntakes.parseVenue(row)
-          setVenueAddSeed(mapIntakeVenueBundleToVenueRow(bundle))
-          pendingVenueContactsRef.current = intakeContactsForVenue(bundle)
+          if (!row || !isV3IntakeRow(row)) return
+          const v3 = bookingIntakes.parseVenue(row)
+          const shows = bookingIntakes.showsByIntake[intakeId] ?? []
+          const primary = [...shows].sort((a, b) => a.sort_order - b.sort_order)[0]
+          const primarySd = primary ? bookingIntakes.parseShow(primary) : null
+          setVenueAddSeed(mapIntakeVenueDataV3ToVenueRow(v3, primarySd))
+          pendingVenueContactsRef.current = intakeContactsFromVenueDataV3(v3)
           setVenueAddSeedNonce(n => n + 1)
           setAddOpen(true)
         }}

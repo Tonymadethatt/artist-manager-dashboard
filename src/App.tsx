@@ -22,7 +22,7 @@ import VenueEmailAckBridge from '@/pages/public/VenueEmailAckBridge'
 import PerformanceReports from '@/pages/PerformanceReports'
 import ManualShowReport from '@/pages/ManualShowReport'
 import FormPreviews from '@/pages/FormPreviews'
-import IntakeForms from '@/pages/IntakeForms'
+import BookingIntakePage from '@/pages/BookingIntakePage'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -55,6 +55,7 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/performance-report/:token" element={<PerformanceReportForm />} />
         <Route path="/venue-email-ack/:token" element={<VenueEmailAckBridge />} />
+        <Route path="/forms/intake" element={<BookingIntakePage />} />
 
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
@@ -75,7 +76,6 @@ export default function App() {
           <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="/performance-reports/manual" element={<ManualShowReport />} />
           <Route path="/forms/preview" element={<FormPreviews />} />
-          <Route path="/forms/intake" element={<IntakeForms />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
