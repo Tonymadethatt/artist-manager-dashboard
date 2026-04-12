@@ -74,7 +74,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const navContent = (
     <nav className="flex flex-col h-full">
       {/* Wordmark */}
-      <div className="h-12 px-3 flex items-center border-b border-[hsl(var(--sidebar-border))] shrink-0">
+      <div className="h-11 px-3 flex items-center border-b border-[hsl(var(--sidebar-border))] shrink-0">
         <div className="flex items-center justify-between w-full min-w-0">
           <div className="flex flex-col leading-none min-w-0">
             <span className="text-white font-bold text-[13px] tracking-[0.12em] uppercase truncate">
@@ -94,13 +94,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Nav groups */}
-      <div className="flex-1 py-4 px-2 overflow-y-auto space-y-6">
+      <div className="flex-1 py-3 px-2 overflow-y-auto space-y-4">
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
-            <p className="px-2 mb-1.5 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 select-none">
+            <p className="px-2 mb-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 select-none">
               {group.label}
             </p>
-            <div className="space-y-0.5">
+            <div className="space-y-px">
               {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
                 const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
                 return (
@@ -111,7 +111,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={({ isActive }) =>
                       cn(
-                        'relative flex items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-sm transition-all duration-150',
+                        'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-sm transition-all duration-150',
                         (isActive || (to === '/pipeline' && onPipelinePath))
                           ? 'bg-[hsl(var(--sidebar-active))] text-white'
                           : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
@@ -146,7 +146,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={({ isActive }) =>
                         cn(
-                          'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] transition-colors mt-0.5',
+                          'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1 rounded text-[12px] transition-colors mt-px',
                           isActive
                             ? 'text-neutral-200'
                             : 'text-[hsl(var(--sidebar-muted))] hover:text-neutral-300'
@@ -175,13 +175,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Bottom: settings + sign out */}
-      <div className="px-2 pb-4 pt-3 border-t border-[hsl(var(--sidebar-border))] space-y-0.5 shrink-0">
+      <div className="px-2 pb-3 pt-2 border-t border-[hsl(var(--sidebar-border))] space-y-px shrink-0">
         <NavLink
           to="/settings"
           onClick={onClose}
           className={({ isActive }) =>
             cn(
-              'relative flex items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-[12px] font-medium transition-all duration-150',
+              'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] font-medium transition-all duration-150',
               isActive
                 ? 'bg-[hsl(var(--sidebar-active))] text-white'
                 : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
@@ -198,7 +198,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </NavLink>
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-2 pl-2.5 pr-2.5 py-[7px] rounded text-[12px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
+          className="flex w-full items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
         >
           <LogOut className="h-[15px] w-[15px] shrink-0" />
           Sign out
