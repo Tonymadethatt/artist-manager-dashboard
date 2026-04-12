@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils'
 import {
   ADDRESS_DETAIL_LEVEL_KEYS,
   ADDRESS_DETAIL_LEVEL_LABELS,
+  CALL_VIBE_KEYS,
+  CALL_VIBE_LABELS,
   CAPACITY_RANGE_OPTIONS,
   CLOSE_ARTIFACT_TAG_KEYS,
   CLOSE_ARTIFACT_TAG_LABELS,
@@ -103,7 +105,10 @@ import {
   type EquipmentCapabilityIdV3,
   type LoadAccessTagV3,
   type MusicDeliveryV3,
+  type Phase1CompanyConfirmedV3,
   type Phase1ContactMismatchContextV3,
+  type Phase1EmailConfirmedV3,
+  type Phase1PhoneConfirmedV3,
   type Phase1PreferredEmailChannelV3,
   type Phase2SettingV3,
   type Phase3CustomSetlistV3,
@@ -153,6 +158,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  IntakeBranchPanel,
+  IntakeCompactChipRow,
+  IntakeCompactDual,
+  IntakeScriptCaptureTabs,
+  IntakeYesNoPair,
+} from '@/pages/booking-intake/intakeLivePrimitives'
 
 const LIVE_PHASES = [
   { id: '1', label: 'Opening' },
@@ -409,14 +421,14 @@ function GenreChipRow({
     else onChange([...selected, g])
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1">
       {PERFORMANCE_GENRE_VALUES.map(g => (
         <button
           key={g}
           type="button"
           onClick={() => toggle(g)}
           className={cn(
-            'min-h-[44px] px-3 text-sm font-medium rounded-lg border transition-colors',
+            'min-h-[32px] px-2 text-xs font-medium rounded-md border transition-colors',
             selected.includes(g)
               ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
               : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
@@ -429,90 +441,12 @@ function GenreChipRow({
   )
 }
 
-function IdChipRow<T extends string>({
-  label,
-  selected,
-  ids,
-  labels,
-  onChange,
-}: {
-  label: string
-  selected: T[]
-  ids: readonly T[]
-  labels: Record<T, string>
-  onChange: (next: T[]) => void
-}) {
-  const toggle = (id: T) => {
-    if (selected.includes(id)) onChange(selected.filter(x => x !== id))
-    else onChange([...selected, id])
-  }
-  return (
-    <div className="space-y-2">
-      <Label className="text-neutral-400 text-xs">{label}</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {ids.map(id => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => toggle(id)}
-            className={cn(
-              'min-h-[44px] px-3 text-sm font-medium rounded-lg border transition-colors',
-              selected.includes(id)
-                ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-            )}
-          >
-            {labels[id]}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 const COMMISSION_ORDER: CommissionTier[] = ['new_doors', 'kept_doors', 'bigger_doors', 'artist_network']
 
 function commissionLabel(tier: CommissionTier): string {
   const pct = Math.round(COMMISSION_TIER_RATES[tier] * 100)
   const base = COMMISSION_TIER_LABELS[tier]
   return tier === 'artist_network' ? `${base} (0%)` : `${base} (${pct}%)`
-}
-
-function ToggleTwo({
-  value,
-  onChange,
-  a,
-  b,
-}: {
-  value: boolean
-  onChange: (v: boolean) => void
-  a: { id: string; label: string }
-  b: { id: string; label: string }
-}) {
-  return (
-    <div className="flex rounded-lg border border-white/[0.08] overflow-hidden p-0.5 bg-neutral-900/50">
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={cn(
-          'flex-1 min-h-[48px] text-sm font-medium rounded-md transition-colors',
-          !value ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-200',
-        )}
-      >
-        {a.label}
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={cn(
-          'flex-1 min-h-[48px] text-sm font-medium rounded-md transition-colors',
-          value ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-200',
-        )}
-      >
-        {b.label}
-      </button>
-    </div>
-  )
 }
 
 function ToggleN<T extends string>({
@@ -525,14 +459,14 @@ function ToggleN<T extends string>({
   options: { value: T; label: string }[]
 }) {
   return (
-    <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] p-1 bg-neutral-900/50">
+    <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.08] p-0.5 bg-neutral-900/50">
       {options.map(opt => (
         <button
-          key={opt.value}
+          key={String(opt.value)}
           type="button"
           onClick={() => onChange(opt.value)}
           className={cn(
-            'flex-1 min-w-[6.5rem] min-h-[48px] px-2 text-sm font-medium rounded-md transition-colors leading-tight',
+            'min-h-10 px-2.5 text-xs font-medium rounded-md transition-colors leading-tight shrink-0',
             value === opt.value ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-200',
           )}
         >
@@ -571,6 +505,8 @@ export default function BookingIntakePage() {
   const [endCallBusy, setEndCallBusy] = useState(false)
   const [importBusyKey, setImportBusyKey] = useState<string | null>(null)
   const [importBanner, setImportBanner] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [liveUiTab, setLiveUiTab] = useState<'script' | 'capture'>('script')
+  const [advanceNudge, setAdvanceNudge] = useState<string | null>(null)
 
   const selectedRow = useMemo(
     () => booking.intakes.find(i => i.id === selectedId) ?? null,
@@ -1242,6 +1178,15 @@ export default function BookingIntakePage() {
     if (v.startsWith('__stub_')) return
     if (v === '7C') return
 
+    if (v === '1A' && data.confirmed_contact === 'no_different_person') {
+      const gaps: string[] = []
+      if (!data.contact_mismatch_context.trim()) gaps.push('Select who you’re actually speaking with.')
+      if (!data.contact_mismatch_note.trim()) gaps.push('Add a short note (who / role).')
+      setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
+    } else {
+      setAdvanceNudge(null)
+    }
+
     const iv = pathSections.indexOf(v)
     const il = pathSections.indexOf(l)
     if (iv < 0 || il < 0) return
@@ -1306,6 +1251,12 @@ export default function BookingIntakePage() {
     if (!selectedId || !data) return
     booking.updateVenueData(selectedId, { view_section: data.last_active_section })
   }, [selectedId, data, booking])
+
+  useEffect(() => {
+    if (!data || data.session_mode !== 'live_call') return
+    setLiveUiTab('script')
+    setAdvanceNudge(null)
+  }, [data?.view_section, data?.session_mode])
 
   useEffect(() => {
     if (!data || data.session_mode !== 'live_call') return
@@ -1704,6 +1655,61 @@ export default function BookingIntakePage() {
     ? `“${data.contact_name.trim()}, appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
     : `“Appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
 
+  const liveScriptParagraph = useMemo(() => {
+    const s = data.view_section
+    if (s === '1A') return greetingTalking
+    if (s === '1B') return confirmTalking
+    if (s === '2A')
+      return `Walk me through what this night is — type of room, vibe, and whether it has a name yet.`
+    if (s === '2B')
+      return `Lock the calendar date and set start/end; we’ll flag overnights automatically.`
+    if (s === '2C')
+      return `Confirm what you know about the room and mailing address without slowing the call.`
+    if (s === '2D') return `Get a sense of scale — capacity, headcount, or range.`
+    if (s === '3A') return talking3a
+    if (s === '3B') return talking3b
+    if (s === '3C') return talking3c
+    if (s === '4A') return talking4a
+    if (s === '4B') return talking4b
+    if (s === '4C') return talking4c
+    if (s === '4D') return talking4d
+    if (s === '4E') return talking4e
+    if (s === '5A') return talking5a
+    if (s === '5B') return talking5b
+    if (s === '5C') return talking5c
+    if (s === '5D') return talking5d
+    if (s === '5E') return talking5e
+    if (s === '6A')
+      return `${talking6a} We’re looking good — transition to what happens next.`
+    if (s === '7A') return talking7a
+    if (s === '7B') return talking7b
+    if (s === '7C') return talking7c
+    if (s.startsWith('__stub_'))
+      return `This phase isn’t wired yet — use the sidebar to stay on an earlier step.`
+    return `Work through ${liveSectionTitle(s)} with the client, then capture the details on the Capture tab.`
+  }, [
+    data.view_section,
+    greetingTalking,
+    confirmTalking,
+    talking3a,
+    talking3b,
+    talking3c,
+    talking4a,
+    talking4b,
+    talking4c,
+    talking4d,
+    talking4e,
+    talking5a,
+    talking5b,
+    talking5c,
+    talking5d,
+    talking5e,
+    talking6a,
+    talking7a,
+    talking7b,
+    talking7c,
+  ])
+
   const depositOptions: { value: Phase5DepositPercentV3; label: string }[] = [
     { value: 25, label: '25%' },
     { value: 50, label: '50%' },
@@ -1792,7 +1798,7 @@ export default function BookingIntakePage() {
 
             <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Venue source</h2>
-              <ToggleTwo
+              <IntakeCompactDual
                 value={data.venue_source === 'existing'}
                 onChange={v => {
                   if (v) patch({ venue_source: 'existing' })
@@ -1998,7 +2004,7 @@ export default function BookingIntakePage() {
               <div className="space-y-3">
                 <div className="space-y-2">
                   <Label className="text-neutral-400 text-xs">Lead source *</Label>
-                  <ToggleTwo
+                  <IntakeCompactDual
                     value={data.outreach_track === 'community'}
                     onChange={v => patch({ outreach_track: (v ? 'community' : 'pipeline') as OutreachTrack })}
                     a={{ id: 'pipe', label: OUTREACH_TRACK_LABELS.pipeline }}
@@ -2050,7 +2056,7 @@ export default function BookingIntakePage() {
 
             <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Shows on this call</h2>
-              <ToggleTwo
+              <IntakeCompactDual
                 value={data.multi_show}
                 onChange={v => patch({ multi_show: v })}
                 a={{ id: 'single', label: 'Single show' }}
@@ -2119,141 +2125,244 @@ export default function BookingIntakePage() {
             <div className="flex-1 overflow-y-auto flex justify-center p-6 pb-24">
               <div
                 key={data.view_section}
-                className="w-full max-w-2xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-6 space-y-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
+                className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
               >
-                {data.view_section.startsWith('__stub_') ? (
-                  <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">
-                      {LIVE_PHASES[viewPhaseIndex]?.label ?? 'Phase'}
-                    </p>
-                    <p className="text-sm text-neutral-300">
-                      This part of the call flow is not built yet. Use Return or the sidebar to go back to Opening.
-                    </p>
-                  </>
-                ) : data.view_section === '1A' ? (
-                  <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 1A · The greeting</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{greetingTalking}</p>
-                    <div className="border-t border-white/[0.06] pt-4 space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Speaking with the right person?</Label>
-                        <ToggleN
-                          value={data.confirmed_contact}
-                          onChange={v =>
-                            patch(
-                              v === 'yes'
-                                ? { confirmed_contact: v, contact_mismatch_context: '' }
-                                : { confirmed_contact: v },
-                            )
-                          }
-                          options={[
-                            { value: 'yes' as const, label: 'Yes' },
-                            { value: 'no_different_person' as const, label: 'No — different person' },
-                          ]}
-                        />
-                      </div>
-                      {data.confirmed_contact === 'no_different_person' ? (
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Who are we actually speaking with?</Label>
-                          <ToggleN
-                            value={data.contact_mismatch_context}
-                            onChange={v => patch({ contact_mismatch_context: v as Phase1ContactMismatchContextV3 })}
-                            options={(
-                              [
-                                'billing',
-                                'production',
-                                'owner',
-                                'assistant',
-                                'other_party',
-                              ] as const satisfies readonly Phase1ContactMismatchContextV3[]
-                            ).map(key => ({
-                              value: key,
-                              label: CONTACT_MISMATCH_CONTEXT_LABELS[key],
-                            }))}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Call energy</Label>
-                        <ToggleN
-                          value={data.call_vibe}
-                          onChange={v => patch({ call_vibe: v })}
-                          options={[
-                            { value: 'excited' as const, label: 'Excited' },
-                            { value: 'business' as const, label: 'Business' },
-                            { value: 'rushed' as const, label: 'Rushed' },
-                          ]}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Before we get into the fun stuff — just want to make sure I have everything right on my end.
-                    </p>
-                  </>
-                ) : data.view_section === '1B' ? (
-                  <>
-                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 1B · Confirm what you know</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{confirmTalking}</p>
-                    <div className="border-t border-white/[0.06] pt-4 space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Phone?</Label>
-                        <ToggleN
-                          value={data.phone_confirmed}
-                          onChange={v => patch({ phone_confirmed: v })}
-                          options={[
-                            { value: 'confirmed' as const, label: 'Confirmed' },
-                            { value: 'update_needed' as const, label: 'Update needed' },
-                          ]}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Email?</Label>
-                        <ToggleN
-                          value={data.email_confirmed}
-                          onChange={v => patch({ email_confirmed: v })}
-                          options={[
-                            { value: 'confirmed' as const, label: 'Confirmed' },
-                            { value: 'update_needed' as const, label: 'Update needed' },
-                            { value: 'need_to_get' as const, label: 'Need to get' },
-                          ]}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Company?</Label>
-                        <ToggleN
-                          value={data.company_confirmed}
-                          onChange={v => patch({ company_confirmed: v })}
-                          options={[
-                            { value: 'confirmed' as const, label: 'Confirmed' },
-                            { value: 'update_needed' as const, label: 'Update needed' },
-                          ]}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-neutral-400 text-xs">Primary email use (best for paperwork)</Label>
-                        <ToggleN
-                          value={data.preferred_email_channel}
-                          onChange={v => patch({ preferred_email_channel: v as Phase1PreferredEmailChannelV3 })}
-                          options={(
-                            ['work', 'personal', 'billing', 'production'] as const satisfies readonly Phase1PreferredEmailChannelV3[]
-                          ).map(key => ({
-                            value: key,
-                            label: PREFERRED_EMAIL_CHANNEL_LABELS[key],
-                          }))}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Alright, we’re good. So tell me about this event — what are we working with?
-                    </p>
-                  </>
-                ) : data.view_section === '2A' ? (
+                <IntakeScriptCaptureTabs
+                  tab={liveUiTab}
+                  onTabChange={setLiveUiTab}
+                  script={
+                    <p className="text-sm text-neutral-200 leading-relaxed">{liveScriptParagraph}</p>
+                  }
+                  capture={
+                    <>
+                      {data.view_section.startsWith('__stub_') ? (
+                        <>
+                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
+                            {LIVE_PHASES[viewPhaseIndex]?.label ?? 'Phase'}
+                          </p>
+                          <p className="text-sm text-neutral-300">
+                            This part of the call flow is not built yet. Use Return or the sidebar to go back to
+                            Opening.
+                          </p>
+                        </>
+                      ) : data.view_section === '1A' ? (
+                        <>
+                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
+                            Section 1A · The greeting
+                          </p>
+                          <div className="border-t border-white/[0.06] pt-3 space-y-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Speaking with the right person?</Label>
+                              <IntakeYesNoPair
+                                value={data.confirmed_contact}
+                                onChange={v =>
+                                  patch(
+                                    v === 'yes'
+                                      ? {
+                                          confirmed_contact: v,
+                                          contact_mismatch_context: '',
+                                          contact_mismatch_note: '',
+                                        }
+                                      : { confirmed_contact: v },
+                                  )
+                                }
+                                yesValue="yes"
+                                noValue="no_different_person"
+                                yesLabel="Yes"
+                                noLabel="Different person"
+                              />
+                            </div>
+                            <IntakeBranchPanel
+                              open={data.confirmed_contact === 'no_different_person'}
+                              title="Not the contact on file"
+                            >
+                              <div className="space-y-1.5">
+                                <Label className="text-neutral-400 text-xs">Who are we actually speaking with?</Label>
+                                <Select
+                                  value={data.contact_mismatch_context.trim() ? data.contact_mismatch_context : '__none__'}
+                                  onValueChange={v =>
+                                    patch({
+                                      contact_mismatch_context:
+                                        v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                    <SelectValue placeholder="Select" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">—</SelectItem>
+                                    {(
+                                      [
+                                        'billing',
+                                        'production',
+                                        'owner',
+                                        'assistant',
+                                        'other_party',
+                                      ] as const satisfies readonly Phase1ContactMismatchContextV3[]
+                                    ).map(key => (
+                                        <SelectItem key={key} value={key}>
+                                          {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-neutral-400 text-xs">Quick note (required)</Label>
+                                <Textarea
+                                  className="min-h-[72px] border-neutral-800 bg-neutral-950/80 text-sm"
+                                  value={data.contact_mismatch_note}
+                                  onChange={e => patch({ contact_mismatch_note: e.target.value })}
+                                  placeholder="Name, role, how they relate to the booking…"
+                                />
+                              </div>
+                            </IntakeBranchPanel>
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Call energy</Label>
+                              <Select
+                                value={data.call_vibe.trim() ? data.call_vibe : '__none__'}
+                                onValueChange={v =>
+                                  patch({ call_vibe: v === '__none__' ? '' : (v as BookingIntakeVenueDataV3['call_vibe']) })
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {CALL_VIBE_KEYS.filter(k => k !== '').map(key => (
+                                    <SelectItem key={key} value={key}>
+                                      {CALL_VIBE_LABELS[key]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </>
+                      ) : data.view_section === '1B' ? (
+                        <>
+                          <p className="text-xs text-neutral-500 uppercase tracking-wide">
+                            Section 1B · Confirm what you know
+                          </p>
+                          <div className="border-t border-white/[0.06] pt-3 space-y-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Phone</Label>
+                              <Input
+                                className="h-11 border-neutral-800 bg-neutral-950/80"
+                                value={data.contact_phone}
+                                onChange={e => patch({ contact_phone: e.target.value })}
+                                placeholder="Phone"
+                              />
+                              <Select
+                                value={data.phone_confirmed.trim() ? data.phone_confirmed : '__none__'}
+                                onValueChange={v =>
+                                  patch({
+                                    phone_confirmed: v === '__none__' ? '' : (v as Phase1PhoneConfirmedV3),
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                                  <SelectItem value="update_needed">Update needed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Email</Label>
+                              <Input
+                                className="h-11 border-neutral-800 bg-neutral-950/80"
+                                value={data.contact_email}
+                                onChange={e => patch({ contact_email: e.target.value })}
+                                placeholder="Email"
+                              />
+                              <Select
+                                value={data.email_confirmed.trim() ? data.email_confirmed : '__none__'}
+                                onValueChange={v =>
+                                  patch({
+                                    email_confirmed: v === '__none__' ? '' : (v as Phase1EmailConfirmedV3),
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                                  <SelectItem value="update_needed">Update needed</SelectItem>
+                                  <SelectItem value="need_to_get">Need to get</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Company</Label>
+                              <Input
+                                className="h-11 border-neutral-800 bg-neutral-950/80"
+                                value={data.contact_company}
+                                onChange={e => patch({ contact_company: e.target.value })}
+                                placeholder="Company"
+                              />
+                              <Select
+                                value={data.company_confirmed.trim() ? data.company_confirmed : '__none__'}
+                                onValueChange={v =>
+                                  patch({
+                                    company_confirmed: v === '__none__' ? '' : (v as Phase1CompanyConfirmedV3),
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                                  <SelectItem value="update_needed">Update needed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Primary email for paperwork</Label>
+                              <Select
+                                value={
+                                  data.preferred_email_channel.trim()
+                                    ? data.preferred_email_channel
+                                    : '__none__'
+                                }
+                                onValueChange={v =>
+                                  patch({
+                                    preferred_email_channel:
+                                      v === '__none__' ? '' : (v as Phase1PreferredEmailChannelV3),
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {(['work', 'personal', 'billing', 'production'] as const).map(key => (
+                                    <SelectItem key={key} value={key}>
+                                      {PREFERRED_EMAIL_CHANNEL_LABELS[key]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </>
+                      ) : data.view_section === '2A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 2A · Event identity</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same details for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_2a}
                           onChange={v => onSameForAllChange('same_for_all_2a', v, pick2a)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2328,68 +2437,86 @@ export default function BookingIntakePage() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Setting</Label>
-                              <ToggleN
-                                value={sd.setting}
-                                onChange={v => applyShowPatch(row.id, { setting: v as Phase2SettingV3 }, '2a')}
-                                options={[
-                                  { value: 'indoor', label: 'Indoor' },
-                                  { value: 'outdoor', label: 'Outdoor' },
-                                  { value: 'both', label: 'Both' },
-                                ]}
-                              />
+                              <Select
+                                value={sd.setting.trim() ? sd.setting : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    { setting: v === '__none__' ? '' : (v as Phase2SettingV3) },
+                                    '2a',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="indoor">Indoor</SelectItem>
+                                  <SelectItem value="outdoor">Outdoor</SelectItem>
+                                  <SelectItem value="both">Both</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Event name</Label>
-                              <ToggleN
-                                value={sd.event_name_flag}
-                                onChange={v => applyShowPatch(row.id, { event_name_flag: v }, '2a')}
-                                options={[
-                                  { value: 'capture_later' as const, label: 'Capture later' },
-                                  { value: 'no_name_yet' as const, label: 'No name yet' },
-                                ]}
-                              />
+                              <Select
+                                value={sd.event_name_flag.trim() ? sd.event_name_flag : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      event_name_flag:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['event_name_flag']),
+                                    },
+                                    '2a',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="capture_later">Capture later</SelectItem>
+                                  <SelectItem value="no_name_yet">No name yet</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Event format (how the night runs)</Label>
-                              <div className="flex flex-wrap gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => applyShowPatch(row.id, { event_archetype: '' }, '2a')}
-                                  className={cn(
-                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                    !sd.event_archetype
-                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                  )}
-                                >
-                                  —
-                                </button>
-                                {EVENT_ARCHETYPE_KEYS.map(key => (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => applyShowPatch(row.id, { event_archetype: key }, '2a')}
-                                    className={cn(
-                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                      sd.event_archetype === key
-                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                    )}
-                                  >
-                                    {EVENT_ARCHETYPE_LABELS[key]}
-                                  </button>
-                                ))}
-                              </div>
+                              <Select
+                                value={sd.event_archetype.trim() ? sd.event_archetype : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      event_archetype:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['event_archetype']),
+                                    },
+                                    '2a',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {EVENT_ARCHETYPE_KEYS.map(key => (
+                                    <SelectItem key={key} value={key}>
+                                      {EVENT_ARCHETYPE_LABELS[key]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Walk me through what this night is — type of room, vibe, and whether it has a name yet.
-                    </p>
                   </>
                 ) : data.view_section === '2B' ? (
                   <>
@@ -2397,7 +2524,7 @@ export default function BookingIntakePage() {
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same schedule for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_2b}
                           onChange={v => onSameForAllChange('same_for_all_2b', v, pick2b)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2488,9 +2615,6 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Lock the calendar date and set start/end; we’ll flag overnights automatically.
-                    </p>
                   </>
                 ) : data.view_section === '2C' ? (
                   <>
@@ -2498,7 +2622,7 @@ export default function BookingIntakePage() {
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same location for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_2c}
                           onChange={v => onSameForAllChange('same_for_all_2c', v, pick2c)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2523,29 +2647,54 @@ export default function BookingIntakePage() {
                                 {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
                               </p>
                             ) : null}
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Venue name status</Label>
-                              <ToggleN
-                                value={sd.venue_name_flag}
-                                onChange={v => applyShowPatch(row.id, { venue_name_flag: v }, '2c')}
-                                options={[
-                                  { value: 'already_have' as const, label: 'Have it' },
-                                  { value: 'capture_later' as const, label: 'Later' },
-                                  { value: 'tbd' as const, label: 'TBD' },
-                                ]}
-                              />
+                              <Select
+                                value={sd.venue_name_flag.trim() ? sd.venue_name_flag : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      venue_name_flag:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['venue_name_flag']),
+                                    },
+                                    '2c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="already_have">Have it</SelectItem>
+                                  <SelectItem value="capture_later">Later</SelectItem>
+                                  <SelectItem value="tbd">TBD</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">City status</Label>
-                              <ToggleN
-                                value={sd.city_flag}
-                                onChange={v => applyShowPatch(row.id, { city_flag: v }, '2c')}
-                                options={[
-                                  { value: 'already_have' as const, label: 'Have it' },
-                                  { value: 'capture_later' as const, label: 'Later' },
-                                  { value: 'tbd' as const, label: 'TBD' },
-                                ]}
-                              />
+                              <Select
+                                value={sd.city_flag.trim() ? sd.city_flag : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    { city_flag: v === '__none__' ? '' : (v as BookingIntakeShowDataV3['city_flag']) },
+                                    '2c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="already_have">Have it</SelectItem>
+                                  <SelectItem value="capture_later">Later</SelectItem>
+                                  <SelectItem value="tbd">TBD</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">State / region</Label>
@@ -2572,89 +2721,92 @@ export default function BookingIntakePage() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Address</Label>
-                              <ToggleN
-                                value={sd.address_status}
-                                onChange={v => applyShowPatch(row.id, { address_status: v }, '2c')}
-                                options={[
-                                  { value: 'have_it' as const, label: 'Have it' },
-                                  { value: 'theyll_send' as const, label: 'They’ll send' },
-                                  { value: 'tbd_private' as const, label: 'TBD / private' },
-                                ]}
-                              />
+                              <Select
+                                value={sd.address_status.trim() ? sd.address_status : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      address_status:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['address_status']),
+                                    },
+                                    '2c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  <SelectItem value="have_it">Have it</SelectItem>
+                                  <SelectItem value="theyll_send">They’ll send</SelectItem>
+                                  <SelectItem value="tbd_private">TBD / private</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Venue / room type (what kind of room)</Label>
-                              <div className="flex flex-wrap gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => applyShowPatch(row.id, { venue_archetype: '' }, '2c')}
-                                  className={cn(
-                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                    !sd.venue_archetype
-                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                  )}
-                                >
-                                  —
-                                </button>
-                                {VENUE_ARCHETYPE_KEYS.map(key => (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => applyShowPatch(row.id, { venue_archetype: key }, '2c')}
-                                    className={cn(
-                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                      sd.venue_archetype === key
-                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                    )}
-                                  >
-                                    {VENUE_ARCHETYPE_LABELS[key]}
-                                  </button>
-                                ))}
-                              </div>
+                              <Select
+                                value={sd.venue_archetype.trim() ? sd.venue_archetype : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      venue_archetype:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['venue_archetype']),
+                                    },
+                                    '2c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {VENUE_ARCHETYPE_KEYS.map(key => (
+                                    <SelectItem key={key} value={key}>
+                                      {VENUE_ARCHETYPE_LABELS[key]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">How specific is the location right now?</Label>
-                              <div className="flex flex-wrap gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => applyShowPatch(row.id, { address_detail_level: '' }, '2c')}
-                                  className={cn(
-                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                    !sd.address_detail_level
-                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                  )}
-                                >
-                                  —
-                                </button>
-                                {ADDRESS_DETAIL_LEVEL_KEYS.map(key => (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => applyShowPatch(row.id, { address_detail_level: key }, '2c')}
-                                    className={cn(
-                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                      sd.address_detail_level === key
-                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                    )}
-                                  >
-                                    {ADDRESS_DETAIL_LEVEL_LABELS[key]}
-                                  </button>
-                                ))}
-                              </div>
+                              <Select
+                                value={sd.address_detail_level.trim() ? sd.address_detail_level : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      address_detail_level:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['address_detail_level']),
+                                    },
+                                    '2c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {ADDRESS_DETAIL_LEVEL_KEYS.map(key => (
+                                    <SelectItem key={key} value={key}>
+                                      {ADDRESS_DETAIL_LEVEL_LABELS[key]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Confirm what you know about the room and mailing address without slowing the call.
-                    </p>
                   </>
                 ) : data.view_section === '2D' ? (
                   <>
@@ -2662,7 +2814,7 @@ export default function BookingIntakePage() {
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same capacity for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_2d}
                           onChange={v => onSameForAllChange('same_for_all_2d', v, pick2d)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2778,21 +2930,14 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Rough room size is enough for now unless they want to be precise.
-                    </p>
-                    <p className="text-[11px] text-neutral-500 italic leading-snug">
-                      Alright, I’ve got the picture. Let’s talk about what you want from Luijay’s set.
-                    </p>
                   </>
                 ) : data.view_section === '3A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3A · Role &amp; slot</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking3a}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same role &amp; set for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_3a}
                           onChange={v => onSameForAllChange('same_for_all_3a', v, pick3a)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2912,18 +3057,14 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      And what’s the vibe musically? Any specific direction?
-                    </p>
                   </>
                 ) : data.view_section === '3B' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3B · Music &amp; vibe</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking3b}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same music details for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_3b}
                           onChange={v => onSameForAllChange('same_for_all_3b', v, pick3b)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -2955,7 +3096,7 @@ export default function BookingIntakePage() {
                                 onChange={next => applyShowPatch(row.id, { genres: next }, '3b')}
                               />
                             </div>
-                            <IdChipRow<SetlistRequestTagV3>
+                            <IntakeCompactChipRow<SetlistRequestTagV3>
                               label="Music direction & requests (tap all that apply)"
                               selected={sd.setlist_request_tags}
                               ids={SETLIST_REQUEST_TAG_KEYS}
@@ -3010,18 +3151,14 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Is Luijay the only one on the lineup, or are there other acts?
-                    </p>
                   </>
                 ) : data.view_section === '3C' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 3C · Other performers</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking3c}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same lineup context for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_3c}
                           onChange={v => onSameForAllChange('same_for_all_3c', v, pick3c)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -3113,55 +3250,48 @@ export default function BookingIntakePage() {
                                 </div>
                               </>
                             ) : null}
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <Label className="text-neutral-400 text-xs">Lineup / set structure</Label>
-                              <div className="flex flex-wrap gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => applyShowPatch(row.id, { lineup_format: '' }, '3c')}
-                                  className={cn(
-                                    'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                    !sd.lineup_format
-                                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                              <Select
+                                value={sd.lineup_format.trim() ? sd.lineup_format : '__none__'}
+                                onValueChange={v =>
+                                  applyShowPatch(
+                                    row.id,
+                                    {
+                                      lineup_format:
+                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['lineup_format']),
+                                    },
+                                    '3c',
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">—</SelectItem>
+                                  {LINEUP_FORMAT_KEYS.filter((k): k is Exclude<LineupFormatV3, ''> => k !== '').map(
+                                    key => (
+                                      <SelectItem key={key} value={key}>
+                                        {LINEUP_FORMAT_LABELS[key]}
+                                      </SelectItem>
+                                    ),
                                   )}
-                                >
-                                  —
-                                </button>
-                                {LINEUP_FORMAT_KEYS.filter((k): k is Exclude<LineupFormatV3, ''> => k !== '').map(key => (
-                                  <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => applyShowPatch(row.id, { lineup_format: key }, '3c')}
-                                    className={cn(
-                                      'min-h-[40px] px-2.5 text-xs font-medium rounded-lg border transition-colors',
-                                      sd.lineup_format === key
-                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                    )}
-                                  >
-                                    {LINEUP_FORMAT_LABELS[key]}
-                                  </button>
-                                ))}
-                              </div>
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Got it. Let me ask you a few things on the production side — just to make sure everything’s dialed
-                      in.
-                    </p>
                   </>
                 ) : data.view_section === '4A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4A · Equipment</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking4a}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same equipment details for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_4a}
                           onChange={v => onSameForAllChange('same_for_all_4a', v, pick4a)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -3218,7 +3348,7 @@ export default function BookingIntakePage() {
                                 ]}
                               />
                             </div>
-                            <IdChipRow<EquipmentCapabilityIdV3>
+                            <IntakeCompactChipRow<EquipmentCapabilityIdV3>
                               label="What's provided / discussed (tap all that apply)"
                               selected={sd.equipment_capability_ids}
                               ids={EQUIPMENT_CAPABILITY_KEYS}
@@ -3231,17 +3361,13 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      And on the day of — who should we connect with when Luijay gets there?
-                    </p>
                   </>
                 ) : data.view_section === '4B' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4B · On-site contact</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking4b}</p>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Same as main contact?</Label>
-                      <ToggleN
+                      <IntakeYesNoPair
                         value={data.onsite_same_contact}
                         onChange={v => {
                           const x = v as Phase4OnsiteSameContactV3
@@ -3258,14 +3384,17 @@ export default function BookingIntakePage() {
                             patch({ onsite_same_contact: x })
                           }
                         }}
-                        options={[
-                          { value: 'same' as const, label: 'Same person' },
-                          { value: 'different' as const, label: 'Different person' },
-                        ]}
+                        yesValue="same"
+                        noValue="different"
+                        yesLabel="Same person"
+                        noLabel="Different person"
                       />
                     </div>
-                    {data.onsite_same_contact === 'different' ? (
-                      <div className="space-y-4 border-t border-white/[0.06] pt-4">
+                    <IntakeBranchPanel
+                      open={data.onsite_same_contact === 'different'}
+                      title="Different on-site contact"
+                    >
+                      <div className="space-y-4">
                         <div className="space-y-2">
                           <Label className="text-neutral-400 text-xs">On-site name</Label>
                           <ToggleN
@@ -3322,21 +3451,17 @@ export default function BookingIntakePage() {
                           />
                         </div>
                       </div>
-                    ) : null}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Do you have a load-in time or soundcheck window figured out?
-                    </p>
+                    </IntakeBranchPanel>
                   </>
                 ) : data.view_section === '4C' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">
                       Section 4C · Load-in &amp; soundcheck
                     </p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking4c}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same load-in plan for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_4c}
                           onChange={v => onSameForAllChange('same_for_all_4c', v, pick4c)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -3415,7 +3540,7 @@ export default function BookingIntakePage() {
                                 ]}
                               />
                             </div>
-                            <IdChipRow<LoadAccessTagV3>
+                            <IntakeCompactChipRow<LoadAccessTagV3>
                               label="Load-in access (tap all that apply)"
                               selected={sd.load_in_access_tags}
                               ids={LOAD_ACCESS_TAG_KEYS}
@@ -3428,18 +3553,14 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Any special instructions for getting in — parking, loading, anything like that?
-                    </p>
                   </>
                 ) : data.view_section === '4D' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4D · Parking &amp; access</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking4d}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same parking / access for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_4d}
                           onChange={v => onSameForAllChange('same_for_all_4d', v, pick4d)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -3524,18 +3645,14 @@ export default function BookingIntakePage() {
                         California venue — travel &amp; lodging is skipped on this path (see intake spec).
                       </p>
                     ) : null}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Is this local, or would there be any travel involved?
-                    </p>
                   </>
                 ) : data.view_section === '4E' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 4E · Travel &amp; lodging</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking4e}</p>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same travel details for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_4e}
                           onChange={v => onSameForAllChange('same_for_all_4e', v, pick4e)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -3659,14 +3776,10 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Alright, logistics are covered. Let me pull up what this looks like on the investment side.
-                    </p>
                   </>
                 ) : data.view_section === '5A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5A · Pricing setup</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking5a}</p>
                     {!catalogHasMinimumForDealLogging(pricingCatalog) ? (
                       <p className="text-sm text-amber-200/90 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2">
                         Add at least one package or hourly rate in Earnings → Pricing so quotes can run here.
@@ -3695,7 +3808,7 @@ export default function BookingIntakePage() {
                           ) : null}
                           <div className="space-y-2">
                             <Label className="text-neutral-400 text-xs">Pricing mode</Label>
-                            <ToggleTwo
+                            <IntakeCompactDual
                               value={isPkg}
                               onChange={v =>
                                 applyShowPatch(row.id, { pricing_mode: v ? 'package' : 'hourly' }, '5a')
@@ -3851,7 +3964,6 @@ export default function BookingIntakePage() {
                 ) : data.view_section === '5B' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5B · Add-ons &amp; adjustments</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking5b}</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const inp = buildPriceInputForShow(sd, pricingCatalog)
@@ -4009,7 +4121,6 @@ export default function BookingIntakePage() {
                 ) : data.view_section === '5C' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5C · The number</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking5c}</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const inp = buildPriceInputForShow(sd, pricingCatalog)
@@ -4031,12 +4142,7 @@ export default function BookingIntakePage() {
                         sub = total
                         tax = 0
                       }
-                      const roleLabel =
-                        PERFORMANCE_ROLE_OPTIONS.find(o => o.value === sd.performance_role)?.label ?? 'set'
                       const dateLbl = showLabelFromEventDate(sd.event_date)
-                      const setLen = formatSetLengthDisplay(
-                        computeSetLengthHours(sd.set_start_time, sd.set_end_time, sd.overnight_set),
-                      )
                       return (
                         <div
                           key={row.id}
@@ -4051,10 +4157,6 @@ export default function BookingIntakePage() {
                               {dateLbl || `Show ${idx + 1}`}
                             </p>
                           ) : null}
-                          <p className="text-[11px] text-neutral-500 italic">
-                            So for the {setLen} {roleLabel} on {dateLbl || 'this date'}, we&apos;re looking at{' '}
-                            <span className="text-neutral-200 font-semibold tabular-nums">${total}</span>.
-                          </p>
                           <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 p-4 space-y-2">
                             <div className="flex justify-between text-sm">
                               <span className="text-neutral-500">Subtotal (pre-tax)</span>
@@ -4071,7 +4173,7 @@ export default function BookingIntakePage() {
                           </div>
                           <div className="space-y-2">
                             <Label className="text-neutral-400 text-xs">Quote source</Label>
-                            <ToggleTwo
+                            <IntakeCompactDual
                               value={sd.pricing_source === 'manual'}
                               onChange={v =>
                                 applyShowPatch(row.id, { pricing_source: v ? 'manual' : 'calculated' }, '5c')
@@ -4126,14 +4228,10 @@ export default function BookingIntakePage() {
                         </div>
                       )
                     })}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Let me tell you how we usually structure the payment.
-                    </p>
                   </>
                 ) : data.view_section === '5D' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5D · Deposit &amp; payment</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking5d}</p>
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const total = totalUsdForShow(sd)
@@ -4258,14 +4356,10 @@ export default function BookingIntakePage() {
                         </div>
                       )
                     })}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      And for the invoice — should I send that directly to you?
-                    </p>
                   </>
                 ) : data.view_section === '5E' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 5E · Invoicing</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking5e}</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Invoice to main contact?</Label>
                       <ToggleN
@@ -4335,15 +4429,10 @@ export default function BookingIntakePage() {
                         </div>
                       </div>
                     ) : null}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      Alright, money&apos;s squared away. Just want to run through a couple quick things to make sure
-                      we&apos;re on the same page.
-                    </p>
                   </>
                 ) : data.view_section === '6A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 6A · Venue promise lines</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking6a}</p>
                     <p className="text-[11px] text-neutral-500">
                       Quick taps only — confirm what you discussed; leave lines unset or mark not discussed. Items with
                       an <span className="text-amber-500/90">Auto</span> tag were prefilled from earlier sections.
@@ -4351,7 +4440,7 @@ export default function BookingIntakePage() {
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <span className="text-xs text-neutral-400">Same promise grid for all shows</span>
-                        <ToggleTwo
+                        <IntakeCompactDual
                           value={data.same_for_all_6a}
                           onChange={v => onSameForAllChange('same_for_all_6a', v, pick6a)}
                           a={{ id: 'per', label: 'Per show' }}
@@ -4411,14 +4500,10 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
-                    <p className="text-[11px] text-neutral-600 italic leading-snug pt-1">
-                      We&apos;re looking good. Let me tell you what happens from here.
-                    </p>
                   </>
                 ) : data.view_section === '7A' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7A · Next steps</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking7a}</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Agreement</Label>
                       <ToggleN
@@ -4454,7 +4539,7 @@ export default function BookingIntakePage() {
                         ]}
                       />
                     </div>
-                    <IdChipRow<CloseArtifactTagV3>
+                    <IntakeCompactChipRow<CloseArtifactTagV3>
                       label="What you're sending / holding (tap all that apply)"
                       selected={data.close_artifact_tags}
                       ids={CLOSE_ARTIFACT_TAG_KEYS}
@@ -4465,7 +4550,6 @@ export default function BookingIntakePage() {
                 ) : data.view_section === '7B' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7B · Follow-ups</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking7b}</p>
                     <div className="space-y-2">
                       <Label className="text-neutral-400 text-xs">Follow-ups?</Label>
                       <ToggleN
@@ -4523,18 +4607,24 @@ export default function BookingIntakePage() {
                 ) : data.view_section === '7C' ? (
                   <>
                     <p className="text-xs text-neutral-500 uppercase tracking-wide">Section 7C · End call</p>
-                    <p className="text-sm text-neutral-400 italic leading-relaxed">{talking7c}</p>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Call completed?</Label>
-                      <ToggleN
-                        value={data.call_status}
-                        onChange={v => patch({ call_status: v as Phase7CallStatusV3 })}
-                        options={[
-                          { value: 'full' as const, label: 'Full call' },
-                          { value: 'partial' as const, label: 'Partial — need follow-up' },
-                          { value: 'voicemail' as const, label: 'Voicemail' },
-                        ]}
-                      />
+                      <Select
+                        value={data.call_status.trim() ? data.call_status : '__none__'}
+                        onValueChange={v =>
+                          patch({ call_status: v === '__none__' ? '' : (v as Phase7CallStatusV3) })
+                        }
+                      >
+                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          <SelectItem value="full">Full call</SelectItem>
+                          <SelectItem value="partial">Partial — need follow-up</SelectItem>
+                          <SelectItem value="voicemail">Voicemail</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="pt-2">
                       <Button
@@ -4558,6 +4648,14 @@ export default function BookingIntakePage() {
                       </p>
                     </div>
                   </>
+                ) : null}
+                    </>
+                  }
+                />
+                {advanceNudge ? (
+                  <p className="text-xs text-amber-200/90 rounded-md border border-amber-900/40 bg-amber-950/25 px-2 py-1.5">
+                    {advanceNudge}
+                  </p>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/[0.06]">
@@ -4649,7 +4747,7 @@ export default function BookingIntakePage() {
             <div className="flex-1 overflow-y-auto flex justify-center p-6 pb-24">
               <div
                 key={postCallSection}
-                className="w-full max-w-2xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-6 space-y-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
+                className="w-full max-w-xl rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
               >
                 <div>
                   <p className="text-xs text-neutral-500 uppercase tracking-wide">Phase 8</p>
@@ -4693,6 +4791,15 @@ export default function BookingIntakePage() {
                         onChange={e => patch({ contact_name: e.target.value })}
                         placeholder="Name on the account"
                       />
+                      <div className="space-y-1.5 pt-1">
+                        <Label className="text-neutral-400 text-xs">Who / role (from call)</Label>
+                        <Textarea
+                          className="min-h-[64px] border-neutral-800 bg-neutral-950/80 text-sm"
+                          value={data.contact_mismatch_note}
+                          onChange={e => patch({ contact_mismatch_note: e.target.value })}
+                          placeholder="Context you captured live"
+                        />
+                      </div>
                     </div>
                   ) : null}
                   {data.phone_confirmed === 'update_needed' ? (

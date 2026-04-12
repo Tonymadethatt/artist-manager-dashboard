@@ -36,7 +36,32 @@ export type KnownEventTypeV3 =
 
 /** Phase 1 — Opening (live-call, shared across shows). */
 export type Phase1ConfirmedContactV3 = '' | 'yes' | 'no_different_person'
-export type Phase1CallVibeV3 = '' | 'excited' | 'business' | 'rushed'
+
+/** Opening “call energy” — expanded discrete set (legacy JSON values still parse). */
+export const CALL_VIBE_KEYS = [
+  '',
+  'excited',
+  'business',
+  'rushed',
+  'warm_easy',
+  'guarded_testing_us',
+  'time_crunched',
+  'all_over_the_place',
+  'very_formal',
+] as const
+
+export type Phase1CallVibeV3 = (typeof CALL_VIBE_KEYS)[number]
+
+export const CALL_VIBE_LABELS: Record<Exclude<Phase1CallVibeV3, ''>, string> = {
+  excited: 'Excited / upbeat',
+  business: 'Businesslike / efficient',
+  rushed: 'Rushed — keep it tight',
+  warm_easy: 'Warm / easy rapport',
+  guarded_testing_us: 'Guarded — feeling us out',
+  time_crunched: 'Time-crunched / distracted',
+  all_over_the_place: 'Scattered / multi-tasking',
+  very_formal: 'Very formal / corporate',
+}
 export type Phase1PhoneConfirmedV3 = '' | 'confirmed' | 'update_needed'
 export type Phase1EmailConfirmedV3 = '' | 'confirmed' | 'update_needed' | 'need_to_get'
 export type Phase1CompanyConfirmedV3 = '' | 'confirmed' | 'update_needed'
@@ -771,6 +796,8 @@ export type BookingIntakeVenueDataV3 = {
   company_confirmed: Phase1CompanyConfirmedV3
   /** Substantive: who we’re actually talking to when `confirmed_contact === 'no_different_person'`. */
   contact_mismatch_context: Phase1ContactMismatchContextV3
+  /** Required in UI when `confirmed_contact === 'no_different_person'` — who / role / context in plain language. */
+  contact_mismatch_note: string
   /** Preferred channel for the email we’ll use (when multiple in play). */
   preferred_email_channel: Phase1PreferredEmailChannelV3
   /** Per §8.5 — Phase 2 subsection defaults per spec §8.4 */
@@ -1172,6 +1199,7 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     email_confirmed: '',
     company_confirmed: '',
     contact_mismatch_context: '',
+    contact_mismatch_note: '',
     preferred_email_channel: '',
     same_for_all_2a: true,
     same_for_all_2b: false,
@@ -1449,7 +1477,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     show_count: showCount,
     last_saved_at: typeof o.last_saved_at === 'string' ? o.last_saved_at : null,
     confirmed_contact: parsePhase1Enum(o.confirmed_contact, ['', 'yes', 'no_different_person'], ''),
-    call_vibe: parsePhase1Enum(o.call_vibe, ['', 'excited', 'business', 'rushed'], ''),
+    call_vibe: parsePhase1Enum(o.call_vibe, CALL_VIBE_KEYS, ''),
     phone_confirmed: parsePhase1Enum(o.phone_confirmed, ['', 'confirmed', 'update_needed'], ''),
     email_confirmed: parsePhase1Enum(o.email_confirmed, ['', 'confirmed', 'update_needed', 'need_to_get'], ''),
     company_confirmed: parsePhase1Enum(o.company_confirmed, ['', 'confirmed', 'update_needed'], ''),
@@ -1458,6 +1486,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
       ['', 'billing', 'production', 'owner', 'assistant', 'other_party'],
       '',
     ),
+    contact_mismatch_note: typeof o.contact_mismatch_note === 'string' ? o.contact_mismatch_note : '',
     preferred_email_channel: parsePhase1Enum(
       o.preferred_email_channel,
       ['', 'work', 'personal', 'billing', 'production'],
@@ -1514,7 +1543,10 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
 
 function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVenueDataV3 {
   const out = { ...v }
-  if (out.confirmed_contact !== 'no_different_person') out.contact_mismatch_context = ''
+  if (out.confirmed_contact !== 'no_different_person') {
+    out.contact_mismatch_context = ''
+    out.contact_mismatch_note = ''
+  }
   if (out.onsite_same_contact !== 'different') {
     out.onsite_contact_name = ''
     out.onsite_contact_phone = ''
@@ -1934,6 +1966,12 @@ export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): strin
     lines.push(
       `Contact context: ${CONTACT_MISMATCH_CONTEXT_LABELS[v.contact_mismatch_context as Exclude<Phase1ContactMismatchContextV3, ''>]}`,
     )
+  }
+  if (v.contact_mismatch_note.trim()) {
+    lines.push(`Contact note: ${v.contact_mismatch_note.trim()}`)
+  }
+  if (v.call_vibe) {
+    lines.push(`Call energy: ${CALL_VIBE_LABELS[v.call_vibe as Exclude<Phase1CallVibeV3, ''>]}`)
   }
   if (v.preferred_email_channel) {
     lines.push(
