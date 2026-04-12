@@ -1553,6 +1553,21 @@ export default function BookingIntakePage() {
     refreshNavBadges,
   ])
 
+  // #region agent log
+  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd0bca7' },
+    body: JSON.stringify({
+      sessionId: 'd0bca7',
+      hypothesisId: 'H1',
+      location: 'BookingIntakePage.tsx:preEarlyReturn',
+      message: 'render before conditional branch',
+      data: { hasData: !!data, hasSelectedRow: !!selectedRow, authLoading },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
@@ -1655,7 +1670,22 @@ export default function BookingIntakePage() {
     ? `“${data.contact_name.trim()}, appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
     : `“Appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
 
-  const liveScriptParagraph = useMemo(() => {
+  const liveScriptParagraph = (() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd0bca7' },
+      body: JSON.stringify({
+        sessionId: 'd0bca7',
+        runId: 'post-fix',
+        hypothesisId: 'H1',
+        location: 'BookingIntakePage.tsx:liveScriptComputed',
+        message: 'liveScript paragraph computed (no hook; after data guard)',
+        data: { view_section: data.view_section },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
     const s = data.view_section
     if (s === '1A') return greetingTalking
     if (s === '1B') return confirmTalking
@@ -1687,28 +1717,7 @@ export default function BookingIntakePage() {
     if (s.startsWith('__stub_'))
       return `This phase isn’t wired yet — use the sidebar to stay on an earlier step.`
     return `Work through ${liveSectionTitle(s)} with the client, then capture the details on the Capture tab.`
-  }, [
-    data.view_section,
-    greetingTalking,
-    confirmTalking,
-    talking3a,
-    talking3b,
-    talking3c,
-    talking4a,
-    talking4b,
-    talking4c,
-    talking4d,
-    talking4e,
-    talking5a,
-    talking5b,
-    talking5c,
-    talking5d,
-    talking5e,
-    talking6a,
-    talking7a,
-    talking7b,
-    talking7c,
-  ])
+  })()
 
   const depositOptions: { value: Phase5DepositPercentV3; label: string }[] = [
     { value: 25, label: '25%' },
