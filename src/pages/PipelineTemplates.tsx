@@ -280,7 +280,7 @@ export default function PipelineTemplates() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1 className="text-base font-semibold text-white">Task Templates</h1>
+          <h1 className="text-base font-semibold text-white">Templates</h1>
           <p className="text-xs text-neutral-500 mt-0.5">Reusable task packs that auto-create tasks when venues are added or change status.</p>
           <p className="text-[11px] text-neutral-600 mt-2 max-w-xl leading-snug">
             Each <span className="text-neutral-500">auto-trigger</span> status runs every template tied to that status when the venue enters it — use one template per status to avoid duplicate tasks.

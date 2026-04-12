@@ -138,7 +138,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     )}
                   </NavLink>
 
-                  {/* Tasks sub-item: Task Templates */}
+                  {/* Tasks sub-item: Templates (same horizontal rhythm as parent row, no deep indent) */}
                   {to === '/pipeline' && onPipelinePath && (
                     <NavLink
                       to="/pipeline/templates"
@@ -146,15 +146,24 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center gap-2 pl-[33px] pr-2.5 py-1.5 rounded text-[12px] transition-colors mt-0.5',
+                          'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] transition-colors mt-0.5',
                           isActive
                             ? 'text-neutral-200'
                             : 'text-[hsl(var(--sidebar-muted))] hover:text-neutral-300'
                         )
                       }
                     >
-                      <LayoutTemplate className="h-3 w-3 shrink-0 opacity-70" />
-                      Task Templates
+                      {({ isActive }) => (
+                        <>
+                          {isActive && (
+                            <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-white/40 rounded-full" />
+                          )}
+                          <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center" aria-hidden>
+                            <LayoutTemplate className="h-3 w-3 opacity-70" />
+                          </span>
+                          <span className="font-medium tracking-[0.01em] truncate flex-1 min-w-0">Templates</span>
+                        </>
+                      )}
                     </NavLink>
                   )}
                 </div>
