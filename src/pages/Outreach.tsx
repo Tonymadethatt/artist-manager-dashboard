@@ -157,6 +157,7 @@ export default function Outreach() {
             user_id: user.id,
             venue_id: result.data!.id,
             name: c.name,
+            title_key: null as string | null,
             role: c.role,
             email: c.email,
             phone: c.phone,

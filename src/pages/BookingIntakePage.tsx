@@ -134,6 +134,7 @@ import {
   type SetlistRequestTagV3,
   type VenuePromiseLineIdV3,
 } from '@/lib/intake/intakePayloadV3'
+import { contactRoleForDisplay, contactToMismatchContext } from '@/lib/contacts/contactTitles'
 import type { CommissionTier, Contact, Deal, OutreachTrack, PricingCatalogDoc, Venue, VenueType } from '@/types'
 import {
   COMMISSION_TIER_LABELS,
@@ -175,28 +176,6 @@ const LIVE_PHASES = [
   { id: '6', label: 'Commitments' },
   { id: '7', label: 'Close' },
 ] as const
-
-/** Map saved venue contact role text to intake mismatch title enum (best effort). */
-function mapContactRoleToMismatchContext(
-  role: string | null | undefined,
-): Exclude<Phase1ContactMismatchContextV3, ''> {
-  const r = (role ?? '').toLowerCase()
-  if (!r) return 'other_party'
-  if (/(billing|\bap\b|a\/p|accounts? payable)/i.test(r)) return 'billing'
-  if (/(production|technical|\ba1\b|audio)/i.test(r)) return 'production'
-  if (/(owner|principal|partner)/i.test(r)) return 'owner'
-  if (/(assistant|coordinator|admin)/i.test(r)) return 'assistant'
-  if (/(buyer|booker|talent)/i.test(r)) return 'talent_buyer'
-  if (/(planner|producer)/i.test(r)) return 'event_planner'
-  if (/(day[- ]of|showcaller)/i.test(r)) return 'day_of_coordinator'
-  if (/wedding/i.test(r)) return 'wedding_planner'
-  if (/(agency|rep)/i.test(r)) return 'agency_rep'
-  if (/(venue|manager|\bgm\b|operations)/i.test(r)) return 'venue_manager'
-  if (/(hospitality|f&b|fb\b|catering)/i.test(r)) return 'hospitality_manager'
-  if (/(marketing|\bpr\b|public relations)/i.test(r)) return 'marketing_pr'
-  if (/(security|door|box office)/i.test(r)) return 'security_box'
-  return 'other_party'
-}
 
 const INQUIRY_OPTIONS: { value: InquirySourceV3; label: string }[] = [
   { value: 'instagram_dm', label: 'Instagram DM' },
@@ -1423,6 +1402,7 @@ export default function BookingIntakePage() {
           user_id: userRow.id,
           venue_id: newId,
           name: c.name,
+          title_key: null as string | null,
           role: c.role,
           email: c.email,
           phone: c.phone,
@@ -1923,12 +1903,15 @@ export default function BookingIntakePage() {
                           <SelectValue placeholder="Contact" />
                         </SelectTrigger>
                         <SelectContent>
-                          {contactsForVenue.map(c => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                              {c.role ? ` · ${c.role}` : ''}
-                            </SelectItem>
-                          ))}
+                          {contactsForVenue.map(c => {
+                            const r = contactRoleForDisplay(c)
+                            return (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                                {r ? ` · ${r}` : ''}
+                              </SelectItem>
+                            )
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2251,12 +2234,16 @@ export default function BookingIntakePage() {
                                       <button
                                         key={c.id}
                                         type="button"
-                                        title={c.role ? `${c.name} · ${c.role}` : c.name}
+                                        title={
+                                          contactRoleForDisplay(c)
+                                            ? `${c.name} · ${contactRoleForDisplay(c)}`
+                                            : c.name
+                                        }
                                         onClick={() => {
                                           setMismatchAddNewChosen(false)
                                           patch({
                                             contact_mismatch_note: c.name,
-                                            contact_mismatch_context: mapContactRoleToMismatchContext(c.role),
+                                            contact_mismatch_context: contactToMismatchContext(c),
                                           })
                                         }}
                                         className={cn(

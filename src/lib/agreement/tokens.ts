@@ -9,6 +9,7 @@ import {
   formatPacificTimeRangeReadable,
 } from '../calendar/pacificWallTime'
 import { buildPricingAgreementTransparency } from './pricingAgreementTransparency'
+import { contactRoleForDisplay } from '../contacts/contactTitles'
 
 const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -283,7 +284,8 @@ export function buildAgreementPrefill(
 
   if (mergeContact) {
     out.contact_name = mergeContact.name
-    if (mergeContact.role) out.contact_role = mergeContact.role
+    const mergeRole = contactRoleForDisplay(mergeContact)
+    if (mergeRole) out.contact_role = mergeRole
     if (mergeContact.email) out.contact_email = mergeContact.email
     const phoneRaw =
       mergeContact.phone?.trim() ||
@@ -301,7 +303,7 @@ export function buildAgreementPrefill(
       if (!out.company_name?.trim()) out.company_name = co
     }
     out.client_name = mergeContact.name
-    if (mergeContact.role) out.client_role = mergeContact.role
+    if (mergeRole) out.client_role = mergeRole
     if (mergeContact.email) out.client_email = mergeContact.email
     if (phoneDisp) {
       out.client_phone = phoneDisp
@@ -312,7 +314,8 @@ export function buildAgreementPrefill(
 
   if (onsiteContact) {
     out.onsite_contact_name = onsiteContact.name
-    if (onsiteContact.role?.trim()) out.onsite_contact_role = onsiteContact.role.trim()
+    const onsiteRole = contactRoleForDisplay(onsiteContact)
+    if (onsiteRole) out.onsite_contact_role = onsiteRole
     if (onsiteContact.email?.trim()) out.onsite_contact_email = onsiteContact.email.trim()
     if (onsiteContact.phone?.trim()) {
       const op = onsiteContact.phone.trim()

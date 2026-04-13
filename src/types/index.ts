@@ -312,6 +312,9 @@ export interface Contact {
   user_id: string
   venue_id: string
   name: string
+  /** Canonical title key from app catalog; when set, `role` should be null. */
+  title_key: string | null
+  /** Legacy free-text title until migrated to `title_key`. */
   role: string | null
   email: string | null
   phone: string | null

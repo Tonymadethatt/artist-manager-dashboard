@@ -25,6 +25,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
+import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
+import { isContactTitleLegacy, type ContactTitleKey } from '@/lib/contacts/contactTitles'
 import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms } from '@/types'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
@@ -383,6 +386,7 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                         contact={c}
                         onEdit={() => setEditingContact(c)}
                         onDelete={() => deleteContact(c.id)}
+                        onPatch={updates => updateContact(c.id, updates)}
                       />
                     ))}
                   </div>
@@ -549,13 +553,46 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   )
 }
 
-function ContactRow({ contact, onEdit, onDelete }: { contact: Contact; onEdit: () => void; onDelete: () => void }) {
+function ContactRow({
+  contact,
+  onEdit,
+  onDelete,
+  onPatch,
+}: {
+  contact: Contact
+  onEdit: () => void
+  onDelete: () => void
+  onPatch: (updates: Partial<Pick<Contact, 'title_key' | 'role'>>) => Promise<unknown>
+}) {
+  const legacy = isContactTitleLegacy(contact)
   return (
     <div className="flex items-start justify-between gap-2 rounded border border-neutral-800 bg-neutral-800/50 px-3 py-2.5">
-      <div className="min-w-0">
-        <div className="font-medium text-sm text-neutral-200">{contact.name}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="font-medium text-sm text-neutral-200">{contact.name}</div>
+          {legacy ? (
+            <Badge
+              variant="outline"
+              className="text-[10px] font-normal border-amber-700/55 text-amber-200/95 bg-amber-950/35 px-1.5 py-0 h-5"
+            >
+              Update title
+            </Badge>
+          ) : null}
+        </div>
         {contact.company && <div className="text-xs text-neutral-400">{contact.company}</div>}
-        {contact.role && <div className="text-xs text-neutral-500">{contact.role}</div>}
+        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+          <ContactTitleSelect
+            value={contact.title_key}
+            placeholder={legacy ? 'Choose standard title…' : 'Select title'}
+            triggerClassName="max-w-[15rem]"
+            onValueChange={key => void onPatch({ title_key: key, role: null })}
+          />
+          {legacy && contact.role ? (
+            <span className="text-[10px] text-neutral-500 truncate max-w-[11rem]" title={contact.role}>
+              Was: {contact.role}
+            </span>
+          ) : null}
+        </div>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           {contact.email && (
             <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300">
@@ -593,7 +630,7 @@ function ContactForm({
   const [form, setForm] = useState({
     name: initial?.name ?? '',
     company: initial?.company ?? '',
-    role: initial?.role ?? '',
+    title_key: (initial?.title_key as ContactTitleKey | null) ?? null,
     email: initial?.email ?? '',
     phone: initial?.phone ?? '',
   })
@@ -603,7 +640,7 @@ function ContactForm({
     setForm({
       name: initial?.name ?? '',
       company: initial?.company ?? '',
-      role: initial?.role ?? '',
+      title_key: (initial?.title_key as ContactTitleKey | null) ?? null,
       email: initial?.email ?? '',
       phone: initial?.phone ?? '',
     })
@@ -615,7 +652,8 @@ function ContactForm({
     await onSave({
       name: form.name.trim(),
       company: form.company.trim() || null,
-      role: form.role || null,
+      title_key: form.title_key || null,
+      role: form.title_key ? null : initial?.role?.trim() || null,
       email: form.email || null,
       phone: form.phone || null,
     })
@@ -640,8 +678,17 @@ function ContactForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label>Role</Label>
-          <Input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder="Booker" />
+          <Label>Title</Label>
+          <ContactTitleSelect
+            value={form.title_key}
+            placeholder={
+              initial && isContactTitleLegacy(initial) ? 'Map legacy title…' : 'Select title'
+            }
+            onValueChange={key => setForm(f => ({ ...f, title_key: key }))}
+          />
+          {initial && isContactTitleLegacy(initial) && initial.role ? (
+            <p className="text-[10px] text-neutral-500">Previously: {initial.role}</p>
+          ) : null}
         </div>
         <div className="space-y-1">
           <Label>Email</Label>

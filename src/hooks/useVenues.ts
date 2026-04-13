@@ -106,6 +106,7 @@ export function useVenueDetail(venueId: string | null) {
         user_id: user!.id,
         venue_id: contact.venue_id,
         name: contact.name,
+        title_key: contact.title_key ?? null,
         role: contact.role,
         email: contact.email,
         phone: contact.phone,

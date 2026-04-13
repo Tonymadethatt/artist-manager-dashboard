@@ -85,6 +85,7 @@ export interface Database {
           user_id: string
           venue_id: string
           name: string
+          title_key: string | null
           role: string | null
           email: string | null
           phone: string | null
@@ -96,6 +97,7 @@ export interface Database {
           user_id: string
           venue_id: string
           name: string
+          title_key?: string | null
           role?: string | null
           email?: string | null
           phone?: string | null
@@ -107,6 +109,7 @@ export interface Database {
           user_id?: string
           venue_id?: string
           name?: string
+          title_key?: string | null
           role?: string | null
           email?: string | null
           phone?: string | null
