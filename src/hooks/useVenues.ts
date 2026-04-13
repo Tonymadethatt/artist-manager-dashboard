@@ -7,6 +7,11 @@ import { ensureCalendarEmailsForVenueDeals } from '@/lib/calendar/queueGigCalend
 type VenueUpdate = Database['public']['Tables']['venues']['Update']
 type ContactUpdate = Database['public']['Tables']['contacts']['Update']
 
+function normalizeContactFromDb(raw: unknown): Contact {
+  const c = raw as Contact
+  return { ...c, title_key: c.title_key ?? null, role: c.role ?? null }
+}
+
 export function useVenues() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [loading, setLoading] = useState(true)
@@ -91,7 +96,7 @@ export function useVenueDetail(venueId: string | null) {
       supabase.from('contacts').select('*').eq('venue_id', venueId).order('created_at'),
       supabase.from('outreach_notes').select('*').eq('venue_id', venueId).order('created_at', { ascending: false }),
     ])
-    setContacts((contactsRes.data ?? []) as Contact[])
+    setContacts((contactsRes.data ?? []).map(normalizeContactFromDb))
     setNotes((notesRes.data ?? []) as OutreachNote[])
     setLoading(false)
   }, [venueId])
@@ -115,20 +120,30 @@ export function useVenueDetail(venueId: string | null) {
       .select()
       .single()
     if (error) return { error }
-    setContacts(prev => [...prev, data as Contact])
-    return { data: data as Contact }
+    const row = normalizeContactFromDb(data)
+    setContacts(prev => [...prev, row])
+    return { data: row }
   }
 
   const updateContact = async (id: string, updates: Omit<ContactUpdate, 'id' | 'user_id'>) => {
+    const patch: ContactUpdate = {
+      name: updates.name,
+      company: updates.company ?? null,
+      title_key: updates.title_key ?? null,
+      role: updates.role ?? null,
+      email: updates.email ?? null,
+      phone: updates.phone ?? null,
+    }
     const { data, error } = await supabase
       .from('contacts')
-      .update(updates)
+      .update(patch)
       .eq('id', id)
       .select()
       .single()
     if (error) return { error }
-    setContacts(prev => prev.map(c => c.id === id ? data as Contact : c))
-    return { data: data as Contact }
+    const row = normalizeContactFromDb(data)
+    setContacts(prev => prev.map(c => (c.id === id ? row : c)))
+    return { data: row }
   }
 
   const deleteContact = async (id: string) => {

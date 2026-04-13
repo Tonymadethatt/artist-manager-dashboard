@@ -25,9 +25,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
-import { isContactTitleLegacy, type ContactTitleKey } from '@/lib/contacts/contactTitles'
+import {
+  contactRoleForDisplay,
+  isContactTitleLegacy,
+  type ContactTitleKey,
+} from '@/lib/contacts/contactTitles'
 import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms } from '@/types'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
@@ -386,7 +389,6 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                         contact={c}
                         onEdit={() => setEditingContact(c)}
                         onDelete={() => deleteContact(c.id)}
-                        onPatch={updates => updateContact(c.id, updates)}
                       />
                     ))}
                   </div>
@@ -397,12 +399,25 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                     initial={editingContact}
                     onSave={async data => {
                       if (editingContact) {
-                        await updateContact(editingContact.id, data)
+                        const r = await updateContact(editingContact.id, data)
+                        if (r.error) {
+                          return {
+                            ok: false,
+                            message: r.error.message || 'Could not save contact. If this persists, confirm the database has the contacts.title_key column.',
+                          }
+                        }
                         setEditingContact(null)
-                      } else {
-                        await addContact({ ...data, venue_id: venue.id })
-                        setAddContactOpen(false)
+                        return { ok: true }
                       }
+                      const r = await addContact({ ...data, venue_id: venue.id })
+                      if (r.error) {
+                        return {
+                          ok: false,
+                          message: r.error.message || 'Could not add contact.',
+                        }
+                      }
+                      setAddContactOpen(false)
+                      return { ok: true }
                     }}
                     onCancel={() => { setAddContactOpen(false); setEditingContact(null) }}
                   />
@@ -557,42 +572,20 @@ function ContactRow({
   contact,
   onEdit,
   onDelete,
-  onPatch,
 }: {
   contact: Contact
   onEdit: () => void
   onDelete: () => void
-  onPatch: (updates: Partial<Pick<Contact, 'title_key' | 'role'>>) => Promise<unknown>
 }) {
-  const legacy = isContactTitleLegacy(contact)
+  const titleLine = contactRoleForDisplay(contact)
   return (
     <div className="flex items-start justify-between gap-2 rounded border border-neutral-800 bg-neutral-800/50 px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <div className="font-medium text-sm text-neutral-200">{contact.name}</div>
-          {legacy ? (
-            <Badge
-              variant="outline"
-              className="text-[10px] font-normal border-amber-700/55 text-amber-200/95 bg-amber-950/35 px-1.5 py-0 h-5"
-            >
-              Update title
-            </Badge>
-          ) : null}
         </div>
         {contact.company && <div className="text-xs text-neutral-400">{contact.company}</div>}
-        <div className="flex flex-wrap items-center gap-2 mt-1.5">
-          <ContactTitleSelect
-            value={contact.title_key}
-            placeholder={legacy ? 'Choose standard title…' : 'Select title'}
-            triggerClassName="max-w-[15rem]"
-            onValueChange={key => void onPatch({ title_key: key, role: null })}
-          />
-          {legacy && contact.role ? (
-            <span className="text-[10px] text-neutral-500 truncate max-w-[11rem]" title={contact.role}>
-              Was: {contact.role}
-            </span>
-          ) : null}
-        </div>
+        {titleLine ? <div className="text-xs text-neutral-500 mt-0.5">{titleLine}</div> : null}
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
           {contact.email && (
             <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-300">
@@ -618,13 +611,15 @@ function ContactRow({
   )
 }
 
+type ContactSaveResult = { ok: true } | { ok: false; message: string }
+
 function ContactForm({
   initial,
   onCancel,
   onSave,
 }: {
   initial: Contact | null
-  onSave: (data: Omit<Contact, 'id' | 'created_at' | 'venue_id' | 'user_id'>) => Promise<void>
+  onSave: (data: Omit<Contact, 'id' | 'created_at' | 'venue_id' | 'user_id'>) => Promise<ContactSaveResult>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -635,6 +630,7 @@ function ContactForm({
     phone: initial?.phone ?? '',
   })
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     setForm({
@@ -644,20 +640,28 @@ function ContactForm({
       email: initial?.email ?? '',
       phone: initial?.phone ?? '',
     })
+    setSaveError(null)
   }, [initial])
 
   const handleSave = async () => {
     if (!form.name.trim()) return
+    const tk = form.title_key?.trim() || null
+    if (initial && isContactTitleLegacy(initial) && !tk) {
+      setSaveError('Choose a catalog title so we can save it to the database and clear the legacy text.')
+      return
+    }
     setSaving(true)
-    await onSave({
+    setSaveError(null)
+    const result = await onSave({
       name: form.name.trim(),
       company: form.company.trim() || null,
-      title_key: form.title_key || null,
-      role: form.title_key ? null : initial?.role?.trim() || null,
+      title_key: tk,
+      role: tk ? null : initial?.role?.trim() || null,
       email: form.email || null,
       phone: form.phone || null,
     })
     setSaving(false)
+    if (!result.ok) setSaveError(result.message)
   }
 
   return (
@@ -684,7 +688,10 @@ function ContactForm({
             placeholder={
               initial && isContactTitleLegacy(initial) ? 'Map legacy title…' : 'Select title'
             }
-            onValueChange={key => setForm(f => ({ ...f, title_key: key }))}
+            onValueChange={key => {
+              setSaveError(null)
+              setForm(f => ({ ...f, title_key: key }))
+            }}
           />
           {initial && isContactTitleLegacy(initial) && initial.role ? (
             <p className="text-[10px] text-neutral-500">Previously: {initial.role}</p>
@@ -699,6 +706,9 @@ function ContactForm({
         <Label>Phone</Label>
         <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" />
       </div>
+      {saveError ? (
+        <p className="text-[11px] text-red-400/95">{saveError}</p>
+      ) : null}
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>
           {saving ? 'Saving…' : initial ? 'Save' : 'Add contact'}

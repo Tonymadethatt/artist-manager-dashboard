@@ -15,6 +15,7 @@ const CONTACT_TITLE_ROWS = [
   { key: 'promoter_owner', group: 'Venue & nightlife', label: 'Promoter / owner', m: 'owner' },
   { key: 'production_manager', group: 'Venue & nightlife', label: 'Production manager', m: 'production' },
   { key: 'technical_director', group: 'Venue & nightlife', label: 'Technical director', m: 'production' },
+  { key: 'on_site_tech', group: 'Venue & nightlife', label: 'On-site tech', m: 'production' },
   { key: 'audio_engineer', group: 'Venue & nightlife', label: 'Audio engineer / A1', m: 'production' },
   { key: 'stage_manager', group: 'Venue & nightlife', label: 'Stage manager', m: 'production' },
   { key: 'lighting_director', group: 'Venue & nightlife', label: 'Lighting director', m: 'production' },
@@ -82,9 +83,11 @@ export const CONTACT_TITLE_GROUPS: { label: string; keys: readonly ContactTitleK
   return [...map.entries()].map(([label, keys]) => ({ label, keys }))
 })()
 
-/** True when the contact still uses a free-text `role` and has not been mapped to `title_key`. */
+/** True when the contact still needs a catalog title: free-text `role` and no valid `title_key` yet. */
 export function isContactTitleLegacy(c: Pick<Contact, 'title_key' | 'role'>): boolean {
-  return !c.title_key?.trim() && !!(c.role?.trim())
+  const k = c.title_key?.trim()
+  if (k && k in CONTACT_TITLE_LABELS) return false
+  return !!(c.role?.trim())
 }
 
 /** Display string for agreements, chips, and heuristics — prefers catalog label, else legacy `role`. */
