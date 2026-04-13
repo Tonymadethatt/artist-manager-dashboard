@@ -7,6 +7,18 @@ import {
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
 
+/** Same yellow script treatment as the main live stack, for follow-up steps inside a section. */
+export function IntakeInlineScriptBlock({ children }: { children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">Script</h3>
+      <div className="rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3.5 py-3.5 sm:px-4 sm:py-4 text-base sm:text-lg font-medium leading-[1.65] text-yellow-100 [&_p]:m-0 [&_p]:text-inherit">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 /** Live call: step title, then script, then fields (single scroll). */
 export function IntakeLiveScriptCaptureStack({
   stepTitle,
@@ -22,7 +34,7 @@ export function IntakeLiveScriptCaptureStack({
       <h2 className="text-lg font-semibold text-neutral-100 tracking-tight pb-1">{stepTitle}</h2>
       <section aria-label="Call script" className="space-y-2.5 pt-4 border-t border-white/[0.08]">
         <h3 className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">Script</h3>
-        <div className="rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3.5 py-3.5 sm:px-4 sm:py-4 text-sm text-neutral-200 leading-[1.65] [&_p]:m-0">
+        <div className="rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3.5 py-3.5 sm:px-4 sm:py-4 text-lg sm:text-xl font-medium leading-[1.65] text-yellow-100 [&_p]:m-0 [&_p]:text-inherit">
           {script}
         </div>
       </section>
@@ -45,7 +57,7 @@ export function IntakeCallVibeChips({
     <div
       role="group"
       aria-label="Call energy"
-      className="grid w-full min-w-0 grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))] gap-2"
+      className="grid w-full min-w-0 grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] gap-1.5"
     >
       {CALL_VIBE_ORDER_NONEMPTY.map(key => {
         const { emoji, word } = CALL_VIBE_CHIP_META[key]
@@ -57,7 +69,7 @@ export function IntakeCallVibeChips({
             aria-pressed={on}
             onClick={() => onChange(on ? '' : key)}
             className={cn(
-              'flex min-h-[4.25rem] w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-1.5 py-2.5 text-center transition-colors',
+              'flex min-h-[3.25rem] w-full min-w-0 flex-col items-center justify-center gap-px rounded-md border px-1 py-1.5 text-center transition-colors',
               on
                 ? 'border-neutral-200 bg-neutral-100 text-neutral-950 shadow-sm'
                 : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:border-white/[0.12] hover:text-neutral-200',

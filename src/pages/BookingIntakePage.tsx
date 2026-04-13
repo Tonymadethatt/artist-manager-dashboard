@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
-  CornerDownLeft,
+  ChevronLeft,
   Loader2,
   Mic2,
   Pin,
   Save,
   Search,
+  Undo2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useBookingIntakes, type BookingIntakeShowRow } from '@/hooks/useBookingIntakes'
@@ -29,33 +30,32 @@ import {
 } from '@/lib/pricing/computeDealPrice'
 import { cn } from '@/lib/utils'
 import {
-  ADDRESS_DETAIL_LEVEL_KEYS,
-  ADDRESS_DETAIL_LEVEL_LABELS,
   CAPACITY_RANGE_OPTIONS,
   CLOSE_ARTIFACT_TAG_KEYS,
   CLOSE_ARTIFACT_TAG_LABELS,
   CONTACT_MISMATCH_CONTEXT_LABELS,
   CONTACT_MISMATCH_ROLE_ORDER,
   computeOvernightEvent,
-  computeSetLengthHours,
-  EQUIPMENT_CAPABILITY_KEYS,
-  EQUIPMENT_CAPABILITY_LABELS,
-  EVENT_ARCHETYPE_KEYS,
-  EVENT_ARCHETYPE_LABELS,
   defaultIntakeTitleV3,
-  formatSetLengthDisplay,
   INTAKE_SCHEMA_VERSION_V3,
+  INTAKE_DEFAULT_EVENT_CITY_TEXT,
+  INTAKE_DEFAULT_EVENT_STATE_REGION,
   livePathSections,
   livePhaseIndexFromSection,
   liveSectionTitle,
+  genreSetsEqual,
+  INTAKE_DEFAULT_GENRES,
+  MUSIC_VIBE_PRESETS,
   PERFORMANCE_GENRE_LABELS,
   PERFORMANCE_GENRE_VALUES,
-  PERFORMANCE_ROLE_OPTIONS,
   finalizeShowPostCaptures,
+  intakePhase2aRelaxDynamicFilters,
   parseShowDataV3,
   parseVenueDataV3,
+  phase1CaptureOwnerLabel,
   PAYMENT_METHOD_KEYS,
   PAYMENT_METHOD_LABELS,
+  PHASE2_SETTING_OPTIONS,
   POST_CALL_SECTION_ORDER,
   showLabelFromEventDate,
   stubSectionId,
@@ -64,19 +64,21 @@ import {
   suggestedOutreachStatusFromPhase7Close,
   suggestedPromiseLinesFromEarlierPhases,
   US_STATE_OPTIONS,
+  findIntakeVenuePickById,
+  intakeVenueDefaultPickForEventType,
+  intakeVenuePickOptionsForEvent,
+  intakeVenuePickValueFromShow,
+  knownEventTypeLabel,
+  venueTypesForIntake2a,
   VENUE_PROMISE_LINE_OPTIONS,
   FOLLOW_UP_TOPIC_KEYS,
   FOLLOW_UP_TOPIC_LABELS,
   GROUND_TRANSPORT_KEYS,
   GROUND_TRANSPORT_LABELS,
-  LINEUP_FORMAT_KEYS,
-  LINEUP_FORMAT_LABELS,
   LOAD_ACCESS_TAG_KEYS,
   LOAD_ACCESS_TAG_LABELS,
   MANUAL_PRICING_REASON_KEYS,
   MANUAL_PRICING_REASON_LABELS,
-  MUSIC_DELIVERY_KEYS,
-  MUSIC_DELIVERY_LABELS,
   ONSITE_CONNECT_METHOD_KEYS,
   ONSITE_CONNECT_METHOD_LABELS,
   ONSITE_CONNECT_WINDOW_KEYS,
@@ -85,35 +87,18 @@ import {
   ONSITE_POC_ROLE_LABELS,
   PARKING_ACCESS_CLASS_KEYS,
   PARKING_ACCESS_CLASS_LABELS,
-  PREFERRED_EMAIL_CHANNEL_LABELS,
-  SETLIST_REQUEST_TAG_KEYS,
-  SETLIST_REQUEST_TAG_LABELS,
   TRAVEL_BOOKED_BY_KEYS,
   TRAVEL_BOOKED_BY_LABELS,
-  VENUE_ARCHETYPE_KEYS,
-  VENUE_ARCHETYPE_LABELS,
   type BookingIntakeShowDataV3,
   type BookingIntakeVenueDataV3,
   type CapacityRangeV3,
-  type LineupFormatV3,
   type InquirySourceV3,
   type KnownEventTypeV3,
   type PerformanceGenreV3,
-  type PerformanceRoleV3,
   type CloseArtifactTagV3,
-  type EquipmentCapabilityIdV3,
   type LoadAccessTagV3,
-  type MusicDeliveryV3,
-  type Phase1CompanyConfirmedV3,
   type Phase1ContactMismatchContextV3,
-  type Phase1EmailConfirmedV3,
-  type Phase1PhoneConfirmedV3,
-  type Phase1PreferredEmailChannelV3,
   type Phase2SettingV3,
-  type Phase3CustomSetlistV3,
-  type Phase3MusicRequestsFlagV3,
-  type Phase4EquipmentDetailsFlagV3,
-  type Phase4EquipmentProviderV3,
   type Phase4LodgingStatusV3,
   type Phase4OnsiteFlagV3,
   type Phase4OnsiteSameContactV3,
@@ -131,17 +116,15 @@ import {
   type Phase7SendAgreementV3,
   type PaymentMethodKeyV3,
   type FollowUpTopicKeyV3,
-  type SetlistRequestTagV3,
   type VenuePromiseLineIdV3,
 } from '@/lib/intake/intakePayloadV3'
 import { contactRoleForDisplay, contactToMismatchContext } from '@/lib/contacts/contactTitles'
-import type { CommissionTier, Contact, Deal, OutreachTrack, PricingCatalogDoc, Venue, VenueType } from '@/types'
+import type { CommissionTier, Contact, Deal, OutreachTrack, PricingCatalogDoc, Venue } from '@/types'
 import {
   COMMISSION_TIER_LABELS,
   COMMISSION_TIER_RATES,
   OUTREACH_STATUS_LABELS,
   OUTREACH_TRACK_LABELS,
-  VENUE_TYPE_ORDER,
   VENUE_TYPE_LABELS,
 } from '@/types'
 import { mapShowBundleToEarningsImport } from '@/lib/intake/mapIntakeToDealForm'
@@ -154,7 +137,10 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -166,6 +152,13 @@ import {
   IntakeLiveScriptCaptureStack,
   IntakeYesNoPair,
 } from '@/pages/booking-intake/intakeLivePrimitives'
+import {
+  EquipmentIntakeFlowCapture,
+  type EquipmentSoundTechPickOption,
+} from '@/pages/booking-intake/EquipmentIntakeFlowCapture'
+import { Intake2bSchedulePanel } from '@/pages/booking-intake/Intake2bSchedulePanel'
+import { addHoursToQuarterHm, INTAKE_DEFAULT_EVENT_DURATION_HOURS } from '@/lib/intake/quarterHourTimes'
+import { IntakeQuarterHourTimeField } from '@/pages/booking-intake/IntakeQuarterHourTimeField'
 
 const LIVE_PHASES = [
   { id: '1', label: 'Opening' },
@@ -199,124 +192,152 @@ const EVENT_TYPE_OPTIONS: { value: KnownEventTypeV3; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
-const TIME_OPTIONS_15: string[] = (() => {
-  const out: string[] = []
-  for (let h = 0; h < 24; h++) {
-    for (const m of [0, 15, 30, 45]) {
-      out.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
-    }
-  }
-  return out
-})()
-
 function pick2a(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'event_type' | 'venue_type' | 'setting' | 'event_archetype' | 'event_name_flag'
+  | 'event_type'
+  | 'event_type_other'
+  | 'venue_type'
+  | 'venue_type_other'
+  | 'setting'
+  | 'setting_other_detail'
+  | 'event_schedule_type'
+  | 'event_recurrence_interval'
+  | 'event_name_text'
 > {
   return {
     event_type: d.event_type,
+    event_type_other: d.event_type_other,
     venue_type: d.venue_type,
+    venue_type_other: d.venue_type_other,
     setting: d.setting,
-    event_archetype: d.event_archetype,
-    event_name_flag: d.event_name_flag,
+    setting_other_detail: d.setting_other_detail,
+    event_schedule_type: d.event_schedule_type,
+    event_recurrence_interval: d.event_recurrence_interval,
+    event_name_text: d.event_name_text,
   }
+}
+
+/** “Other” free-text: chevron back inside the field so row height matches dropdowns. */
+function Intake2aOtherFieldInput({
+  placeholder,
+  value,
+  onValueChange,
+  onBackToPresets,
+}: {
+  placeholder: string
+  value: string
+  onValueChange: (v: string) => void
+  onBackToPresets: () => void
+}) {
+  return (
+    <div className="relative">
+      <Input
+        className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onValueChange(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={onBackToPresets}
+        className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400"
+        aria-label="Back to preset options"
+        title="Back to presets"
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden />
+      </button>
+    </div>
+  )
 }
 
 function pick2b(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'event_date' | 'event_start_time' | 'event_end_time' | 'overnight_event'
+  | 'event_date'
+  | 'event_start_time'
+  | 'event_end_time'
+  | 'overnight_event'
+  | 'set_start_time'
+  | 'set_end_time'
+  | 'overnight_set'
 > {
   return {
     event_date: d.event_date,
     event_start_time: d.event_start_time,
     event_end_time: d.event_end_time,
     overnight_event: d.overnight_event,
-  }
-}
-
-function pick2c(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  | 'venue_name_flag'
-  | 'city_flag'
-  | 'state_region'
-  | 'address_status'
-  | 'venue_archetype'
-  | 'address_detail_level'
-> {
-  return {
-    venue_name_flag: d.venue_name_flag,
-    city_flag: d.city_flag,
-    state_region: d.state_region,
-    address_status: d.address_status,
-    venue_archetype: d.venue_archetype,
-    address_detail_level: d.address_detail_level,
-  }
-}
-
-function pick2d(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'capacity_range' | 'exact_capacity_flag' | 'approximate_headcount'
-> {
-  return {
-    capacity_range: d.capacity_range,
-    exact_capacity_flag: d.exact_capacity_flag,
-    approximate_headcount: d.approximate_headcount,
-  }
-}
-
-function pick3a(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'performance_role' | 'set_start_time' | 'set_end_time' | 'overnight_set'
-> {
-  return {
-    performance_role: d.performance_role,
     set_start_time: d.set_start_time,
     set_end_time: d.set_end_time,
     overnight_set: d.overnight_set,
   }
 }
 
-function pick3b(d: BookingIntakeShowDataV3): Pick<
+function pick2c(d: BookingIntakeShowDataV3): Pick<
   BookingIntakeShowDataV3,
-  'genres' | 'custom_setlist' | 'setlist_request_tags' | 'music_requests_flag' | 'music_delivery'
+  | 'venue_name_flag'
+  | 'venue_name_text'
+  | 'city_flag'
+  | 'city_text'
+  | 'state_region'
+  | 'address_status'
+  | 'street_address'
+  | 'address_line2'
+  | 'postal_code'
+  | 'capacity_range'
 > {
   return {
-    genres: [...d.genres],
-    custom_setlist: d.custom_setlist,
-    setlist_request_tags: [...d.setlist_request_tags],
-    music_requests_flag: d.music_requests_flag,
-    music_delivery: d.music_delivery,
+    venue_name_flag: d.venue_name_flag,
+    venue_name_text: d.venue_name_text,
+    city_flag: d.city_flag,
+    city_text: d.city_text,
+    state_region: d.state_region,
+    address_status: d.address_status,
+    street_address: d.street_address,
+    address_line2: d.address_line2,
+    postal_code: d.postal_code,
+    capacity_range: d.capacity_range,
   }
 }
 
-function pick3c(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'other_performers' | 'num_other_acts' | 'billing_priority' | 'lineup_format'
-> {
-  if (d.other_performers !== 'multiple_performers') {
-    return {
-      other_performers: d.other_performers,
-      num_other_acts: '',
-      billing_priority: '',
-      lineup_format: d.lineup_format,
-    }
-  }
-  return {
-    other_performers: d.other_performers,
-    num_other_acts: d.num_other_acts,
-    billing_priority: d.billing_priority,
-    lineup_format: d.lineup_format,
-  }
+function pick3b(d: BookingIntakeShowDataV3): Pick<BookingIntakeShowDataV3, 'genres'> {
+  return { genres: [...d.genres] }
 }
 
-function pick4a(d: BookingIntakeShowDataV3): Pick<
+function pick4a(
+  d: BookingIntakeShowDataV3,
+): Pick<
   BookingIntakeShowDataV3,
-  'equipment_provider' | 'equipment_details_flag' | 'equipment_capability_ids'
+  | 'equipment_provider'
+  | 'equipment_capability_ids'
+  | 'equipment_intake_flow_version'
+  | 'equipment_mic'
+  | 'equipment_sound_tech'
+  | 'equipment_sound_tech_contact_id'
+  | 'equipment_sound_tech_name'
+  | 'equipment_venue_includes'
+  | 'equipment_hybrid_covers'
+  | 'equipment_dj_package_interest'
+  | 'equipment_hybrid_additions'
+  | 'equipment_revisit_production_5b'
+  | 'pricing_mode'
+  | 'package_id'
+  | 'addon_quantities'
 > {
   return {
     equipment_provider: d.equipment_provider,
-    equipment_details_flag: d.equipment_details_flag,
     equipment_capability_ids: [...d.equipment_capability_ids],
+    equipment_intake_flow_version: d.equipment_intake_flow_version,
+    equipment_mic: d.equipment_mic,
+    equipment_sound_tech: d.equipment_sound_tech,
+    equipment_sound_tech_contact_id: d.equipment_sound_tech_contact_id,
+    equipment_sound_tech_name: d.equipment_sound_tech_name,
+    equipment_venue_includes: [...d.equipment_venue_includes],
+    equipment_hybrid_covers: [...d.equipment_hybrid_covers],
+    equipment_dj_package_interest: d.equipment_dj_package_interest,
+    equipment_hybrid_additions: d.equipment_hybrid_additions,
+    equipment_revisit_production_5b: d.equipment_revisit_production_5b,
+    pricing_mode: d.pricing_mode,
+    package_id: d.package_id,
+    addon_quantities: { ...d.addon_quantities },
   }
 }
 
@@ -408,6 +429,61 @@ function buildPriceInputForShow(
     surchargeIds: [...sd.surcharge_ids],
     discountIds: [...sd.discount_ids],
   }
+}
+
+/** Bright gradient text on dark chips (selected = stronger rim, still dark ground for contrast). */
+const VIBE_PRESET_LABEL_GRADIENT: Record<string, string> = {
+  latin_party: 'from-orange-400 via-amber-300 to-yellow-300',
+  open_format: 'from-sky-400 via-blue-400 to-indigo-400',
+  hiphop_rnb: 'from-rose-400 via-fuchsia-500 to-purple-400',
+  club_high_energy: 'from-purple-400 via-violet-400 to-yellow-300',
+  afro_caribbean: 'from-emerald-400 via-yellow-300 to-red-400',
+  chill_lounge: 'from-cyan-400 via-sky-400 to-blue-400',
+  latin_x_hiphop: 'from-yellow-300 via-amber-400 to-red-500',
+  latin_x_club: 'from-yellow-300 via-amber-400 to-purple-500',
+  rnb_x_latin: 'from-purple-400 via-fuchsia-400 to-yellow-300',
+}
+
+function MusicVibePresetRow({
+  selectedGenres,
+  onApplyPreset,
+}: {
+  selectedGenres: PerformanceGenreV3[]
+  onApplyPreset: (genres: readonly PerformanceGenreV3[]) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-neutral-400 text-xs">Vibe preset</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {MUSIC_VIBE_PRESETS.map(p => {
+          const on = genreSetsEqual(selectedGenres, p.genres)
+          const grad = VIBE_PRESET_LABEL_GRADIENT[p.id] ?? 'from-neutral-200 to-neutral-100'
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onApplyPreset(p.genres)}
+              className={cn(
+                'min-h-9 px-2.5 py-1.5 text-[11px] sm:text-xs rounded-md border transition-colors leading-snug text-left',
+                on
+                  ? 'border-white/35 bg-neutral-950/75 ring-1 ring-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                  : 'border-white/[0.1] bg-neutral-900/40 hover:border-white/20',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline font-semibold bg-gradient-to-r bg-clip-text text-transparent',
+                  grad,
+                )}
+              >
+                {p.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function GenreChipRow({
@@ -582,7 +658,8 @@ export default function BookingIntakePage() {
   const pre2aRef = useRef(false)
   const pre2bRef = useRef(false)
   const pre2cRef = useRef(false)
-  const pre3aRef = useRef(false)
+  const pre2bSetSeedRef = useRef(false)
+  const genreDefaultSeededShowIdsRef = useRef(new Set<string>())
 
   useEffect(() => {
     document.title = 'The Office — Call intake'
@@ -622,32 +699,101 @@ export default function BookingIntakePage() {
     return contactsForVenue.filter(c => (sid ? c.id !== sid : true))
   }, [data?.existing_venue_id, data?.selected_contact_id, contactsForVenue])
 
+  /** Live 1B: chips for who an added phone/email belongs to. */
+  const live1bDetailOwnerChips = useMemo(() => {
+    if (!data) return []
+    const rows: { key: string; label: string }[] = []
+    rows.push({
+      key: 'primary_on_file',
+      label: data.contact_name.trim() ? `${data.contact_name.trim()} · on file` : 'Primary · on file',
+    })
+    if (data.confirmed_contact === 'no_different_person' && data.contact_mismatch_note.trim()) {
+      const first = data.contact_mismatch_note.trim().split(/\s+/)[0] ?? data.contact_mismatch_note.trim()
+      rows.push({ key: 'on_call', label: `${first} · on the call` })
+    }
+    for (const c of contactsForVenue) {
+      const r = contactRoleForDisplay(c)
+      rows.push({ key: c.id, label: r ? `${c.name} · ${r}` : c.name })
+    }
+    return rows
+  }, [data, contactsForVenue])
+
+  /** Phase 4A — sound tech picks (primary, on-call, venue contacts). */
+  const equipmentSoundTechPickOptions = useMemo((): EquipmentSoundTechPickOption[] => {
+    if (!data) return []
+    const rows: EquipmentSoundTechPickOption[] = []
+    if (data.contact_name.trim()) {
+      rows.push({
+        id: '__primary__',
+        label: `${data.contact_name.trim()} · on file`,
+        contactId: null,
+        name: data.contact_name.trim(),
+      })
+    }
+    if (data.confirmed_contact === 'no_different_person' && data.contact_mismatch_note.trim()) {
+      const full = data.contact_mismatch_note.trim()
+      const first = full.split(/\s+/)[0] ?? full
+      rows.push({
+        id: '__on_call__',
+        label: `${first} · on the call`,
+        contactId: null,
+        name: full,
+      })
+    }
+    for (const c of contactsForVenue) {
+      rows.push({
+        id: c.id,
+        label: c.role ? `${c.name} · ${c.role}` : c.name,
+        contactId: c.id,
+        name: '',
+      })
+    }
+    return rows
+  }, [data, contactsForVenue])
+
   useEffect(() => {
     if (data?.confirmed_contact !== 'no_different_person') setMismatchAddNewChosen(false)
   }, [data?.confirmed_contact])
 
-  const live1aShowVenueContactPick = useMemo(() => {
+  /** Venue contact chips row (stays visible after a chip is selected so you can switch or use Add new). */
+  const live1aShowVenueMismatchChips = useMemo(() => {
     if (!data || data.view_section !== '1A' || data.confirmed_contact !== 'no_different_person') return false
-    return (
-      otherVenueContactsForMismatch.length > 0 &&
-      !mismatchAddNewChosen &&
-      !data.contact_mismatch_note.trim() &&
-      !data.contact_mismatch_context.trim()
-    )
+    return otherVenueContactsForMismatch.length > 0 && !mismatchAddNewChosen
+  }, [data, data?.view_section, data?.confirmed_contact, otherVenueContactsForMismatch, mismatchAddNewChosen])
+
+  /** Advance blocked until user picks a venue contact or chooses Add new (legacy: note+context already set counts as done). */
+  const live1aShowVenueContactPick = useMemo(() => {
+    if (!live1aShowVenueMismatchChips || mismatchAddNewChosen) return false
+    if (data?.contact_mismatch_linked_contact_id) return false
+    const note = data?.contact_mismatch_note?.trim() ?? ''
+    const ctx = data?.contact_mismatch_context?.trim() ?? ''
+    if (note && ctx) return false
+    return true
+  }, [
+    live1aShowVenueMismatchChips,
+    data?.contact_mismatch_linked_contact_id,
+    data?.contact_mismatch_note,
+    data?.contact_mismatch_context,
+    mismatchAddNewChosen,
+  ])
+
+  const live1aShowMismatchForm = useMemo(() => {
+    if (!data || data.view_section !== '1A') return false
+    if (data.confirmed_contact !== 'no_different_person' || live1aShowVenueContactPick) return false
+    if (data.contact_mismatch_linked_contact_id) return false
+    if (data.contact_mismatch_note.trim() && data.contact_mismatch_context.trim()) return false
+    return mismatchAddNewChosen || otherVenueContactsForMismatch.length === 0
   }, [
     data,
     data?.view_section,
     data?.confirmed_contact,
     data?.contact_mismatch_note,
     data?.contact_mismatch_context,
-    otherVenueContactsForMismatch,
+    data?.contact_mismatch_linked_contact_id,
+    live1aShowVenueContactPick,
     mismatchAddNewChosen,
+    otherVenueContactsForMismatch.length,
   ])
-
-  const live1aShowMismatchForm = useMemo(() => {
-    if (!data || data.view_section !== '1A') return false
-    return data.confirmed_contact === 'no_different_person' && !live1aShowVenueContactPick
-  }, [data, data?.view_section, data?.confirmed_contact, live1aShowVenueContactPick])
 
   const filteredVenues = useMemo(() => {
     const q = venueSearch.trim().toLowerCase()
@@ -677,10 +823,7 @@ export default function BookingIntakePage() {
         | '2a'
         | '2b'
         | '2c'
-        | '2d'
-        | '3a'
         | '3b'
-        | '3c'
         | '4a'
         | '4c'
         | '4d'
@@ -704,17 +847,14 @@ export default function BookingIntakePage() {
       if ('event_start_time' in partial || 'event_end_time' in partial) {
         next.overnight_event = computeOvernightEvent(next.event_start_time, next.event_end_time)
       }
-      if (section === '3a') {
+      if (
+        section === '2b' &&
+        ('set_start_time' in partial || 'set_end_time' in partial)
+      ) {
         if (!next.set_start_time.trim() || !next.set_end_time.trim()) {
           next.overnight_set = false
-        } else if ('set_start_time' in partial || 'set_end_time' in partial) {
+        } else {
           next.overnight_set = computeOvernightEvent(next.set_start_time, next.set_end_time)
-        }
-      }
-      if (section === '3c') {
-        if (partial.other_performers === 'solo_act' || next.other_performers === 'solo_act') {
-          next.num_other_acts = ''
-          next.billing_priority = ''
         }
       }
       if (section === '4c') {
@@ -736,6 +876,28 @@ export default function BookingIntakePage() {
       if (section === '5d') {
         if (next.balance_timing !== 'custom') next.balance_due_date = ''
       }
+      if (section === '2a') {
+        if ('event_type' in partial && partial.event_type !== cur.event_type) {
+          /** Use event/setting only so an existing “other” venue doesn’t widen the list and pick the wrong default (e.g. Bar). */
+          const relaxForVenueDefault =
+            next.event_type === 'other' || next.setting === 'other'
+          const defPick = intakeVenueDefaultPickForEventType(next.event_type, relaxForVenueDefault)
+          const curPick = intakeVenuePickValueFromShow(cur)
+          /** Match legacy behavior: changing event type snaps venue to this type’s default unless the operator typed a custom “other” line. */
+          const userTypedCustomVenue = curPick === '__custom__'
+          if (defPick && !userTypedCustomVenue) {
+            next.venue_type = defPick.venueType
+            next.venue_type_other =
+              defPick.venueType === 'other' ? (defPick.otherDetail ?? '') : ''
+          }
+        }
+        const relax = intakePhase2aRelaxDynamicFilters(next)
+        const allowed = new Set(venueTypesForIntake2a(next.event_type, relax))
+        if (next.venue_type && !allowed.has(next.venue_type)) {
+          next.venue_type = ''
+          next.venue_type_other = ''
+        }
+      }
       if (section === '6a') {
         if (partial.promise_lines_v3) {
           next.promise_lines_v3 = { ...cur.promise_lines_v3, ...partial.promise_lines_v3 }
@@ -751,10 +913,7 @@ export default function BookingIntakePage() {
         ((section === '2a' && data.same_for_all_2a) ||
           (section === '2b' && data.same_for_all_2b) ||
           (section === '2c' && data.same_for_all_2c) ||
-          (section === '2d' && data.same_for_all_2d) ||
-          (section === '3a' && data.same_for_all_3a) ||
           (section === '3b' && data.same_for_all_3b) ||
-          (section === '3c' && data.same_for_all_3c) ||
           (section === '4a' && data.same_for_all_4a) ||
           (section === '4c' && data.same_for_all_4c) ||
           (section === '4d' && data.same_for_all_4d) ||
@@ -772,27 +931,19 @@ export default function BookingIntakePage() {
                 ? { ...oc, ...pick2b(next) }
                 : section === '2c'
                   ? { ...oc, ...pick2c(next) }
-                  : section === '2d'
-                    ? { ...oc, ...pick2d(next) }
-                    : section === '3a'
-                      ? { ...oc, ...pick3a(next) }
-                      : section === '3b'
-                        ? { ...oc, ...pick3b(next) }
-                        : section === '3c'
-                          ? { ...oc, ...pick3c(next) }
-                          : section === '4a'
-                            ? { ...oc, ...pick4a(next) }
-                            : section === '4c'
-                              ? { ...oc, ...pick4c(next) }
-                              : section === '4d'
-                                ? { ...oc, ...pick4d(next) }
-                                : section === '4e'
-                                  ? { ...oc, ...pick4e(next) }
-                                  : { ...oc, ...pick6a(next) }
+                  : section === '3b'
+                    ? { ...oc, ...pick3b(next) }
+                    : section === '4a'
+                      ? { ...oc, ...pick4a(next) }
+                      : section === '4c'
+                        ? { ...oc, ...pick4c(next) }
+                        : section === '4d'
+                          ? { ...oc, ...pick4d(next) }
+                          : section === '4e'
+                            ? { ...oc, ...pick4e(next) }
+                            : { ...oc, ...pick6a(next) }
           if (section === '2b') {
             merged.overnight_event = computeOvernightEvent(merged.event_start_time, merged.event_end_time)
-          }
-          if (section === '3a') {
             merged.overnight_set =
               !merged.set_start_time.trim() || !merged.set_end_time.trim()
                 ? false
@@ -814,16 +965,24 @@ export default function BookingIntakePage() {
     [selectedId, data, showsSorted, booking],
   )
 
+  useEffect(() => {
+    if (!selectedId || !data || data.view_section !== '3B') return
+    for (const row of showsSorted) {
+      const sd = parseShowDataV3(row.show_data, row.sort_order)
+      if (sd.genres.length > 0) continue
+      if (genreDefaultSeededShowIdsRef.current.has(row.id)) continue
+      genreDefaultSeededShowIdsRef.current.add(row.id)
+      applyShowPatch(row.id, { genres: [...INTAKE_DEFAULT_GENRES] }, '3b')
+    }
+  }, [selectedId, data?.view_section, showsSorted, applyShowPatch])
+
   const onSameForAllChange = useCallback(
     (
       key:
         | 'same_for_all_2a'
         | 'same_for_all_2b'
         | 'same_for_all_2c'
-        | 'same_for_all_2d'
-        | 'same_for_all_3a'
         | 'same_for_all_3b'
-        | 'same_for_all_3c'
         | 'same_for_all_4a'
         | 'same_for_all_4c'
         | 'same_for_all_4d'
@@ -843,9 +1002,10 @@ export default function BookingIntakePage() {
         let merged: BookingIntakeShowDataV3 = { ...oc, ...part }
         if (key === 'same_for_all_2b') {
           merged.overnight_event = computeOvernightEvent(merged.event_start_time, merged.event_end_time)
-        }
-        if (key === 'same_for_all_3a') {
-          merged.overnight_set = computeOvernightEvent(merged.set_start_time, merged.set_end_time)
+          merged.overnight_set =
+            !merged.set_start_time.trim() || !merged.set_end_time.trim()
+              ? false
+              : computeOvernightEvent(merged.set_start_time, merged.set_end_time)
         }
         booking.updateShowData(s.id, selectedId, merged)
         if (key === 'same_for_all_2b') {
@@ -871,12 +1031,41 @@ export default function BookingIntakePage() {
       return
     }
     pre2aRef.current = true
-    const next: BookingIntakeShowDataV3 = { ...sd, event_type: data.known_event_type }
-    booking.updateShowData(primary.id, selectedId, next)
+    const relaxSeed = sd.setting === 'other'
+    const defPick = intakeVenueDefaultPickForEventType(data.known_event_type, relaxSeed)
+    let next: BookingIntakeShowDataV3 = { ...sd, event_type: data.known_event_type }
+    const sdVenuePick = intakeVenuePickValueFromShow(sd)
+    const needVenueSeed =
+      !sd.venue_type ||
+      sdVenuePick === 'other_describe' ||
+      (sd.venue_type === 'other' && !sd.venue_type_other.trim())
+    if (defPick && needVenueSeed && sdVenuePick !== '__custom__') {
+      next = {
+        ...next,
+        venue_type: defPick.venueType,
+        venue_type_other:
+          defPick.venueType === 'other' ? (defPick.otherDetail ?? '') : '',
+      }
+    }
+    booking.updateShowData(primary.id, selectedId, finalizeShowPostCaptures(next))
     if (data.multi_show && data.same_for_all_2a) {
       for (const s of showsSorted.slice(1)) {
         const oc = parseShowDataV3(s.show_data, s.sort_order)
-        booking.updateShowData(s.id, selectedId, { ...oc, event_type: data.known_event_type })
+        let merged: BookingIntakeShowDataV3 = { ...oc, event_type: data.known_event_type }
+        const ocVenuePick = intakeVenuePickValueFromShow(oc)
+        const ocNeedVenueSeed =
+          !oc.venue_type ||
+          ocVenuePick === 'other_describe' ||
+          (oc.venue_type === 'other' && !oc.venue_type_other.trim())
+        if (defPick && ocNeedVenueSeed && ocVenuePick !== '__custom__') {
+          merged = {
+            ...merged,
+            venue_type: defPick.venueType,
+            venue_type_other:
+              defPick.venueType === 'other' ? (defPick.otherDetail ?? '') : '',
+          }
+        }
+        booking.updateShowData(s.id, selectedId, finalizeShowPostCaptures(merged))
       }
     }
   }, [
@@ -925,26 +1114,27 @@ export default function BookingIntakePage() {
     booking,
   ])
 
+  /** When (2B): if set times empty, seed from event window (same behavior as former 3A step). */
   useEffect(() => {
-    if (data?.view_section !== '3A') {
-      pre3aRef.current = false
+    if (data?.view_section !== '2B') {
+      pre2bSetSeedRef.current = false
       return
     }
-    if (pre3aRef.current || !selectedId) return
+    if (pre2bSetSeedRef.current || !selectedId) return
     const primary = showsSorted[0]
     if (!primary) return
     const sd = parseShowDataV3(primary.show_data, primary.sort_order)
     if (sd.set_start_time.trim() && sd.set_end_time.trim()) {
-      pre3aRef.current = true
+      pre2bSetSeedRef.current = true
       return
     }
     const es = sd.event_start_time.trim()
     const ee = sd.event_end_time.trim()
     if (!es && !ee) {
-      pre3aRef.current = true
+      pre2bSetSeedRef.current = true
       return
     }
-    pre3aRef.current = true
+    pre2bSetSeedRef.current = true
     const setStart = es || '20:00'
     const setEnd = ee || '23:00'
     const ovn = computeOvernightEvent(setStart, setEnd)
@@ -954,7 +1144,7 @@ export default function BookingIntakePage() {
       set_end_time: setEnd,
       overnight_set: ovn,
     })
-    if (data.multi_show && data.same_for_all_3a) {
+    if (data.multi_show && data.same_for_all_2b) {
       for (const s of showsSorted.slice(1)) {
         const oc = parseShowDataV3(s.show_data, s.sort_order)
         const st = oc.event_start_time.trim() || setStart
@@ -971,7 +1161,7 @@ export default function BookingIntakePage() {
   }, [
     data?.view_section,
     data?.multi_show,
-    data?.same_for_all_3a,
+    data?.same_for_all_2b,
     selectedId,
     showsSorted,
     booking,
@@ -982,15 +1172,21 @@ export default function BookingIntakePage() {
       pre2cRef.current = false
       return
     }
-    if (pre2cRef.current || !selectedId || !existingVenue) return
+    if (pre2cRef.current || !selectedId) return
     pre2cRef.current = true
 
     const run = (row: (typeof showsSorted)[0]) => {
       const sd = parseShowDataV3(row.show_data, row.sort_order)
       const p: Partial<BookingIntakeShowDataV3> = {}
       if (!sd.venue_name_flag) p.venue_name_flag = 'already_have'
+      if (!sd.venue_name_text.trim() && data?.known_venue_name?.trim()) {
+        p.venue_name_text = data.known_venue_name.trim()
+      }
       if (!sd.city_flag) p.city_flag = 'already_have'
-      if (!sd.state_region && existingVenue.region) p.state_region = existingVenue.region
+      if (!sd.address_status) p.address_status = 'have_it'
+      if (!sd.state_region && existingVenue?.region) p.state_region = existingVenue.region
+      else if (!sd.state_region) p.state_region = INTAKE_DEFAULT_EVENT_STATE_REGION
+      if (!sd.city_text.trim()) p.city_text = INTAKE_DEFAULT_EVENT_CITY_TEXT
       if (Object.keys(p).length === 0) return
       booking.updateShowData(row.id, selectedId, { ...sd, ...p })
     }
@@ -1004,6 +1200,7 @@ export default function BookingIntakePage() {
     data?.view_section,
     data?.multi_show,
     data?.same_for_all_2c,
+    data?.known_venue_name,
     existingVenue,
     selectedId,
     showsSorted,
@@ -1026,6 +1223,19 @@ export default function BookingIntakePage() {
     booking,
     data,
   ])
+
+  /** Removed 2D / 3A; bump stale bookmarks to the next live step. */
+  useEffect(() => {
+    if (!selectedId || !data || data.session_mode !== 'live_call') return
+    const u: Partial<BookingIntakeVenueDataV3> = {}
+    if (data.last_active_section === '2D' || data.last_active_section === '3A') {
+      u.last_active_section = '3B'
+    }
+    if (data.last_active_section === '3C') u.last_active_section = '4A'
+    if (data.view_section === '2D' || data.view_section === '3A') u.view_section = '3B'
+    if (data.view_section === '3C') u.view_section = '4A'
+    if (Object.keys(u).length) booking.updateVenueData(selectedId, u)
+  }, [selectedId, data?.session_mode, data?.last_active_section, data?.view_section, booking, data])
 
   useEffect(() => {
     if (!selectedId || !data || data.session_mode !== 'live_call') return
@@ -1207,7 +1417,7 @@ export default function BookingIntakePage() {
     await booking.flushIntakeImmediate(selectedId)
   }
 
-  const handleLiveNext = useCallback(() => {
+  const handleLiveNext = useCallback(async () => {
     if (!selectedId || !data) return
     const v = data.view_section
     const l = data.last_active_section
@@ -1217,12 +1427,59 @@ export default function BookingIntakePage() {
     if (v === '1A' && data.confirmed_contact === 'no_different_person') {
       if (live1aShowVenueContactPick) {
         setAdvanceNudge('Pick who is on the line, or Add new.')
-      } else {
-        const gaps: string[] = []
-        if (!data.contact_mismatch_note.trim()) gaps.push('Enter the caller’s name.')
-        if (!data.contact_mismatch_context.trim()) gaps.push('Select their title / role.')
-        setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
+        return
       }
+      let linkedId = data.contact_mismatch_linked_contact_id
+      const note = data.contact_mismatch_note.trim()
+      const ctxRaw = data.contact_mismatch_context.trim()
+      const needsPersist =
+        !linkedId &&
+        !!data.existing_venue_id?.trim() &&
+        !!note &&
+        !!ctxRaw &&
+        (mismatchAddNewChosen || otherVenueContactsForMismatch.length === 0)
+      if (needsPersist) {
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth.user?.id
+        if (!uid) {
+          setAdvanceNudge('Sign in to save this contact to the venue.')
+          return
+        }
+        const ctxKey = ctxRaw as Exclude<Phase1ContactMismatchContextV3, ''>
+        const roleLabel = CONTACT_MISMATCH_CONTEXT_LABELS[ctxKey] ?? ctxRaw
+        const { data: ins, error: insErr } = await supabase
+          .from('contacts')
+          .insert({
+            user_id: uid,
+            venue_id: data.existing_venue_id!.trim(),
+            name: note,
+            role: roleLabel,
+            email: null,
+            phone: null,
+            company: null,
+          })
+          .select('id')
+          .single()
+        if (insErr || !ins?.id) {
+          setAdvanceNudge(insErr?.message ? `Could not save contact: ${insErr.message}` : 'Could not save contact.')
+          return
+        }
+        linkedId = ins.id
+        booking.updateVenueData(selectedId, { contact_mismatch_linked_contact_id: linkedId })
+        await booking.flushIntakeImmediate(selectedId)
+        const vid = data.existing_venue_id!.trim()
+        const { data: rows } = await supabase.from('contacts').select('*').eq('venue_id', vid).order('created_at')
+        setContactsForVenue((rows ?? []) as Contact[])
+      }
+      const hasMismatch = !!linkedId || (!!note && !!ctxRaw)
+      if (!hasMismatch) {
+        const gaps: string[] = []
+        if (!note) gaps.push('Enter the caller’s name.')
+        if (!ctxRaw) gaps.push('Select their title / role.')
+        setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
+        return
+      }
+      setAdvanceNudge(null)
     } else {
       setAdvanceNudge(null)
     }
@@ -1253,7 +1510,15 @@ export default function BookingIntakePage() {
         booking.updateVenueData(selectedId, { last_active_section: v, view_section: v })
       }
     }
-  }, [selectedId, data, booking, pathSections, live1aShowVenueContactPick])
+  }, [
+    selectedId,
+    data,
+    booking,
+    pathSections,
+    live1aShowVenueContactPick,
+    mismatchAddNewChosen,
+    otherVenueContactsForMismatch.length,
+  ])
 
   const handleLiveBack = useCallback(() => {
     if (!selectedId || !data) return
@@ -1274,7 +1539,7 @@ export default function BookingIntakePage() {
       const jump: Record<number, string> = {
         0: '1A',
         1: '2A',
-        2: '3A',
+               2: '3B',
         3: '4A',
         4: '5A',
         5: '6A',
@@ -1304,7 +1569,7 @@ export default function BookingIntakePage() {
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
       if (e.key === 'Enter') {
         e.preventDefault()
-        handleLiveNext()
+        void handleLiveNext()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1654,7 +1919,7 @@ export default function BookingIntakePage() {
   const viewPhaseIndex = livePhaseIndexFromSection(data.view_section)
   const bookmarkPhaseIndex = livePhaseIndexFromSection(data.last_active_section)
   const showJumpReturn = data.view_section !== data.last_active_section
-  const lastPathSection = pathSections[pathSections.length - 1] ?? '3C'
+  const lastPathSection = pathSections[pathSections.length - 1] ?? '7C'
 
   const knownTypeLabel = data.known_event_type
     ? EVENT_TYPE_OPTIONS.find(o => o.value === data.known_event_type)?.label
@@ -1668,22 +1933,30 @@ export default function BookingIntakePage() {
         : knownDateFmt
           ? ` for ${knownDateFmt}`
           : ''
-  const greetingTalking = data.contact_name.trim()
-    ? `“Hey ${data.contact_name.trim()}, this is Tony with DJ Luijay’s team — thanks for reaching out${greetingMid}. I wanted to get on the phone with you personally to make sure we take care of everything. How’s it going?”`
+  /** Person actually on the call — on-file contact, or mismatch pick / “Add new” name when different person. */
+  const liveScriptAddressee = (() => {
+    if (data.confirmed_contact === 'no_different_person') {
+      const onCall = data.contact_mismatch_note.trim()
+      if (onCall) return onCall
+    }
+    return data.contact_name.trim()
+  })()
+  const liveScriptAddresseeHey = liveScriptAddressee.split(/\s+/)[0] ?? ''
+  const greetingTalking = liveScriptAddresseeHey
+    ? `“Hey ${liveScriptAddresseeHey}, this is Tony with DJ Luijay’s team — thanks for reaching out${greetingMid}. I wanted to get on the phone with you personally to make sure we take care of everything. How’s it going?”`
     : `“Hey — this is Tony with DJ Luijay’s team — thanks for reaching out${greetingMid}. I wanted to get on the phone with you personally to make sure we take care of everything. How’s it going?”`
 
   const confirmTalking =
-    data.contact_email.trim()
-      ? `“Is ${data.contact_phone.trim() || 'this number'} still the best number for you? And should I send everything over to ${data.contact_email.trim()}?”`
-      : `“Is ${data.contact_phone.trim() || 'this number'} still the best number for you? What’s the best email to send everything to?”`
+    (() => {
+      const body = `Just checking — is the contact information you gave us last time still valid, or has anything changed?`
+      if (!liveScriptAddresseeHey) return `“${body}”`
+      const lowerLead = body.charAt(0).toLowerCase() + body.slice(1)
+      return `“${liveScriptAddresseeHey}, ${lowerLead}”`
+    })()
 
-  const talking3a =
-    data.multi_show && !data.same_for_all_3a
-      ? `“Is his role the same for both nights, or different?”`
-      : `“What kind of role are you envisioning for Luijay — headliner, opener, holding down the whole night?”`
-  const talking3b = `“What kind of sound are you envisioning?”`
-  const talking3c = `“Any other DJs or performers that night?”`
-  const talking4a = `“On the equipment side — does the venue have a full DJ setup, or does Luijay need to bring his own gear?”`
+  const talking2a = `“I just want to make sure I've got everything right — what's the official name of the event, and tell me a little about the venue and how often you guys do this?”`
+  const talking3b = `“What kind of music are you envisioning for that night?”`
+  const talking4a = `“On the equipment side — does the venue have a full setup, or is Luijay bringing the production?”`
   const talking4b = `“Is there a production person or point of contact on site?”`
   const talking4c = `“Just so we know when to have him there — any load-in or soundcheck window?”`
   const talking4d = `“How’s the parking and access situation?”`
@@ -1706,8 +1979,8 @@ export default function BookingIntakePage() {
       ? `“Here's what happens next — I'm putting together the agreement, sending it to ${data.contact_email.trim()} with the invoice for the deposit. Once that's handled, the date is officially locked. Sound good?”`
       : `“Here's what happens next — I'm putting together the agreement and invoice for the deposit. Once that's handled, the date is officially locked. Sound good?”`
   const talking7b = `“Anything else you need from our side, or anything I should follow up on?”`
-  const talking7c = data.contact_name.trim()
-    ? `“${data.contact_name.trim()}, appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
+  const talking7c = liveScriptAddressee
+    ? `“${liveScriptAddressee}, appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
     : `“Appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
 
   const liveScriptParagraph = (() => {
@@ -1729,16 +2002,11 @@ export default function BookingIntakePage() {
     const s = data.view_section
     if (s === '1A') return greetingTalking
     if (s === '1B') return confirmTalking
-    if (s === '2A')
-      return `Walk me through what this night is — type of room, vibe, and whether it has a name yet.`
+    if (s === '2A') return talking2a
     if (s === '2B')
-      return `Lock the calendar date and set start/end; we’ll flag overnights automatically.`
-    if (s === '2C')
-      return `Confirm what you know about the room and mailing address without slowing the call.`
-    if (s === '2D') return `Get a sense of scale — capacity, headcount, or range.`
-    if (s === '3A') return talking3a
+      return `“What date and time are we looking at, and when do you want Luijay on?”`
+    if (s === '2C') return `“And what's the address for the venue?”`
     if (s === '3B') return talking3b
-    if (s === '3C') return talking3c
     if (s === '4A') return talking4a
     if (s === '4B') return talking4b
     if (s === '4C') return talking4c
@@ -1903,15 +2171,12 @@ export default function BookingIntakePage() {
                           <SelectValue placeholder="Contact" />
                         </SelectTrigger>
                         <SelectContent>
-                          {contactsForVenue.map(c => {
-                            const r = contactRoleForDisplay(c)
-                            return (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                                {r ? ` · ${r}` : ''}
-                              </SelectItem>
-                            )
-                          })}
+                          {contactsForVenue.map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                              {c.role ? ` · ${c.role}` : ''}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2174,6 +2439,23 @@ export default function BookingIntakePage() {
                 </button>
               ))}
             </nav>
+            {showJumpReturn ? (
+              <div className="shrink-0 mt-2 pt-2 border-t border-white/[0.08] px-1">
+                <button
+                  type="button"
+                  onClick={() => handleJumpReturn()}
+                  title={`Return to ${liveSectionTitle(data.last_active_section)}`}
+                  aria-label={`Return to ${liveSectionTitle(data.last_active_section)}`}
+                  className={cn(
+                    'flex h-10 w-full items-center justify-center rounded-lg border-2 border-orange-500',
+                    'bg-black text-orange-500 hover:border-orange-400 hover:text-orange-400',
+                    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950',
+                  )}
+                >
+                  <Undo2 className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
             <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-4 pb-24 sm:p-6 items-start">
@@ -2183,9 +2465,7 @@ export default function BookingIntakePage() {
               >
                 <IntakeLiveScriptCaptureStack
                   stepTitle={liveSectionTitle(data.view_section)}
-                  script={
-                    <p className="text-[15px] sm:text-sm text-neutral-100 leading-relaxed">{liveScriptParagraph}</p>
-                  }
+                  script={<p>{liveScriptParagraph}</p>}
                   capture={
                     <>
                       {data.view_section.startsWith('__stub_') ? (
@@ -2214,11 +2494,13 @@ export default function BookingIntakePage() {
                                               confirmed_contact: v,
                                               contact_mismatch_context: '',
                                               contact_mismatch_note: '',
+                                              contact_mismatch_linked_contact_id: null,
                                             }
                                           : {
                                               confirmed_contact: v,
                                               contact_mismatch_context: '',
                                               contact_mismatch_note: '',
+                                              contact_mismatch_linked_contact_id: null,
                                             },
                                       )
                                     }}
@@ -2228,7 +2510,7 @@ export default function BookingIntakePage() {
                                     noLabel="Different person"
                                   />
                                 </div>
-                                {live1aShowVenueContactPick ? (
+                                {live1aShowVenueMismatchChips ? (
                                   <div className="flex min-w-0 flex-wrap items-end gap-1.5">
                                     {otherVenueContactsForMismatch.map(c => (
                                       <button
@@ -2244,11 +2526,14 @@ export default function BookingIntakePage() {
                                           patch({
                                             contact_mismatch_note: c.name,
                                             contact_mismatch_context: contactToMismatchContext(c),
+                                            contact_mismatch_linked_contact_id: c.id,
                                           })
                                         }}
                                         className={cn(
                                           'max-w-[9.5rem] truncate rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
-                                          'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/[0.14] hover:text-neutral-100',
+                                          data.contact_mismatch_linked_contact_id === c.id
+                                            ? 'border-white/[0.35] bg-neutral-800/80 text-neutral-100'
+                                            : 'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/[0.14] hover:text-neutral-100',
                                         )}
                                       >
                                         {c.name}
@@ -2258,7 +2543,11 @@ export default function BookingIntakePage() {
                                       type="button"
                                       onClick={() => {
                                         setMismatchAddNewChosen(true)
-                                        patch({ contact_mismatch_context: '', contact_mismatch_note: '' })
+                                        patch({
+                                          contact_mismatch_context: '',
+                                          contact_mismatch_note: '',
+                                          contact_mismatch_linked_contact_id: null,
+                                        })
                                       }}
                                       className={cn(
                                         'rounded-md border border-dashed border-white/[0.18] bg-neutral-900/30 px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200',
@@ -2327,114 +2616,217 @@ export default function BookingIntakePage() {
                         </>
                       ) : data.view_section === '1B' ? (
                         <>
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Phone</Label>
-                              <Input
-                                className="h-11 border-neutral-800 bg-neutral-950/80"
-                                value={data.contact_phone}
-                                onChange={e => patch({ contact_phone: e.target.value })}
-                                placeholder="Phone"
-                              />
-                              <Select
-                                value={data.phone_confirmed.trim() ? data.phone_confirmed : '__none__'}
-                                onValueChange={v =>
-                                  patch({
-                                    phone_confirmed: v === '__none__' ? '' : (v as Phase1PhoneConfirmedV3),
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                                  <SelectItem value="update_needed">Update needed</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Email</Label>
-                              <Input
-                                className="h-11 border-neutral-800 bg-neutral-950/80"
-                                value={data.contact_email}
-                                onChange={e => patch({ contact_email: e.target.value })}
-                                placeholder="Email"
-                              />
-                              <Select
-                                value={data.email_confirmed.trim() ? data.email_confirmed : '__none__'}
-                                onValueChange={v =>
-                                  patch({
-                                    email_confirmed: v === '__none__' ? '' : (v as Phase1EmailConfirmedV3),
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                                  <SelectItem value="update_needed">Update needed</SelectItem>
-                                  <SelectItem value="need_to_get">Need to get</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Company</Label>
-                              <Input
-                                className="h-11 border-neutral-800 bg-neutral-950/80"
-                                value={data.contact_company}
-                                onChange={e => patch({ contact_company: e.target.value })}
-                                placeholder="Company"
-                              />
-                              <Select
-                                value={data.company_confirmed.trim() ? data.company_confirmed : '__none__'}
-                                onValueChange={v =>
-                                  patch({
-                                    company_confirmed: v === '__none__' ? '' : (v as Phase1CompanyConfirmedV3),
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                                  <SelectItem value="update_needed">Update needed</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Primary email for paperwork</Label>
-                              <Select
-                                value={
-                                  data.preferred_email_channel.trim()
-                                    ? data.preferred_email_channel
-                                    : '__none__'
-                                }
-                                onValueChange={v =>
-                                  patch({
-                                    preferred_email_channel:
-                                      v === '__none__' ? '' : (v as Phase1PreferredEmailChannelV3),
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {(['work', 'personal', 'billing', 'production'] as const).map(key => (
-                                    <SelectItem key={key} value={key}>
-                                      {PREFERRED_EMAIL_CHANNEL_LABELS[key]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                          <div className="space-y-3">
+                            {(() => {
+                              const phoneOnFile =
+                                data.contact_phone_on_file.trim() || data.contact_phone.trim()
+                              const phoneAdding = data.phone_confirmed === 'update_needed'
+                              const emailOnFile =
+                                data.contact_email_on_file.trim() || data.contact_email.trim()
+                              const emailAdding =
+                                data.email_confirmed === 'update_needed' ||
+                                data.email_confirmed === 'need_to_get'
+                              return (
+                                <>
+                                  <div className="rounded-lg border border-white/[0.08] bg-neutral-950/40 p-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                                      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+                                        <div className="space-y-0.5 shrink-0">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                                            {phoneAdding ? 'Add phone number' : 'Phone on file'}
+                                          </p>
+                                          {phoneAdding ? (
+                                            <Input
+                                              className="h-9 w-44 max-w-full border-neutral-800 bg-neutral-950/80 text-sm tabular-nums"
+                                              type="tel"
+                                              inputMode="tel"
+                                              autoComplete="tel"
+                                              value={data.contact_phone_added}
+                                              onChange={e =>
+                                                patch({ contact_phone_added: e.target.value })
+                                              }
+                                              placeholder="e.g. 9514989147"
+                                              aria-label="Phone number to add"
+                                            />
+                                          ) : (
+                                            <p className="text-sm text-neutral-100 tabular-nums break-all">
+                                              {phoneOnFile || '—'}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {phoneAdding ? (
+                                          <div className="min-w-0 flex-1 sm:max-w-[min(100%,16rem)]">
+                                            <Select
+                                              value={
+                                                data.contact_phone_added_owner.trim()
+                                                  ? data.contact_phone_added_owner
+                                                  : '__none__'
+                                              }
+                                              onValueChange={v =>
+                                                patch({
+                                                  contact_phone_added_owner:
+                                                    v === '__none__' ? '' : v,
+                                                })
+                                              }
+                                            >
+                                              <SelectTrigger
+                                                className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                                aria-label="Whose phone number"
+                                              >
+                                                <SelectValue placeholder="Whose number?" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="__none__">— Choose person</SelectItem>
+                                                {live1bDetailOwnerChips.map(chip => (
+                                                  <SelectItem key={`ph-${chip.key}`} value={chip.key}>
+                                                    {chip.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-end sm:pb-0.5">
+                                        <span className="text-[11px] text-neutral-500 sm:order-2">
+                                          Add / update
+                                        </span>
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={phoneAdding}
+                                          onClick={() => {
+                                            const on = !phoneAdding
+                                            patch({
+                                              phone_confirmed: on ? 'update_needed' : 'confirmed',
+                                              contact_phone_on_file: on
+                                                ? data.contact_phone_on_file.trim() ||
+                                                  data.contact_phone.trim()
+                                                : data.contact_phone_on_file,
+                                            })
+                                          }}
+                                          className={cn(
+                                            'relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400',
+                                            phoneAdding
+                                              ? 'border-neutral-300 bg-neutral-200'
+                                              : 'border-white/[0.12] bg-neutral-800',
+                                          )}
+                                        >
+                                                                                   <span
+                                            className={cn(
+                                              'absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
+                                              phoneAdding ? 'translate-x-[1.125rem]' : 'translate-x-0',
+                                            )}
+                                            aria-hidden
+                                          />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-lg border border-white/[0.08] bg-neutral-950/40 p-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                                      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+                                        <div className="space-y-0.5 shrink-0">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                                            {emailAdding ? 'Add email' : 'Email on file'}
+                                          </p>
+                                          {emailAdding ? (
+                                            <Input
+                                              className="h-9 w-56 max-w-full border-neutral-800 bg-neutral-950/80 text-sm"
+                                              type="email"
+                                              autoComplete="email"
+                                              value={data.contact_email_added}
+                                              onChange={e => {
+                                                const v = e.target.value
+                                                const t = v.trim()
+                                                patch(
+                                                  t
+                                                    ? { contact_email_added: v, contact_email: t }
+                                                    : { contact_email_added: v },
+                                                )
+                                              }}
+                                              placeholder="Email they gave on the call"
+                                              aria-label="Email to add"
+                                            />
+                                          ) : (
+                                            <p className="text-sm text-neutral-100 break-all">
+                                              {emailOnFile || '—'}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {emailAdding ? (
+                                          <div className="min-w-0 flex-1 sm:max-w-[min(100%,16rem)]">
+                                            <Select
+                                              value={
+                                                data.contact_email_added_owner.trim()
+                                                  ? data.contact_email_added_owner
+                                                  : '__none__'
+                                              }
+                                              onValueChange={v =>
+                                                patch({
+                                                  contact_email_added_owner:
+                                                    v === '__none__' ? '' : v,
+                                                })
+                                              }
+                                            >
+                                              <SelectTrigger
+                                                className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                                aria-label="Whose email"
+                                              >
+                                                <SelectValue placeholder="Whose email?" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="__none__">— Choose person</SelectItem>
+                                                {live1bDetailOwnerChips.map(chip => (
+                                                  <SelectItem key={`em-${chip.key}`} value={chip.key}>
+                                                    {chip.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end sm:justify-end sm:pb-0.5">
+                                        <span className="text-[11px] text-neutral-500 sm:order-2">
+                                          Add / update
+                                        </span>
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={emailAdding}
+                                          onClick={() => {
+                                            const on = !emailAdding
+                                            patch({
+                                              email_confirmed: on ? 'update_needed' : 'confirmed',
+                                              contact_email_on_file: on
+                                                ? data.contact_email_on_file.trim() ||
+                                                  data.contact_email.trim()
+                                                : data.contact_email_on_file,
+                                            })
+                                          }}
+                                          className={cn(
+                                            'relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400',
+                                            emailAdding
+                                              ? 'border-neutral-300 bg-neutral-200'
+                                              : 'border-white/[0.12] bg-neutral-800',
+                                          )}
+                                        >
+                                          <span
+                                            className={cn(
+                                              'absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
+                                              emailAdding ? 'translate-x-[1.125rem]' : 'translate-x-0',
+                                            )}
+                                            aria-hidden
+                                          />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </>
+                              )
+                            })()}
                           </div>
                         </>
                       ) : data.view_section === '2A' ? (
@@ -2467,132 +2859,291 @@ export default function BookingIntakePage() {
                                 Show {idx + 1}
                               </p>
                             ) : null}
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Event type</Label>
-                              <Select
-                                value={sd.event_type || '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { event_type: v === '__none__' ? '' : (v as KnownEventTypeV3) },
-                                    '2a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {EVENT_TYPE_OPTIONS.map(o => (
-                                    <SelectItem key={o.value} value={o.value}>
-                                      {o.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Venue type</Label>
-                              <Select
-                                value={sd.venue_type || '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { venue_type: v === '__none__' ? '' : (v as VenueType) },
-                                    '2a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {VENUE_TYPE_ORDER.map(t => (
-                                    <SelectItem key={t} value={t}>
-                                      {VENUE_TYPE_LABELS[t]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Setting</Label>
-                              <Select
-                                value={sd.setting.trim() ? sd.setting : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { setting: v === '__none__' ? '' : (v as Phase2SettingV3) },
-                                    '2a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="indoor">Indoor</SelectItem>
-                                  <SelectItem value="outdoor">Outdoor</SelectItem>
-                                  <SelectItem value="both">Both</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Event name</Label>
-                              <Select
-                                value={sd.event_name_flag.trim() ? sd.event_name_flag : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      event_name_flag:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['event_name_flag']),
-                                    },
-                                    '2a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="capture_later">Capture later</SelectItem>
-                                  <SelectItem value="no_name_yet">No name yet</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Event format (how the night runs)</Label>
-                              <Select
-                                value={sd.event_archetype.trim() ? sd.event_archetype : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      event_archetype:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['event_archetype']),
-                                    },
-                                    '2a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {EVENT_ARCHETYPE_KEYS.map(key => (
-                                    <SelectItem key={key} value={key}>
-                                      {EVENT_ARCHETYPE_LABELS[key]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                            {(() => {
+                              const relax2a = intakePhase2aRelaxDynamicFilters(sd)
+                              const { suggested: venueSuggested, rest: venueRest } =
+                                intakeVenuePickOptionsForEvent(sd.event_type, relax2a)
+                              const venuePickVal = intakeVenuePickValueFromShow(sd)
+                              const showVenueFreeform =
+                                sd.venue_type === 'other' &&
+                                (venuePickVal === 'other_describe' ||
+                                  venuePickVal === '__custom__')
+                              return (
+                                <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
+                                  <div className="min-w-0 space-y-1.5 sm:col-span-2">
+                                    <Label className="text-neutral-400 text-xs">Event name</Label>
+                                    <Input
+                                      className="h-11 border-neutral-800 bg-neutral-950/80"
+                                      placeholder="Title or working name — leave blank if they didn't give one yet"
+                                      value={sd.event_name_text}
+                                      onChange={e =>
+                                        applyShowPatch(
+                                          row.id,
+                                          { event_name_text: e.target.value, event_name_flag: '' },
+                                          '2a',
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                  <div className="min-w-0 space-y-1.5">
+                                    <Label className="text-neutral-400 text-xs">Event type</Label>
+                                    {sd.event_type === 'other' ? (
+                                      <Intake2aOtherFieldInput
+                                        placeholder="Describe event type"
+                                        value={sd.event_type_other}
+                                        onValueChange={v =>
+                                          applyShowPatch(row.id, { event_type_other: v }, '2a')
+                                        }
+                                        onBackToPresets={() =>
+                                          applyShowPatch(row.id, { event_type: '', event_type_other: '' }, '2a')
+                                        }
+                                      />
+                                    ) : (
+                                      <Select
+                                        value={sd.event_type || '__none__'}
+                                        onValueChange={v =>
+                                          applyShowPatch(
+                                            row.id,
+                                            { event_type: v === '__none__' ? '' : (v as KnownEventTypeV3) },
+                                            '2a',
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                          <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {EVENT_TYPE_OPTIONS.map(o => (
+                                            <SelectItem key={o.value} value={o.value}>
+                                              {o.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 space-y-1.5">
+                                    <Label className="text-neutral-400 text-xs">Venue type</Label>
+                                    {showVenueFreeform ? (
+                                      <Intake2aOtherFieldInput
+                                        placeholder="Describe venue type"
+                                        value={sd.venue_type_other}
+                                        onValueChange={v =>
+                                          applyShowPatch(row.id, { venue_type_other: v }, '2a')
+                                        }
+                                        onBackToPresets={() =>
+                                          applyShowPatch(row.id, { venue_type: '', venue_type_other: '' }, '2a')
+                                        }
+                                      />
+                                    ) : (
+                                      <Select
+                                        value={
+                                          !sd.venue_type
+                                            ? '__none__'
+                                            : venuePickVal === '__custom__' ||
+                                                venuePickVal === 'other_describe'
+                                              ? '__none__'
+                                              : venuePickVal
+                                        }
+                                        onValueChange={v => {
+                                          if (v === '__none__') {
+                                            applyShowPatch(
+                                              row.id,
+                                              { venue_type: '', venue_type_other: '' },
+                                              '2a',
+                                            )
+                                            return
+                                          }
+                                          const opt = findIntakeVenuePickById(v)
+                                          if (!opt) return
+                                          applyShowPatch(
+                                            row.id,
+                                            {
+                                              venue_type: opt.venueType,
+                                              venue_type_other:
+                                                opt.venueType === 'other'
+                                                  ? opt.id === 'other_describe'
+                                                    ? ''
+                                                    : (opt.otherDetail ?? '')
+                                                  : '',
+                                            },
+                                            '2a',
+                                          )
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                          <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {venueSuggested.length > 0 ? (
+                                            <SelectGroup>
+                                              <SelectLabel>
+                                                Popular for{' '}
+                                                {knownEventTypeLabel(
+                                                  sd.event_type as KnownEventTypeV3,
+                                                )}
+                                              </SelectLabel>
+                                              {venueSuggested.map(o => (
+                                                <SelectItem key={o.id} value={o.id}>
+                                                  {o.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          ) : null}
+                                          {venueSuggested.length > 0 && venueRest.length > 0 ? (
+                                            <SelectSeparator />
+                                          ) : null}
+                                          {venueRest.length > 0 ? (
+                                            <SelectGroup>
+                                              {venueSuggested.length > 0 ? (
+                                                <SelectLabel>More options</SelectLabel>
+                                              ) : null}
+                                              {venueRest.map(o => (
+                                                <SelectItem key={o.id} value={o.id}>
+                                                  {o.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectGroup>
+                                          ) : null}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 space-y-1.5">
+                                    <Label className="text-neutral-400 text-xs">Setting</Label>
+                                    {sd.setting === 'other' ? (
+                                      <Intake2aOtherFieldInput
+                                        placeholder="Describe setting"
+                                        value={sd.setting_other_detail}
+                                        onValueChange={v =>
+                                          applyShowPatch(row.id, { setting_other_detail: v }, '2a')
+                                        }
+                                        onBackToPresets={() =>
+                                          applyShowPatch(
+                                            row.id,
+                                            { setting: '', setting_other_detail: '' },
+                                            '2a',
+                                          )
+                                        }
+                                      />
+                                    ) : (
+                                      <Select
+                                        value={sd.setting.trim() ? sd.setting : '__none__'}
+                                        onValueChange={v =>
+                                          applyShowPatch(
+                                            row.id,
+                                            { setting: v === '__none__' ? '' : (v as Phase2SettingV3) },
+                                            '2a',
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                          <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="__none__">—</SelectItem>
+                                          {PHASE2_SETTING_OPTIONS.map(o => (
+                                            <SelectItem key={o.value} value={o.value}>
+                                              {o.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 space-y-1.5">
+                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                                      <span className="text-neutral-400 text-xs shrink-0">Event cadence</span>
+                                      <span className="text-[11px] text-neutral-500">
+                                        One-off or recurring?
+                                      </span>
+                                    </div>
+                                    <div
+                                      className="flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]"
+                                      role="group"
+                                      aria-label="Event cadence"
+                                    >
+                                      <button
+                                        type="button"
+                                        aria-pressed={sd.event_schedule_type === 'one_off'}
+                                        onClick={() =>
+                                          applyShowPatch(
+                                            row.id,
+                                            { event_schedule_type: 'one_off', event_recurrence_interval: '' },
+                                            '2a',
+                                          )
+                                        }
+                                        className={cn(
+                                          'rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors',
+                                          sd.event_schedule_type === 'one_off'
+                                            ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                            : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:border-white/[0.12] hover:text-neutral-200',
+                                        )}
+                                      >
+                                        One-off
+                                      </button>
+                                      {sd.event_schedule_type === 'one_off' ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            applyShowPatch(
+                                              row.id,
+                                              { event_schedule_type: 'recurring', event_recurrence_interval: '' },
+                                              '2a',
+                                            )
+                                          }
+                                          className={cn(
+                                            'rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors',
+                                            'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:border-white/[0.12] hover:text-neutral-200',
+                                          )}
+                                        >
+                                          Recurring
+                                        </button>
+                                      ) : (
+                                        <>
+                                          {(
+                                            [
+                                              { id: 'weekly' as const, label: 'Weekly' },
+                                              { id: 'biweekly' as const, label: 'Bi-weekly' },
+                                              { id: 'monthly' as const, label: 'Monthly' },
+                                            ] as const
+                                          ).map(opt => {
+                                            const on = sd.event_recurrence_interval === opt.id
+                                            return (
+                                              <button
+                                                key={opt.id}
+                                                type="button"
+                                                aria-pressed={on}
+                                                onClick={() =>
+                                                  applyShowPatch(
+                                                    row.id,
+                                                    {
+                                                      event_schedule_type: 'recurring',
+                                                      event_recurrence_interval: on ? '' : opt.id,
+                                                    },
+                                                    '2a',
+                                                  )
+                                                }
+                                                className={cn(
+                                                  'rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors',
+                                                  on
+                                                    ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                                    : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:border-white/[0.12] hover:text-neutral-200',
+                                                )}
+                                              >
+                                                {opt.label}
+                                              </button>
+                                            )
+                                          })}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       },
@@ -2628,68 +3179,41 @@ export default function BookingIntakePage() {
                                 {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
                               </p>
                             ) : null}
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Event date</Label>
-                              <Input
-                                type="date"
-                                className="h-11 border-neutral-800 bg-neutral-950/80"
-                                value={sd.event_date}
-                                onChange={e => applyShowPatch(row.id, { event_date: e.target.value }, '2b')}
-                              />
-                              {sd.event_date.trim() ? (
-                                <p className="text-[11px] text-neutral-500">
-                                  {new Date(`${sd.event_date}T12:00:00`).toLocaleDateString(undefined, {
-                                    weekday: 'long',
-                                    month: 'long',
-                                    day: 'numeric',
-                                    year: 'numeric',
-                                  })}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Start</Label>
-                                <Select
-                                  value={sd.event_start_time}
-                                  onValueChange={v => applyShowPatch(row.id, { event_start_time: v }, '2b')}
-                                >
-                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-60">
-                                    {TIME_OPTIONS_15.map(t => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">End</Label>
-                                <Select
-                                  value={sd.event_end_time}
-                                  onValueChange={v => applyShowPatch(row.id, { event_end_time: v }, '2b')}
-                                >
-                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-60">
-                                    {TIME_OPTIONS_15.map(t => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            {sd.overnight_event ? (
-                              <p className="text-[11px] text-amber-600/90">
-                                End time is earlier than start — treating as overnight into the next day.
-                              </p>
-                            ) : null}
+                            <Intake2bSchedulePanel
+                              eventDate={sd.event_date}
+                              eventStartTime={sd.event_start_time}
+                              eventEndTime={sd.event_end_time}
+                              setStartTime={sd.set_start_time}
+                              setEndTime={sd.set_end_time}
+                              overnightEvent={sd.overnight_event}
+                              overnightSet={sd.overnight_set}
+                              onEventDate={d => applyShowPatch(row.id, { event_date: d }, '2b')}
+                              onEventStartTime={v =>
+                                applyShowPatch(row.id, {
+                                  event_start_time: v,
+                                  ...(v.trim()
+                                    ? {
+                                        event_end_time: addHoursToQuarterHm(
+                                          v,
+                                          INTAKE_DEFAULT_EVENT_DURATION_HOURS,
+                                        ),
+                                      }
+                                    : {}),
+                                }, '2b')
+                              }
+                              onEventEndTime={v =>
+                                applyShowPatch(row.id, { event_end_time: v }, '2b')
+                              }
+                              onSetStartTime={v =>
+                                applyShowPatch(row.id, { set_start_time: v }, '2b')
+                              }
+                              onSetEndTime={v =>
+                                applyShowPatch(row.id, { set_end_time: v }, '2b')
+                              }
+                              onSetDjRange={(s, e) =>
+                                applyShowPatch(row.id, { set_start_time: s, set_end_time: e }, '2b')
+                              }
+                            />
                           </div>
                         )
                       },
@@ -2699,7 +3223,7 @@ export default function BookingIntakePage() {
                   <>
                     {data.multi_show ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same location for all shows</span>
+                        <span className="text-xs text-neutral-400">Same address &amp; capacity for all shows</span>
                         <IntakeCompactDual
                           value={data.same_for_all_2c}
                           onChange={v => onSameForAllChange('same_for_all_2c', v, pick2c)}
@@ -2726,408 +3250,159 @@ export default function BookingIntakePage() {
                               </p>
                             ) : null}
                             <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Venue name status</Label>
-                              <Select
-                                value={sd.venue_name_flag.trim() ? sd.venue_name_flag : '__none__'}
-                                onValueChange={v =>
+                              <Label className="text-neutral-400 text-xs">Venue name</Label>
+                              <Input
+                                className="h-11 border-neutral-800 bg-neutral-950/80"
+                                placeholder="Venue or room name"
+                                value={sd.venue_name_text}
+                                onChange={e =>
                                   applyShowPatch(
                                     row.id,
                                     {
-                                      venue_name_flag:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['venue_name_flag']),
+                                      venue_name_text: e.target.value,
+                                      venue_name_flag: sd.venue_name_flag || 'already_have',
+                                      address_status: sd.address_status || 'have_it',
                                     },
                                     '2c',
                                   )
                                 }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="already_have">Have it</SelectItem>
-                                  <SelectItem value="capture_later">Later</SelectItem>
-                                  <SelectItem value="tbd">TBD</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">City status</Label>
-                              <Select
-                                value={sd.city_flag.trim() ? sd.city_flag : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { city_flag: v === '__none__' ? '' : (v as BookingIntakeShowDataV3['city_flag']) },
-                                    '2c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="already_have">Have it</SelectItem>
-                                  <SelectItem value="capture_later">Later</SelectItem>
-                                  <SelectItem value="tbd">TBD</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">State / region</Label>
-                              <Select
-                                value={sd.state_region || '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { state_region: v === '__none__' ? '' : v },
-                                    '2c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-60">
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {US_STATE_OPTIONS.map(o => (
-                                    <SelectItem key={o.value} value={o.value}>
-                                      {o.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Address</Label>
-                              <Select
-                                value={sd.address_status.trim() ? sd.address_status : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      address_status:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['address_status']),
-                                    },
-                                    '2c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  <SelectItem value="have_it">Have it</SelectItem>
-                                  <SelectItem value="theyll_send">They’ll send</SelectItem>
-                                  <SelectItem value="tbd_private">TBD / private</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Venue / room type (what kind of room)</Label>
-                              <Select
-                                value={sd.venue_archetype.trim() ? sd.venue_archetype : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      venue_archetype:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['venue_archetype']),
-                                    },
-                                    '2c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {VENUE_ARCHETYPE_KEYS.map(key => (
-                                    <SelectItem key={key} value={key}>
-                                      {VENUE_ARCHETYPE_LABELS[key]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">How specific is the location right now?</Label>
-                              <Select
-                                value={sd.address_detail_level.trim() ? sd.address_detail_level : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      address_detail_level:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['address_detail_level']),
-                                    },
-                                    '2c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {ADDRESS_DETAIL_LEVEL_KEYS.map(key => (
-                                    <SelectItem key={key} value={key}>
-                                      {ADDRESS_DETAIL_LEVEL_LABELS[key]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        )
-                      },
-                    )}
-                  </>
-                ) : data.view_section === '2D' ? (
-                  <>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same capacity for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_2d}
-                          onChange={v => onSameForAllChange('same_for_all_2d', v, pick2d)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_2d ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_2d ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
-                                />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Capacity range</Label>
-                              <Select
-                                value={sd.capacity_range || '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      capacity_range:
-                                        v === '__none__' ? '' : (v as CapacityRangeV3),
-                                    },
-                                    '2d',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select band" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {CAPACITY_RANGE_OPTIONS.map(o => (
-                                    <SelectItem key={o.value} value={o.value}>
-                                      {o.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Exact headcount</Label>
-                              <ToggleN
-                                value={sd.exact_capacity_flag}
-                                onChange={v => applyShowPatch(row.id, { exact_capacity_flag: v }, '2d')}
-                                options={[
-                                  { value: 'capture_later' as const, label: 'Capture later' },
-                                  { value: 'range_ok' as const, label: 'Range is fine' },
-                                ]}
                               />
                             </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Approx. headcount they said (rounded)</Label>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-10 border-neutral-700"
-                                  onClick={() =>
+                            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">Street</Label>
+                                <Input
+                                  className="h-11 border-neutral-800 bg-neutral-950/80"
+                                  placeholder="Number and street"
+                                  value={sd.street_address}
+                                  onChange={e =>
                                     applyShowPatch(
                                       row.id,
-                                      { approximate_headcount: Math.max(0, sd.approximate_headcount - 25) },
-                                      '2d',
+                                      {
+                                        street_address: e.target.value,
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
                                     )
                                   }
-                                >
-                                  −25
-                                </Button>
-                                <span className="text-sm text-neutral-200 tabular-nums min-w-[3rem] text-center">
-                                  {sd.approximate_headcount > 0 ? sd.approximate_headcount : '—'}
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-10 border-neutral-700"
-                                  onClick={() =>
-                                    applyShowPatch(
-                                      row.id,
-                                      { approximate_headcount: Math.min(100_000, sd.approximate_headcount + 25) },
-                                      '2d',
-                                    )
-                                  }
-                                >
-                                  +25
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-10 text-neutral-500"
-                                  onClick={() => applyShowPatch(row.id, { approximate_headcount: 0 }, '2d')}
-                                >
-                                  Clear
-                                </Button>
-                              </div>
-                              <p className="text-[10px] text-neutral-600">Use when they give a number but you’re not capturing exact later.</p>
-                            </div>
-                          </div>
-                        )
-                      },
-                    )}
-                  </>
-                ) : data.view_section === '3A' ? (
-                  <>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same role &amp; set for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_3a}
-                          onChange={v => onSameForAllChange('same_for_all_3a', v, pick3a)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_3a ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        const setHrs = computeSetLengthHours(
-                          sd.set_start_time,
-                          sd.set_end_time,
-                          sd.overnight_set,
-                        )
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_3a ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
                                 />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Role</Label>
-                              <Select
-                                value={sd.performance_role || '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { performance_role: v === '__none__' ? '' : (v as PerformanceRoleV3) },
-                                    '3a',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {PERFORMANCE_ROLE_OPTIONS.map(o => (
-                                    <SelectItem key={o.value} value={o.value}>
-                                      {o.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              </div>
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">Apt, suite, unit</Label>
+                                <Input
+                                  className="h-11 border-neutral-800 bg-neutral-950/80"
+                                  placeholder="Optional"
+                                  value={sd.address_line2}
+                                  onChange={e =>
+                                    applyShowPatch(
+                                      row.id,
+                                      {
+                                        address_line2: e.target.value,
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
+                                    )
+                                  }
+                                />
+                              </div>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Set start</Label>
+                            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">City</Label>
+                                <Input
+                                  className="h-11 border-neutral-800 bg-neutral-950/80"
+                                  placeholder="City"
+                                  value={sd.city_text}
+                                  onChange={e =>
+                                    applyShowPatch(
+                                      row.id,
+                                      {
+                                        city_text: e.target.value,
+                                        city_flag: sd.city_flag || 'already_have',
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">State / region</Label>
                                 <Select
-                                  value={sd.set_start_time.trim() ? sd.set_start_time : '__none__'}
+                                  value={sd.state_region || '__none__'}
                                   onValueChange={v =>
                                     applyShowPatch(
                                       row.id,
-                                      { set_start_time: v === '__none__' ? '' : v },
-                                      '3a',
+                                      {
+                                        state_region: v === '__none__' ? '' : v,
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
                                     )
                                   }
                                 >
                                   <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue placeholder="Time" />
+                                    <SelectValue placeholder="Select" />
                                   </SelectTrigger>
                                   <SelectContent className="max-h-60">
                                     <SelectItem value="__none__">—</SelectItem>
-                                    {TIME_OPTIONS_15.map(t => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Set end</Label>
-                                <Select
-                                  value={sd.set_end_time.trim() ? sd.set_end_time : '__none__'}
-                                  onValueChange={v =>
-                                    applyShowPatch(row.id, { set_end_time: v === '__none__' ? '' : v }, '3a')
-                                  }
-                                >
-                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue placeholder="Time" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-60">
-                                    <SelectItem value="__none__">—</SelectItem>
-                                    {TIME_OPTIONS_15.map(t => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
+                                    {US_STATE_OPTIONS.map(o => (
+                                      <SelectItem key={o.value} value={o.value}>
+                                        {o.label}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               </div>
                             </div>
-                            <div className="rounded-lg border border-white/[0.06] bg-neutral-950/50 px-3 py-2">
-                              <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-0.5">
-                                Set length
-                              </p>
-                              <p className="text-sm font-medium text-neutral-200">
-                                {formatSetLengthDisplay(setHrs)}
-                              </p>
-                              {sd.overnight_set ? (
-                                <p className="text-[11px] text-amber-600/90 mt-1">
-                                  Set crosses midnight (end before start on the clock).
-                                </p>
-                              ) : null}
+                            <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">Postal code</Label>
+                                <Input
+                                  className="h-11 border-neutral-800 bg-neutral-950/80"
+                                  placeholder="ZIP / postal"
+                                  value={sd.postal_code}
+                                  onChange={e =>
+                                    applyShowPatch(
+                                      row.id,
+                                      {
+                                        postal_code: e.target.value,
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1.5 min-w-0">
+                                <Label className="text-neutral-400 text-xs">Scale / capacity</Label>
+                                <Select
+                                  value={sd.capacity_range || '__none__'}
+                                  onValueChange={v =>
+                                    applyShowPatch(
+                                      row.id,
+                                      {
+                                        capacity_range:
+                                          v === '__none__' ? '' : (v as CapacityRangeV3),
+                                        address_status: sd.address_status || 'have_it',
+                                      },
+                                      '2c',
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                                    <SelectValue placeholder="Expected size" />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-[min(28rem,70vh)]">
+                                    <SelectItem value="__none__">—</SelectItem>
+                                    {CAPACITY_RANGE_OPTIONS.map(o => (
+                                      <SelectItem key={o.value} value={o.value}>
+                                        {o.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                           </div>
                         )
@@ -3164,195 +3439,18 @@ export default function BookingIntakePage() {
                                 {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
                               </p>
                             ) : null}
+                            <MusicVibePresetRow
+                              selectedGenres={sd.genres}
+                              onApplyPreset={genres =>
+                                applyShowPatch(row.id, { genres: [...genres] }, '3b')
+                              }
+                            />
                             <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Genre (multi-select)</Label>
+                              <Label className="text-neutral-400 text-xs">Genre</Label>
                               <GenreChipRow
                                 selected={sd.genres}
                                 onChange={next => applyShowPatch(row.id, { genres: next }, '3b')}
                               />
-                            </div>
-                            <IntakeCompactChipRow<SetlistRequestTagV3>
-                              label="Music direction & requests (tap all that apply)"
-                              selected={sd.setlist_request_tags}
-                              ids={SETLIST_REQUEST_TAG_KEYS}
-                              labels={SETLIST_REQUEST_TAG_LABELS}
-                              onChange={next => applyShowPatch(row.id, { setlist_request_tags: next }, '3b')}
-                            />
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">How will detailed requests arrive?</Label>
-                              <ToggleN
-                                value={sd.music_delivery}
-                                onChange={v => applyShowPatch(row.id, { music_delivery: v as MusicDeliveryV3 }, '3b')}
-                                options={MUSIC_DELIVERY_KEYS.filter((k): k is Exclude<MusicDeliveryV3, ''> => k !== '').map(
-                                  k => ({
-                                    value: k,
-                                    label: MUSIC_DELIVERY_LABELS[k],
-                                  }),
-                                )}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Custom setlist</Label>
-                              <ToggleN
-                                value={sd.custom_setlist}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { custom_setlist: v as Phase3CustomSetlistV3 }, '3b')
-                                }
-                                options={[
-                                  { value: 'djs_call' as const, label: 'DJ’s call' },
-                                  { value: 'specific_requests' as const, label: 'Specific requests' },
-                                ]}
-                              />
-                              {sd.custom_setlist === 'specific_requests' ? (
-                                <p className="text-[11px] text-neutral-600 leading-snug">
-                                  You’ll type the specifics in post-call wrap-up (Phase 8).
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Specific requests</Label>
-                              <ToggleN
-                                value={sd.music_requests_flag}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { music_requests_flag: v as Phase3MusicRequestsFlagV3 }, '3b')
-                                }
-                                options={[
-                                  { value: 'none' as const, label: 'None' },
-                                  { value: 'capture_later' as const, label: 'Yes — capture later' },
-                                ]}
-                              />
-                            </div>
-                          </div>
-                        )
-                      },
-                    )}
-                  </>
-                ) : data.view_section === '3C' ? (
-                  <>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same lineup context for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_3c}
-                          onChange={v => onSameForAllChange('same_for_all_3c', v, pick3c)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_3c ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_3c ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
-                                />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Other performers</Label>
-                              <ToggleN
-                                value={sd.other_performers}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { other_performers: v }, '3c')
-                                }
-                                options={[
-                                  { value: 'solo_act' as const, label: 'Solo act' },
-                                  { value: 'multiple_performers' as const, label: 'Multiple performers' },
-                                ]}
-                              />
-                            </div>
-                            {sd.other_performers === 'multiple_performers' ? (
-                              <>
-                                <div className="space-y-1.5">
-                                  <Label className="text-neutral-400 text-xs">How many other acts?</Label>
-                                  <Select
-                                    value={sd.num_other_acts || '__none__'}
-                                    onValueChange={v =>
-                                      applyShowPatch(
-                                        row.id,
-                                        { num_other_acts: v === '__none__' ? '' : (v as BookingIntakeShowDataV3['num_other_acts']) },
-                                        '3c',
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                      <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">—</SelectItem>
-                                      <SelectItem value="1">1</SelectItem>
-                                      <SelectItem value="2">2</SelectItem>
-                                      <SelectItem value="3">3</SelectItem>
-                                      <SelectItem value="4plus">4+</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                  <Label className="text-neutral-400 text-xs">Luijay’s billing</Label>
-                                  <Select
-                                    value={sd.billing_priority || '__none__'}
-                                    onValueChange={v =>
-                                      applyShowPatch(
-                                        row.id,
-                                        {
-                                          billing_priority:
-                                            v === '__none__' ? '' : (v as BookingIntakeShowDataV3['billing_priority']),
-                                        },
-                                        '3c',
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                      <SelectValue placeholder="Select" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">—</SelectItem>
-                                      <SelectItem value="top_billing">Top billing</SelectItem>
-                                      <SelectItem value="co_headliner">Co-headliner</SelectItem>
-                                      <SelectItem value="supporting_act">Supporting act</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </>
-                            ) : null}
-                            <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Lineup / set structure</Label>
-                              <Select
-                                value={sd.lineup_format.trim() ? sd.lineup_format : '__none__'}
-                                onValueChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    {
-                                      lineup_format:
-                                        v === '__none__' ? '' : (v as BookingIntakeShowDataV3['lineup_format']),
-                                    },
-                                    '3c',
-                                  )
-                                }
-                              >
-                                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">—</SelectItem>
-                                  {LINEUP_FORMAT_KEYS.filter((k): k is Exclude<LineupFormatV3, ''> => k !== '').map(
-                                    key => (
-                                      <SelectItem key={key} value={key}>
-                                        {LINEUP_FORMAT_LABELS[key]}
-                                      </SelectItem>
-                                    ),
-                                  )}
-                                </SelectContent>
-                              </Select>
                             </div>
                           </div>
                         )
@@ -3389,46 +3487,11 @@ export default function BookingIntakePage() {
                                 {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
                               </p>
                             ) : null}
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">DJ equipment</Label>
-                              <ToggleN
-                                value={sd.equipment_provider}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { equipment_provider: v as Phase4EquipmentProviderV3 }, '4a')
-                                }
-                                options={[
-                                  { value: 'venue_provides' as const, label: 'Venue provides' },
-                                  { value: 'dj_brings' as const, label: 'DJ brings own' },
-                                  { value: 'hybrid' as const, label: 'Hybrid' },
-                                ]}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Setup details</Label>
-                              <ToggleN
-                                value={sd.equipment_details_flag}
-                                onChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { equipment_details_flag: v as Phase4EquipmentDetailsFlagV3 },
-                                    '4a',
-                                  )
-                                }
-                                options={[
-                                  { value: 'full_confirmed' as const, label: 'Full setup confirmed' },
-                                  { value: 'capture_later' as const, label: 'Discussed — capture later' },
-                                  { value: 'not_discussed' as const, label: 'Not discussed' },
-                                ]}
-                              />
-                            </div>
-                            <IntakeCompactChipRow<EquipmentCapabilityIdV3>
-                              label="What's provided / discussed (tap all that apply)"
-                              selected={sd.equipment_capability_ids}
-                              ids={EQUIPMENT_CAPABILITY_KEYS}
-                              labels={EQUIPMENT_CAPABILITY_LABELS}
-                              onChange={next =>
-                                applyShowPatch(row.id, { equipment_capability_ids: next }, '4a')
-                              }
+                            <EquipmentIntakeFlowCapture
+                              sd={sd}
+                              pricingCatalog={pricingCatalog}
+                              soundTechPickOptions={equipmentSoundTechPickOptions}
+                              onPatch={partial => applyShowPatch(row.id, partial, '4a')}
                             />
                           </div>
                         )
@@ -3569,31 +3632,14 @@ export default function BookingIntakePage() {
                               />
                             </div>
                             {sd.load_in_discussed === 'yes' ? (
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Load-in time</Label>
-                                <Select
-                                  value={sd.load_in_time.trim() ? sd.load_in_time : '__none__'}
-                                  onValueChange={v =>
-                                    applyShowPatch(
-                                      row.id,
-                                      { load_in_time: v === '__none__' ? '' : v },
-                                      '4c',
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                    <SelectValue placeholder="Time" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-60">
-                                    <SelectItem value="__none__">—</SelectItem>
-                                    {TIME_OPTIONS_15.map(t => (
-                                      <SelectItem key={t} value={t}>
-                                        {t}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                              <IntakeQuarterHourTimeField
+                                id={`intake-4c-load-in-${row.id}`}
+                                label="Load-in time"
+                                value={sd.load_in_time}
+                                allowClear
+                                onChange={v => applyShowPatch(row.id, { load_in_time: v }, '4c')}
+                                triggerClassName="h-11"
+                              />
                             ) : null}
                             <div className="space-y-2">
                               <Label className="text-neutral-400 text-xs">Soundcheck</Label>
@@ -4029,6 +4075,30 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '5B' ? (
                   <>
+                    {showsSorted.some(r => {
+                      const sdx = parseShowDataV3(r.show_data, r.sort_order)
+                      return sdx.equipment_revisit_production_5b
+                    }) ? (
+                      <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm text-amber-100/90 leading-snug">
+                          They were interested in production upgrades — revisit?
+                        </p>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-amber-200/95 hover:text-amber-50 shrink-0"
+                          onClick={() => {
+                            for (const r of showsSorted) {
+                              const sdx = parseShowDataV3(r.show_data, r.sort_order)
+                              if (sdx.equipment_revisit_production_5b) {
+                                applyShowPatch(r.id, { equipment_revisit_production_5b: false }, '5b')
+                              }
+                            }
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    ) : null}
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const inp = buildPriceInputForShow(sd, pricingCatalog)
@@ -4740,7 +4810,7 @@ export default function BookingIntakePage() {
                       (data.view_section === lastPathSection &&
                         data.last_active_section === lastPathSection)
                     }
-                    onClick={() => handleLiveNext()}
+                    onClick={() => void handleLiveNext()}
                   >
                     Next →
                   </Button>
@@ -4753,20 +4823,6 @@ export default function BookingIntakePage() {
                 </div>
               </div>
             </div>
-
-            {showJumpReturn ? (
-              <div className="absolute bottom-14 right-6 z-10">
-                <Button
-                  type="button"
-                  size="lg"
-                  className="min-h-[48px] gap-2 shadow-lg bg-amber-600 hover:bg-amber-700 text-white border-0"
-                  onClick={() => handleJumpReturn()}
-                >
-                  <CornerDownLeft className="h-4 w-4" />
-                  Return to {liveSectionTitle(data.last_active_section)}
-                </Button>
-              </div>
-            ) : null}
 
             <footer className="h-10 border-t border-neutral-800 flex items-center justify-between px-4 text-xs text-neutral-500 shrink-0 bg-neutral-950/90">
               <span>
@@ -4851,81 +4907,123 @@ export default function BookingIntakePage() {
                         onChange={e => patch({ contact_name: e.target.value })}
                         placeholder="Name on the account"
                       />
-                      <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 sm:items-end">
-                        <div className="space-y-1.5 min-w-0">
-                          <Label className="text-neutral-400 text-xs">On-call name</Label>
-                          <Input
-                            className="h-10 border-neutral-800 bg-neutral-950/80 text-sm"
-                            value={data.contact_mismatch_note}
-                            onChange={e => patch({ contact_mismatch_note: e.target.value })}
-                            placeholder="Name they gave on the call"
-                          />
+                      {data.contact_mismatch_linked_contact_id &&
+                      data.contact_mismatch_note.trim() &&
+                      data.contact_mismatch_context.trim() ? (
+                        <div className="pt-1 space-y-1">
+                          <Label className="text-neutral-400 text-xs">On the call</Label>
+                          <p className="text-sm text-neutral-200 rounded-md border border-white/[0.06] bg-neutral-950/50 px-3 py-2">
+                            {data.contact_mismatch_note.trim()}
+                            <span className="text-neutral-500">
+                              {' '}
+                              —{' '}
+                              {CONTACT_MISMATCH_CONTEXT_LABELS[
+                                data.contact_mismatch_context as Exclude<Phase1ContactMismatchContextV3, ''>
+                              ] ?? data.contact_mismatch_context.trim()}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-neutral-600">
+                            Linked to venue contacts; edit in Outreach if their role changes.
+                          </p>
                         </div>
-                        <div className="space-y-1.5 min-w-0">
-                          <Label className="text-neutral-400 text-xs">Title</Label>
-                          <Select
-                            value={
-                              data.contact_mismatch_context.trim()
-                                ? data.contact_mismatch_context
-                                : '__none__'
-                            }
-                            onValueChange={v =>
-                              patch({
-                                contact_mismatch_context:
-                                  v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
-                              })
-                            }
-                          >
-                            <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80 text-sm">
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">—</SelectItem>
-                              {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
-                                <SelectItem key={key} value={key}>
-                                  {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 sm:items-end">
+                          <div className="space-y-1.5 min-w-0">
+                            <Label className="text-neutral-400 text-xs">On-call name</Label>
+                            <Input
+                              className="h-10 border-neutral-800 bg-neutral-950/80 text-sm"
+                              value={data.contact_mismatch_note}
+                              onChange={e => patch({ contact_mismatch_note: e.target.value })}
+                              placeholder="Name they gave on the call"
+                            />
+                          </div>
+                          <div className="space-y-1.5 min-w-0">
+                            <Label className="text-neutral-400 text-xs">Title</Label>
+                            <Select
+                              value={
+                                data.contact_mismatch_context.trim()
+                                  ? data.contact_mismatch_context
+                                  : '__none__'
+                              }
+                              onValueChange={v =>
+                                patch({
+                                  contact_mismatch_context:
+                                    v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80 text-sm">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">—</SelectItem>
+                                {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
+                                  <SelectItem key={key} value={key}>
+                                    {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ) : null}
-                  {data.phone_confirmed === 'update_needed' ? (
+                  {data.phone_confirmed === 'update_needed' || data.contact_phone_added.trim() ? (
                     <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
                       <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 1 — Opening</p>
-                      <p className="text-sm text-neutral-200">Phone (updated)</p>
-                      <Input
-                        className="h-10 border-neutral-800 bg-neutral-950/80"
-                        value={data.contact_phone}
-                        onChange={e => patch({ contact_phone: e.target.value })}
-                        placeholder="Phone"
-                      />
+                      <p className="text-sm text-neutral-200">Phone</p>
+                      {(data.contact_phone_on_file.trim() || data.contact_phone.trim()) ? (
+                        <p className="text-xs text-neutral-500">
+                          On file:{' '}
+                          <span className="text-neutral-300">
+                            {data.contact_phone_on_file.trim() || data.contact_phone.trim()}
+                          </span>
+                        </p>
+                      ) : null}
+                      {data.contact_phone_added.trim() ? (
+                        <p className="text-xs text-neutral-500">
+                          Added ({phase1CaptureOwnerLabel(data, data.contact_phone_added_owner)}):{' '}
+                          <span className="text-neutral-300">{data.contact_phone_added.trim()}</span>
+                        </p>
+                      ) : data.phone_confirmed === 'update_needed' ? (
+                        <Input
+                          className="h-10 border-neutral-800 bg-neutral-950/80"
+                          value={data.contact_phone}
+                          onChange={e => patch({ contact_phone: e.target.value })}
+                          placeholder="Updated phone"
+                        />
+                      ) : null}
                     </div>
                   ) : null}
-                  {(data.email_confirmed === 'update_needed' || data.email_confirmed === 'need_to_get') ? (
+                  {(data.email_confirmed === 'update_needed' ||
+                    data.email_confirmed === 'need_to_get' ||
+                    data.contact_email_added.trim()) ? (
                     <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
                       <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 1 — Opening</p>
                       <p className="text-sm text-neutral-200">Email</p>
-                      <Input
-                        className="h-10 border-neutral-800 bg-neutral-950/80"
-                        value={data.contact_email}
-                        onChange={e => patch({ contact_email: e.target.value })}
-                        placeholder="Email"
-                      />
-                    </div>
-                  ) : null}
-                  {data.company_confirmed === 'update_needed' ? (
-                    <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
-                      <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 1 — Opening</p>
-                      <p className="text-sm text-neutral-200">Company</p>
-                      <Input
-                        className="h-10 border-neutral-800 bg-neutral-950/80"
-                        value={data.contact_company}
-                        onChange={e => patch({ contact_company: e.target.value })}
-                        placeholder="Company"
-                      />
+                      {(data.contact_email_on_file.trim() || data.contact_email.trim()) ? (
+                        <p className="text-xs text-neutral-500">
+                          On file:{' '}
+                          <span className="text-neutral-300">
+                            {data.contact_email_on_file.trim() || data.contact_email.trim()}
+                          </span>
+                        </p>
+                      ) : null}
+                      {data.contact_email_added.trim() ? (
+                        <p className="text-xs text-neutral-500">
+                          Added ({phase1CaptureOwnerLabel(data, data.contact_email_added_owner)}):{' '}
+                          <span className="text-neutral-300">{data.contact_email_added.trim()}</span>
+                        </p>
+                      ) : data.email_confirmed === 'update_needed' ||
+                        data.email_confirmed === 'need_to_get' ? (
+                        <Input
+                          className="h-10 border-neutral-800 bg-neutral-950/80"
+                          value={data.contact_email}
+                          onChange={e => patch({ contact_email: e.target.value })}
+                          placeholder="Email"
+                        />
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -5021,7 +5119,13 @@ export default function BookingIntakePage() {
                       </p>
                     )
                     const blocks: ReactNode[] = []
-                    if (sd.event_name_flag === 'capture_later') {
+                    if (
+                      !sd.event_name_text.trim() &&
+                      sd.event_name_flag !== 'no_name_yet' &&
+                      (sd.event_name_flag === 'capture_later' ||
+                        sd.event_name_flag === 'other' ||
+                        sd.event_name_flag === '')
+                    ) {
                       blocks.push(
                         <div key="en" className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
                           {showHeader}
@@ -5041,7 +5145,7 @@ export default function BookingIntakePage() {
                       blocks.push(
                         <div key="vn" className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
                           {showHeader}
-                          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 2 — Where</p>
+                          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 2 — Event address</p>
                           <p className="text-sm text-neutral-200">Venue name</p>
                           <Input
                             className="h-10 border-neutral-800 bg-neutral-950/80"
@@ -5057,7 +5161,7 @@ export default function BookingIntakePage() {
                       blocks.push(
                         <div key="ct" className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
                           {showHeader}
-                          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 2 — Where</p>
+                          <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 2 — Event address</p>
                           <p className="text-sm text-neutral-200">City</p>
                           <Input
                             className="h-10 border-neutral-800 bg-neutral-950/80"
@@ -5083,7 +5187,7 @@ export default function BookingIntakePage() {
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-neutral-400 text-xs">Line 2</Label>
+                            <Label className="text-neutral-400 text-xs">Apt, suite, unit</Label>
                             <Input
                               className="h-10 border-neutral-800 bg-neutral-950/80"
                               value={sd.address_line2}

@@ -145,7 +145,7 @@ export function mapShowBundleToEarningsImport(
   if (isPlainObject(rawShowData) && rawShowData._v === 3) {
     const sd = parseShowDataV3(rawShowData, 0)
     const warnings: string[] = []
-    const typePart = knownEventTypeLabel(sd.event_type)
+    const typePart = knownEventTypeLabel(sd.event_type, sd.event_type_other)
     const rolePart = PERFORMANCE_ROLE_OPTIONS.find(o => o.value === sd.performance_role)?.label ?? ''
     const descParts = [typePart, sd.event_date.trim() || undefined, rolePart || undefined].filter(Boolean)
     const baseDescription = descParts.join(' · ') || 'Booking intake'

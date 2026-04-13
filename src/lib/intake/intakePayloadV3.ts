@@ -1,4 +1,5 @@
-import type { CommissionTier, OutreachTrack, VenueType } from '@/types'
+import type { CommissionTier, OutreachTrack, PricingAddon, PricingCatalogDoc, PricingPackage, VenueType } from '@/types'
+import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 import { SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
 
 const COMMISSION_TIERS: CommissionTier[] = ['new_doors', 'kept_doors', 'bigger_doors', 'artist_network']
@@ -83,13 +84,60 @@ export type Phase1PhoneConfirmedV3 = '' | 'confirmed' | 'update_needed'
 export type Phase1EmailConfirmedV3 = '' | 'confirmed' | 'update_needed' | 'need_to_get'
 export type Phase1CompanyConfirmedV3 = '' | 'confirmed' | 'update_needed'
 
-/** Phase 2 — per show (booking_intake_shows.show_data). */
-export type Phase2SettingV3 = '' | 'indoor' | 'outdoor' | 'both'
-export type Phase2EventNameFlagV3 = '' | 'capture_later' | 'no_name_yet'
+/** Phase 2 — per show (booking_intake_shows.show_data). Indoor/outdoor + common floor levels. */
+export type Phase2SettingV3 =
+  | ''
+  | 'indoor'
+  | 'outdoor'
+  | 'floor_1'
+  | 'floor_2'
+  | 'floor_3'
+  | 'both'
+  | 'other'
+
+export const PHASE2_SETTING_LABELS: Record<Exclude<Phase2SettingV3, ''>, string> = {
+  indoor: 'Indoor',
+  outdoor: 'Outdoor',
+  floor_1: 'First floor',
+  floor_2: 'Second floor',
+  floor_3: 'Third floor',
+  both: 'Both',
+  other: 'Other (describe)',
+}
+
+const PHASE2_SETTING_PARSE_KEYS: Phase2SettingV3[] = [
+  '',
+  'indoor',
+  'outdoor',
+  'floor_1',
+  'floor_2',
+  'floor_3',
+  'both',
+  'other',
+]
+
+/** Live 2A Setting dropdown order. */
+export const PHASE2_SETTING_OPTIONS_ORDER: Exclude<Phase2SettingV3, ''>[] = [
+  'indoor',
+  'outdoor',
+  'floor_1',
+  'floor_2',
+  'floor_3',
+  'both',
+  'other',
+]
+
+export const PHASE2_SETTING_OPTIONS: { value: Exclude<Phase2SettingV3, ''>; label: string }[] =
+  PHASE2_SETTING_OPTIONS_ORDER.map(value => ({ value, label: PHASE2_SETTING_LABELS[value] }))
+export type Phase2EventNameFlagV3 = '' | 'capture_later' | 'no_name_yet' | 'other'
 export type Phase2VenueNameFlagV3 = '' | 'already_have' | 'capture_later' | 'tbd'
 export type Phase2CityFlagV3 = '' | 'already_have' | 'capture_later' | 'tbd'
 export type Phase2AddressStatusV3 = '' | 'have_it' | 'theyll_send' | 'tbd_private'
 export type Phase2ExactCapacityFlagV3 = '' | 'capture_later' | 'range_ok'
+
+/** Phase 2A — one-off vs recurring (replaces legacy “event format” dropdown in live UI). */
+export type Phase2EventScheduleV3 = '' | 'one_off' | 'recurring'
+export type Phase2RecurrenceIntervalV3 = '' | 'weekly' | 'biweekly' | 'monthly'
 
 /** Phase 3 — Performance (per-show in `show_data` where noted). */
 export type PerformanceRoleV3 =
@@ -347,38 +395,451 @@ export const LINEUP_FORMAT_LABELS: Record<Exclude<LineupFormatV3, ''>, string> =
   multi_stage: 'Multi-stage / roaming',
 }
 
-/** Phase 4A — equipment substance (multi-select). */
+/** Phase 4A — gear chips (multi-select) + presets in live UI. */
 export const EQUIPMENT_CAPABILITY_KEYS = [
-  'cdjs_provided',
-  'decks_two',
-  'decks_four_plus',
-  'club_standard_mixer',
-  'booth_monitors',
+  'cdjs_x2',
+  'cdjs_x3_plus',
+  'dj_mixer_club_standard',
+  'dj_mixer_rotary',
+  'dj_controller',
+  'turntables_vinyl',
+  'laptop',
+  'main_pa_speakers',
+  'main_pa_speakers_production',
+  'subwoofers',
+  'subwoofers_production',
+  'subwoofer_portable',
+  'portable_pa_speakers',
+  'booth_monitor',
+  'dj_brings_own_booth_monitor',
+  'floor_monitors',
   'wired_mic',
+  'wired_mic_backup_speeches',
   'wireless_mic',
-  'house_tech_onsite',
-  'dj_brings_controller',
-  'dj_laptop_only',
-  'power_or_generator_note',
-  'backup_usb_provided',
+  'stage_lighting',
+  'led_moving_lights',
+  'basic_lighting_uplights',
+  'fog_haze_machine',
+  'cold_sparks',
+  'co2_jets',
+  'laser_effects',
+  'folding_dj_table',
+  'branded_dj_booth_facade',
+  'power_needs_confirmed',
+  'power_generator_extension',
+  'all_cables_adapters',
+  'house_sound_tech_onsite',
+  'dj_brings_own_tech',
+  'backup_usb_media',
+  'other_capture_in_notes',
 ] as const
 
 export type EquipmentCapabilityIdV3 = (typeof EQUIPMENT_CAPABILITY_KEYS)[number]
 
 export const EQUIPMENT_CAPABILITY_LABELS: Record<EquipmentCapabilityIdV3, string> = {
-  cdjs_provided: 'CDJs / media players provided',
-  decks_two: '2-deck setup',
-  decks_four_plus: '3+ decks / rotary / extra',
-  club_standard_mixer: 'Club-standard mixer',
-  booth_monitors: 'Booth monitors OK',
-  wired_mic: 'Wired mic',
-  wireless_mic: 'Wireless mic',
-  house_tech_onsite: 'House tech / A1 on site',
-  dj_brings_controller: 'DJ brings controller',
-  dj_laptop_only: 'DJ laptop-only (house audio)',
-  power_or_generator_note: 'Power / generator concerns',
-  backup_usb_provided: 'Backup media / USB plan',
+  cdjs_x2: 'CDJs (x2)',
+  cdjs_x3_plus: 'CDJs (x3+)',
+  dj_mixer_club_standard: 'DJ Mixer (Club Standard)',
+  dj_mixer_rotary: 'DJ Mixer (Rotary)',
+  dj_controller: 'DJ Controller',
+  turntables_vinyl: 'Turntables (Vinyl)',
+  laptop: 'Laptop',
+  main_pa_speakers: 'Main PA Speakers',
+  main_pa_speakers_production: 'Main PA Speakers (Production Company)',
+  subwoofers: 'Subwoofers',
+  subwoofers_production: 'Subwoofers (Production Company)',
+  subwoofer_portable: 'Subwoofer (Portable)',
+  portable_pa_speakers: 'Portable PA Speakers',
+  booth_monitor: 'Booth Monitor',
+  dj_brings_own_booth_monitor: 'DJ Brings Own Booth Monitor',
+  floor_monitors: 'Floor Monitors',
+  wired_mic: 'Wired Mic',
+  wired_mic_backup_speeches: 'Wired Mic (Backup / Speeches)',
+  wireless_mic: 'Wireless Mic',
+  stage_lighting: 'Stage Lighting',
+  led_moving_lights: 'LED / Moving Lights',
+  basic_lighting_uplights: 'Basic Lighting (LED Uplights)',
+  fog_haze_machine: 'Fog / Haze Machine',
+  cold_sparks: 'Cold Sparks',
+  co2_jets: 'CO2 Jets',
+  laser_effects: 'Laser Effects',
+  folding_dj_table: 'Folding DJ Table',
+  branded_dj_booth_facade: 'Branded DJ Booth / Facade',
+  power_needs_confirmed: 'Power Needs Confirmed',
+  power_generator_extension: 'Power Generator / Extension',
+  all_cables_adapters: 'All Cables & Adapters',
+  house_sound_tech_onsite: 'House Sound Tech On Site',
+  dj_brings_own_tech: 'DJ Brings Own Tech',
+  backup_usb_media: 'Backup USB / Media',
+  other_capture_in_notes: 'Other — Capture in Notes',
 }
+
+/** Grouped gear list for Phase 4A UI. */
+export const EQUIPMENT_GEAR_GROUPS: { title: string; ids: readonly EquipmentCapabilityIdV3[] }[] = [
+  {
+    title: 'Decks & mixers',
+    ids: [
+      'cdjs_x2',
+      'cdjs_x3_plus',
+      'dj_mixer_club_standard',
+      'dj_mixer_rotary',
+      'dj_controller',
+      'turntables_vinyl',
+      'laptop',
+    ],
+  },
+  {
+    title: 'Sound / PA',
+    ids: [
+      'main_pa_speakers',
+      'main_pa_speakers_production',
+      'subwoofers',
+      'subwoofers_production',
+      'subwoofer_portable',
+      'portable_pa_speakers',
+      'booth_monitor',
+      'dj_brings_own_booth_monitor',
+      'floor_monitors',
+    ],
+  },
+  {
+    title: 'Microphones',
+    ids: ['wired_mic', 'wired_mic_backup_speeches', 'wireless_mic'],
+  },
+  {
+    title: 'Lighting & effects',
+    ids: [
+      'stage_lighting',
+      'led_moving_lights',
+      'basic_lighting_uplights',
+      'fog_haze_machine',
+      'cold_sparks',
+      'co2_jets',
+      'laser_effects',
+    ],
+  },
+  {
+    title: 'Booth & furniture',
+    ids: ['folding_dj_table', 'branded_dj_booth_facade'],
+  },
+  {
+    title: 'Power & infrastructure',
+    ids: ['power_needs_confirmed', 'power_generator_extension', 'all_cables_adapters'],
+  },
+  {
+    title: 'People',
+    ids: ['house_sound_tech_onsite', 'dj_brings_own_tech'],
+  },
+  {
+    title: 'Backup',
+    ids: ['backup_usb_media'],
+  },
+  {
+    title: 'Other',
+    ids: ['other_capture_in_notes'],
+  },
+]
+
+export type EquipmentPresetV3 = {
+  id: string
+  label: string
+  capabilities: readonly EquipmentCapabilityIdV3[]
+}
+
+/** Tap a preset to replace the gear chip selection (operator can edit after). */
+export const EQUIPMENT_PRESETS: readonly EquipmentPresetV3[] = [
+  {
+    id: 'full_club_industry',
+    label: 'Full Club · Industry standard',
+    capabilities: [
+      'cdjs_x2',
+      'dj_mixer_club_standard',
+      'main_pa_speakers',
+      'subwoofers',
+      'booth_monitor',
+      'wired_mic',
+      'house_sound_tech_onsite',
+      'stage_lighting',
+    ],
+  },
+  {
+    id: 'premium_club',
+    label: 'Premium Club',
+    capabilities: [
+      'cdjs_x2',
+      'dj_mixer_club_standard',
+      'main_pa_speakers',
+      'subwoofers',
+      'booth_monitor',
+      'floor_monitors',
+      'wireless_mic',
+      'house_sound_tech_onsite',
+      'stage_lighting',
+      'led_moving_lights',
+      'fog_haze_machine',
+    ],
+  },
+  {
+    id: 'luijay_full_kit',
+    label: 'Luijay · Full kit',
+    capabilities: [
+      'dj_controller',
+      'laptop',
+      'portable_pa_speakers',
+      'subwoofer_portable',
+      'wireless_mic',
+      'dj_brings_own_booth_monitor',
+      'all_cables_adapters',
+      'backup_usb_media',
+      'power_needs_confirmed',
+    ],
+  },
+  {
+    id: 'luijay_essentials',
+    label: 'Luijay · Essentials (controller)',
+    capabilities: [
+      'dj_controller',
+      'laptop',
+      'main_pa_speakers',
+      'subwoofers',
+      'booth_monitor',
+      'all_cables_adapters',
+      'backup_usb_media',
+    ],
+  },
+  {
+    id: 'private_backyard_warehouse',
+    label: 'Private / Backyard / Warehouse',
+    capabilities: [
+      'portable_pa_speakers',
+      'subwoofer_portable',
+      'dj_controller',
+      'laptop',
+      'wireless_mic',
+      'folding_dj_table',
+      'power_generator_extension',
+      'all_cables_adapters',
+      'backup_usb_media',
+      'basic_lighting_uplights',
+    ],
+  },
+  {
+    id: 'festival_outdoor',
+    label: 'Festival / Outdoor stage',
+    capabilities: [
+      'cdjs_x2',
+      'dj_mixer_club_standard',
+      'main_pa_speakers_production',
+      'subwoofers_production',
+      'floor_monitors',
+      'booth_monitor',
+      'wireless_mic',
+      'house_sound_tech_onsite',
+      'stage_lighting',
+      'led_moving_lights',
+      'fog_haze_machine',
+      'power_needs_confirmed',
+    ],
+  },
+  {
+    id: 'corporate_brand',
+    label: 'Corporate / Brand activation',
+    capabilities: [
+      'dj_controller',
+      'laptop',
+      'portable_pa_speakers',
+      'booth_monitor',
+      'wireless_mic',
+      'branded_dj_booth_facade',
+      'basic_lighting_uplights',
+      'all_cables_adapters',
+      'backup_usb_media',
+      'power_needs_confirmed',
+    ],
+  },
+  {
+    id: 'wedding_formal',
+    label: 'Wedding / Formal',
+    capabilities: [
+      'dj_controller',
+      'laptop',
+      'portable_pa_speakers',
+      'subwoofer_portable',
+      'wireless_mic',
+      'wired_mic_backup_speeches',
+      'folding_dj_table',
+      'branded_dj_booth_facade',
+      'basic_lighting_uplights',
+      'all_cables_adapters',
+      'backup_usb_media',
+      'power_needs_confirmed',
+    ],
+  },
+  {
+    id: 'hybrid_venue_pa_dj_decks',
+    label: 'Hybrid · Venue PA + DJ decks',
+    capabilities: [
+      'dj_controller',
+      'laptop',
+      'main_pa_speakers',
+      'subwoofers',
+      'booth_monitor',
+      'wired_mic',
+      'all_cables_adapters',
+      'backup_usb_media',
+    ],
+  },
+]
+
+export function equipmentSetsEqual(
+  a: readonly EquipmentCapabilityIdV3[],
+  b: readonly EquipmentCapabilityIdV3[],
+): boolean {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  for (let i = 0; i < sa.length; i++) {
+    if (sa[i] !== sb[i]) return false
+  }
+  return true
+}
+
+/** 0 = legacy flat gear chips only; 2 = structured equipment card flow. */
+export type EquipmentIntakeFlowVersionV3 = 0 | 2
+
+export type EquipmentMicV3 = '' | 'venue_has_mic' | 'dj_brings_mic' | 'not_discussed'
+
+export type EquipmentSoundTechV3 = '' | 'yes' | 'no' | 'not_discussed'
+
+export type EquipmentDjPackageInterestV3 = '' | 'yes_walkthrough' | 'no_simple' | 'think_later'
+
+export type EquipmentHybridAdditionsV3 = '' | 'yeah_see' | 'no_good' | 'maybe_later'
+
+export const EQUIPMENT_VENUE_INCLUDES_KEYS = [
+  'full_sound',
+  'booth_monitor',
+  'stage_lighting',
+  'led_moving',
+  'fog_haze',
+  'not_sure_confirm',
+] as const
+
+export type EquipmentVenueIncludesIdV3 = (typeof EQUIPMENT_VENUE_INCLUDES_KEYS)[number]
+
+export const EQUIPMENT_VENUE_INCLUDES_LABELS: Record<EquipmentVenueIncludesIdV3, string> = {
+  full_sound: 'Full Sound System',
+  booth_monitor: 'Booth Monitor',
+  stage_lighting: 'Stage Lighting',
+  led_moving: 'LED / Moving Lights',
+  fog_haze: 'Fog / Haze',
+  not_sure_confirm: 'Not sure — will confirm',
+}
+
+export const EQUIPMENT_HYBRID_COVER_KEYS = [
+  'sound_system',
+  'booth_monitor',
+  'lighting',
+  'mic',
+  'not_sure_confirm',
+] as const
+
+export type EquipmentHybridCoverIdV3 = (typeof EQUIPMENT_HYBRID_COVER_KEYS)[number]
+
+export const EQUIPMENT_HYBRID_COVER_LABELS: Record<EquipmentHybridCoverIdV3, string> = {
+  sound_system: 'Sound System',
+  booth_monitor: 'Booth Monitor',
+  lighting: 'Lighting',
+  mic: 'Mic',
+  not_sure_confirm: 'Not sure — will confirm',
+}
+
+/** Derive legacy `equipment_capability_ids` from structured equipment answers (flow v2). */
+export function synthesizeEquipmentCapabilityIds(sd: BookingIntakeShowDataV3): EquipmentCapabilityIdV3[] {
+  const acc = new Set<EquipmentCapabilityIdV3>()
+  const add = (id: EquipmentCapabilityIdV3) => acc.add(id)
+
+  for (const k of sd.equipment_venue_includes) {
+    if (k === 'full_sound') {
+      add('main_pa_speakers')
+      add('subwoofers')
+    }
+    if (k === 'booth_monitor') add('booth_monitor')
+    if (k === 'stage_lighting') add('stage_lighting')
+    if (k === 'led_moving') add('led_moving_lights')
+    if (k === 'fog_haze') add('fog_haze_machine')
+  }
+  for (const k of sd.equipment_hybrid_covers) {
+    if (k === 'sound_system') {
+      add('main_pa_speakers')
+      add('subwoofers')
+    }
+    if (k === 'booth_monitor') add('booth_monitor')
+    if (k === 'lighting') add('stage_lighting')
+    if (k === 'mic') add('wireless_mic')
+  }
+  if (sd.equipment_mic === 'venue_has_mic') add('wired_mic')
+  if (sd.equipment_mic === 'dj_brings_mic') add('wireless_mic')
+  if (sd.equipment_sound_tech === 'yes') add('house_sound_tech_onsite')
+
+  return (EQUIPMENT_CAPABILITY_KEYS as readonly EquipmentCapabilityIdV3[]).filter(id => acc.has(id))
+}
+
+export function resolveProductionPackageCandidates(doc: PricingCatalogDoc): {
+  premium: PricingPackage | null
+  platinum: PricingPackage | null
+  exclusive: PricingPackage | null
+} {
+  const byPrice = (target: number, tol = 250) =>
+    doc.packages.find(p => Math.abs(p.price - target) <= tol) ?? null
+  let premium = byPrice(2000)
+  let platinum = byPrice(2600)
+  let exclusive = byPrice(3300)
+  if (!premium) premium = doc.packages.find(p => /premium/i.test(p.name)) ?? null
+  if (!platinum) platinum = doc.packages.find(p => /platinum/i.test(p.name)) ?? null
+  if (!exclusive) exclusive = doc.packages.find(p => /exclusive/i.test(p.name)) ?? null
+  if (!premium || !platinum || !exclusive) {
+    const sorted = [...doc.packages].sort((a, b) => a.price - b.price)
+    if (!premium && sorted[0]) premium = sorted[0]
+    if (!platinum && sorted[1]) platinum = sorted[1]
+    else if (!platinum && sorted[0]) platinum = sorted[0]
+    if (!exclusive && sorted[2]) exclusive = sorted[2]
+    else if (!exclusive && sorted[sorted.length - 1]) exclusive = sorted[sorted.length - 1]
+  }
+  return { premium, platinum, exclusive }
+}
+
+export function resolveVenueProductionAddonCandidates(doc: PricingCatalogDoc): {
+  lighting: PricingAddon | null
+  effects: PricingAddon | null
+  danceFloor: PricingAddon | null
+} {
+  const lower = (s: string) => s.toLowerCase()
+  const lighting =
+    doc.addons.find(a => /lighting|uplight/i.test(a.name) && !/dance/i.test(a.name)) ??
+    doc.addons.find(a => Math.abs(a.price - 350) <= 120) ??
+    null
+  const effects =
+    doc.addons.find(
+      a => /co2|spark|cold|visual|haze|effect/i.test(lower(a.name)) || /effect/i.test(lower(a.category ?? '')),
+    ) ?? doc.addons.find(a => Math.abs(a.price - 400) <= 150) ?? null
+  const danceFloor =
+    doc.addons.find(a => /dance\s*floor|dancefloor|sq\.?\s*ft|sqft/i.test(a.name)) ??
+    doc.addons.find(a => a.priceType === 'per_sq_ft') ??
+    null
+  return { lighting, effects, danceFloor }
+}
+
+const VENUE_PA_CAPABILITY_IDS: readonly EquipmentCapabilityIdV3[] = [
+  'main_pa_speakers',
+  'main_pa_speakers_production',
+  'subwoofers',
+  'subwoofers_production',
+]
+
+const DJ_PORTABLE_PA_CAPABILITY_IDS: readonly EquipmentCapabilityIdV3[] = [
+  'portable_pa_speakers',
+  'subwoofer_portable',
+]
 
 /** Phase 4C — load-in access */
 export const LOAD_ACCESS_TAG_KEYS = [
@@ -692,32 +1153,206 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethodKeyV3, string> = {
   other: 'Other',
 }
 
+/** Alphabetical chip list — union of all vibe presets (Phase 3B). */
 export const PERFORMANCE_GENRE_VALUES = [
-  'latin_house',
-  'reggaeton',
-  'hip_hop',
-  'top_40',
-  'edm',
-  'cumbia',
-  'salsa',
   'afrobeats',
-  'open_format',
-  'other',
+  'amapiano',
+  'bachata',
+  'bossa_nova',
+  'cumbia',
+  'dance_pop',
+  'dancehall',
+  'deep_house',
+  'dembow',
+  'downtempo',
+  'edm',
+  'hip_hop',
+  'house',
+  'jazz_house',
+  'kompa',
+  'latin_house',
+  'latin_trap',
+  'lo_fi',
+  'merengue',
+  'moombahton',
+  'neo_soul',
+  'old_school_hip_hop',
+  'rnb',
+  'reggae',
+  'reggaeton',
+  'reggaeton_clasico',
+  'remix_mashups',
+  'salsa',
+  'soca',
+  'tech_house',
+  'throwbacks',
+  'top_40',
+  'trap',
+  'west_coast_hip_hop',
 ] as const
 
 export type PerformanceGenreV3 = (typeof PERFORMANCE_GENRE_VALUES)[number]
 
+export type MusicVibePresetV3 = {
+  id: string
+  label: string
+  genres: readonly PerformanceGenreV3[]
+}
+
+/** Tap a vibe to replace genre chip selection with that preset (operator can edit chips after). */
+export const MUSIC_VIBE_PRESETS: readonly MusicVibePresetV3[] = [
+  {
+    id: 'latin_party',
+    label: 'Latin Party',
+    genres: [
+      'reggaeton',
+      'latin_house',
+      'cumbia',
+      'salsa',
+      'bachata',
+      'merengue',
+      'dembow',
+      'moombahton',
+      'latin_trap',
+      'reggaeton_clasico',
+    ],
+  },
+  {
+    id: 'hiphop_rnb',
+    label: 'Hip-Hop & R&B',
+    genres: [
+      'hip_hop',
+      'rnb',
+      'trap',
+      'west_coast_hip_hop',
+      'old_school_hip_hop',
+      'afrobeats',
+      'dancehall',
+    ],
+  },
+  {
+    id: 'club_high_energy',
+    label: 'Club / High Energy',
+    genres: ['edm', 'house', 'tech_house', 'latin_house', 'moombahton', 'dance_pop', 'remix_mashups', 'top_40'],
+  },
+  {
+    id: 'chill_lounge',
+    label: 'Chill / Lounge',
+    genres: ['rnb', 'deep_house', 'downtempo', 'neo_soul', 'bossa_nova', 'lo_fi', 'jazz_house'],
+  },
+  {
+    id: 'open_format',
+    label: 'Open Format / Mix of Everything',
+    genres: [
+      'top_40',
+      'hip_hop',
+      'rnb',
+      'reggaeton',
+      'edm',
+      'dance_pop',
+      'latin_house',
+      'remix_mashups',
+      'throwbacks',
+    ],
+  },
+  {
+    id: 'afro_caribbean',
+    label: 'Afro / Caribbean',
+    genres: ['afrobeats', 'dancehall', 'soca', 'amapiano', 'dembow', 'reggae', 'kompa'],
+  },
+  {
+    id: 'latin_x_hiphop',
+    label: 'Latin x Hip-Hop',
+    genres: [
+      'reggaeton',
+      'latin_trap',
+      'hip_hop',
+      'trap',
+      'dembow',
+      'moombahton',
+      'west_coast_hip_hop',
+      'old_school_hip_hop',
+    ],
+  },
+  {
+    id: 'latin_x_club',
+    label: 'Latin x Club',
+    genres: [
+      'reggaeton',
+      'latin_house',
+      'moombahton',
+      'dembow',
+      'tech_house',
+      'edm',
+      'dance_pop',
+      'cumbia',
+      'remix_mashups',
+    ],
+  },
+  {
+    id: 'rnb_x_latin',
+    label: 'R&B x Latin',
+    genres: [
+      'rnb',
+      'bachata',
+      'neo_soul',
+      'reggaeton_clasico',
+      'salsa',
+      'deep_house',
+      'downtempo',
+      'bossa_nova',
+    ],
+  },
+] as const
+
+/** New shows + empty legacy rows: default to Latin Party (specialty). */
+export const INTAKE_DEFAULT_GENRES: readonly PerformanceGenreV3[] = MUSIC_VIBE_PRESETS[0].genres
+
+export function genreSetsEqual(a: readonly PerformanceGenreV3[], b: readonly PerformanceGenreV3[]): boolean {
+  if (a.length !== b.length) return false
+  const sa = [...a].sort()
+  const sb = [...b].sort()
+  for (let i = 0; i < sa.length; i++) {
+    if (sa[i] !== sb[i]) return false
+  }
+  return true
+}
+
 export const PERFORMANCE_GENRE_LABELS: Record<PerformanceGenreV3, string> = {
-  latin_house: 'Latin House',
-  reggaeton: 'Reggaeton',
-  hip_hop: 'Hip-Hop',
-  top_40: 'Top 40',
-  edm: 'EDM',
-  cumbia: 'Cumbia',
-  salsa: 'Salsa',
   afrobeats: 'Afrobeats',
-  open_format: 'Open Format',
-  other: 'Other',
+  amapiano: 'Amapiano',
+  bachata: 'Bachata',
+  bossa_nova: 'Bossa Nova',
+  cumbia: 'Cumbia',
+  dance_pop: 'Dance Pop',
+  dancehall: 'Dancehall',
+  deep_house: 'Deep House',
+  dembow: 'Dembow',
+  downtempo: 'Downtempo',
+  edm: 'EDM',
+  hip_hop: 'Hip-Hop',
+  house: 'House',
+  jazz_house: 'Jazz House',
+  kompa: 'Kompa',
+  latin_house: 'Latin House',
+  latin_trap: 'Latin Trap',
+  lo_fi: 'Lo-fi',
+  merengue: 'Merengue',
+  moombahton: 'Moombahton',
+  neo_soul: 'Neo-Soul',
+  old_school_hip_hop: 'Old School Hip-Hop',
+  rnb: 'R&B',
+  reggae: 'Reggae',
+  reggaeton: 'Reggaeton',
+  reggaeton_clasico: 'Reggaeton Clásico',
+  remix_mashups: 'Remix / Mashups',
+  salsa: 'Salsa',
+  soca: 'Soca',
+  tech_house: 'Tech House',
+  throwbacks: 'Throwbacks',
+  top_40: 'Top 40',
+  trap: 'Trap',
+  west_coast_hip_hop: 'West Coast Hip-Hop',
 }
 
 export const PERFORMANCE_ROLE_OPTIONS: { value: PerformanceRoleV3; label: string }[] = [
@@ -731,23 +1366,51 @@ export const PERFORMANCE_ROLE_OPTIONS: { value: PerformanceRoleV3; label: string
 
 export type CapacityRangeV3 =
   | ''
+  | 'under_50'
+  | '50_100'
   | 'under_100'
+  | '100_250'
+  | '250_500'
   | '100_300'
   | '300_500'
+  | '500_750'
+  | '750_1000'
   | '500_1000'
   | '1000_2000'
   | '2000_5000'
+  | '5000_10000'
+  | '10000_25000'
+  | '25000_50000'
+  | '50000_100000'
+  | '100000_250000'
+  | '250000_plus'
   | '5000_plus'
 
 export const CAPACITY_RANGE_OPTIONS: { value: CapacityRangeV3; label: string }[] = [
-  { value: 'under_100', label: 'Under 100' },
+  { value: 'under_50', label: 'Under 50' },
+  { value: '50_100', label: '50-100' },
+  { value: 'under_100', label: 'Up to 100' },
+  { value: '100_250', label: '100-250' },
+  { value: '250_500', label: '250-500' },
   { value: '100_300', label: '100-300' },
   { value: '300_500', label: '300-500' },
+  { value: '500_750', label: '500-750' },
+  { value: '750_1000', label: '750-1,000' },
   { value: '500_1000', label: '500-1,000' },
   { value: '1000_2000', label: '1,000-2,000' },
   { value: '2000_5000', label: '2,000-5,000' },
-  { value: '5000_plus', label: '5,000+' },
+  { value: '5000_10000', label: '5,000-10,000' },
+  { value: '10000_25000', label: '10,000-25,000' },
+  { value: '25000_50000', label: '25,000-50,000' },
+  { value: '50000_100000', label: '50,000-100,000' },
+  { value: '100000_250000', label: '100,000-250,000' },
+  { value: '250000_plus', label: '250,000+ (stadium / festival scale)' },
+  { value: '5000_plus', label: '5,000+ (broad)' },
 ]
+
+/** Default event-address locality for new shows (primary operating market). */
+export const INTAKE_DEFAULT_EVENT_CITY_TEXT = 'Los Angeles'
+export const INTAKE_DEFAULT_EVENT_STATE_REGION = 'CA'
 
 /** US state / region codes stored in `venues.region`; last = Other / International. */
 export const US_STATE_OPTIONS: { value: string; label: string }[] = [
@@ -837,10 +1500,24 @@ export type BookingIntakeVenueDataV3 = {
   phone_confirmed: Phase1PhoneConfirmedV3
   email_confirmed: Phase1EmailConfirmedV3
   company_confirmed: Phase1CompanyConfirmedV3
+  /** Frozen copy of phone on file when starting 1B “add number” flow (`contact_phone` stays the primary on-file value). */
+  contact_phone_on_file: string
+  /** Additional phone from live 1B (additive). */
+  contact_phone_added: string
+  /** `primary_on_file` | `on_call` | venue `contacts.id` for {@link contact_phone_added}. */
+  contact_phone_added_owner: string
+  contact_email_on_file: string
+  contact_email_added: string
+  contact_email_added_owner: string
   /** Substantive: their role/title when `confirmed_contact === 'no_different_person'`. */
   contact_mismatch_context: Phase1ContactMismatchContextV3
   /** Their name on the call when not the contact on file (single line). */
   contact_mismatch_note: string
+  /**
+   * When set, mismatch is satisfied by this `contacts.id` (venue chip pick or row created from Add new).
+   * Suppresses redundant name/title UI in live 1A; Add new clears until a new person is saved on advance.
+   */
+  contact_mismatch_linked_contact_id: string | null
   /** Preferred channel for the email we’ll use (when multiple in play). */
   preferred_email_channel: Phase1PreferredEmailChannelV3
   /** Per §8.5 — Phase 2 subsection defaults per spec §8.4 */
@@ -906,10 +1583,22 @@ export type BookingIntakeShowDataV3 = {
   _v: 3
   color: string
   event_type: KnownEventTypeV3 | ''
+  /** Freeform when `event_type === 'other'`. */
+  event_type_other: string
   venue_type: VenueType | ''
+  /** Freeform when `venue_type === 'other'`. */
+  venue_type_other: string
   setting: Phase2SettingV3
-  /** Event format / cadence (tappable substance). */
+  /** When `setting === 'other'`. */
+  setting_other_detail: string
+  /** @deprecated Live2A uses `event_schedule_type` / `event_recurrence_interval`; kept for legacy JSON. */
   event_archetype: EventArchetypeV3
+  /** @deprecated */
+  event_archetype_other_detail: string
+  /** One-off vs recurring engagement. */
+  event_schedule_type: Phase2EventScheduleV3
+  /** When `event_schedule_type === 'recurring'`. */
+  event_recurrence_interval: Phase2RecurrenceIntervalV3
   event_name_flag: Phase2EventNameFlagV3
   event_date: string
   event_start_time: string
@@ -944,6 +1633,20 @@ export type BookingIntakeShowDataV3 = {
   equipment_details_flag: Phase4EquipmentDetailsFlagV3
   /** Tappable equipment capabilities discussed. */
   equipment_capability_ids: EquipmentCapabilityIdV3[]
+  /** Structured equipment card (v2); v0 keeps legacy chip-only capture without synthesis overwrite. */
+  equipment_intake_flow_version: EquipmentIntakeFlowVersionV3
+  equipment_mic: EquipmentMicV3
+  equipment_sound_tech: EquipmentSoundTechV3
+  /** Venue `contacts.id` when the sound tech maps to a saved contact; otherwise null with {@link equipment_sound_tech_name}. */
+  equipment_sound_tech_contact_id: string | null
+  /** Free-typed sound tech or snapshot name (primary / on-call picks). */
+  equipment_sound_tech_name: string
+  equipment_venue_includes: EquipmentVenueIncludesIdV3[]
+  equipment_hybrid_covers: EquipmentHybridCoverIdV3[]
+  equipment_dj_package_interest: EquipmentDjPackageInterestV3
+  equipment_hybrid_additions: EquipmentHybridAdditionsV3
+  /** Phase 5B nudge: client deferred production upsell. */
+  equipment_revisit_production_5b: boolean
   load_in_discussed: Phase4LoadInDiscussedV3
   load_in_time: string
   soundcheck: Phase4SoundcheckV3
@@ -1054,6 +1757,15 @@ export function suggestedPromiseLinesFromEarlierPhases(
   if (ep === 'venue_provides') out.pa_sound = 'venue_provides'
   else if (ep === 'dj_brings') out.pa_sound = 'dj_provides'
   else if (ep === 'hybrid') out.pa_sound = 'not_discussed'
+  else if (sd.equipment_capability_ids.length > 0) {
+    const ids = new Set(sd.equipment_capability_ids)
+    const venuePa = VENUE_PA_CAPABILITY_IDS.some(id => ids.has(id))
+    const djPortable = DJ_PORTABLE_PA_CAPABILITY_IDS.some(id => ids.has(id))
+    const djController = ids.has('dj_controller')
+    if (venuePa && !djPortable && !djController) out.pa_sound = 'venue_provides'
+    else if ((djPortable || djController) && !venuePa) out.pa_sound = 'dj_provides'
+    else if (venuePa && (djPortable || djController)) out.pa_sound = 'not_discussed'
+  }
 
   if (sd.set_start_time.trim() && sd.set_end_time.trim()) out.set_times = 'confirmed'
 
@@ -1121,8 +1833,239 @@ const KNOWN_EVENT_LABELS: Record<KnownEventTypeV3, string> = {
   other: 'Other',
 }
 
-export function knownEventTypeLabel(v: KnownEventTypeV3 | ''): string {
+export function knownEventTypeLabel(v: KnownEventTypeV3 | '', otherDetail?: string): string {
+  if (v === 'other' && otherDetail?.trim()) return otherDetail.trim()
   return v ? KNOWN_EVENT_LABELS[v] ?? '' : ''
+}
+
+/** Venue type labels in Phase 2A — disambiguate from *event* type “Festival”. */
+export const VENUE_TYPE_INTAKE_2A_LABELS: Record<VenueType, string> = {
+  ...VENUE_TYPE_LABELS,
+  festival: 'Festival grounds / outdoor site',
+}
+
+const VENUE_BY_EVENT_TYPE: Partial<Record<Exclude<KnownEventTypeV3, 'other'>, VenueType[]>> = {
+  /** `festival` venue = grounds / outdoor site (label disambiguates from event type in UI). */
+  festival: ['festival', 'bar', 'club', 'lounge', 'theater', 'other'],
+  concert: ['theater', 'club', 'bar', 'lounge', 'festival', 'other'],
+  club_night: ['club', 'bar', 'lounge', 'theater', 'other'],
+  after_party: ['club', 'bar', 'lounge', 'theater', 'festival', 'other'],
+  wedding: ['lounge', 'theater', 'bar', 'club', 'festival', 'other'],
+  corporate: ['bar', 'club', 'lounge', 'theater', 'festival', 'other'],
+  private_event: ['bar', 'club', 'theater', 'lounge', 'festival', 'other'],
+  brand_activation: ['bar', 'club', 'lounge', 'theater', 'festival', 'other'],
+}
+
+/** When true, Phase 2A uses full venue lists and does not narrow options by event type. */
+export function intakePhase2aRelaxDynamicFilters(sd: BookingIntakeShowDataV3): boolean {
+  return sd.event_type === 'other' || sd.venue_type === 'other' || sd.setting === 'other'
+}
+
+export function venueTypesForIntake2a(eventType: KnownEventTypeV3 | '', relax: boolean): VenueType[] {
+  if (relax || !eventType || eventType === 'other') return [...VENUE_TYPE_ORDER]
+  const subset = VENUE_BY_EVENT_TYPE[eventType as Exclude<KnownEventTypeV3, 'other'>]
+  return subset ? [...subset] : [...VENUE_TYPE_ORDER]
+}
+
+/**
+ * Single row in the live 2A venue picker. Maps to DB `venue_type` (+ `venue_type_other` for presets that are not one of the five coarse enum slugs).
+ */
+export type IntakeVenuePickOptionV3 = {
+  id: string
+  label: string
+  venueType: VenueType
+  /** When `venueType === 'other'`, persisted verbatim to `venue_type_other` (except `other_describe`). */
+  otherDetail?: string
+}
+
+const INTAKE_VENUE_MASTER_LIST: IntakeVenuePickOptionV3[] = [
+  { id: 'bar', label: 'Bar', venueType: 'bar' },
+  { id: 'club', label: 'Club', venueType: 'club' },
+  { id: 'lounge', label: 'Lounge', venueType: 'lounge' },
+  { id: 'theater', label: 'Theater / performance hall', venueType: 'theater' },
+  { id: 'festival', label: 'Festival grounds / outdoor site', venueType: 'festival' },
+  {
+    id: 'o_conference',
+    label: 'Conference / convention center',
+    venueType: 'other',
+    otherDetail: 'Conference / convention center',
+  },
+  { id: 'o_hotel', label: 'Hotel / resort', venueType: 'other', otherDetail: 'Hotel / resort' },
+  {
+    id: 'o_ballroom',
+    label: 'Hotel ballroom / event hall',
+    venueType: 'other',
+    otherDetail: 'Hotel ballroom / event hall',
+  },
+  {
+    id: 'o_office',
+    label: 'Office / coworking event space',
+    venueType: 'other',
+    otherDetail: 'Office / coworking event space',
+  },
+  {
+    id: 'o_restaurant',
+    label: 'Restaurant (private dining)',
+    venueType: 'other',
+    otherDetail: 'Restaurant (private dining)',
+  },
+  { id: 'o_rooftop', label: 'Rooftop / terrace', venueType: 'other', otherDetail: 'Rooftop / terrace' },
+  {
+    id: 'o_warehouse',
+    label: 'Warehouse / industrial',
+    venueType: 'other',
+    otherDetail: 'Warehouse / industrial',
+  },
+  { id: 'o_gallery', label: 'Gallery / museum', venueType: 'other', otherDetail: 'Gallery / museum' },
+  {
+    id: 'o_country',
+    label: 'Country club / golf club',
+    venueType: 'other',
+    otherDetail: 'Country club / golf club',
+  },
+  {
+    id: 'o_casino',
+    label: 'Casino / gaming venue',
+    venueType: 'other',
+    otherDetail: 'Casino / gaming venue',
+  },
+  { id: 'o_stadium', label: 'Stadium / arena', venueType: 'other', otherDetail: 'Stadium / arena' },
+  { id: 'o_boat', label: 'Boat / yacht', venueType: 'other', otherDetail: 'Boat / yacht' },
+  {
+    id: 'o_estate',
+    label: 'Private estate / home',
+    venueType: 'other',
+    otherDetail: 'Private estate / home',
+  },
+  { id: 'o_park', label: 'Park / outdoor venue', venueType: 'other', otherDetail: 'Park / outdoor venue' },
+  {
+    id: 'o_retail',
+    label: 'Retail / pop-up space',
+    venueType: 'other',
+    otherDetail: 'Retail / pop-up space',
+  },
+  { id: 'other_describe', label: 'Other (describe)', venueType: 'other' },
+]
+
+/** Priority order for 2A venue chips by event type (ids from `INTAKE_VENUE_MASTER_LIST`). */
+const EVENT_VENUE_SUGGESTED_IDS: Partial<Record<KnownEventTypeV3, string[]>> = {
+  corporate: [
+    'o_conference',
+    'o_hotel',
+    'o_ballroom',
+    'o_office',
+    'bar',
+    'o_restaurant',
+    'lounge',
+    'o_rooftop',
+    'theater',
+    'club',
+  ],
+  club_night: ['club', 'bar', 'lounge', 'theater', 'o_warehouse', 'o_rooftop'],
+  wedding: [
+    'o_hotel',
+    'o_ballroom',
+    'o_estate',
+    'o_country',
+    'o_restaurant',
+    'o_gallery',
+    'lounge',
+    'bar',
+    'theater',
+    'club',
+  ],
+  festival: ['festival', 'o_park', 'o_stadium', 'bar', 'club', 'theater', 'lounge'],
+  concert: ['theater', 'o_stadium', 'bar', 'club', 'lounge', 'festival', 'o_warehouse'],
+  private_event: [
+    'o_estate',
+    'o_hotel',
+    'o_ballroom',
+    'o_restaurant',
+    'o_gallery',
+    'bar',
+    'lounge',
+    'theater',
+    'club',
+    'o_conference',
+  ],
+  brand_activation: [
+    'o_retail',
+    'o_gallery',
+    'o_warehouse',
+    'o_rooftop',
+    'bar',
+    'club',
+    'lounge',
+    'theater',
+  ],
+  after_party: ['club', 'bar', 'lounge', 'theater', 'o_warehouse', 'o_rooftop', 'o_boat'],
+}
+
+function filterIntakeVenuePicksByAllowed(
+  opts: IntakeVenuePickOptionV3[],
+  allowed: Set<VenueType>,
+): IntakeVenuePickOptionV3[] {
+  return opts.filter(o => o.venueType === 'other' || allowed.has(o.venueType))
+}
+
+export function findIntakeVenuePickById(id: string): IntakeVenuePickOptionV3 | undefined {
+  return INTAKE_VENUE_MASTER_LIST.find(o => o.id === id)
+}
+
+/** Value for the 2A venue Select, or `__none__` / `__custom__` / `other_describe` for freeform. */
+export function intakeVenuePickValueFromShow(sd: BookingIntakeShowDataV3): string {
+  if (!sd.venue_type) return '__none__'
+  if (sd.venue_type !== 'other') return sd.venue_type
+  const t = sd.venue_type_other.trim()
+  if (!t) return 'other_describe'
+  const found = INTAKE_VENUE_MASTER_LIST.find(
+    o => o.venueType === 'other' && o.otherDetail === t,
+  )
+  return found?.id ?? '__custom__'
+}
+
+export function intakeVenuePickOptionsForEvent(
+  eventType: KnownEventTypeV3 | '',
+  relax: boolean,
+): { suggested: IntakeVenuePickOptionV3[]; rest: IntakeVenuePickOptionV3[] } {
+  const allowed = new Set(venueTypesForIntake2a(eventType, relax))
+  const filtered = filterIntakeVenuePicksByAllowed(INTAKE_VENUE_MASTER_LIST, allowed)
+  if (relax || !eventType || eventType === 'other') {
+    return {
+      suggested: [],
+      rest: [...filtered].sort((a, b) => a.label.localeCompare(b.label)),
+    }
+  }
+  const order = EVENT_VENUE_SUGGESTED_IDS[eventType] ?? []
+  const suggested: IntakeVenuePickOptionV3[] = []
+  const seen = new Set<string>()
+  for (const id of order) {
+    const o = INTAKE_VENUE_MASTER_LIST.find(m => m.id === id)
+    if (!o) continue
+    if (o.venueType !== 'other' && !allowed.has(o.venueType)) continue
+    if (seen.has(id)) continue
+    suggested.push(o)
+    seen.add(id)
+  }
+  const rest = filtered.filter(o => !seen.has(o.id)).sort((a, b) => a.label.localeCompare(b.label))
+  return { suggested, rest }
+}
+
+/** First non–freeform suggestion for auto-fill when event type changes or pre-call seed. */
+export function intakeVenueDefaultPickForEventType(
+  eventType: KnownEventTypeV3 | '',
+  relax: boolean,
+): IntakeVenuePickOptionV3 | null {
+  const { suggested } = intakeVenuePickOptionsForEvent(eventType, relax)
+  const first = suggested.find(o => o.id !== 'other_describe')
+  if (first) return first
+  const { rest } = intakeVenuePickOptionsForEvent(eventType, relax)
+  return rest.find(o => o.id !== 'other_describe') ?? null
+}
+
+export function intakeVenueTypeDisplay(v: VenueType | '', otherDetail?: string): string {
+  if (v === 'other' && otherDetail?.trim()) return otherDetail.trim()
+  return v ? VENUE_TYPE_INTAKE_2A_LABELS[v] ?? VENUE_TYPE_LABELS[v] : ''
 }
 
 const VENUE_TYPES: VenueType[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
@@ -1132,18 +2075,24 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     _v: 3,
     color: SHOW_COLOR_HEX[Math.min(sortIndex, 2)] ?? SHOW_COLOR_HEX[0],
     event_type: '',
+    event_type_other: '',
     venue_type: '',
+    venue_type_other: '',
     setting: '',
+    setting_other_detail: '',
     event_archetype: '',
+    event_archetype_other_detail: '',
+    event_schedule_type: 'one_off',
+    event_recurrence_interval: '',
     event_name_flag: '',
     event_date: '',
     event_start_time: '20:00',
     event_end_time: '23:00',
     overnight_event: false,
-    venue_name_flag: '',
-    city_flag: '',
-    state_region: '',
-    address_status: '',
+    venue_name_flag: 'already_have',
+    city_flag: 'already_have',
+    state_region: INTAKE_DEFAULT_EVENT_STATE_REGION,
+    address_status: 'have_it',
     venue_archetype: '',
     address_detail_level: '',
     capacity_range: '',
@@ -1153,7 +2102,7 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     set_start_time: '',
     set_end_time: '',
     overnight_set: false,
-    genres: [],
+    genres: [...INTAKE_DEFAULT_GENRES],
     custom_setlist: '',
     setlist_request_tags: [],
     music_requests_flag: '',
@@ -1165,6 +2114,16 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     equipment_provider: '',
     equipment_details_flag: '',
     equipment_capability_ids: [],
+    equipment_intake_flow_version: 2,
+    equipment_mic: '',
+    equipment_sound_tech: '',
+    equipment_sound_tech_contact_id: null,
+    equipment_sound_tech_name: '',
+    equipment_venue_includes: [],
+    equipment_hybrid_covers: [],
+    equipment_dj_package_interest: '',
+    equipment_hybrid_additions: '',
+    equipment_revisit_production_5b: false,
     load_in_discussed: '',
     load_in_time: '',
     soundcheck: '',
@@ -1196,7 +2155,7 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     promise_lines_auto: emptyVenuePromiseLinesAutoV3(),
     event_name_text: '',
     venue_name_text: '',
-    city_text: '',
+    city_text: INTAKE_DEFAULT_EVENT_CITY_TEXT,
     street_address: '',
     address_line2: '',
     postal_code: '',
@@ -1241,8 +2200,15 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     phone_confirmed: '',
     email_confirmed: '',
     company_confirmed: '',
+    contact_phone_on_file: '',
+    contact_phone_added: '',
+    contact_phone_added_owner: '',
+    contact_email_on_file: '',
+    contact_email_added: '',
+    contact_email_added_owner: '',
     contact_mismatch_context: '',
     contact_mismatch_note: '',
+    contact_mismatch_linked_contact_id: null,
     preferred_email_channel: '',
     same_for_all_2a: true,
     same_for_all_2b: false,
@@ -1298,12 +2264,9 @@ export const LIVE_SECTION_ORDER: readonly string[] = [
   '1A',
   '1B',
   '2A',
-  '2B',
   '2C',
-  '2D',
-  '3A',
+  '2B',
   '3B',
-  '3C',
   '4A',
   '4B',
   '4C',
@@ -1345,15 +2308,13 @@ export function liveSectionTitle(sectionId: string): string {
     case '2B':
       return 'When'
     case '2C':
-      return 'Where'
+      return 'Event address'
     case '2D':
-      return 'Scale'
+      return 'Scale (legacy)'
     case '3A':
-      return 'Role & slot'
+      return 'Role & slot (legacy)'
     case '3B':
       return 'Music & vibe'
-    case '3C':
-      return 'Other performers'
     case '4A':
       return 'Equipment'
     case '4B':
@@ -1524,12 +2485,22 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     phone_confirmed: parsePhase1Enum(o.phone_confirmed, ['', 'confirmed', 'update_needed'], ''),
     email_confirmed: parsePhase1Enum(o.email_confirmed, ['', 'confirmed', 'update_needed', 'need_to_get'], ''),
     company_confirmed: parsePhase1Enum(o.company_confirmed, ['', 'confirmed', 'update_needed'], ''),
+    contact_phone_on_file: typeof o.contact_phone_on_file === 'string' ? o.contact_phone_on_file : '',
+    contact_phone_added: typeof o.contact_phone_added === 'string' ? o.contact_phone_added : '',
+    contact_phone_added_owner: typeof o.contact_phone_added_owner === 'string' ? o.contact_phone_added_owner : '',
+    contact_email_on_file: typeof o.contact_email_on_file === 'string' ? o.contact_email_on_file : '',
+    contact_email_added: typeof o.contact_email_added === 'string' ? o.contact_email_added : '',
+    contact_email_added_owner: typeof o.contact_email_added_owner === 'string' ? o.contact_email_added_owner : '',
     contact_mismatch_context: parsePhase1Enum(
       o.contact_mismatch_context,
       [...CONTACT_MISMATCH_CONTEXT_KEYS],
       '',
     ),
     contact_mismatch_note: typeof o.contact_mismatch_note === 'string' ? o.contact_mismatch_note : '',
+    contact_mismatch_linked_contact_id:
+      typeof o.contact_mismatch_linked_contact_id === 'string' && o.contact_mismatch_linked_contact_id.trim()
+        ? o.contact_mismatch_linked_contact_id.trim()
+        : null,
     preferred_email_channel: parsePhase1Enum(
       o.preferred_email_channel,
       ['', 'work', 'personal', 'billing', 'production'],
@@ -1581,7 +2552,15 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
       ? o.post_import_venue_id.trim()
       : null,
   }
-  return finalizeVenuePostCaptures(parsed)
+  const remapped =
+    parsed.view_section === '3C' || parsed.last_active_section === '3C'
+      ? {
+          ...parsed,
+          view_section: parsed.view_section === '3C' ? '4A' : parsed.view_section,
+          last_active_section: parsed.last_active_section === '3C' ? '4A' : parsed.last_active_section,
+        }
+      : parsed
+  return finalizeVenuePostCaptures(remapped)
 }
 
 function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVenueDataV3 {
@@ -1589,6 +2568,7 @@ function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVe
   if (out.confirmed_contact !== 'no_different_person') {
     out.contact_mismatch_context = ''
     out.contact_mismatch_note = ''
+    out.contact_mismatch_linked_contact_id = null
   }
   if (out.onsite_same_contact !== 'different') {
     out.onsite_contact_name = ''
@@ -1698,6 +2678,23 @@ function asEquipmentCapabilityIds(v: unknown): EquipmentCapabilityIdV3[] {
   )
 }
 
+function asEquipmentVenueIncludesIds(v: unknown): EquipmentVenueIncludesIdV3[] {
+  if (!Array.isArray(v)) return []
+  const allowed = new Set(EQUIPMENT_VENUE_INCLUDES_KEYS as readonly string[])
+  return v.filter(
+    (x): x is EquipmentVenueIncludesIdV3 =>
+      typeof x === 'string' && allowed.has(x as EquipmentVenueIncludesIdV3),
+  )
+}
+
+function asEquipmentHybridCoverIds(v: unknown): EquipmentHybridCoverIdV3[] {
+  if (!Array.isArray(v)) return []
+  const allowed = new Set(EQUIPMENT_HYBRID_COVER_KEYS as readonly string[])
+  return v.filter(
+    (x): x is EquipmentHybridCoverIdV3 => typeof x === 'string' && allowed.has(x as EquipmentHybridCoverIdV3),
+  )
+}
+
 function asLoadAccessTags(v: unknown): LoadAccessTagV3[] {
   if (!Array.isArray(v)) return []
   const allowed = new Set(LOAD_ACCESS_TAG_KEYS as readonly string[])
@@ -1729,15 +2726,43 @@ function parseVenuePromiseLinesAutoV3(raw: unknown): VenuePromiseLinesAutoV3 {
 function asCapacityRange(v: unknown): CapacityRangeV3 {
   const allowed: CapacityRangeV3[] = [
     '',
+    'under_50',
+    '50_100',
     'under_100',
+    '100_250',
+    '250_500',
     '100_300',
     '300_500',
+    '500_750',
+    '750_1000',
     '500_1000',
     '1000_2000',
     '2000_5000',
+    '5000_10000',
+    '10000_25000',
+    '25000_50000',
+    '50000_100000',
+    '100000_250000',
+    '250000_plus',
     '5000_plus',
   ]
   return typeof v === 'string' && (allowed as string[]).includes(v as CapacityRangeV3) ? (v as CapacityRangeV3) : ''
+}
+
+/** Infer `event_schedule_type` from legacy `event_archetype` when new fields are absent. */
+export function hydrateEventScheduleFromLegacy(sd: BookingIntakeShowDataV3): BookingIntakeShowDataV3 {
+  if (sd.event_schedule_type === 'one_off' || sd.event_schedule_type === 'recurring') return sd
+  const a = sd.event_archetype
+  if (a === 'weekly_residency') {
+    return { ...sd, event_schedule_type: 'recurring', event_recurrence_interval: 'weekly' }
+  }
+  if (a === 'club_series') {
+    return { ...sd, event_schedule_type: 'recurring', event_recurrence_interval: 'biweekly' }
+  }
+  if (a === 'annual_corporate') {
+    return { ...sd, event_schedule_type: 'recurring', event_recurrence_interval: 'monthly' }
+  }
+  return { ...sd, event_schedule_type: 'one_off', event_recurrence_interval: '' }
 }
 
 export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowDataV3 {
@@ -1758,26 +2783,53 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     ...base,
     color,
     event_type: asKnownEventType(o.event_type),
+    event_type_other: typeof o.event_type_other === 'string' ? o.event_type_other : '',
     venue_type: asVenueType(o.venue_type),
-    setting: parsePhase1Enum(o.setting, ['', 'indoor', 'outdoor', 'both'], ''),
+    venue_type_other: typeof o.venue_type_other === 'string' ? o.venue_type_other : '',
+    setting: parsePhase1Enum(o.setting, PHASE2_SETTING_PARSE_KEYS, ''),
+    setting_other_detail: typeof o.setting_other_detail === 'string' ? o.setting_other_detail : '',
     event_archetype: parsePhase1Enum(o.event_archetype, EVENT_ARCHETYPE_KEYS, ''),
-    event_name_flag: parsePhase1Enum(o.event_name_flag, ['', 'capture_later', 'no_name_yet'], ''),
+    event_archetype_other_detail:
+      typeof o.event_archetype_other_detail === 'string' ? o.event_archetype_other_detail : '',
+    event_schedule_type: parsePhase1Enum(o.event_schedule_type, ['', 'one_off', 'recurring'], ''),
+    event_recurrence_interval: parsePhase1Enum(
+      o.event_recurrence_interval,
+      ['', 'weekly', 'biweekly', 'monthly'],
+      '',
+    ),
+    event_name_flag: parsePhase1Enum(o.event_name_flag, ['', 'capture_later', 'no_name_yet', 'other'], ''),
     event_date: typeof o.event_date === 'string' ? o.event_date : '',
     event_start_time: start,
     event_end_time: end,
     overnight_event: overnight,
-    venue_name_flag: parsePhase1Enum(
-      o.venue_name_flag,
-      ['', 'already_have', 'capture_later', 'tbd'],
-      '',
-    ),
-    city_flag: parsePhase1Enum(o.city_flag, ['', 'already_have', 'capture_later', 'tbd'], ''),
-    state_region: typeof o.state_region === 'string' ? o.state_region : '',
-    address_status: parsePhase1Enum(
-      o.address_status,
-      ['', 'have_it', 'theyll_send', 'tbd_private'],
-      '',
-    ),
+    venue_name_flag: (() => {
+      const f = parsePhase1Enum(
+        o.venue_name_flag,
+        ['', 'already_have', 'capture_later', 'tbd'],
+        '',
+      )
+      if (f !== '') return f
+      return base.venue_name_flag
+    })(),
+    city_flag: (() => {
+      const f = parsePhase1Enum(o.city_flag, ['', 'already_have', 'capture_later', 'tbd'], '')
+      if (f !== '') return f
+      return base.city_flag
+    })(),
+    state_region: (() => {
+      const v = o.state_region
+      if (typeof v === 'string' && v.trim() !== '') return v.trim()
+      return base.state_region
+    })(),
+    address_status: (() => {
+      const a = parsePhase1Enum(
+        o.address_status,
+        ['', 'have_it', 'theyll_send', 'tbd_private'],
+        '',
+      )
+      if (a !== '') return a
+      return base.address_status
+    })(),
     venue_archetype: parsePhase1Enum(o.venue_archetype, VENUE_ARCHETYPE_KEYS, ''),
     address_detail_level: parsePhase1Enum(o.address_detail_level, ADDRESS_DETAIL_LEVEL_KEYS, ''),
     capacity_range: asCapacityRange(o.capacity_range),
@@ -1822,6 +2874,31 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
       '',
     ),
     equipment_capability_ids: asEquipmentCapabilityIds(o.equipment_capability_ids),
+    equipment_intake_flow_version: o.equipment_intake_flow_version === 2 ? 2 : 0,
+    equipment_mic: parsePhase1Enum(o.equipment_mic, ['', 'venue_has_mic', 'dj_brings_mic', 'not_discussed'], ''),
+    equipment_sound_tech: (() => {
+      const v = parsePhase1Enum(o.equipment_sound_tech, ['', 'yes', 'no', 'not_discussed'], '')
+      return v === 'not_discussed' ? '' : v
+    })(),
+    equipment_sound_tech_contact_id:
+      typeof o.equipment_sound_tech_contact_id === 'string' && o.equipment_sound_tech_contact_id.trim()
+        ? o.equipment_sound_tech_contact_id.trim()
+        : null,
+    equipment_sound_tech_name:
+      typeof o.equipment_sound_tech_name === 'string' ? o.equipment_sound_tech_name : '',
+    equipment_venue_includes: asEquipmentVenueIncludesIds(o.equipment_venue_includes),
+    equipment_hybrid_covers: asEquipmentHybridCoverIds(o.equipment_hybrid_covers),
+    equipment_dj_package_interest: parsePhase1Enum(
+      o.equipment_dj_package_interest,
+      ['', 'yes_walkthrough', 'no_simple', 'think_later'],
+      '',
+    ),
+    equipment_hybrid_additions: parsePhase1Enum(
+      o.equipment_hybrid_additions,
+      ['', 'yeah_see', 'no_good', 'maybe_later'],
+      '',
+    ),
+    equipment_revisit_production_5b: o.equipment_revisit_production_5b === true,
     load_in_discussed: parsePhase1Enum(o.load_in_discussed, ['', 'yes', 'tbd'], ''),
     load_in_time: typeof o.load_in_time === 'string' ? o.load_in_time : '',
     soundcheck: parsePhase1Enum(o.soundcheck, ['', 'yes', 'no', 'not_discussed'], ''),
@@ -1876,7 +2953,11 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     promise_lines_auto: parseVenuePromiseLinesAutoV3(o.promise_lines_auto),
     event_name_text: typeof o.event_name_text === 'string' ? o.event_name_text : '',
     venue_name_text: typeof o.venue_name_text === 'string' ? o.venue_name_text : '',
-    city_text: typeof o.city_text === 'string' ? o.city_text : '',
+    city_text: (() => {
+      const v = o.city_text
+      if (typeof v === 'string' && v.trim() !== '') return v
+      return base.city_text
+    })(),
     street_address: typeof o.street_address === 'string' ? o.street_address : '',
     address_line2: typeof o.address_line2 === 'string' ? o.address_line2 : '',
     postal_code: typeof o.postal_code === 'string' ? o.postal_code : '',
@@ -1915,14 +2996,22 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
   if (!parsed.overtime_service_id.trim() && parsed.service_id.trim()) {
     parsed.overtime_service_id = parsed.service_id
   }
-  return finalizeShowPostCaptures(parsed)
+  return finalizeShowPostCaptures(hydrateEventScheduleFromLegacy(parsed))
 }
 
 export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIntakeShowDataV3 {
   const out = { ...sd }
-  if (out.event_name_flag !== 'capture_later') out.event_name_text = ''
-  if (out.venue_name_flag !== 'capture_later' && out.venue_name_flag !== 'tbd') out.venue_name_text = ''
-  if (out.city_flag !== 'capture_later' && out.city_flag !== 'tbd') out.city_text = ''
+  if (out.event_type !== 'other') out.event_type_other = ''
+  if (out.venue_type !== 'other') out.venue_type_other = ''
+  if (out.setting !== 'other') out.setting_other_detail = ''
+  if (out.event_archetype !== 'other_archetype') out.event_archetype_other_detail = ''
+  if (out.event_schedule_type !== 'recurring') out.event_recurrence_interval = ''
+  if (out.event_schedule_type === 'one_off' || out.event_schedule_type === 'recurring') {
+    out.event_archetype = ''
+    out.event_archetype_other_detail = ''
+  }
+  if (!out.venue_name_flag) out.venue_name_text = ''
+  if (!out.city_flag) out.city_text = ''
   if (!out.address_status) {
     out.street_address = ''
     out.address_line2 = ''
@@ -1941,14 +3030,52 @@ export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIn
     out.travel_booked_by = ''
     out.ground_transport = ''
   }
+  const relax2a = intakePhase2aRelaxDynamicFilters(out)
+  const allowedVenues = new Set(venueTypesForIntake2a(out.event_type, relax2a))
+  if (out.venue_type && out.venue_type !== 'other' && !allowedVenues.has(out.venue_type)) {
+    out.venue_type = ''
+    out.venue_type_other = ''
+  }
+  if (out.equipment_intake_flow_version === 2 && out.equipment_provider) {
+    const syn = synthesizeEquipmentCapabilityIds(out)
+    const merged = new Set(out.equipment_capability_ids)
+    for (const id of syn) merged.add(id)
+    out.equipment_capability_ids = (EQUIPMENT_CAPABILITY_KEYS as readonly EquipmentCapabilityIdV3[]).filter(id =>
+      merged.has(id),
+    )
+  }
+  if (out.equipment_sound_tech !== 'yes') {
+    out.equipment_sound_tech_contact_id = null
+    out.equipment_sound_tech_name = ''
+  }
   return out
 }
 
 /** Human lines for deal/venue notes — structured fields captured on the live call. */
 export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string[] {
   const lines: string[] = []
-  if (sd.event_archetype) {
+  if (sd.event_schedule_type === 'recurring') {
+    const freq =
+      sd.event_recurrence_interval === 'weekly'
+        ? 'Weekly'
+        : sd.event_recurrence_interval === 'biweekly'
+          ? 'Bi-weekly'
+          : sd.event_recurrence_interval === 'monthly'
+            ? 'Monthly'
+            : ''
+    lines.push(freq ? `Event cadence: Recurring (${freq})` : 'Event cadence: Recurring')
+  } else if (sd.event_schedule_type === 'one_off') {
+    lines.push('Event cadence: One-off')
+  } else if (sd.event_archetype === 'other_archetype') {
+    const d = sd.event_archetype_other_detail.trim()
+    lines.push(d ? `Event format: ${d}` : `Event format: ${EVENT_ARCHETYPE_LABELS.other_archetype}`)
+  } else if (sd.event_archetype) {
     lines.push(`Event format: ${EVENT_ARCHETYPE_LABELS[sd.event_archetype as Exclude<EventArchetypeV3, ''>]}`)
+  }
+  if (sd.setting === 'other' && sd.setting_other_detail.trim()) {
+    lines.push(`Setting: ${sd.setting_other_detail.trim()}`)
+  } else if (sd.setting) {
+    lines.push(`Setting: ${PHASE2_SETTING_LABELS[sd.setting as Exclude<Phase2SettingV3, ''>]}`)
   }
   if (sd.venue_archetype) {
     lines.push(`Venue type (discussed): ${VENUE_ARCHETYPE_LABELS[sd.venue_archetype as Exclude<VenueArchetypeV3, ''>]}`)
@@ -1971,6 +3098,41 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
   }
   if (sd.lineup_format) {
     lines.push(`Lineup: ${LINEUP_FORMAT_LABELS[sd.lineup_format as Exclude<LineupFormatV3, ''>]}`)
+  }
+  if (sd.equipment_provider) {
+    const ep = sd.equipment_provider as Exclude<Phase4EquipmentProviderV3, ''>
+    lines.push(
+      ep === 'venue_provides'
+        ? 'DJ equipment: Venue provides'
+        : ep === 'dj_brings'
+          ? 'DJ equipment: DJ brings own'
+          : 'DJ equipment: Hybrid',
+    )
+  }
+  if (sd.equipment_mic) {
+    const m = sd.equipment_mic as Exclude<EquipmentMicV3, ''>
+    lines.push(
+      `Mic: ${m === 'venue_has_mic' ? 'Venue has mic' : m === 'dj_brings_mic' ? 'DJ brings mic' : 'Not discussed'}`,
+    )
+  }
+  if (sd.equipment_sound_tech === 'yes') {
+    const id = sd.equipment_sound_tech_contact_id?.trim()
+    const nm = sd.equipment_sound_tech_name.trim()
+    if (nm) lines.push(`Sound tech on site: Yes — ${nm}`)
+    else if (id) lines.push('Sound tech on site: Yes — linked venue contact')
+    else lines.push('Sound tech on site: Yes')
+  } else if (sd.equipment_sound_tech === 'no') {
+    lines.push('Sound tech on site: No')
+  }
+  if (sd.equipment_venue_includes.length) {
+    lines.push(
+      `Venue setup includes: ${sd.equipment_venue_includes.map(id => EQUIPMENT_VENUE_INCLUDES_LABELS[id]).join('; ')}`,
+    )
+  }
+  if (sd.equipment_hybrid_covers.length) {
+    lines.push(
+      `Venue covers (hybrid): ${sd.equipment_hybrid_covers.map(id => EQUIPMENT_HYBRID_COVER_LABELS[id]).join('; ')}`,
+    )
   }
   if (sd.equipment_capability_ids.length) {
     lines.push(
@@ -2003,6 +3165,20 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
   return lines.filter(Boolean)
 }
 
+export function phase1CaptureOwnerLabel(data: BookingIntakeVenueDataV3, ownerRaw: string): string {
+  const owner = ownerRaw.trim()
+  if (!owner) return 'unspecified'
+  if (owner === 'primary_on_file') {
+    const n = data.contact_name.trim()
+    return n ? `${n} (on file)` : 'Primary on file'
+  }
+  if (owner === 'on_call') {
+    const n = data.contact_mismatch_note.trim()
+    return n ? `${n} (on call)` : 'On call'
+  }
+  return `contact id ${owner}`
+}
+
 export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): string[] {
   const lines: string[] = []
   if (v.confirmed_contact === 'no_different_person') {
@@ -2020,6 +3196,16 @@ export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): strin
   if (v.preferred_email_channel) {
     lines.push(
       `Email preference: ${PREFERRED_EMAIL_CHANNEL_LABELS[v.preferred_email_channel as Exclude<Phase1PreferredEmailChannelV3, ''>]}`,
+    )
+  }
+  if (v.contact_phone_added.trim()) {
+    lines.push(
+      `Additional phone (${phase1CaptureOwnerLabel(v, v.contact_phone_added_owner)}): ${v.contact_phone_added.trim()}`,
+    )
+  }
+  if (v.contact_email_added.trim()) {
+    lines.push(
+      `Additional email (${phase1CaptureOwnerLabel(v, v.contact_email_added_owner)}): ${v.contact_email_added.trim()}`,
     )
   }
   if (v.onsite_same_contact === 'different') {
