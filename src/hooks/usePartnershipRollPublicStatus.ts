@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getPartnershipRollOwnerId } from '@/lib/partnerships/partnershipRollOwner'
+import { fetchPartnershipRollArtistUserId } from '@/lib/partnerships/partnershipRollOwner'
 
 export type PartnershipRollPublicOwnerRow = {
   confirmed_at: string | null
@@ -10,11 +10,22 @@ export type PartnershipRollPublicOwnerRow = {
 
 /** Loads partnership_roll_public_owner (id=1) when the signed-in user is the designated roll owner. */
 export function usePartnershipRollPublicStatus(userId: string | null) {
-  const ownerEnvId = getPartnershipRollOwnerId()
-  const enabled = Boolean(userId && ownerEnvId && userId === ownerEnvId)
+  const [rollArtistId, setRollArtistId] = useState<string | null>(null)
+  const enabled = Boolean(userId && rollArtistId && userId === rollArtistId)
 
   const [row, setRow] = useState<PartnershipRollPublicOwnerRow | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { userId: id } = await fetchPartnershipRollArtistUserId()
+      if (!cancelled) setRollArtistId(id)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = useCallback(async () => {
     if (!enabled) {

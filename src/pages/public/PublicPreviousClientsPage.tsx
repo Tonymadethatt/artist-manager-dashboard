@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { seedPartnershipRollIfEmpty } from '@/lib/partnerships/seedPartnershipRollIfEmpty'
-import { getPartnershipRollOwnerId } from '@/lib/partnerships/partnershipRollOwner'
+import { fetchPartnershipRollArtistUserId } from '@/lib/partnerships/partnershipRollOwner'
 import { applySocialPreviewMeta } from '@/lib/documentMeta'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -177,7 +177,9 @@ function PublicListRowEditor({
 }
 
 export default function PublicPreviousClientsPage() {
-  const ownerId = getPartnershipRollOwnerId()
+  const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [ownerResolveDone, setOwnerResolveDone] = useState(false)
+  const [ownerResolveError, setOwnerResolveError] = useState<string | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -257,13 +259,34 @@ export default function PublicPreviousClientsPage() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { userId, fetchError } = await fetchPartnershipRollArtistUserId()
+      if (cancelled) return
+      if (fetchError) {
+        setOwnerResolveError(fetchError)
+        setOwnerId(null)
+        setOwnerResolveDone(true)
+        setLoading(false)
+        return
+      }
+      setOwnerResolveError(null)
+      setOwnerId(userId)
+      setOwnerResolveDone(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     const id = window.setInterval(() => setNowTick(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [])
 
   useEffect(() => {
-    if (!ownerId) {
-      setLoading(false)
+    if (!ownerResolveDone || !ownerId) {
+      if (ownerResolveDone && !ownerId) setLoading(false)
       return
     }
     let cancelled = false
@@ -294,10 +317,10 @@ export default function PublicPreviousClientsPage() {
     return () => {
       cancelled = true
     }
-  }, [ownerId, load, loadWindow, applyWindowRow])
+  }, [ownerResolveDone, ownerId, load, loadWindow, applyWindowRow])
 
   useEffect(() => {
-    if (!ownerId) return
+    if (!ownerResolveDone || !ownerId) return
     const onVis = () => {
       if (document.visibilityState === 'visible') void loadWindow()
     }
@@ -323,7 +346,7 @@ export default function PublicPreviousClientsPage() {
       window.clearInterval(t2)
       void supabase.removeChannel(ch)
     }
-  }, [ownerId, load, loadWindow])
+  }, [ownerResolveDone, ownerId, load, loadWindow])
 
   const flash = (msg: string) => {
     setActionMsg(msg)
@@ -429,16 +452,49 @@ export default function PublicPreviousClientsPage() {
     }
   }
 
+  if (!ownerResolveDone) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
+        <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      </div>
+    )
+  }
+
+  if (ownerResolveError) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-lg border border-neutral-800 bg-neutral-900/40 p-5 text-sm text-neutral-300 space-y-2">
+          <p className="font-semibold text-white">Could not load previous-clients setup</p>
+          <p className="text-red-400/90">{ownerResolveError}</p>
+          <p className="text-xs text-neutral-500">
+            Confirm Supabase migrations through <span className="font-mono">054</span> are applied and RLS allows
+            reading <span className="font-mono">partnership_roll_public_owner</span> for id <span className="font-mono">1</span>.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (!ownerId) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-6">
         <div className="max-w-md w-full rounded-lg border border-neutral-800 bg-neutral-900/40 p-5 text-sm text-neutral-300 space-y-2">
           <p className="font-semibold text-white">Previous clients page isn’t configured</p>
           <p>
-            Set <span className="font-mono text-xs">VITE_PARTNERSHIP_ROLL_OWNER_ID</span> to your dashboard account’s
-            user UUID (Supabase → Authentication → Users), redeploy, and add the same UUID to{' '}
-            <span className="font-mono text-xs">partnership_roll_public_owner</span> per migration{' '}
-            <span className="font-mono text-xs">054_partnership_roll_public_anon_access.sql</span>.
+            Add the row in Supabase (SQL editor) so the list has an owner. Use your dashboard login user’s UUID from{' '}
+            <span className="text-neutral-200">Authentication → Users</span>:
+          </p>
+          <pre className="text-[11px] bg-neutral-950/80 border border-neutral-800 rounded p-3 overflow-x-auto text-neutral-400 whitespace-pre-wrap">
+            {`insert into public.partnership_roll_public_owner (id, artist_user_id)
+values (1, 'YOUR_AUTH_USER_UUID_HERE')
+on conflict (id) do update set artist_user_id = excluded.artist_user_id;`}
+          </pre>
+          <p className="text-xs text-neutral-500">
+            See migration <span className="font-mono">054_partnership_roll_public_anon_access.sql</span>. No Netlify env
+            var is required for this page.
           </p>
         </div>
       </div>
