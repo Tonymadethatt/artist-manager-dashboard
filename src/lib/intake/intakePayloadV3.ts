@@ -155,6 +155,24 @@ export type Phase3OtherPerformersV3 = '' | 'solo_act' | 'multiple_performers'
 export type Phase3NumOtherActsV3 = '' | '1' | '2' | '3' | '4plus'
 export type Phase3BillingPriorityV3 = '' | 'top_billing' | 'co_headliner' | 'supporting_act'
 
+export const PHASE3_OTHER_PERFORMERS_LABELS: Record<Exclude<Phase3OtherPerformersV3, ''>, string> = {
+  solo_act: 'Bill: solo act',
+  multiple_performers: 'Bill: multiple performers / shared lineup',
+}
+
+export const PHASE3_NUM_OTHER_ACTS_LABELS: Record<Exclude<Phase3NumOtherActsV3, ''>, string> = {
+  '1': 'Other acts on bill: 1',
+  '2': 'Other acts on bill: 2',
+  '3': 'Other acts on bill: 3',
+  '4plus': 'Other acts on bill: 4+',
+}
+
+export const PHASE3_BILLING_PRIORITY_LABELS: Record<Exclude<Phase3BillingPriorityV3, ''>, string> = {
+  top_billing: 'Billing priority: top billing',
+  co_headliner: 'Billing priority: co-headliner',
+  supporting_act: 'Billing priority: supporting act',
+}
+
 /** Phase 4 — Technical & logistics */
 export type Phase4EquipmentProviderV3 = '' | 'venue_provides' | 'dj_brings' | 'hybrid'
 export type Phase4EquipmentDetailsFlagV3 = '' | 'full_confirmed' | 'capture_later' | 'not_discussed'
@@ -167,6 +185,19 @@ export type Phase4ParkingDetailsFlagV3 = '' | 'capture_later' | 'no'
 export type Phase4TravelRequiredV3 = '' | 'local' | 'regional' | 'flight'
 export type Phase4LodgingStatusV3 = '' | 'not_needed' | 'venue_provides' | 'dj_covers' | 'not_discussed'
 export type Phase4TravelNotesFlagV3 = '' | 'capture_later' | 'no'
+
+export const PHASE4_PARKING_STATUS_LABELS: Record<Exclude<Phase4ParkingStatusV3, ''>, string> = {
+  confirmed: 'Parking status: confirmed',
+  need_confirm: 'Parking status: needs confirmation',
+  not_discussed: 'Parking status: not discussed',
+}
+
+export const PHASE4_LODGING_STATUS_LABELS: Record<Exclude<Phase4LodgingStatusV3, ''>, string> = {
+  not_needed: 'Lodging: not needed',
+  venue_provides: 'Lodging: venue provides',
+  dj_covers: 'Lodging: artist covers',
+  not_discussed: 'Lodging: not discussed',
+}
 
 /** Phase 5 — Money (per-show on `show_data` except 5E on `venue_data`). */
 export type Phase5PricingModeV3 = '' | 'package' | 'hourly'
@@ -183,12 +214,82 @@ export type Phase5InvoiceSameContactV3 = '' | 'yes' | 'different'
 export type Phase5InvoiceConfirmV3 = '' | 'correct' | 'capture_later'
 export type Phase5BillingContactFlagV3 = '' | 'same_main' | 'capture_later'
 
+export const PHASE5_INVOICE_SAME_LABELS: Record<Exclude<Phase5InvoiceSameContactV3, ''>, string> = {
+  yes: 'Invoicing: same as main contact',
+  different: 'Invoicing: different billing contact',
+}
+
+export const PHASE5_INVOICE_CONFIRM_LABELS: Record<Exclude<Phase5InvoiceConfirmV3, ''>, string> = {
+  correct: 'Invoice company/email: confirmed',
+  capture_later: 'Invoice company/email: capture later',
+}
+
+export const PHASE5_BILLING_FLAG_LABELS: Record<Exclude<Phase5BillingContactFlagV3, ''>, string> = {
+  same_main: 'Billing contact: same as main',
+  capture_later: 'Billing contact: capture later',
+}
+
 /** Phase 7 — Close (shared on `venue_data`). */
-export type Phase7SendAgreementV3 = '' | 'yes_sending' | 'verbal_only'
+export type Phase7SendAgreementV3 = '' | 'yes_sending' | 'invoice_only' | 'verbal_only'
 export type Phase7DepositOnCallV3 = '' | 'paying_now' | 'sending_invoice'
 export type Phase7ClientEnergyV3 = '' | 'very_excited' | 'positive' | 'neutral' | 'uncertain'
 export type Phase7HasFollowUpsV3 = '' | 'yes' | 'all_clear'
 export type Phase7CallStatusV3 = '' | 'full' | 'partial' | 'voicemail'
+
+export const PHASE7_SEND_AGREEMENT_LABELS: Record<Exclude<Phase7SendAgreementV3, ''>, string> = {
+  yes_sending: 'Sending agreement + invoice',
+  invoice_only: 'Invoice only (no full agreement pack)',
+  verbal_only: 'Verbal close — paperwork to follow',
+}
+
+export const PHASE7_DEPOSIT_ON_CALL_LABELS: Record<Exclude<Phase7DepositOnCallV3, ''>, string> = {
+  paying_now: 'Deposit collected / paying on the call',
+  sending_invoice: 'Deposit via invoice',
+}
+
+export const PHASE7_CLIENT_ENERGY_LABELS: Record<Exclude<Phase7ClientEnergyV3, ''>, string> = {
+  very_excited: 'Client energy: very excited',
+  positive: 'Client energy: positive',
+  neutral: 'Client energy: neutral',
+  uncertain: 'Client energy: uncertain / hesitant',
+}
+
+export const PHASE7_HAS_FOLLOW_UPS_LABELS: Record<Exclude<Phase7HasFollowUpsV3, ''>, string> = {
+  yes: 'Follow-ups still open',
+  all_clear: 'No open follow-ups discussed',
+}
+
+export const PHASE7_CALL_STATUS_LABELS: Record<Exclude<Phase7CallStatusV3, ''>, string> = {
+  full: 'Call status: full conversation',
+  partial: 'Call status: partial — needs follow-up',
+  voicemail: 'Call status: voicemail / async',
+}
+
+export const INQUIRY_SOURCE_LABELS: Record<Exclude<InquirySourceV3, ''>, string> = {
+  instagram_dm: 'Instagram DM',
+  email: 'Email',
+  phone_text: 'Phone / text',
+  referral: 'Referral',
+  website: 'Website',
+  radio: 'Radio',
+  other: 'Other source',
+}
+
+export const PHASE1_PHONE_CONFIRMED_LABELS: Record<Exclude<Phase1PhoneConfirmedV3, ''>, string> = {
+  confirmed: 'Phone: confirmed on file',
+  update_needed: 'Phone: update needed',
+}
+
+export const PHASE1_EMAIL_CONFIRMED_LABELS: Record<Exclude<Phase1EmailConfirmedV3, ''>, string> = {
+  confirmed: 'Email: confirmed on file',
+  update_needed: 'Email: update needed',
+  need_to_get: 'Email: still need address',
+}
+
+export const PHASE1_COMPANY_CONFIRMED_LABELS: Record<Exclude<Phase1CompanyConfirmedV3, ''>, string> = {
+  confirmed: 'Company / org: confirmed',
+  update_needed: 'Company / org: update needed',
+}
 
 /** Phase 1 — substantive context (venue_data). Who’s on the line when not the contact on file. */
 export const CONTACT_MISMATCH_CONTEXT_KEYS = [
@@ -715,6 +816,18 @@ export type EquipmentDjPackageInterestV3 = '' | 'yes_walkthrough' | 'no_simple' 
 
 export type EquipmentHybridAdditionsV3 = '' | 'yeah_see' | 'no_good' | 'maybe_later'
 
+export const EQUIPMENT_DJ_PACKAGE_INTEREST_LABELS: Record<Exclude<EquipmentDjPackageInterestV3, ''>, string> = {
+  yes_walkthrough: 'Production / walk-through package: interested',
+  no_simple: 'Production package: keeping it simple',
+  think_later: 'Production package: revisit later',
+}
+
+export const EQUIPMENT_HYBRID_ADDITIONS_LABELS: Record<Exclude<EquipmentHybridAdditionsV3, ''>, string> = {
+  yeah_see: 'Hybrid add-ons: open to more',
+  no_good: 'Hybrid add-ons: not pursuing',
+  maybe_later: 'Hybrid add-ons: maybe later',
+}
+
 export const EQUIPMENT_VENUE_INCLUDES_KEYS = [
   'full_sound',
   'booth_monitor',
@@ -861,6 +974,89 @@ export const LOAD_ACCESS_TAG_LABELS: Record<LoadAccessTagV3, string> = {
   curbside: 'Curbside / pull-up',
   stairs_carry: 'Stairs / carry-in',
 }
+
+/** Setup window after load-in (equipment card, DJ brings / hybrid / festival). */
+export const EQUIPMENT_SETUP_WINDOW_KEYS = ['', '30', '60', '120', 'not_discussed'] as const
+export type Phase4SetupWindowV3 = (typeof EQUIPMENT_SETUP_WINDOW_KEYS)[number]
+export const EQUIPMENT_SETUP_WINDOW_LABELS: Record<Exclude<Phase4SetupWindowV3, ''>, string> = {
+  '30': '30 min',
+  '60': '1 hr',
+  '120': '2 hrs',
+  not_discussed: 'Not discussed',
+}
+
+/** Night-of arrival intent (on-site contact card). */
+export const ARTIST_ARRIVAL_NOTE_KEYS = [
+  '',
+  'before_doors',
+  'during_event',
+  'before_set',
+  'not_discussed',
+] as const
+export type Phase4ArtistArrivalNoteV3 = (typeof ARTIST_ARRIVAL_NOTE_KEYS)[number]
+export const ARTIST_ARRIVAL_NOTE_LABELS: Record<Exclude<Phase4ArtistArrivalNoteV3, ''>, string> = {
+  before_doors: 'Before doors',
+  during_event: 'During event',
+  before_set: 'Before his set',
+  not_discussed: 'Not discussed',
+}
+
+/** Phase 2B — “anything about getting to the venue?” (live); default no. */
+export type Phase2VenueAccessNotesFlagV3 = 'no' | 'yes'
+
+export const VENUE_ACCESS_NOTE_TAG_KEYS = [
+  'gated_property',
+  'street_parking_only',
+  'dedicated_lot',
+  'valet',
+  'loading_dock',
+  'rear_alley_entrance',
+  'stairs_no_elevator',
+  'freight_elevator',
+  'security_checkpoint',
+  'guest_list_entry',
+  'id_wristband',
+  'noise_curfew',
+  'residential_quiet_load_in',
+  'other',
+] as const
+export type VenueAccessNoteTagV3 = (typeof VENUE_ACCESS_NOTE_TAG_KEYS)[number]
+export const VENUE_ACCESS_NOTE_TAG_LABELS: Record<VenueAccessNoteTagV3, string> = {
+  gated_property: 'Gated property — need code or contact',
+  street_parking_only: 'Street parking only',
+  dedicated_lot: 'Dedicated parking lot',
+  valet: 'Valet available',
+  loading_dock: 'Loading dock available',
+  rear_alley_entrance: 'Rear / alley entrance',
+  stairs_no_elevator: 'Stairs — no elevator',
+  freight_elevator: 'Freight elevator available',
+  security_checkpoint: 'Security checkpoint',
+  guest_list_entry: 'Guest list required for entry',
+  id_wristband: 'ID / wristband required',
+  noise_curfew: 'Strict noise curfew',
+  residential_quiet_load_in: 'Residential area — keep it quiet on load-in',
+  other: 'Other',
+}
+
+/** Live 4B — DJ parking (single pick, night-of logistics). Default {@link emptyVenueDataV3} is `street`. */
+export const DJ_PARKING_V3_KEYS = [
+  'street',
+  'dedicated_spot',
+  'garage',
+  'private_parking',
+  'valet',
+] as const
+export type Phase4DjParkingV3 = (typeof DJ_PARKING_V3_KEYS)[number]
+export const DJ_PARKING_V3_LABELS: Record<Phase4DjParkingV3, string> = {
+  street: 'Street parking',
+  dedicated_spot: 'Dedicated spot',
+  garage: 'Garage',
+  private_parking: 'Private parking',
+  valet: 'Valet',
+}
+
+/** Festival / outdoor production: soundcheck scheduled with production (equipment card chip). */
+export type Phase4ProductionSoundcheckV3 = '' | 'scheduled'
 
 /** Phase 4D — parking class (substantive). */
 export const PARKING_ACCESS_CLASS_KEYS = [
@@ -1030,17 +1226,19 @@ export const FOLLOW_UP_TOPIC_KEYS = [
   'technical',
   'payment',
   'contract_review',
+  'internal_approval',
   'other',
 ] as const
 
 export type FollowUpTopicKeyV3 = (typeof FOLLOW_UP_TOPIC_KEYS)[number]
 
 export const FOLLOW_UP_TOPIC_LABELS: Record<FollowUpTopicKeyV3, string> = {
-  address: 'Address',
-  contacts: 'Contacts',
-  technical: 'Technical',
-  payment: 'Payment',
+  address: 'Address needed',
+  contacts: 'Contact info to confirm',
+  technical: 'Technical details TBD',
+  payment: 'Payment pending',
   contract_review: 'Contract review',
+  internal_approval: 'They need internal approval',
   other: 'Other',
 }
 
@@ -1055,6 +1253,15 @@ export const PAYMENT_METHOD_KEYS = [
 ] as const
 
 export type PaymentMethodKeyV3 = (typeof PAYMENT_METHOD_KEYS)[number]
+
+/** Live intake money step — selectable chips only (cash/other omitted; empty allowed). */
+export const LIVE_PAYMENT_METHOD_KEYS = [
+  'zelle',
+  'venmo',
+  'apple_pay',
+  'paypal',
+  'check',
+] as const satisfies readonly PaymentMethodKeyV3[]
 
 /** §17.6A — venue promise presets (ids align with `SHOW_REPORT_PRESETS` / deal `promise_lines`). */
 export type VenuePromiseLineIdV3 = (typeof SHOW_REPORT_PRESETS)[number]['id']
@@ -1538,6 +1745,24 @@ export type BookingIntakeVenueDataV3 = {
   onsite_same_contact: Phase4OnsiteSameContactV3
   onsite_name_flag: Phase4OnsiteFlagV3
   onsite_phone_flag: Phase4OnsiteFlagV3
+  /**
+   * When set, on-site POC is an existing venue `contacts` row (live 4B chip pick).
+   * Skips duplicate contact insert on venue import; snapshots still hold name/phone for capture.
+   */
+  onsite_linked_contact_id: string | null
+  /** Title bucket for on-site POC when chosen via Add new (mirrors Phase 1 mismatch context). */
+  onsite_title_context: Phase1ContactMismatchContextV3
+  /** Night-of: target arrival time for the artist (venue provides / club scenarios). */
+  artist_arrival_time: string
+  /** When / how arrival relates to doors or set (live 4B). */
+  artist_arrival_note: Phase4ArtistArrivalNoteV3
+  /** Phase 2B — casual “getting to the venue” capture (chips + optional Phase 8 other). */
+  venue_access_notes_flag: Phase2VenueAccessNotesFlagV3
+  venue_access_note_tags: VenueAccessNoteTagV3[]
+  /** When {@link venue_access_note_tags} includes `other`, typed in Phase 8A. */
+  venue_access_other_notes: string
+  /** Live 4B — DJ parking (replaces legacy §4D parking card). */
+  dj_parking: Phase4DjParkingV3
   /** On-site POC role / logistics (substance beyond name capture later). */
   onsite_poc_role: OnsitePocRoleV3
   onsite_connect_method: OnsiteConnectMethodV3
@@ -1547,6 +1772,8 @@ export type BookingIntakeVenueDataV3 = {
   invoice_company_confirmed: Phase5InvoiceConfirmV3
   invoice_email_confirmed: Phase5InvoiceConfirmV3
   billing_contact_flag: Phase5BillingContactFlagV3
+  /** When invoice goes to someone already on the venue roster (live §5C picker). */
+  billing_linked_contact_id: string | null
   /** §18.7A */
   send_agreement: Phase7SendAgreementV3
   deposit_on_call: Phase7DepositOnCallV3
@@ -1603,6 +1830,8 @@ export type BookingIntakeShowDataV3 = {
   event_date: string
   event_start_time: string
   event_end_time: string
+  /** Empty = same as {@link event_start_time} for doors (live 2B). */
+  doors_open_time: string
   overnight_event: boolean
   venue_name_flag: Phase2VenueNameFlagV3
   city_flag: Phase2CityFlagV3
@@ -1647,8 +1876,12 @@ export type BookingIntakeShowDataV3 = {
   equipment_hybrid_additions: EquipmentHybridAdditionsV3
   /** Phase 5B nudge: client deferred production upsell. */
   equipment_revisit_production_5b: boolean
+  equipment_setup_window: Phase4SetupWindowV3
+  equipment_production_soundcheck: Phase4ProductionSoundcheckV3
+  /** @deprecated Legacy 4C gate; unused in live flow. */
   load_in_discussed: Phase4LoadInDiscussedV3
   load_in_time: string
+  /** @deprecated Removed from live flow. */
   soundcheck: Phase4SoundcheckV3
   load_in_access_tags: LoadAccessTagV3[]
   parking_status: Phase4ParkingStatusV3
@@ -1666,6 +1899,10 @@ export type BookingIntakeShowDataV3 = {
   overtime_service_id: string
   performance_hours: number
   addon_quantities: Record<string, number>
+  /** Add-on ids turned on by equipment / intake autopop rules — drives “Auto” badge on §5B. */
+  addon_autopop_ids: string[]
+  /** Operator dismissed autopop for these add-on ids on §5B — autopop won’t re-apply them. */
+  addon_autopop_dismissed_ids: string[]
   surcharge_ids: string[]
   discount_ids: string[]
   pricing_source: Phase5PricingSourceV3
@@ -1744,6 +1981,7 @@ export function suggestedBillableHoursFromShow(d: BookingIntakeShowDataV3): numb
 /** Auto-suggestions from Phases 3A–5 (only fill blanks in UI). */
 export function suggestedPromiseLinesFromEarlierPhases(
   sd: BookingIntakeShowDataV3,
+  venue?: Pick<BookingIntakeVenueDataV3, 'dj_parking'> | null,
 ): Partial<VenuePromiseLinesV3> {
   const out: Partial<VenuePromiseLinesV3> = {}
   const pricingLocked =
@@ -1769,12 +2007,16 @@ export function suggestedPromiseLinesFromEarlierPhases(
 
   if (sd.set_start_time.trim() && sd.set_end_time.trim()) out.set_times = 'confirmed'
 
-  if (sd.load_in_discussed === 'yes') out.load_in = 'confirmed'
+  if (sd.load_in_time.trim()) out.load_in = 'confirmed'
 
-  const ps = sd.parking_status
-  if (ps === 'confirmed') out.parking = 'confirmed'
-  else if (ps === 'need_confirm') out.parking = 'need_confirm'
-  else if (ps === 'not_discussed') out.parking = 'not_discussed'
+  const dp = venue?.dj_parking
+  if (dp) out.parking = 'confirmed'
+  else {
+    const ps = sd.parking_status
+    if (ps === 'confirmed') out.parking = 'confirmed'
+    else if (ps === 'need_confirm') out.parking = 'need_confirm'
+    else if (ps === 'not_discussed') out.parking = 'not_discussed'
+  }
 
   if (sd.travel_required === 'local') {
     out.lodging = 'not_needed'
@@ -2088,6 +2330,7 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     event_date: '',
     event_start_time: '20:00',
     event_end_time: '23:00',
+    doors_open_time: '',
     overnight_event: false,
     venue_name_flag: 'already_have',
     city_flag: 'already_have',
@@ -2124,6 +2367,8 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     equipment_dj_package_interest: '',
     equipment_hybrid_additions: '',
     equipment_revisit_production_5b: false,
+    equipment_setup_window: '',
+    equipment_production_soundcheck: '',
     load_in_discussed: '',
     load_in_time: '',
     soundcheck: '',
@@ -2142,6 +2387,8 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     overtime_service_id: '',
     performance_hours: 0,
     addon_quantities: {},
+    addon_autopop_ids: [],
+    addon_autopop_dismissed_ids: [],
     surcharge_ids: [],
     discount_ids: [],
     pricing_source: 'calculated',
@@ -2225,6 +2472,14 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     onsite_same_contact: '',
     onsite_name_flag: '',
     onsite_phone_flag: '',
+    onsite_linked_contact_id: null,
+    onsite_title_context: '',
+    artist_arrival_time: '',
+    artist_arrival_note: '',
+    venue_access_notes_flag: 'no',
+    venue_access_note_tags: [],
+    venue_access_other_notes: '',
+    dj_parking: 'street',
     onsite_poc_role: '',
     onsite_connect_method: '',
     onsite_connect_window: '',
@@ -2232,6 +2487,7 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     invoice_company_confirmed: '',
     invoice_email_confirmed: '',
     billing_contact_flag: '',
+    billing_linked_contact_id: null,
     send_agreement: '',
     deposit_on_call: '',
     client_energy: '',
@@ -2269,18 +2525,11 @@ export const LIVE_SECTION_ORDER: readonly string[] = [
   '3B',
   '4A',
   '4B',
-  '4C',
-  '4D',
   '4E',
   '5A',
   '5B',
   '5C',
-  '5D',
-  '5E',
-  '6A',
   '7A',
-  '7B',
-  '7C',
 ]
 
 /**
@@ -2319,8 +2568,6 @@ export function liveSectionTitle(sectionId: string): string {
       return 'Equipment'
     case '4B':
       return 'On-site contact'
-    case '4C':
-      return 'Load-in & soundcheck'
     case '4D':
       return 'Parking & access'
     case '4E':
@@ -2328,21 +2575,21 @@ export function liveSectionTitle(sectionId: string): string {
     case '5A':
       return 'Pricing setup'
     case '5B':
-      return 'Add-ons & adjustments'
+      return 'Add-ons & upgrades'
     case '5C':
-      return 'The number'
+      return 'The Deal'
     case '5D':
-      return 'Deposit & payment'
+      return 'Deposit & payment (legacy)'
     case '5E':
-      return 'Invoicing'
+      return 'Invoicing (legacy)'
     case '6A':
-      return 'Venue promises'
+      return 'Venue promises (legacy)'
     case '7A':
-      return 'Next steps'
+      return 'The Close'
     case '7B':
-      return 'Follow-ups'
+      return 'Follow-ups (legacy)'
     case '7C':
-      return 'End call'
+      return 'End call (legacy)'
     case '8A':
       return 'Flagged fields'
     case '8B':
@@ -2355,15 +2602,19 @@ export function liveSectionTitle(sectionId: string): string {
   }
 }
 
-/** Sidebar phase index 0–6 (Opening = 0). */
+/** Sidebar phase index 0–5 (Opening = 0, Close = 5). Legacy §6 merged into Close. */
 export function livePhaseIndexFromSection(sectionId: string): number {
   if (sectionId.startsWith('__stub_')) {
     const n = parseInt(sectionId.replace('__stub_', ''), 10)
-    return Number.isFinite(n) ? Math.min(6, Math.max(0, n - 1)) : 0
+    return Number.isFinite(n) ? Math.min(5, Math.max(0, n - 1)) : 0
   }
   const c = sectionId.charAt(0)
   const p = parseInt(c, 10)
-  return Number.isFinite(p) ? Math.min(6, Math.max(0, p - 1)) : 0
+  if (!Number.isFinite(p)) return 0
+  if (p >= 7) return 5
+  if (p === 6) return 5
+  if (p === 5) return 4
+  return Math.min(3, Math.max(0, p - 1))
 }
 
 export function stubSectionId(phaseOneBased: number): string {
@@ -2374,7 +2625,7 @@ export function stubSectionId(phaseOneBased: number): string {
 export function suggestedOutreachStatusFromPhase7Close(
   sendAgreement: Phase7SendAgreementV3,
 ): '' | 'agreement_sent' | 'in_discussion' {
-  if (sendAgreement === 'yes_sending') return 'agreement_sent'
+  if (sendAgreement === 'yes_sending' || sendAgreement === 'invoice_only') return 'agreement_sent'
   if (sendAgreement === 'verbal_only') return 'in_discussion'
   return ''
 }
@@ -2422,12 +2673,17 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
   let invCo = parsePhase1Enum(o.invoice_company_confirmed, ['', 'correct', 'capture_later'], '')
   let invEmail = parsePhase1Enum(o.invoice_email_confirmed, ['', 'correct', 'capture_later'], '')
   let billFlag = parsePhase1Enum(o.billing_contact_flag, ['', 'same_main', 'capture_later'], '')
+  let billingLinkedId =
+    typeof o.billing_linked_contact_id === 'string' && o.billing_linked_contact_id.trim()
+      ? o.billing_linked_contact_id.trim()
+      : null
   if (invSame !== 'different') {
     invCo = ''
     invEmail = ''
     billFlag = ''
+    billingLinkedId = null
   }
-  const sendAgreement = parsePhase1Enum(o.send_agreement, ['', 'yes_sending', 'verbal_only'], '')
+  const sendAgreement = parsePhase1Enum(o.send_agreement, ['', 'yes_sending', 'invoice_only', 'verbal_only'], '')
   const depositOnCall = parsePhase1Enum(o.deposit_on_call, ['', 'paying_now', 'sending_invoice'], '')
   const clientEnergy = parsePhase1Enum(
     o.client_energy,
@@ -2521,6 +2777,21 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     onsite_same_contact: onsiteSame,
     onsite_name_flag: onsiteName,
     onsite_phone_flag: onsitePhone,
+    onsite_linked_contact_id:
+      typeof o.onsite_linked_contact_id === 'string' && o.onsite_linked_contact_id.trim()
+        ? o.onsite_linked_contact_id.trim()
+        : null,
+    onsite_title_context: parsePhase1Enum(
+      o.onsite_title_context,
+      [...CONTACT_MISMATCH_CONTEXT_KEYS],
+      '',
+    ),
+    artist_arrival_time: typeof o.artist_arrival_time === 'string' ? o.artist_arrival_time : '',
+    artist_arrival_note: parsePhase1Enum(o.artist_arrival_note, [...ARTIST_ARRIVAL_NOTE_KEYS], ''),
+    venue_access_notes_flag: parsePhase1Enum(o.venue_access_notes_flag, ['no', 'yes'], 'no'),
+    venue_access_note_tags: asVenueAccessNoteTags(o.venue_access_note_tags),
+    venue_access_other_notes: typeof o.venue_access_other_notes === 'string' ? o.venue_access_other_notes : '',
+    dj_parking: parsePhase1Enum(o.dj_parking, [...DJ_PARKING_V3_KEYS], 'street'),
     onsite_poc_role: parsePhase1Enum(o.onsite_poc_role, ONSITE_POC_ROLE_KEYS, ''),
     onsite_connect_method: parsePhase1Enum(o.onsite_connect_method, ONSITE_CONNECT_METHOD_KEYS, ''),
     onsite_connect_window: parsePhase1Enum(o.onsite_connect_window, ONSITE_CONNECT_WINDOW_KEYS, ''),
@@ -2528,6 +2799,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     invoice_company_confirmed: invCo,
     invoice_email_confirmed: invEmail,
     billing_contact_flag: billFlag,
+    billing_linked_contact_id: billingLinkedId,
     send_agreement: sendAgreement,
     deposit_on_call: depositOnCall,
     client_energy: clientEnergy,
@@ -2552,7 +2824,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
       ? o.post_import_venue_id.trim()
       : null,
   }
-  const remapped =
+  let remapped: BookingIntakeVenueDataV3 =
     parsed.view_section === '3C' || parsed.last_active_section === '3C'
       ? {
           ...parsed,
@@ -2560,6 +2832,31 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
           last_active_section: parsed.last_active_section === '3C' ? '4A' : parsed.last_active_section,
         }
       : parsed
+  if (remapped.view_section === '4C' || remapped.last_active_section === '4C') {
+    remapped = {
+      ...remapped,
+      view_section: remapped.view_section === '4C' ? '4E' : remapped.view_section,
+      last_active_section: remapped.last_active_section === '4C' ? '4E' : remapped.last_active_section,
+    }
+  }
+  if (remapped.view_section === '4D' || remapped.last_active_section === '4D') {
+    remapped = {
+      ...remapped,
+      view_section: remapped.view_section === '4D' ? '4E' : remapped.view_section,
+      last_active_section: remapped.last_active_section === '4D' ? '4E' : remapped.last_active_section,
+    }
+  }
+  const bumpMoneyClose = (s: string) => {
+    if (s === '5D' || s === '5E') return '5C'
+    if (s === '6A') return '7A'
+    if (s === '7B' || s === '7C') return '7A'
+    return s
+  }
+  remapped = {
+    ...remapped,
+    view_section: bumpMoneyClose(remapped.view_section),
+    last_active_section: bumpMoneyClose(remapped.last_active_section),
+  }
   return finalizeVenuePostCaptures(remapped)
 }
 
@@ -2577,25 +2874,45 @@ function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVe
     out.onsite_poc_role = ''
     out.onsite_connect_method = ''
     out.onsite_connect_window = ''
-  } else {
+    out.onsite_linked_contact_id = null
+    out.onsite_title_context = ''
+  } else if (!out.onsite_linked_contact_id) {
     if (out.onsite_name_flag !== 'capture_later') out.onsite_contact_name = ''
     if (out.onsite_phone_flag !== 'capture_later') out.onsite_contact_phone = ''
     if (out.onsite_name_flag !== 'capture_later' && out.onsite_phone_flag !== 'capture_later') {
       out.onsite_contact_role = ''
+      out.onsite_title_context = ''
     }
+  }
+  if (out.onsite_same_contact === 'different') {
+    out.onsite_poc_role = ''
+    out.onsite_connect_method = ''
+    out.onsite_connect_window = ''
   }
   if (out.invoice_same_contact !== 'different') {
     out.invoice_company_text = ''
     out.invoice_email_text = ''
     out.billing_contact_name = ''
     out.billing_contact_email = ''
+    out.billing_linked_contact_id = null
   } else {
     if (out.invoice_company_confirmed !== 'capture_later') out.invoice_company_text = ''
     if (out.invoice_email_confirmed !== 'capture_later') out.invoice_email_text = ''
-    if (out.billing_contact_flag !== 'capture_later') {
+    if (out.billing_linked_contact_id) {
+      out.billing_contact_flag = ''
+      out.billing_contact_name = ''
+      out.billing_contact_email = ''
+    } else if (out.billing_contact_flag !== 'capture_later') {
       out.billing_contact_name = ''
       out.billing_contact_email = ''
     }
+  }
+  out.artist_arrival_time = ''
+  if (out.venue_access_notes_flag !== 'yes') {
+    out.venue_access_note_tags = []
+  }
+  if (!out.venue_access_note_tags.includes('other')) {
+    out.venue_access_other_notes = ''
   }
   return out
 }
@@ -2701,6 +3018,14 @@ function asLoadAccessTags(v: unknown): LoadAccessTagV3[] {
   return v.filter((x): x is LoadAccessTagV3 => typeof x === 'string' && allowed.has(x as LoadAccessTagV3))
 }
 
+function asVenueAccessNoteTags(v: unknown): VenueAccessNoteTagV3[] {
+  if (!Array.isArray(v)) return []
+  const allowed = new Set(VENUE_ACCESS_NOTE_TAG_KEYS as readonly string[])
+  return v.filter(
+    (x): x is VenueAccessNoteTagV3 => typeof x === 'string' && allowed.has(x as VenueAccessNoteTagV3),
+  )
+}
+
 function parseVenuePromiseLinesV3(raw: unknown): VenuePromiseLinesV3 {
   const base = emptyVenuePromiseLinesV3()
   if (!isPlainObject(raw)) return base
@@ -2801,6 +3126,7 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     event_date: typeof o.event_date === 'string' ? o.event_date : '',
     event_start_time: start,
     event_end_time: end,
+    doors_open_time: typeof o.doors_open_time === 'string' ? o.doors_open_time : '',
     overnight_event: overnight,
     venue_name_flag: (() => {
       const f = parsePhase1Enum(
@@ -2899,6 +3225,8 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
       '',
     ),
     equipment_revisit_production_5b: o.equipment_revisit_production_5b === true,
+    equipment_setup_window: parsePhase1Enum(o.equipment_setup_window, [...EQUIPMENT_SETUP_WINDOW_KEYS], ''),
+    equipment_production_soundcheck: o.equipment_production_soundcheck === 'scheduled' ? 'scheduled' : '',
     load_in_discussed: parsePhase1Enum(o.load_in_discussed, ['', 'yes', 'tbd'], ''),
     load_in_time: typeof o.load_in_time === 'string' ? o.load_in_time : '',
     soundcheck: parsePhase1Enum(o.soundcheck, ['', 'yes', 'no', 'not_discussed'], ''),
@@ -2933,9 +3261,11 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     overtime_service_id: typeof o.overtime_service_id === 'string' ? o.overtime_service_id : '',
     performance_hours: typeof o.performance_hours === 'number' && Number.isFinite(o.performance_hours) ? o.performance_hours : 0,
     addon_quantities: asAddonQuantitiesV3(o.addon_quantities),
+    addon_autopop_ids: asStringIdList(o.addon_autopop_ids),
+    addon_autopop_dismissed_ids: asStringIdList(o.addon_autopop_dismissed_ids),
     surcharge_ids: asStringIdList(o.surcharge_ids),
     discount_ids: asStringIdList(o.discount_ids),
-    pricing_source: parsePhase1Enum(o.pricing_source, ['', 'calculated', 'manual'], 'calculated'),
+    pricing_source: parsePhase1Enum(o.pricing_source, ['calculated', 'manual'], 'calculated'),
     manual_gross:
       typeof o.manual_gross === 'number' && Number.isFinite(o.manual_gross) && o.manual_gross >= 0
         ? o.manual_gross
@@ -2981,7 +3311,6 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
           '',
         )
       : ''
-  if (parsed.load_in_discussed !== 'yes') parsed.load_in_time = ''
   if (parsed.travel_required === 'local') {
     parsed.lodging_status = ''
     parsed.travel_notes_flag = ''
@@ -2990,6 +3319,7 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
   }
   if (parsed.balance_timing !== 'custom') parsed.balance_due_date = ''
   if (parsed.pricing_source !== 'manual') {
+    parsed.pricing_source = 'calculated'
     parsed.manual_gross = null
     parsed.manual_pricing_reason = ''
   }
@@ -2997,6 +3327,17 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     parsed.overtime_service_id = parsed.service_id
   }
   return finalizeShowPostCaptures(hydrateEventScheduleFromLegacy(parsed))
+}
+
+export function intakeShowIsFestivalLikeProduction(sd: BookingIntakeShowDataV3): boolean {
+  return sd.event_type === 'festival' || sd.setting === 'outdoor' || sd.setting === 'both'
+}
+
+/** DJ brings / hybrid, or festival-outdoor production — show load-in block on equipment card. */
+export function intakeShowNeedsEquipmentArrivalSetup(sd: BookingIntakeShowDataV3): boolean {
+  const ep = sd.equipment_provider
+  if (ep === 'dj_brings' || ep === 'hybrid') return true
+  return intakeShowIsFestivalLikeProduction(sd)
 }
 
 export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIntakeShowDataV3 {
@@ -3025,7 +3366,11 @@ export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIn
   if (out.travel_notes_flag !== 'capture_later' || out.travel_required === 'local') {
     out.travel_notes_text = ''
   }
-  if (out.pricing_source !== 'manual') out.manual_pricing_reason = ''
+  if (out.pricing_source !== 'manual') {
+    out.pricing_source = 'calculated'
+    out.manual_gross = null
+    out.manual_pricing_reason = ''
+  }
   if (out.travel_required === 'local') {
     out.travel_booked_by = ''
     out.ground_transport = ''
@@ -3048,6 +3393,17 @@ export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIn
     out.equipment_sound_tech_contact_id = null
     out.equipment_sound_tech_name = ''
   }
+  const needsGearArrival = intakeShowNeedsEquipmentArrivalSetup(out)
+  if (!needsGearArrival) {
+    out.load_in_time = ''
+    out.equipment_setup_window = ''
+    out.load_in_access_tags = []
+    out.equipment_production_soundcheck = ''
+  } else if (!intakeShowIsFestivalLikeProduction(out)) {
+    out.equipment_production_soundcheck = ''
+  }
+  out.soundcheck = ''
+  out.load_in_discussed = ''
   return out
 }
 
@@ -3080,6 +3436,12 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
   if (sd.venue_archetype) {
     lines.push(`Venue type (discussed): ${VENUE_ARCHETYPE_LABELS[sd.venue_archetype as Exclude<VenueArchetypeV3, ''>]}`)
   }
+  if (sd.event_type === 'other' && sd.event_type_other.trim()) {
+    lines.push(`Event type (other): ${sd.event_type_other.trim()}`)
+  }
+  if (sd.venue_type === 'other' && sd.venue_type_other.trim()) {
+    lines.push(`Venue category (other): ${sd.venue_type_other.trim()}`)
+  }
   if (sd.address_detail_level) {
     lines.push(
       `Location detail: ${ADDRESS_DETAIL_LEVEL_LABELS[sd.address_detail_level as Exclude<AddressDetailLevelV3, ''>]}`,
@@ -3087,6 +3449,17 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
   }
   if (sd.approximate_headcount > 0) {
     lines.push(`Approx. headcount (discussed): ~${sd.approximate_headcount.toLocaleString()}`)
+  }
+  {
+    const est = sd.event_start_time.trim()
+    const ddoor = sd.doors_open_time.trim()
+    if (ddoor) {
+      if (est && ddoor !== est) lines.push(`Doors open: ${ddoor} (event start ${est})`)
+      else lines.push(`Doors open: ${ddoor}`)
+    }
+  }
+  if (sd.overnight_event) {
+    lines.push('Event timing: crosses midnight (doors/event window).')
   }
   if (sd.setlist_request_tags.length) {
     lines.push(
@@ -3098,6 +3471,15 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
   }
   if (sd.lineup_format) {
     lines.push(`Lineup: ${LINEUP_FORMAT_LABELS[sd.lineup_format as Exclude<LineupFormatV3, ''>]}`)
+  }
+  if (sd.other_performers) {
+    lines.push(PHASE3_OTHER_PERFORMERS_LABELS[sd.other_performers as Exclude<Phase3OtherPerformersV3, ''>])
+  }
+  if (sd.num_other_acts) {
+    lines.push(PHASE3_NUM_OTHER_ACTS_LABELS[sd.num_other_acts as Exclude<Phase3NumOtherActsV3, ''>])
+  }
+  if (sd.billing_priority) {
+    lines.push(PHASE3_BILLING_PRIORITY_LABELS[sd.billing_priority as Exclude<Phase3BillingPriorityV3, ''>])
   }
   if (sd.equipment_provider) {
     const ep = sd.equipment_provider as Exclude<Phase4EquipmentProviderV3, ''>
@@ -3134,10 +3516,33 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
       `Venue covers (hybrid): ${sd.equipment_hybrid_covers.map(id => EQUIPMENT_HYBRID_COVER_LABELS[id]).join('; ')}`,
     )
   }
+  if (sd.equipment_dj_package_interest) {
+    lines.push(
+      EQUIPMENT_DJ_PACKAGE_INTEREST_LABELS[sd.equipment_dj_package_interest as Exclude<EquipmentDjPackageInterestV3, ''>],
+    )
+  }
+  if (sd.equipment_hybrid_additions) {
+    lines.push(
+      EQUIPMENT_HYBRID_ADDITIONS_LABELS[sd.equipment_hybrid_additions as Exclude<EquipmentHybridAdditionsV3, ''>],
+    )
+  }
+  if (sd.equipment_revisit_production_5b) {
+    lines.push('Production upsell: flagged to revisit in §5B')
+  }
   if (sd.equipment_capability_ids.length) {
     lines.push(
       `Equipment discussed: ${sd.equipment_capability_ids.map(id => EQUIPMENT_CAPABILITY_LABELS[id]).join('; ')}`,
     )
+  }
+  if (sd.load_in_time.trim()) {
+    lines.push(`Load-in time: ${sd.load_in_time.trim()}`)
+  }
+  if (sd.equipment_setup_window) {
+    const w = sd.equipment_setup_window as Exclude<Phase4SetupWindowV3, ''>
+    lines.push(`Setup window: ${EQUIPMENT_SETUP_WINDOW_LABELS[w]}`)
+  }
+  if (sd.equipment_production_soundcheck === 'scheduled') {
+    lines.push('Production soundcheck: scheduled')
   }
   if (sd.load_in_access_tags.length) {
     lines.push(`Load-in access: ${sd.load_in_access_tags.map(t => LOAD_ACCESS_TAG_LABELS[t]).join('; ')}`)
@@ -3146,6 +3551,12 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
     lines.push(
       `Parking (class): ${PARKING_ACCESS_CLASS_LABELS[sd.parking_access_class as Exclude<ParkingAccessClassV3, ''>]}`,
     )
+  }
+  if (sd.parking_status) {
+    lines.push(PHASE4_PARKING_STATUS_LABELS[sd.parking_status as Exclude<Phase4ParkingStatusV3, ''>])
+  }
+  if (sd.lodging_status) {
+    lines.push(PHASE4_LODGING_STATUS_LABELS[sd.lodging_status as Exclude<Phase4LodgingStatusV3, ''>])
   }
   if (sd.travel_booked_by) {
     lines.push(
@@ -3181,6 +3592,36 @@ export function phase1CaptureOwnerLabel(data: BookingIntakeVenueDataV3, ownerRaw
 
 export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): string[] {
   const lines: string[] = []
+  if (v.inquiry_source) {
+    lines.push(`Lead source: ${INQUIRY_SOURCE_LABELS[v.inquiry_source as Exclude<InquirySourceV3, ''>]}`)
+  }
+  if (v.inquiry_summary.trim()) {
+    lines.push(`Inquiry summary: ${v.inquiry_summary.trim()}`)
+  }
+  if (v.pre_call_notes.trim()) {
+    lines.push(`Pre-call notes: ${v.pre_call_notes.trim()}`)
+  }
+  if (v.known_venue_name.trim()) {
+    lines.push(`Known venue (pre-call): ${v.known_venue_name.trim()}`)
+  }
+  if (v.known_city.trim()) {
+    lines.push(`Known city (pre-call): ${v.known_city.trim()}`)
+  }
+  if (v.known_event_date.trim()) {
+    lines.push(`Known date (pre-call): ${v.known_event_date.trim()}`)
+  }
+  if (v.known_event_type) {
+    lines.push(`Known event type (pre-call): ${knownEventTypeLabel(v.known_event_type, '')}`)
+  }
+  if (v.phone_confirmed) {
+    lines.push(PHASE1_PHONE_CONFIRMED_LABELS[v.phone_confirmed as Exclude<Phase1PhoneConfirmedV3, ''>])
+  }
+  if (v.email_confirmed) {
+    lines.push(PHASE1_EMAIL_CONFIRMED_LABELS[v.email_confirmed as Exclude<Phase1EmailConfirmedV3, ''>])
+  }
+  if (v.company_confirmed) {
+    lines.push(PHASE1_COMPANY_CONFIRMED_LABELS[v.company_confirmed as Exclude<Phase1CompanyConfirmedV3, ''>])
+  }
   if (v.confirmed_contact === 'no_different_person') {
     const name = v.contact_mismatch_note.trim()
     const roleKey = v.contact_mismatch_context
@@ -3209,24 +3650,103 @@ export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): strin
     )
   }
   if (v.onsite_same_contact === 'different') {
-    if (v.onsite_poc_role) {
+    const onName = v.onsite_contact_name.trim()
+    const onCtx = v.onsite_title_context.trim()
+    const onRoleLbl =
+      onCtx && (CONTACT_MISMATCH_CONTEXT_KEYS as readonly string[]).includes(onCtx)
+        ? CONTACT_MISMATCH_CONTEXT_LABELS[onCtx as Exclude<Phase1ContactMismatchContextV3, ''>]
+        : ''
+    if (onName && onRoleLbl) lines.push(`On-site contact: ${onName} (${onRoleLbl})`)
+    else if (onName) lines.push(`On-site contact: ${onName}`)
+    else if (onRoleLbl) lines.push(`On-site contact: ${onRoleLbl}`)
+  }
+  if (v.onsite_poc_role) {
+    lines.push(`On-site role (logistics): ${ONSITE_POC_ROLE_LABELS[v.onsite_poc_role as Exclude<OnsitePocRoleV3, ''>]}`)
+  }
+  if (v.onsite_connect_method) {
+    lines.push(
+      `On-site connect: ${ONSITE_CONNECT_METHOD_LABELS[v.onsite_connect_method as Exclude<OnsiteConnectMethodV3, ''>]}`,
+    )
+  }
+  if (v.onsite_connect_window) {
+    lines.push(
+      `On-site connect window: ${ONSITE_CONNECT_WINDOW_LABELS[v.onsite_connect_window as Exclude<OnsiteConnectWindowV3, ''>]}`,
+    )
+  }
+  if (v.invoice_same_contact === 'different') {
+    lines.push(PHASE5_INVOICE_SAME_LABELS.different)
+    if (v.invoice_company_confirmed) {
+      lines.push(PHASE5_INVOICE_CONFIRM_LABELS[v.invoice_company_confirmed as Exclude<Phase5InvoiceConfirmV3, ''>])
+    }
+    if (v.invoice_email_confirmed) {
       lines.push(
-        `On-site role: ${ONSITE_POC_ROLE_LABELS[v.onsite_poc_role as Exclude<OnsitePocRoleV3, ''>]}`,
+        `Invoice email status: ${PHASE5_INVOICE_CONFIRM_LABELS[v.invoice_email_confirmed as Exclude<Phase5InvoiceConfirmV3, ''>]}`,
       )
     }
-    if (v.onsite_connect_method) {
-      lines.push(
-        `On-site reach: ${ONSITE_CONNECT_METHOD_LABELS[v.onsite_connect_method as Exclude<OnsiteConnectMethodV3, ''>]}`,
-      )
+    if (v.billing_contact_flag) {
+      lines.push(PHASE5_BILLING_FLAG_LABELS[v.billing_contact_flag as Exclude<Phase5BillingContactFlagV3, ''>])
     }
-    if (v.onsite_connect_window) {
-      lines.push(
-        `Best window: ${ONSITE_CONNECT_WINDOW_LABELS[v.onsite_connect_window as Exclude<OnsiteConnectWindowV3, ''>]}`,
-      )
+    if (v.invoice_company_text.trim()) {
+      lines.push(`Invoice company (typed): ${v.invoice_company_text.trim()}`)
     }
+    if (v.invoice_email_text.trim()) {
+      lines.push(`Invoice email (typed): ${v.invoice_email_text.trim()}`)
+    }
+    if (v.billing_contact_name.trim()) {
+      lines.push(`Billing contact name: ${v.billing_contact_name.trim()}`)
+    }
+    if (v.billing_contact_email.trim()) {
+      lines.push(`Billing contact email: ${v.billing_contact_email.trim()}`)
+    }
+  }
+  const arrNote = v.artist_arrival_note.trim()
+  if (
+    arrNote &&
+    (ARTIST_ARRIVAL_NOTE_KEYS as readonly string[]).includes(arrNote as Phase4ArtistArrivalNoteV3) &&
+    arrNote !== ''
+  ) {
+    lines.push(
+      `Artist arrival: ${ARTIST_ARRIVAL_NOTE_LABELS[arrNote as Exclude<Phase4ArtistArrivalNoteV3, ''>]}`,
+    )
+  } else if (v.artist_arrival_time.trim()) {
+    lines.push(`Artist arrival: ${v.artist_arrival_time.trim()}`)
+  }
+  if (v.venue_access_notes_flag === 'yes' && v.venue_access_note_tags.length) {
+    lines.push(
+      `Venue access: ${v.venue_access_note_tags.map(t => VENUE_ACCESS_NOTE_TAG_LABELS[t]).join('; ')}`,
+    )
+  }
+  if (v.venue_access_other_notes.trim()) {
+    lines.push(`Venue access (other): ${v.venue_access_other_notes.trim()}`)
+  }
+  if (v.dj_parking) {
+    lines.push(`DJ parking: ${DJ_PARKING_V3_LABELS[v.dj_parking]}`)
   }
   if (v.close_artifact_tags.length) {
     lines.push(`Close plan: ${v.close_artifact_tags.map(t => CLOSE_ARTIFACT_TAG_LABELS[t]).join('; ')}`)
+  }
+  if (v.send_agreement) {
+    lines.push(`Close — paperwork: ${PHASE7_SEND_AGREEMENT_LABELS[v.send_agreement as Exclude<Phase7SendAgreementV3, ''>]}`)
+  }
+  if (v.deposit_on_call) {
+    lines.push(PHASE7_DEPOSIT_ON_CALL_LABELS[v.deposit_on_call as Exclude<Phase7DepositOnCallV3, ''>])
+  }
+  if (v.client_energy) {
+    lines.push(PHASE7_CLIENT_ENERGY_LABELS[v.client_energy as Exclude<Phase7ClientEnergyV3, ''>])
+  }
+  if (v.has_follow_ups) {
+    lines.push(PHASE7_HAS_FOLLOW_UPS_LABELS[v.has_follow_ups as Exclude<Phase7HasFollowUpsV3, ''>])
+  }
+  if (v.follow_up_topics.length) {
+    lines.push(
+      `Follow-up topics: ${v.follow_up_topics.map(t => FOLLOW_UP_TOPIC_LABELS[t as FollowUpTopicKeyV3]).join('; ')}`,
+    )
+  }
+  if (v.follow_up_date.trim()) {
+    lines.push(`Follow-up date (discussed): ${v.follow_up_date.trim()}`)
+  }
+  if (v.call_status) {
+    lines.push(PHASE7_CALL_STATUS_LABELS[v.call_status as Exclude<Phase7CallStatusV3, ''>])
   }
   return lines.filter(Boolean)
 }

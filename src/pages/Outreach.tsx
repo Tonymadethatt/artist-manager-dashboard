@@ -3,7 +3,11 @@ import { Plus, Search, SlidersHorizontal, Star, Upload } from 'lucide-react'
 import { useVenues } from '@/hooks/useVenues'
 import { useBookingIntakes, isV3IntakeRow } from '@/hooks/useBookingIntakes'
 import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
-import { mapIntakeVenueDataV3ToVenueRow, intakeContactsFromVenueDataV3 } from '@/lib/intake/mapIntakeToVenue'
+import {
+  mapIntakeVenueDataV3ToVenueRow,
+  intakeContactsFromVenueDataV3,
+  type IntakeDerivedContactRow,
+} from '@/lib/intake/mapIntakeToVenue'
 import { supabase } from '@/lib/supabase'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { StatusBadge } from '@/components/outreach/StatusBadge'
@@ -53,9 +57,7 @@ export default function Outreach() {
     'id' | 'user_id' | 'created_at' | 'updated_at'
   > | null>(null)
   const [venueAddSeedNonce, setVenueAddSeedNonce] = useState(0)
-  const pendingVenueContactsRef = useRef<
-    Array<{ name: string; role: string | null; email: string | null; phone: string | null; company: string | null }>
-  >([])
+  const pendingVenueContactsRef = useRef<IntakeDerivedContactRow[]>([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
 
   // Inline follow-up date editing
@@ -157,8 +159,8 @@ export default function Outreach() {
             user_id: user.id,
             venue_id: result.data!.id,
             name: c.name,
-            title_key: null as string | null,
-            role: c.role,
+            title_key: c.title_key,
+            role: c.title_key ? null : c.role,
             email: c.email,
             phone: c.phone,
             company: c.company,

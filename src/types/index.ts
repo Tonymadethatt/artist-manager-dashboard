@@ -340,6 +340,7 @@ export const ACTIVITY_CATEGORY_LABELS: Record<string, string> = {
   meeting: 'Meeting',
   voicemail: 'Left voicemail',
   no_response: 'No response',
+  intake: 'Booking intake',
   other: 'Other',
 }
 

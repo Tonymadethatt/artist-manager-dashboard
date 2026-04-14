@@ -470,6 +470,69 @@ export interface Database {
         }
         Relationships: []
       }
+      artist_partnership_roll_entries: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          cohort: 'recent' | 'older'
+          is_confirmed: boolean
+          confirmed_at: string | null
+          source: 'system' | 'dj' | 'admin' | 'mock'
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          cohort?: 'recent' | 'older'
+          is_confirmed?: boolean
+          confirmed_at?: string | null
+          source?: 'system' | 'dj' | 'admin' | 'mock'
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          cohort?: 'recent' | 'older'
+          is_confirmed?: boolean
+          confirmed_at?: string | null
+          source?: 'system' | 'dj' | 'admin' | 'mock'
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      partnership_roll_public_owner: {
+        Row: {
+          id: number
+          artist_user_id: string
+          edit_window_ends_at: string | null
+          confirmed_at: string | null
+          confirmation_document_downloaded_at: string | null
+        }
+        Insert: {
+          id?: number
+          artist_user_id: string
+          edit_window_ends_at?: string | null
+          confirmed_at?: string | null
+          confirmation_document_downloaded_at?: string | null
+        }
+        Update: {
+          id?: number
+          artist_user_id?: string
+          edit_window_ends_at?: string | null
+          confirmed_at?: string | null
+          confirmation_document_downloaded_at?: string | null
+        }
+        Relationships: []
+      }
       booking_intake_shows: {
         Row: {
           id: string
@@ -1338,6 +1401,18 @@ export interface Database {
       ensure_calendar_listing_stamps_for_venue: {
         Args: { p_venue_id: string }
         Returns: undefined
+      }
+      partnership_roll_ensure_deadline: {
+        Args: Record<PropertyKey, never>
+        Returns: Record<string, unknown>
+      }
+      partnership_roll_confirm_list: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      partnership_roll_mark_document_downloaded: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
     }
     Enums: {

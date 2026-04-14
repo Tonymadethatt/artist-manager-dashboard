@@ -1,19 +1,26 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 
+function safeReturnPath(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/'
+  return raw.split('#')[0] ?? '/'
+}
+
 export default function Login() {
   const { user, loading, signIn } = useAuth()
+  const [searchParams] = useSearchParams()
+  const returnTo = safeReturnPath(searchParams.get('return'))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   if (!loading && user) {
-    return <Navigate to="/" replace />
+    return <Navigate to={returnTo} replace />
   }
 
   const handleSubmit = async (e: FormEvent) => {

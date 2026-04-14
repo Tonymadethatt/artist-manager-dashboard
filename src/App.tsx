@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { PREVIOUS_CLIENTS_FORM_PATH } from '@/lib/shareUrls'
 import { Shell } from '@/components/layout/Shell'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
@@ -23,6 +24,9 @@ import PerformanceReports from '@/pages/PerformanceReports'
 import ManualShowReport from '@/pages/ManualShowReport'
 import FormPreviews from '@/pages/FormPreviews'
 import BookingIntakePage from '@/pages/BookingIntakePage'
+import BookingIntakesHubPage from '@/pages/BookingIntakesHubPage'
+import PartnershipRollAdminPage from '@/pages/PartnershipRollAdminPage'
+import PublicPreviousClientsPage from '@/pages/public/PublicPreviousClientsPage'
 import { supabaseConfigured } from '@/lib/supabase'
 
 function EnvErrorScreen() {
@@ -55,7 +59,10 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/performance-report/:token" element={<PerformanceReportForm />} />
         <Route path="/venue-email-ack/:token" element={<VenueEmailAckBridge />} />
+        <Route path="/forms/intakes" element={<BookingIntakesHubPage />} />
         <Route path="/forms/intake" element={<BookingIntakePage />} />
+        <Route path={PREVIOUS_CLIENTS_FORM_PATH} element={<PublicPreviousClientsPage />} />
+        <Route path="/forms/partnerships" element={<Navigate to={PREVIOUS_CLIENTS_FORM_PATH} replace />} />
 
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
@@ -76,6 +83,7 @@ export default function App() {
           <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="/performance-reports/manual" element={<ManualShowReport />} />
           <Route path="/forms/preview" element={<FormPreviews />} />
+          <Route path="/workspace/partnerships" element={<PartnershipRollAdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

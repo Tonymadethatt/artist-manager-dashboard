@@ -24,7 +24,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/email-templates':     'Email Templates',
   '/settings':            'Settings',
   '/forms/preview':       'Forms preview',
+  '/forms/intakes':       'Call intakes',
   '/forms/intake':        'Call intake',
+  '/workspace/partnerships': 'Previous Clients — Workspace',
 }
 
 export function Shell() {
@@ -47,7 +49,8 @@ export function Shell() {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    const returnTo = encodeURIComponent(`${location.pathname}${location.search}`)
+    return <Navigate to={`/login?return=${returnTo}`} replace />
   }
 
   return (

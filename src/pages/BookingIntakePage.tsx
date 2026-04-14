@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   ChevronLeft,
@@ -25,18 +25,21 @@ import {
   computeDealPriceBreakdown,
   type ComputeDealPriceInput,
   isWeekendDate,
-  pickDefaultServiceId,
   roundUsd,
 } from '@/lib/pricing/computeDealPrice'
+import {
+  computeIntakePricingSetupAutopop,
+  intakeServiceLooksDjOnlyUsb,
+} from '@/lib/pricing/intakePricingAutopop'
 import { cn } from '@/lib/utils'
 import {
   CAPACITY_RANGE_OPTIONS,
-  CLOSE_ARTIFACT_TAG_KEYS,
-  CLOSE_ARTIFACT_TAG_LABELS,
   CONTACT_MISMATCH_CONTEXT_LABELS,
   CONTACT_MISMATCH_ROLE_ORDER,
   computeOvernightEvent,
+  computeSetLengthHours,
   defaultIntakeTitleV3,
+  formatSetLengthDisplay,
   INTAKE_SCHEMA_VERSION_V3,
   INTAKE_DEFAULT_EVENT_CITY_TEXT,
   INTAKE_DEFAULT_EVENT_STATE_REGION,
@@ -46,6 +49,7 @@ import {
   genreSetsEqual,
   INTAKE_DEFAULT_GENRES,
   MUSIC_VIBE_PRESETS,
+  PERFORMANCE_ROLE_OPTIONS,
   PERFORMANCE_GENRE_LABELS,
   PERFORMANCE_GENRE_VALUES,
   finalizeShowPostCaptures,
@@ -53,7 +57,7 @@ import {
   parseShowDataV3,
   parseVenueDataV3,
   phase1CaptureOwnerLabel,
-  PAYMENT_METHOD_KEYS,
+  LIVE_PAYMENT_METHOD_KEYS,
   PAYMENT_METHOD_LABELS,
   PHASE2_SETTING_OPTIONS,
   POST_CALL_SECTION_ORDER,
@@ -71,55 +75,57 @@ import {
   knownEventTypeLabel,
   venueTypesForIntake2a,
   VENUE_PROMISE_LINE_OPTIONS,
+  VENUE_ACCESS_NOTE_TAG_KEYS,
+  VENUE_ACCESS_NOTE_TAG_LABELS,
   FOLLOW_UP_TOPIC_KEYS,
   FOLLOW_UP_TOPIC_LABELS,
   GROUND_TRANSPORT_KEYS,
   GROUND_TRANSPORT_LABELS,
-  LOAD_ACCESS_TAG_KEYS,
-  LOAD_ACCESS_TAG_LABELS,
   MANUAL_PRICING_REASON_KEYS,
-  MANUAL_PRICING_REASON_LABELS,
-  ONSITE_CONNECT_METHOD_KEYS,
-  ONSITE_CONNECT_METHOD_LABELS,
-  ONSITE_CONNECT_WINDOW_KEYS,
-  ONSITE_CONNECT_WINDOW_LABELS,
-  ONSITE_POC_ROLE_KEYS,
-  ONSITE_POC_ROLE_LABELS,
-  PARKING_ACCESS_CLASS_KEYS,
-  PARKING_ACCESS_CLASS_LABELS,
+  DJ_PARKING_V3_KEYS,
+  DJ_PARKING_V3_LABELS,
   TRAVEL_BOOKED_BY_KEYS,
   TRAVEL_BOOKED_BY_LABELS,
   type BookingIntakeShowDataV3,
   type BookingIntakeVenueDataV3,
   type CapacityRangeV3,
-  type InquirySourceV3,
   type KnownEventTypeV3,
   type PerformanceGenreV3,
-  type CloseArtifactTagV3,
-  type LoadAccessTagV3,
   type Phase1ContactMismatchContextV3,
   type Phase2SettingV3,
   type Phase4LodgingStatusV3,
-  type Phase4OnsiteFlagV3,
   type Phase4OnsiteSameContactV3,
-  type Phase4ParkingDetailsFlagV3,
-  type Phase4ParkingStatusV3,
-  type Phase4SoundcheckV3,
+  type Phase4DjParkingV3,
+  type Phase2VenueAccessNotesFlagV3,
   type Phase4TravelNotesFlagV3,
   type Phase4TravelRequiredV3,
   type Phase5BalanceTimingV3,
   type Phase5DepositPercentV3,
   type Phase7CallStatusV3,
   type Phase7ClientEnergyV3,
+  type Phase7SendAgreementV3,
   type Phase7DepositOnCallV3,
   type Phase7HasFollowUpsV3,
-  type Phase7SendAgreementV3,
   type PaymentMethodKeyV3,
   type FollowUpTopicKeyV3,
+  type ManualPricingReasonV3,
   type VenuePromiseLineIdV3,
+  type VenueAccessNoteTagV3,
 } from '@/lib/intake/intakePayloadV3'
-import { contactRoleForDisplay, contactToMismatchContext } from '@/lib/contacts/contactTitles'
-import type { CommissionTier, Contact, Deal, OutreachTrack, PricingCatalogDoc, Venue } from '@/types'
+import {
+  contactRoleForDisplay,
+  contactToMismatchContext,
+  isVenueSoundTechContact,
+} from '@/lib/contacts/contactTitles'
+import type {
+  CommissionTier,
+  Contact,
+  Deal,
+  OutreachTrack,
+  PricingCatalogDoc,
+  PricingDiscount,
+  Venue,
+} from '@/types'
 import {
   COMMISSION_TIER_LABELS,
   COMMISSION_TIER_RATES,
@@ -129,6 +135,8 @@ import {
 } from '@/types'
 import { mapShowBundleToEarningsImport } from '@/lib/intake/mapIntakeToDealForm'
 import { mapIntakeVenueDataV3ToVenueRow, intakeContactsFromVenueDataV3 } from '@/lib/intake/mapIntakeToVenue'
+import { buildEndCallOutreachNote, buildVenueImportOutreachNote } from '@/lib/intake/intakeOutreachActivity'
+import { upsertIntakeVenueContactsForVenue } from '@/lib/intake/syncIntakeVenueContacts'
 import { importDealFromIntakeShow } from '@/lib/intake/importDealFromIntakeShow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -145,7 +153,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  IntakeBranchPanel,
   IntakeCallVibeChips,
   IntakeCompactChipRow,
   IntakeCompactDual,
@@ -155,10 +162,46 @@ import {
 import {
   EquipmentIntakeFlowCapture,
   type EquipmentSoundTechPickOption,
+  type SoundTechUiContext,
 } from '@/pages/booking-intake/EquipmentIntakeFlowCapture'
 import { Intake2bSchedulePanel } from '@/pages/booking-intake/Intake2bSchedulePanel'
 import { addHoursToQuarterHm, INTAKE_DEFAULT_EVENT_DURATION_HOURS } from '@/lib/intake/quarterHourTimes'
 import { IntakeQuarterHourTimeField } from '@/pages/booking-intake/IntakeQuarterHourTimeField'
+
+async function insertIntakeOutreachActivityNote(venueId: string, note: string): Promise<void> {
+  const t = note.trim()
+  if (!t) return
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth.user?.id) return
+  await supabase.from('outreach_notes').insert({
+    venue_id: venueId,
+    user_id: auth.user.id,
+    note: t,
+    category: 'intake',
+  })
+}
+
+function intakeHmKey(t: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t.trim())
+  if (!m) return t.trim()
+  return `${m[1].padStart(2, '0')}:${m[2]}`
+}
+
+function postCallPromiseLineUi(
+  rawVal: string,
+  lineId: VenuePromiseLineIdV3,
+): { status: 'set' | 'open' | 'warn'; summary: string } {
+  const opts = VENUE_PROMISE_LINE_OPTIONS[lineId]
+  const found = rawVal ? opts.find(o => o.value === rawVal) : undefined
+  const summary = found?.label ?? (rawVal ? rawVal : 'Not discussed')
+  if (!rawVal || rawVal === 'not_discussed') {
+    return { status: 'open', summary }
+  }
+  if (rawVal === 'no' || rawVal === 'need_confirm') {
+    return { status: 'warn', summary }
+  }
+  return { status: 'set', summary }
+}
 
 const LIVE_PHASES = [
   { id: '1', label: 'Opening' },
@@ -166,19 +209,206 @@ const LIVE_PHASES = [
   { id: '3', label: 'Performance' },
   { id: '4', label: 'Technical' },
   { id: '5', label: 'Money' },
-  { id: '6', label: 'Commitments' },
-  { id: '7', label: 'Close' },
+  { id: '6', label: 'Close' },
 ] as const
 
-const INQUIRY_OPTIONS: { value: InquirySourceV3; label: string }[] = [
-  { value: 'instagram_dm', label: 'Instagram DM' },
-  { value: 'email', label: 'Email' },
-  { value: 'phone_text', label: 'Phone/Text' },
-  { value: 'referral', label: 'Referral' },
-  { value: 'website', label: 'Website' },
-  { value: 'radio', label: 'Radio' },
-  { value: 'other', label: 'Other' },
-]
+/** Compact chip copy for §5C manual override (spec wording). */
+const MANUAL_PRICING_CHIP_LABELS: Record<Exclude<ManualPricingReasonV3, ''>, string> = {
+  friend_rate: 'Friend rate',
+  bundle: 'Bundled dates',
+  trade: 'Trade / contra',
+  promo: 'Promo',
+  tax_inclusive: 'Tax-inclusive',
+  client_math: 'Matched their budget',
+  rate_match: 'Rate match',
+  other_reason: 'Other',
+}
+
+/** Max venue contacts shown as chips; “Type name” is an extra chip → dropdown when names would exceed 4 chips total. */
+const BILLING_CONTACT_CHIP_MAX_NAMES = 3
+const BILLING_CONTACT_PICK_MANUAL = '__billing_manual__'
+const BILLING_CONTACT_PICK_UNSET = '__billing_unset__'
+
+/** Brand / semantic tint on live payment chips (Apple Pay + Check = yellow). */
+function paymentMethodChipTextClass(k: PaymentMethodKeyV3, selected: boolean): string {
+  if (selected) {
+    switch (k) {
+      case 'zelle':
+        return 'text-violet-700'
+      case 'venmo':
+        return 'text-sky-700'
+      case 'paypal':
+        return 'text-blue-800'
+      case 'apple_pay':
+      case 'check':
+        return 'text-amber-900'
+      default:
+        return 'text-neutral-950'
+    }
+  }
+  switch (k) {
+    case 'zelle':
+      return 'text-violet-400 hover:text-violet-300'
+    case 'venmo':
+      return 'text-sky-400 hover:text-sky-300'
+    case 'paypal':
+      return 'text-blue-600 hover:text-blue-500'
+    case 'apple_pay':
+    case 'check':
+      return 'text-amber-200 hover:text-amber-100'
+    default:
+      return 'text-neutral-400 hover:text-neutral-200'
+  }
+}
+
+function addBusinessDaysFromToday(weekdays: number): string {
+  const d = new Date()
+  d.setHours(12, 0, 0, 0)
+  let n = 0
+  while (n < weekdays) {
+    d.setDate(d.getDate() + 1)
+    const w = d.getDay()
+    if (w !== 0 && w !== 6) n += 1
+  }
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Fri–Mon window around US Memorial Day (last Monday of May). */
+function eventDateInMemorialDayWeekendBand(eventIso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventIso)) return false
+  const [Y, M, D] = eventIso.split('-').map(Number)
+  const t = new Date(Y, M - 1, D)
+  t.setHours(12, 0, 0, 0)
+  const lastMon = new Date(Y, 4, 31)
+  lastMon.setHours(12, 0, 0, 0)
+  while (lastMon.getDay() !== 1) {
+    lastMon.setDate(lastMon.getDate() - 1)
+  }
+  const fri = new Date(lastMon)
+  fri.setDate(fri.getDate() - 3)
+  fri.setHours(12, 0, 0, 0)
+  const mon = new Date(lastMon)
+  mon.setHours(12, 0, 0, 0)
+  return t >= fri && t <= mon
+}
+
+/** Subtle hint only — operator still chooses surcharges. */
+function peakSeasonHintLabel(eventIso: string | undefined): string | null {
+  if (!eventIso || !/^\d{4}-\d{2}-\d{2}$/.test(eventIso)) return null
+  const [Y, M, D] = eventIso.split('-').map(Number)
+  const t = new Date(Y, M - 1, D)
+  const m = t.getMonth() + 1
+  const d = t.getDate()
+  const md = m * 100 + d
+  if (m === 12 && d >= 20) return 'Peak season window (Christmas / NYE)'
+  if (m === 1 && d <= 2) return 'Peak season window (Christmas / NYE)'
+  if (md >= 1025 && md <= 1101) return 'Peak season window (Halloween week)'
+  if (m === 4 && d >= 10 && d <= 25) return 'Peak season window (festival week — check Coachella)'
+  if (m === 6 && d >= 28) return 'Peak season window (July 4th week)'
+  if (m === 7 && d <= 6) return 'Peak season window (July 4th week)'
+  if (m === 2 && md >= 213 && md <= 215) return 'Peak season window (Valentine’s weekend)'
+  const feb1 = new Date(Y, 1, 1)
+  const febDow0 = feb1.getDay()
+  const firstSundayFeb = 1 + ((7 - febDow0) % 7)
+  if (m === 2 && d >= firstSundayFeb - 2 && d <= firstSundayFeb + 1)
+    return 'Peak season window (early Feb — Super Bowl / Grammy — verify dates)'
+  const nov1 = new Date(Y, 10, 1)
+  const novDow = nov1.getDay()
+  const firstThuNov = 1 + ((4 - novDow + 7) % 7)
+  const thanksgivingDay = firstThuNov + 21
+  if (m === 11 && d >= thanksgivingDay - 3 && d <= thanksgivingDay + 3)
+    return 'Peak season window (Thanksgiving week)'
+  if ((m === 5 && d >= 24 && d <= 27) || (m === 9 && d >= 1 && d <= 7) || (m === 7 && d >= 3 && d <= 5))
+    return 'Peak season window (holiday weekend)'
+  if (eventDateInMemorialDayWeekendBand(eventIso)) return 'Peak season window (Memorial Day weekend)'
+  return null
+}
+
+function eventTypeSuggestsExclusivitySurcharge(eventType: KnownEventTypeV3 | ''): boolean {
+  return eventType === 'corporate' || eventType === 'wedding' || eventType === 'brand_activation'
+}
+
+function surchargeAutopopBadge(
+  sd: BookingIntakeShowDataV3,
+  s: { id: string; name: string },
+  eventDate: string,
+): string | null {
+  const n = addonNameNorm(s.name)
+  const peak = peakSeasonHintLabel(eventDate.trim())
+  if (peak && /peak/i.test(n)) return 'Peak season'
+  if (eventTypeSuggestsExclusivitySurcharge(sd.event_type) && (n.includes('exclusiv') || n.includes('nda')))
+    return 'Often paired'
+  return null
+}
+
+function isLargeCapacityForPackageHint(sd: BookingIntakeShowDataV3): boolean {
+  if (sd.approximate_headcount >= 2000) return true
+  const r = sd.capacity_range
+  return (
+    r === '2000_5000' ||
+    r === '5000_10000' ||
+    r === '10000_25000' ||
+    r === '25000_50000' ||
+    r === '50000_100000' ||
+    r === '100000_250000' ||
+    r === '250000_plus' ||
+    r === '5000_plus'
+  )
+}
+
+function addonNameNorm(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function shouldHideAddonTile(
+  addon: { id: string; name: string },
+  sd: BookingIntakeShowDataV3,
+): boolean {
+  const n = addonNameNorm(addon.name)
+  const isHighEndSound =
+    (n.includes('sound') || n.includes('pa')) && (n.includes('high') || n.includes('premium') || n.includes('upgrade'))
+  if (isHighEndSound) {
+    if (sd.equipment_provider === 'venue_provides') return true
+    if (sd.equipment_provider === 'dj_brings' && sd.pricing_mode === 'package' && sd.package_id.trim()) return true
+  }
+  if (sd.event_type === 'club_night') {
+    if (n.includes('karaoke')) return true
+    if (n.includes('photo') && n.includes('booth')) return true
+    if (n.includes('dance floor') || (n.includes('led') && n.includes('floor'))) return true
+  }
+  return false
+}
+
+function isVisualEffectsAddon(addon: { name: string }): boolean {
+  const n = addonNameNorm(addon.name)
+  return n.includes('visual') || n.includes('effect') || n.includes('spark') || n.includes('co2')
+}
+
+function isCustomSetlistAddon(addon: { name: string }): boolean {
+  const n = addonNameNorm(addon.name)
+  return n.includes('setlist') || (n.includes('custom') && n.includes('set'))
+}
+
+function isMcAddon(addon: { name: string }): boolean {
+  const n = addonNameNorm(addon.name)
+  return /\bmc\b/.test(n) || n.includes('emcee') || n.includes('host ')
+}
+
+function isGuestArtistAddon(addon: { name: string }): boolean {
+  const n = addonNameNorm(addon.name)
+  return (
+    n.includes('guest artist') ||
+    n.includes('guest ') ||
+    n.includes('additional performer') ||
+    n.includes('second operator')
+  )
+}
+
+/** Live 4B — new on-site POC (artist arrival / night-of) saved to `contacts.role` when operator adds a name. */
+const INTAKE_4B_NEW_ONSITE_CONTACT_TITLE: Exclude<Phase1ContactMismatchContextV3, ''> = 'day_of_coordinator'
 
 const EVENT_TYPE_OPTIONS: { value: KnownEventTypeV3; label: string }[] = [
   { value: 'after_party', label: 'After-Party' },
@@ -255,6 +485,7 @@ function pick2b(d: BookingIntakeShowDataV3): Pick<
   | 'event_date'
   | 'event_start_time'
   | 'event_end_time'
+  | 'doors_open_time'
   | 'overnight_event'
   | 'set_start_time'
   | 'set_end_time'
@@ -264,6 +495,7 @@ function pick2b(d: BookingIntakeShowDataV3): Pick<
     event_date: d.event_date,
     event_start_time: d.event_start_time,
     event_end_time: d.event_end_time,
+    doors_open_time: d.doors_open_time,
     overnight_event: d.overnight_event,
     set_start_time: d.set_start_time,
     set_end_time: d.set_end_time,
@@ -321,6 +553,12 @@ function pick4a(
   | 'pricing_mode'
   | 'package_id'
   | 'addon_quantities'
+  | 'addon_autopop_ids'
+  | 'addon_autopop_dismissed_ids'
+  | 'load_in_time'
+  | 'equipment_setup_window'
+  | 'load_in_access_tags'
+  | 'equipment_production_soundcheck'
 > {
   return {
     equipment_provider: d.equipment_provider,
@@ -338,29 +576,12 @@ function pick4a(
     pricing_mode: d.pricing_mode,
     package_id: d.package_id,
     addon_quantities: { ...d.addon_quantities },
-  }
-}
-
-function pick4c(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'load_in_discussed' | 'load_in_time' | 'soundcheck' | 'load_in_access_tags'
-> {
-  return {
-    load_in_discussed: d.load_in_discussed,
-    load_in_time: d.load_in_discussed === 'yes' ? d.load_in_time : '',
-    soundcheck: d.soundcheck,
+    addon_autopop_ids: [...d.addon_autopop_ids],
+    addon_autopop_dismissed_ids: [...d.addon_autopop_dismissed_ids],
+    load_in_time: d.load_in_time,
+    equipment_setup_window: d.equipment_setup_window,
     load_in_access_tags: [...d.load_in_access_tags],
-  }
-}
-
-function pick4d(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'parking_status' | 'parking_details_flag' | 'parking_access_class'
-> {
-  return {
-    parking_status: d.parking_status,
-    parking_details_flag: d.parking_details_flag,
-    parking_access_class: d.parking_access_class,
+    equipment_production_soundcheck: d.equipment_production_soundcheck,
   }
 }
 
@@ -399,14 +620,31 @@ function servicesForEventDate(catalog: PricingCatalogDoc, eventDate: string) {
   })
 }
 
-function pick6a(d: BookingIntakeShowDataV3): Pick<
-  BookingIntakeShowDataV3,
-  'promise_lines_v3' | 'promise_lines_auto'
-> {
-  return {
-    promise_lines_v3: { ...d.promise_lines_v3 },
-    promise_lines_auto: { ...d.promise_lines_auto },
-  }
+/** Catalog row for “Radio / ongoing engagement” — no longer offered in live intake. */
+function discountIsRadioStation(d: PricingDiscount): boolean {
+  const ct = (d.clientType ?? '').toLowerCase()
+  if (ct === 'radio_stations' || ct === 'radio_station') return true
+  const n = d.name.toLowerCase()
+  return n.includes('radio station') || n.includes('ongoing engagement')
+}
+
+/** Repeat-booking / returning-venue row — auto-applied when commission tier is kept doors. */
+function discountIsRepeatBooking(d: PricingDiscount): boolean {
+  const ct = (d.clientType ?? '').toLowerCase()
+  if (ct === 'returning') return true
+  const n = d.name.toLowerCase()
+  return n.includes('repeat')
+}
+
+function repeatBookingDiscountId(catalog: PricingCatalogDoc): string | null {
+  const row = catalog.discounts.find(discountIsRepeatBooking)
+  return row?.id ?? null
+}
+
+function discountIdListsEqualAsSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const bs = new Set(b)
+  return a.every(id => bs.has(id))
 }
 
 function buildPriceInputForShow(
@@ -567,6 +805,8 @@ function fmtKnownDate(iso: string): string {
 export default function BookingIntakePage() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const intakeIdParam = searchParams.get('intakeId')
   const booking = useBookingIntakes()
   const { venues, addVenue, updateVenue, refetch: refetchVenues } = useVenues()
   const { deals, addDeal, refetch: refetchDeals } = useDeals()
@@ -585,6 +825,8 @@ export default function BookingIntakePage() {
   const [advanceNudge, setAdvanceNudge] = useState<string | null>(null)
   /** Live 1A: user chose “Add new” for different-person flow (skip venue contact chips). */
   const [mismatchAddNewChosen, setMismatchAddNewChosen] = useState(false)
+  /** Live 4B: user chose “Add new” for different on-site POC (skip venue contact chips). */
+  const [onsiteAddNewChosen, setOnsiteAddNewChosen] = useState(false)
 
   const selectedRow = useMemo(
     () => booking.intakes.find(i => i.id === selectedId) ?? null,
@@ -667,11 +909,19 @@ export default function BookingIntakePage() {
 
   useEffect(() => {
     if (booking.loading || booking.intakes.length === 0) return
+    if (intakeIdParam && !booking.intakes.some(i => i.id === intakeIdParam)) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [booking.loading, booking.intakes, intakeIdParam, setSearchParams])
+
+  useEffect(() => {
+    if (booking.loading || booking.intakes.length === 0) return
     setSelectedId(prev => {
+      if (intakeIdParam && booking.intakes.some(i => i.id === intakeIdParam)) return intakeIdParam
       if (prev && booking.intakes.some(i => i.id === prev)) return prev
       return booking.intakes[0]?.id ?? null
     })
-  }, [booking.loading, booking.intakes])
+  }, [booking.loading, booking.intakes, intakeIdParam])
 
   useEffect(() => {
     if (!selectedId || !data || !selectedRow) return
@@ -699,6 +949,28 @@ export default function BookingIntakePage() {
     return contactsForVenue.filter(c => (sid ? c.id !== sid : true))
   }, [data?.existing_venue_id, data?.selected_contact_id, contactsForVenue])
 
+  /**
+   * §5C invoice “Different person” — omit anyone who is already the main contact on the toggle
+   * (`selected_contact_id` and/or same name + email as on-file primary).
+   */
+  const contactsForBillingPicker = useMemo(() => {
+    if (!data) return []
+    const sid = data.selected_contact_id
+    const mainNameNorm = data.contact_name.trim()
+    const mainEmailNorm = data.contact_email.trim().toLowerCase()
+    return contactsForVenue.filter(c => {
+      if (sid && c.id === sid) return false
+      if (!mainNameNorm) return true
+      if (c.name.trim() !== mainNameNorm) return true
+      const ce = (c.email ?? '').trim().toLowerCase()
+      if (mainEmailNorm && ce) return mainEmailNorm !== ce
+      if (mainEmailNorm && !ce) return true
+      if (!mainEmailNorm && !ce) return false
+      if (!mainEmailNorm && ce) return true
+      return false
+    })
+  }, [contactsForVenue, data])
+
   /** Live 1B: chips for who an added phone/email belongs to. */
   const live1bDetailOwnerChips = useMemo(() => {
     if (!data) return []
@@ -718,12 +990,81 @@ export default function BookingIntakePage() {
     return rows
   }, [data, contactsForVenue])
 
-  /** Phase 4A — sound tech picks (primary, on-call, venue contacts). */
+  const venueSoundTechContacts = useMemo(
+    () => contactsForVenue.filter(isVenueSoundTechContact),
+    [contactsForVenue],
+  )
+
+  const soundTechUiContextForEquipment = useMemo((): SoundTechUiContext => {
+    if (venueSoundTechContacts.length === 1) {
+      const c = venueSoundTechContacts[0]
+      const full = c.name.trim()
+      const first = full.split(/\s+/)[0] ?? full
+      return {
+        confirmFirstName: first,
+        confirmFullName: full,
+        multipleOnFile: false,
+        preferredVenueContactId: c.id,
+      }
+    }
+    if (venueSoundTechContacts.length > 1) {
+      return {
+        confirmFirstName: null,
+        confirmFullName: null,
+        multipleOnFile: true,
+        preferredVenueContactId: null,
+      }
+    }
+    return {
+      confirmFirstName: null,
+      confirmFullName: null,
+      multipleOnFile: false,
+      preferredVenueContactId: null,
+    }
+  }, [venueSoundTechContacts])
+
+  const ensureSoundTechContact = useCallback(
+    async (rawName: string): Promise<string | null> => {
+      const vid = data?.existing_venue_id
+      const name = rawName.trim()
+      if (!vid || !name) return null
+      const { data: dup } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('venue_id', vid)
+        .ilike('name', name)
+        .maybeSingle()
+      if (dup?.id) return dup.id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const { data: row, error } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: user.id,
+          venue_id: vid,
+          name,
+          title_key: 'on_site_tech',
+          role: null,
+          email: null,
+          phone: null,
+          company: null,
+        })
+        .select('id')
+        .single()
+      if (error || !row) return null
+      const { data: fresh } = await supabase.from('contacts').select('*').eq('venue_id', vid).order('created_at')
+      setContactsForVenue((fresh ?? []) as Contact[])
+      return row.id as string
+    },
+    [data?.existing_venue_id],
+  )
+
+  /** Phase 4A — sound tech picks (primary, on-call, venue contacts; FOH-ish rows first). */
   const equipmentSoundTechPickOptions = useMemo((): EquipmentSoundTechPickOption[] => {
     if (!data) return []
-    const rows: EquipmentSoundTechPickOption[] = []
+    const prefix: EquipmentSoundTechPickOption[] = []
     if (data.contact_name.trim()) {
-      rows.push({
+      prefix.push({
         id: '__primary__',
         label: `${data.contact_name.trim()} · on file`,
         contactId: null,
@@ -733,27 +1074,36 @@ export default function BookingIntakePage() {
     if (data.confirmed_contact === 'no_different_person' && data.contact_mismatch_note.trim()) {
       const full = data.contact_mismatch_note.trim()
       const first = full.split(/\s+/)[0] ?? full
-      rows.push({
+      prefix.push({
         id: '__on_call__',
         label: `${first} · on the call`,
         contactId: null,
         name: full,
       })
     }
+    const st: EquipmentSoundTechPickOption[] = []
+    const rest: EquipmentSoundTechPickOption[] = []
     for (const c of contactsForVenue) {
-      rows.push({
+      const r = contactRoleForDisplay(c)
+      const opt: EquipmentSoundTechPickOption = {
         id: c.id,
-        label: c.role ? `${c.name} · ${c.role}` : c.name,
+        label: r ? `${c.name} · ${r}` : c.name,
         contactId: c.id,
         name: '',
-      })
+      }
+      if (isVenueSoundTechContact(c)) st.push(opt)
+      else rest.push(opt)
     }
-    return rows
+    return [...prefix, ...st, ...rest]
   }, [data, contactsForVenue])
 
   useEffect(() => {
     if (data?.confirmed_contact !== 'no_different_person') setMismatchAddNewChosen(false)
   }, [data?.confirmed_contact])
+
+  useEffect(() => {
+    if (data?.onsite_same_contact !== 'different') setOnsiteAddNewChosen(false)
+  }, [data?.onsite_same_contact])
 
   /** Venue contact chips row (stays visible after a chip is selected so you can switch or use Add new). */
   const live1aShowVenueMismatchChips = useMemo(() => {
@@ -795,6 +1145,41 @@ export default function BookingIntakePage() {
     otherVenueContactsForMismatch.length,
   ])
 
+  const live4bShowVenueOnsiteChips = useMemo(() => {
+    if (!data || data.view_section !== '4B' || data.onsite_same_contact !== 'different') return false
+    return otherVenueContactsForMismatch.length > 0 && !onsiteAddNewChosen
+  }, [data, data?.view_section, data?.onsite_same_contact, otherVenueContactsForMismatch, onsiteAddNewChosen])
+
+  const live4bVenueOnsiteContactPick = useMemo(() => {
+    if (!live4bShowVenueOnsiteChips || onsiteAddNewChosen) return false
+    if (data?.onsite_linked_contact_id) return false
+    const note = data?.onsite_contact_name?.trim() ?? ''
+    if (note) return false
+    return true
+  }, [
+    live4bShowVenueOnsiteChips,
+    onsiteAddNewChosen,
+    data?.onsite_linked_contact_id,
+    data?.onsite_contact_name,
+  ])
+
+  const live4bShowOnsiteMismatchForm = useMemo(() => {
+    if (!data || data.view_section !== '4B') return false
+    if (data.onsite_same_contact !== 'different' || live4bVenueOnsiteContactPick) return false
+    if (data.onsite_linked_contact_id) return false
+    if (data.onsite_contact_name.trim()) return false
+    return onsiteAddNewChosen || otherVenueContactsForMismatch.length === 0
+  }, [
+    data,
+    data?.view_section,
+    data?.onsite_same_contact,
+    data?.onsite_contact_name,
+    data?.onsite_linked_contact_id,
+    live4bVenueOnsiteContactPick,
+    onsiteAddNewChosen,
+    otherVenueContactsForMismatch.length,
+  ])
+
   const filteredVenues = useMemo(() => {
     const q = venueSearch.trim().toLowerCase()
     if (!q) return venues.slice(0, 50)
@@ -815,6 +1200,23 @@ export default function BookingIntakePage() {
     [selectedId, booking],
   )
 
+  /** Drop billing link if it points at the main contact (no longer in picker list). */
+  useEffect(() => {
+    if (!selectedId || !data) return
+    if (data.invoice_same_contact !== 'different') return
+    const bid = data.billing_linked_contact_id
+    if (!bid) return
+    const allowed = new Set(contactsForBillingPicker.map(c => c.id))
+    if (!allowed.has(bid)) {
+      patch({
+        billing_linked_contact_id: null,
+        billing_contact_flag: 'capture_later',
+        billing_contact_name: '',
+        billing_contact_email: '',
+      })
+    }
+  }, [selectedId, data, contactsForBillingPicker, patch])
+
   const applyShowPatch = useCallback(
     (
       showId: string,
@@ -825,8 +1227,6 @@ export default function BookingIntakePage() {
         | '2c'
         | '3b'
         | '4a'
-        | '4c'
-        | '4d'
         | '4e'
         | '5a'
         | '5b'
@@ -856,9 +1256,6 @@ export default function BookingIntakePage() {
         } else {
           next.overnight_set = computeOvernightEvent(next.set_start_time, next.set_end_time)
         }
-      }
-      if (section === '4c') {
-        if (next.load_in_discussed !== 'yes') next.load_in_time = ''
       }
       if (section === '4e') {
         if (partial.travel_required === 'local' || next.travel_required === 'local') {
@@ -915,10 +1312,7 @@ export default function BookingIntakePage() {
           (section === '2c' && data.same_for_all_2c) ||
           (section === '3b' && data.same_for_all_3b) ||
           (section === '4a' && data.same_for_all_4a) ||
-          (section === '4c' && data.same_for_all_4c) ||
-          (section === '4d' && data.same_for_all_4d) ||
-          (section === '4e' && data.same_for_all_4e) ||
-          (section === '6a' && data.same_for_all_6a))
+          (section === '4e' && data.same_for_all_4e))
 
       if (sync) {
         for (const s of showsSorted) {
@@ -935,13 +1329,9 @@ export default function BookingIntakePage() {
                     ? { ...oc, ...pick3b(next) }
                     : section === '4a'
                       ? { ...oc, ...pick4a(next) }
-                      : section === '4c'
-                        ? { ...oc, ...pick4c(next) }
-                        : section === '4d'
-                          ? { ...oc, ...pick4d(next) }
-                          : section === '4e'
-                            ? { ...oc, ...pick4e(next) }
-                            : { ...oc, ...pick6a(next) }
+                      : section === '4e'
+                      ? { ...oc, ...pick4e(next) }
+                      : oc
           if (section === '2b') {
             merged.overnight_event = computeOvernightEvent(merged.event_start_time, merged.event_end_time)
             merged.overnight_set =
@@ -965,6 +1355,28 @@ export default function BookingIntakePage() {
     [selectedId, data, showsSorted, booking],
   )
 
+  /** Strip legacy radio discount; sync repeat-booking discount with kept-doors tier (not manually toggled). */
+  useEffect(() => {
+    if (!selectedId || !data) return
+    const repeatId = repeatBookingDiscountId(pricingCatalog)
+    const radioIds = new Set(
+      pricingCatalog.discounts.filter(discountIsRadioStation).map(d => d.id),
+    )
+    for (const row of showsSorted) {
+      const sd = parseShowDataV3(row.show_data, row.sort_order)
+      let nextIds = sd.discount_ids.filter(id => !radioIds.has(id))
+      if (data.commission_tier === 'kept_doors' && repeatId && !nextIds.includes(repeatId)) {
+        nextIds = [...nextIds, repeatId]
+      }
+      if (data.commission_tier !== 'kept_doors' && repeatId && sd.event_schedule_type !== 'recurring') {
+        nextIds = nextIds.filter(id => id !== repeatId)
+      }
+      if (!discountIdListsEqualAsSet(nextIds, sd.discount_ids)) {
+        applyShowPatch(row.id, { discount_ids: nextIds }, '5a')
+      }
+    }
+  }, [selectedId, data?.commission_tier, showsSorted, pricingCatalog, applyShowPatch])
+
   useEffect(() => {
     if (!selectedId || !data || data.view_section !== '3B') return
     for (const row of showsSorted) {
@@ -984,10 +1396,7 @@ export default function BookingIntakePage() {
         | 'same_for_all_2c'
         | 'same_for_all_3b'
         | 'same_for_all_4a'
-        | 'same_for_all_4c'
-        | 'same_for_all_4d'
-        | 'same_for_all_4e'
-        | 'same_for_all_6a',
+        | 'same_for_all_4e',
       v: boolean,
       pick: (d: BookingIntakeShowDataV3) => Partial<BookingIntakeShowDataV3>,
     ) => {
@@ -1211,8 +1620,8 @@ export default function BookingIntakePage() {
     if (!selectedId || !data || data.session_mode !== 'live_call') return
     if (pathSections.includes('4E')) return
     const u: Partial<BookingIntakeVenueDataV3> = {}
-    if (data.last_active_section === '4E') u.last_active_section = '4D'
-    if (data.view_section === '4E') u.view_section = '4D'
+    if (data.last_active_section === '4E') u.last_active_section = '5A'
+    if (data.view_section === '4E') u.view_section = '5A'
     if (Object.keys(u).length) booking.updateVenueData(selectedId, u)
   }, [
     selectedId,
@@ -1247,32 +1656,24 @@ export default function BookingIntakePage() {
         const sug = suggestedBillableHoursFromShow(sd)
         if (sug > 0) p.performance_hours = sug
       }
-      if (catalogHasMinimumForDealLogging(pricingCatalog)) {
-        if (!sd.service_id.trim()) {
-          const pick = pickDefaultServiceId(pricingCatalog, sd.event_date.trim() || null)
-          if (pick) {
-            p.service_id = pick
-            p.overtime_service_id = pick
-          }
-        } else if (!sd.overtime_service_id.trim()) {
-          p.overtime_service_id = sd.service_id
-        }
-        if (sd.pricing_mode === 'package' && !sd.package_id.trim() && pricingCatalog.packages[0]) {
-          p.package_id = pricingCatalog.packages[0].id
-        }
-      }
-      if (Object.keys(p).length > 0) {
-        booking.updateShowData(row.id, selectedId, { ...sd, ...p })
-      }
+      const merged = { ...sd, ...p }
+      const auto = computeIntakePricingSetupAutopop(merged, pricingCatalog)
+      const combined = { ...p, ...auto }
+      if (Object.keys(combined).length === 0) continue
+      booking.updateShowData(
+        row.id,
+        selectedId,
+        finalizeShowPostCaptures({ ...sd, ...combined }),
+      )
     }
   }, [selectedId, data?.session_mode, data?.view_section, showsSorted, booking, pricingCatalog])
 
   useEffect(() => {
     if (!selectedId || !data || data.session_mode !== 'live_call') return
-    if (data.view_section !== '6A') return
+    if (data.view_section !== '5C') return
     for (const row of showsSorted) {
       const sd = parseShowDataV3(row.show_data, row.sort_order)
-      const sug = suggestedPromiseLinesFromEarlierPhases(sd)
+      const sug = suggestedPromiseLinesFromEarlierPhases(sd, data)
       const nextLines = { ...sd.promise_lines_v3 }
       const nextAuto = { ...sd.promise_lines_auto }
       let changed = false
@@ -1295,6 +1696,19 @@ export default function BookingIntakePage() {
     }
   }, [selectedId, data?.session_mode, data?.view_section, showsSorted, booking, data])
 
+  /** Drop legacy / disallowed methods (e.g. cash, other) so hidden selections cannot persist. */
+  useEffect(() => {
+    if (!selectedId || !data || data.session_mode !== 'live_call') return
+    if (data.view_section !== '5C') return
+    const allowed = new Set(LIVE_PAYMENT_METHOD_KEYS as readonly string[])
+    for (const row of showsSorted) {
+      const sd = parseShowDataV3(row.show_data, row.sort_order)
+      if (!sd.payment_methods.some(m => !allowed.has(m))) continue
+      const next = sd.payment_methods.filter(m => allowed.has(m))
+      booking.updateShowData(row.id, selectedId, { ...sd, payment_methods: next })
+    }
+  }, [selectedId, data?.session_mode, data?.view_section, showsSorted, booking, data])
+
   const patchPromiseLine = useCallback(
     (showId: string, lineId: VenuePromiseLineIdV3, value: string) => {
       if (!selectedId || !data) return
@@ -1313,13 +1727,34 @@ export default function BookingIntakePage() {
     [selectedId, data, showsSorted, applyShowPatch],
   )
 
+  useEffect(() => {
+    if (!selectedId || !data || data.session_mode !== 'live_call') return
+    if (data.view_section !== '7A') return
+    if (data.has_follow_ups !== 'yes') return
+    if (!data.follow_up_topics.includes('internal_approval')) return
+    if (data.follow_up_date.trim()) return
+    patch({ follow_up_date: addBusinessDaysFromToday(4) })
+  }, [
+    selectedId,
+    data?.session_mode,
+    data?.view_section,
+    data?.has_follow_ups,
+    data?.follow_up_topics,
+    data?.follow_up_date,
+    patch,
+    data,
+  ])
+
   const toggleFollowTopic = useCallback(
     (k: FollowUpTopicKeyV3) => {
       if (!selectedId || !data) return
       const has = data.follow_up_topics.includes(k)
-      patch({
-        follow_up_topics: has ? data.follow_up_topics.filter(x => x !== k) : [...data.follow_up_topics, k],
-      })
+      const nextTopics = has ? data.follow_up_topics.filter(x => x !== k) : [...data.follow_up_topics, k]
+      const extra: Partial<BookingIntakeVenueDataV3> = { follow_up_topics: nextTopics }
+      if (!has && k === 'internal_approval' && !data.follow_up_date.trim()) {
+        extra.follow_up_date = addBusinessDaysFromToday(4)
+      }
+      patch(extra)
     },
     [selectedId, data, patch],
   )
@@ -1398,7 +1833,7 @@ export default function BookingIntakePage() {
   const handleExit = async () => {
     if (!window.confirm('Leave call intake? Changes will be saved first.')) return
     await booking.flushAllPending()
-    navigate('/')
+    navigate('/forms/intakes')
   }
 
   const handleBeginCall = async () => {
@@ -1422,7 +1857,7 @@ export default function BookingIntakePage() {
     const v = data.view_section
     const l = data.last_active_section
     if (v.startsWith('__stub_')) return
-    if (v === '7C') return
+    if (v === '7A') return
 
     if (v === '1A' && data.confirmed_contact === 'no_different_person') {
       if (live1aShowVenueContactPick) {
@@ -1480,6 +1915,61 @@ export default function BookingIntakePage() {
         return
       }
       setAdvanceNudge(null)
+    } else if (v === '4B' && data.onsite_same_contact === 'different') {
+      if (live4bVenueOnsiteContactPick) {
+        setAdvanceNudge('Pick who is on site, or Add new.')
+        return
+      }
+      let linkedId = data.onsite_linked_contact_id
+      const note = data.onsite_contact_name.trim()
+      const needsPersist =
+        !linkedId &&
+        !!data.existing_venue_id?.trim() &&
+        !!note &&
+        (onsiteAddNewChosen || otherVenueContactsForMismatch.length === 0)
+      if (needsPersist) {
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth.user?.id
+        if (!uid) {
+          setAdvanceNudge('Sign in to save this contact to the venue.')
+          return
+        }
+        const ctxKey = INTAKE_4B_NEW_ONSITE_CONTACT_TITLE
+        const roleLabel = CONTACT_MISMATCH_CONTEXT_LABELS[ctxKey]
+        const { data: ins, error: insErr } = await supabase
+          .from('contacts')
+          .insert({
+            user_id: uid,
+            venue_id: data.existing_venue_id!.trim(),
+            name: note,
+            role: roleLabel,
+            email: null,
+            phone: null,
+            company: null,
+          })
+          .select('id')
+          .single()
+        if (insErr || !ins?.id) {
+          setAdvanceNudge(insErr?.message ? `Could not save contact: ${insErr.message}` : 'Could not save contact.')
+          return
+        }
+        linkedId = ins.id
+        booking.updateVenueData(selectedId, {
+          onsite_linked_contact_id: linkedId,
+          onsite_title_context: ctxKey,
+          onsite_contact_role: roleLabel,
+        })
+        await booking.flushIntakeImmediate(selectedId)
+        const vid = data.existing_venue_id!.trim()
+        const { data: rows } = await supabase.from('contacts').select('*').eq('venue_id', vid).order('created_at')
+        setContactsForVenue((rows ?? []) as Contact[])
+      }
+      const hasOnsite = !!linkedId || !!note
+      if (!hasOnsite) {
+        setAdvanceNudge('Enter the on-site contact’s name.')
+        return
+      }
+      setAdvanceNudge(null)
     } else {
       setAdvanceNudge(null)
     }
@@ -1516,7 +2006,9 @@ export default function BookingIntakePage() {
     booking,
     pathSections,
     live1aShowVenueContactPick,
+    live4bVenueOnsiteContactPick,
     mismatchAddNewChosen,
+    onsiteAddNewChosen,
     otherVenueContactsForMismatch.length,
   ])
 
@@ -1539,11 +2031,10 @@ export default function BookingIntakePage() {
       const jump: Record<number, string> = {
         0: '1A',
         1: '2A',
-               2: '3B',
+        2: '3B',
         3: '4A',
         4: '5A',
-        5: '6A',
-        6: '7A',
+        5: '7A',
       }
       const section = jump[phaseIdx]
       if (section) booking.updateVenueData(selectedId, { view_section: section })
@@ -1578,7 +2069,10 @@ export default function BookingIntakePage() {
 
   const handleNewIntake = async () => {
     const row = await booking.createIntake()
-    if (row) setSelectedId(row.id)
+    if (row) {
+      setSelectedId(row.id)
+      setSearchParams({ intakeId: row.id }, { replace: true })
+    }
   }
 
   const handleEndCall = async () => {
@@ -1591,11 +2085,29 @@ export default function BookingIntakePage() {
       booking.updateVenueData(selectedId, {
         session_mode: 'post_call',
         call_ended_at: ended,
-        last_active_section: '7C',
+        last_active_section: '7A',
         view_section: '8A',
         suggested_outreach_status: suggested,
       })
       await booking.flushIntakeImmediate(selectedId)
+      if (data.existing_venue_id && suggested) {
+        const ur = await updateVenue(data.existing_venue_id, { status: suggested })
+        if (!ur.error) await refetchVenues()
+      }
+      try {
+        if (data.existing_venue_id && selectedRow) {
+          await insertIntakeOutreachActivityNote(
+            data.existing_venue_id,
+            buildEndCallOutreachNote(data, {
+              callEndedAtIso: ended,
+              intakeTitle: selectedRow.title?.trim() || 'Booking intake',
+              intakeId: selectedId,
+            }),
+          )
+        }
+      } catch {
+        /* activity log is best-effort */
+      }
     } finally {
       setEndCallBusy(false)
     }
@@ -1613,44 +2125,72 @@ export default function BookingIntakePage() {
     const row = venueImportPreview
     const isPhaseExisting = data.venue_source === 'existing' && !!data.existing_venue_id
 
+    const venuePatch = {
+      name: row.name,
+      location: row.location,
+      city: row.city,
+      address_line2: row.address_line2,
+      region: row.region,
+      postal_code: row.postal_code,
+      venue_type: row.venue_type,
+      priority: row.priority,
+      status: row.status,
+      outreach_track: row.outreach_track,
+      follow_up_date: row.follow_up_date,
+      capacity: row.capacity,
+      deal_terms: row.deal_terms,
+    }
+
+    const syncContactsAndNote = async (venueId: string, isNewVenue: boolean): Promise<string> => {
+      let extra = ''
+      const { data: auth } = await supabase.auth.getUser()
+      if (auth.user) {
+        const { data: existingRows } = await supabase.from('contacts').select('*').eq('venue_id', venueId)
+        const existing = (existingRows ?? []) as Contact[]
+        const pending = intakeContactsFromVenueDataV3(data, existing)
+        if (pending.length > 0) {
+          const sync = await upsertIntakeVenueContactsForVenue({
+            venueId,
+            userId: auth.user.id,
+            derived: pending,
+            existingContacts: existing,
+          })
+          if (!sync.ok) extra = ` Contact sync: ${sync.error}.`
+          else if (data.existing_venue_id === venueId || data.post_import_venue_id === venueId) {
+            setContactsForVenue(sync.contacts)
+          }
+        }
+      }
+      try {
+        await insertIntakeOutreachActivityNote(
+          venueId,
+          buildVenueImportOutreachNote({
+            intakeTitle: selectedRow?.title?.trim() || 'Booking intake',
+            intakeId: selectedId,
+            venueName: row.name,
+            isNewVenue,
+          }),
+        )
+      } catch {
+        /* best-effort */
+      }
+      return extra
+    }
+
     if (isPhaseExisting && data.existing_venue_id) {
-      const ur = await updateVenue(data.existing_venue_id, {
-        name: row.name,
-        location: row.location,
-        city: row.city,
-        address_line2: row.address_line2,
-        region: row.region,
-        postal_code: row.postal_code,
-        venue_type: row.venue_type,
-        priority: row.priority,
-        status: row.status,
-        outreach_track: row.outreach_track,
-        follow_up_date: row.follow_up_date,
-        capacity: row.capacity,
-      })
+      const ur = await updateVenue(data.existing_venue_id, venuePatch)
       if (ur.error) return { ok: false, message: ur.error.message ?? 'Update failed', venueId: null }
       await refetchVenues()
-      return { ok: true, message: 'Venue updated in Outreach.', venueId: data.existing_venue_id }
+      const extra = await syncContactsAndNote(data.existing_venue_id, false)
+      return { ok: true, message: `Venue updated in Outreach.${extra}`, venueId: data.existing_venue_id }
     }
 
     if (data.post_import_venue_id) {
-      const ur = await updateVenue(data.post_import_venue_id, {
-        name: row.name,
-        location: row.location,
-        city: row.city,
-        address_line2: row.address_line2,
-        region: row.region,
-        postal_code: row.postal_code,
-        venue_type: row.venue_type,
-        priority: row.priority,
-        status: row.status,
-        outreach_track: row.outreach_track,
-        follow_up_date: row.follow_up_date,
-        capacity: row.capacity,
-      })
+      const ur = await updateVenue(data.post_import_venue_id, venuePatch)
       if (ur.error) return { ok: false, message: ur.error.message ?? 'Update failed', venueId: null }
       await refetchVenues()
-      return { ok: true, message: 'Venue updated in Outreach.', venueId: data.post_import_venue_id }
+      const extra = await syncContactsAndNote(data.post_import_venue_id, false)
+      return { ok: true, message: `Venue updated in Outreach.${extra}`, venueId: data.post_import_venue_id }
     }
 
     const vr = await addVenue(row)
@@ -1658,39 +2198,61 @@ export default function BookingIntakePage() {
     const newId = vr.data?.id
     if (!newId) return { ok: false, message: 'No venue id returned.', venueId: null }
 
-    const pending = intakeContactsFromVenueDataV3(data)
-    if (pending.length > 0) {
-      const { data: auth } = await supabase.auth.getUser()
-      const userRow = auth.user
-      if (userRow) {
-        const contactRows = pending.map(c => ({
-          user_id: userRow.id,
-          venue_id: newId,
-          name: c.name,
-          title_key: null as string | null,
-          role: c.role,
-          email: c.email,
-          phone: c.phone,
-          company: c.company,
-        }))
-        const { error: ce } = await supabase.from('contacts').insert(contactRows)
-        if (ce) {
+    const { data: auth } = await supabase.auth.getUser()
+    const userRow = auth.user
+    if (userRow) {
+      const pending = intakeContactsFromVenueDataV3(data, [])
+      if (pending.length > 0) {
+        const sync = await upsertIntakeVenueContactsForVenue({
+          venueId: newId,
+          userId: userRow.id,
+          derived: pending,
+          existingContacts: [],
+        })
+        if (!sync.ok) {
+          try {
+            await insertIntakeOutreachActivityNote(
+              newId,
+              buildVenueImportOutreachNote({
+                intakeTitle: selectedRow?.title?.trim() || 'Booking intake',
+                intakeId: selectedId,
+                venueName: row.name,
+                isNewVenue: true,
+              }),
+            )
+          } catch {
+            /* best-effort */
+          }
           booking.updateVenueData(selectedId, { post_import_venue_id: newId })
           await booking.flushIntakeImmediate(selectedId)
           await refetchVenues()
           return {
             ok: true,
-            message: `Venue created; contacts could not be saved: ${ce.message}`,
+            message: `Venue created; contacts could not be saved: ${sync.error}`,
             venueId: newId,
           }
         }
+        setContactsForVenue(sync.contacts)
       }
+    }
+    try {
+      await insertIntakeOutreachActivityNote(
+        newId,
+        buildVenueImportOutreachNote({
+          intakeTitle: selectedRow?.title?.trim() || 'Booking intake',
+          intakeId: selectedId,
+          venueName: row.name,
+          isNewVenue: true,
+        }),
+      )
+    } catch {
+      /* best-effort */
     }
     booking.updateVenueData(selectedId, { post_import_venue_id: newId })
     await booking.flushIntakeImmediate(selectedId)
     await refetchVenues()
     return { ok: true, message: 'Venue created in Outreach and linked for deals.', venueId: newId }
-  }, [selectedId, data, venueImportPreview, booking, addVenue, updateVenue, refetchVenues])
+  }, [selectedId, selectedRow, data, venueImportPreview, booking, addVenue, updateVenue, refetchVenues])
 
   const handleImportVenueClick = useCallback(async () => {
     setImportBusyKey('venue')
@@ -1715,6 +2277,8 @@ export default function BookingIntakePage() {
           setImportBanner({ tone: 'err', text: 'Import the venue first.' })
           return
         }
+        const { data: vcRows } = await supabase.from('contacts').select('*').eq('venue_id', venueId)
+        const venueContacts = (vcRows ?? []) as Contact[]
         const tryImport = (allowOverlap: boolean) =>
           importDealFromIntakeShow({
             rawShowData: showRow.show_data,
@@ -1729,6 +2293,7 @@ export default function BookingIntakePage() {
             refetchVenues,
             artistEmail: profile?.artist_email,
             allowOverlap,
+            venueContacts,
           })
         let r = await tryImport(false)
         if (!r.ok && 'needsOverlapConfirm' in r && r.needsOverlapConfirm) {
@@ -1791,6 +2356,12 @@ export default function BookingIntakePage() {
         })
         return
       }
+      if (!venueId) {
+        setImportBanner({ tone: 'err', text: 'Import the venue first.' })
+        return
+      }
+      const { data: vcAll } = await supabase.from('contacts').select('*').eq('venue_id', venueId)
+      const venueContactsAll = (vcAll ?? []) as Contact[]
       let dealsAcc: Deal[] = [...deals]
       let lastDeal = ''
       for (const showRow of rows) {
@@ -1808,6 +2379,7 @@ export default function BookingIntakePage() {
             refetchVenues,
             artistEmail: profile?.artist_email,
             allowOverlap,
+            venueContacts: venueContactsAll,
           })
         let r = await tryImport(false)
         if (!r.ok && 'needsOverlapConfirm' in r && r.needsOverlapConfirm) {
@@ -1858,21 +2430,6 @@ export default function BookingIntakePage() {
     refreshNavBadges,
   ])
 
-  // #region agent log
-  fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd0bca7' },
-    body: JSON.stringify({
-      sessionId: 'd0bca7',
-      hypothesisId: 'H1',
-      location: 'BookingIntakePage.tsx:preEarlyReturn',
-      message: 'render before conditional branch',
-      data: { hasData: !!data, hasSelectedRow: !!selectedRow, authLoading },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {})
-  // #endregion
-
   if (authLoading) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
@@ -1896,9 +2453,9 @@ export default function BookingIntakePage() {
       <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
         <header className="h-12 border-b border-neutral-800 flex items-center px-4 shrink-0">
           <Button variant="ghost" size="sm" className="gap-2" asChild>
-            <Link to="/">
+            <Link to="/forms/intakes">
               <ArrowLeft className="h-4 w-4" />
-              Dashboard
+              All intakes
             </Link>
           </Button>
         </header>
@@ -1910,6 +2467,9 @@ export default function BookingIntakePage() {
           <Button type="button" onClick={() => void handleNewIntake()}>
             New intake
           </Button>
+          <Button variant="link" className="mt-3 text-neutral-500 text-xs h-auto p-0" asChild>
+            <Link to="/forms/intakes">View intake list</Link>
+          </Button>
           {booking.error ? <p className="text-red-400 text-xs mt-4">{booking.error}</p> : null}
         </div>
       </div>
@@ -1919,7 +2479,7 @@ export default function BookingIntakePage() {
   const viewPhaseIndex = livePhaseIndexFromSection(data.view_section)
   const bookmarkPhaseIndex = livePhaseIndexFromSection(data.last_active_section)
   const showJumpReturn = data.view_section !== data.last_active_section
-  const lastPathSection = pathSections[pathSections.length - 1] ?? '7C'
+  const lastPathSection = pathSections[pathSections.length - 1] ?? '7A'
 
   const knownTypeLabel = data.known_event_type
     ? EVENT_TYPE_OPTIONS.find(o => o.value === data.known_event_type)?.label
@@ -1954,74 +2514,120 @@ export default function BookingIntakePage() {
       return `“${liveScriptAddresseeHey}, ${lowerLead}”`
     })()
 
+  const totalUsdForShow = (sd: BookingIntakeShowDataV3): number => {
+    if (sd.pricing_source === 'manual' && sd.manual_gross != null && Number.isFinite(sd.manual_gross)) {
+      return roundUsd(sd.manual_gross)
+    }
+    const inp = buildPriceInputForShow(sd, pricingCatalog)
+    if (!inp) return 0
+    try {
+      return computeDealPrice(inp).gross
+    } catch {
+      return 0
+    }
+  }
+
   const talking2a = `“I just want to make sure I've got everything right — what's the official name of the event, and tell me a little about the venue and how often you guys do this?”`
   const talking3b = `“What kind of music are you envisioning for that night?”`
   const talking4a = `“On the equipment side — does the venue have a full setup, or is Luijay bringing the production?”`
-  const talking4b = `“Is there a production person or point of contact on site?”`
-  const talking4c = `“Just so we know when to have him there — any load-in or soundcheck window?”`
-  const talking4d = `“How’s the parking and access situation?”`
+  const talking4b = `“On the night of the event — who's the person we reach out to when Luijay arrives? Is that you, or is there someone else on site handling things? And real quick — where should he plan to park?”`
   const talking4e = `“Is this local to the area, or are we looking at travel?”`
-  const talking5a =
-    data.multi_show && showsSorted.length > 1
-      ? `“Let me break down the pricing for each date.”`
-      : `“Based on what you’ve described — here’s what this looks like.”`
-  const talking5b = `“There are a couple things that might apply here depending on the specifics…”`
-  const talking5c = `“So for this slot, here’s where we’re landing.”`
-  const talking5d = `“We usually structure payment with a deposit to lock the date — does that work?”`
-  const talking5e =
-    data.contact_company.trim() || data.contact_email.trim()
-      ? `“Should I put the invoice under ${data.contact_company.trim() || 'your company'} and send it to ${data.contact_email.trim() || 'your email'}?”`
-      : `“Where should I send the invoice?”`
-  const talking6a = `“Just confirming a few things so there are no surprises on either side…”`
-  const talking7a = data.multi_show
-    ? `“I'll put together agreements for both dates and send everything over together.”`
-    : data.contact_email.trim()
-      ? `“Here's what happens next — I'm putting together the agreement, sending it to ${data.contact_email.trim()} with the invoice for the deposit. Once that's handled, the date is officially locked. Sound good?”`
-      : `“Here's what happens next — I'm putting together the agreement and invoice for the deposit. Once that's handled, the date is officially locked. Sound good?”`
-  const talking7b = `“Anything else you need from our side, or anything I should follow up on?”`
-  const talking7c = liveScriptAddressee
-    ? `“${liveScriptAddressee}, appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
-    : `“Appreciate you — this is going to be great. I'll have everything in your inbox within the hour. Let's make it happen.”`
+  const talking5a = (() => {
+    if (data.multi_show && showsSorted.length > 1) {
+      return `“Let me break down the pricing for each date.”`
+    }
+    const sd = primaryShowSd
+    const first = liveScriptAddresseeHey
+    const fallback = first
+      ? `“Alright ${first}, so based on everything you've described — let me walk you through what this looks like.”`
+      : `“Alright, so based on everything you've described — let me walk you through what this looks like.”`
+    if (!sd) return fallback
+    const etLabel =
+      EVENT_TYPE_OPTIONS.find(o => o.value === sd.event_type)?.label?.toLowerCase() ?? ''
+    const setH = computeSetLengthHours(sd.set_start_time, sd.set_end_time, sd.overnight_set)
+    const setPhrase = setH > 0 ? `${formatSetLengthDisplay(setH)} set` : ''
+    let dow = ''
+    if (sd.event_date.trim() && /^\d{4}-\d{2}-\d{2}$/.test(sd.event_date.trim())) {
+      try {
+        dow = new Date(`${sd.event_date.trim()}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long' })
+      } catch {
+        dow = ''
+      }
+    }
+    const bits: string[] = []
+    if (etLabel) bits.push(`the ${etLabel}`)
+    if (setPhrase) bits.push(`the ${setPhrase}`)
+    if (dow) bits.push(`${dow} night`)
+    const mid = bits.length ? bits.join(', ') : `everything`
+    if (first) {
+      return `“Alright ${first}, so based on ${mid} — let me walk you through what this looks like.”`
+    }
+    return `“Alright, so based on ${mid} — let me walk you through what this looks like.”`
+  })()
+  const talking5b = `“We also offer some upgrades if you want to take the night up a notch — anything from MC services to lighting and effects. Want me to run through what's available?”`
+  const talking5c = (() => {
+    const sd = primaryShowSd
+    const email = data.contact_email.trim()
+    const total =
+      sd != null
+        ? totalUsdForShow(sd)
+        : showsSorted[0]
+          ? totalUsdForShow(parseShowDataV3(showsSorted[0].show_data, showsSorted[0].sort_order))
+          : 0
+    const setH = sd ? computeSetLengthHours(sd.set_start_time, sd.set_end_time, sd.overnight_set) : 0
+    const setPhrase = setH > 0 ? formatSetLengthDisplay(setH) : ''
+    const roleLabel = sd
+      ? PERFORMANCE_ROLE_OPTIONS.find(o => o.value === sd.performance_role)?.label ?? ''
+      : ''
+    let dow = ''
+    let dateHuman = ''
+    if (sd?.event_date.trim() && /^\d{4}-\d{2}-\d{2}$/.test(sd.event_date.trim())) {
+      const dt = new Date(`${sd.event_date.trim()}T12:00:00`)
+      try {
+        dow = dt.toLocaleDateString(undefined, { weekday: 'long' })
+        dateHuman = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      } catch {
+        /* ignore */
+      }
+    }
+    const parts: string[] = []
+    if (setPhrase && roleLabel) parts.push(`the ${setPhrase} ${roleLabel} set`)
+    else if (setPhrase) parts.push(`the ${setPhrase} set`)
+    else if (roleLabel) parts.push(`the ${roleLabel} set`)
+    if (dow && dateHuman) parts.push(`on ${dow} ${dateHuman}`)
+    else if (dateHuman) parts.push(`on ${dateHuman}`)
+    const slot = parts.join(' ')
+    if (slot && total > 0 && email) {
+      return `“So here's where we're at — for ${slot}, the total comes to $${total}. We do a deposit to lock in the date, and I'll send the agreement and invoice over to ${email}. What's the easiest way for you to send that — Zelle, Venmo?”`
+    }
+    return `“So here's the total — and we'll do a deposit to lock in the date. I'll send everything right over. What's easiest for payment — Zelle, Venmo?”`
+  })()
+  const talking7close = (() => {
+    const name = liveScriptAddressee
+    const email = data.contact_email.trim()
+    if (name && email) {
+      return `“${name}, here's what happens from here — I'm sending over the agreement and invoice to ${email}. Once the deposit's in, the date is officially locked and we'll start coordinating everything on our end. Anything else you need from us?”`
+    }
+    return `“Here's what happens next — agreement and invoice headed your way. Once the deposit lands, we're locked in. Anything else you need?”`
+  })()
 
   const liveScriptParagraph = (() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7531/ingest/431e0d54-5baa-40c3-ab30-a7f4f3fcf67b', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd0bca7' },
-      body: JSON.stringify({
-        sessionId: 'd0bca7',
-        runId: 'post-fix',
-        hypothesisId: 'H1',
-        location: 'BookingIntakePage.tsx:liveScriptComputed',
-        message: 'liveScript paragraph computed (no hook; after data guard)',
-        data: { view_section: data.view_section },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     const s = data.view_section
     if (s === '1A') return greetingTalking
     if (s === '1B') return confirmTalking
     if (s === '2A') return talking2a
     if (s === '2B')
-      return `“What date and time are we looking at, and when do you want Luijay on?”`
+      return `“What date and time are we looking at, and when do you want Luijay on? And is there anything we should know about getting to the venue — gated community, parking, anything like that?”`
     if (s === '2C') return `“And what's the address for the venue?”`
     if (s === '3B') return talking3b
     if (s === '4A') return talking4a
     if (s === '4B') return talking4b
-    if (s === '4C') return talking4c
-    if (s === '4D') return talking4d
     if (s === '4E') return talking4e
     if (s === '5A') return talking5a
     if (s === '5B') return talking5b
     if (s === '5C') return talking5c
-    if (s === '5D') return talking5d
-    if (s === '5E') return talking5e
-    if (s === '6A')
-      return `${talking6a} We’re looking good — transition to what happens next.`
-    if (s === '7A') return talking7a
-    if (s === '7B') return talking7b
-    if (s === '7C') return talking7c
+    if (s === '7A') return talking7close
+    if (s === '5D' || s === '5E' || s === '6A' || s === '7B' || s === '7C') return talking7close
     if (s.startsWith('__stub_'))
       return `This phase isn’t wired yet — use the sidebar to stay on an earlier step.`
     return `Work through ${liveSectionTitle(s)} with the client, then capture the details in the section below.`
@@ -2040,31 +2646,21 @@ export default function BookingIntakePage() {
     { value: 'custom', label: 'Custom date' },
   ]
 
-  const totalUsdForShow = (sd: BookingIntakeShowDataV3): number => {
-    if (sd.pricing_source === 'manual' && sd.manual_gross != null && Number.isFinite(sd.manual_gross)) {
-      return roundUsd(sd.manual_gross)
-    }
-    const inp = buildPriceInputForShow(sd, pricingCatalog)
-    if (!inp) return 0
-    try {
-      return computeDealPrice(inp).gross
-    } catch {
-      return 0
-    }
-  }
-
   return (
     <div className="h-screen flex flex-col bg-neutral-950 text-neutral-100 overflow-hidden">
       <header className="h-12 border-b border-neutral-800 flex items-center gap-3 px-3 shrink-0 bg-neutral-950 z-20">
         <Button variant="ghost" size="sm" className="gap-1 text-neutral-400 shrink-0" asChild>
-          <Link to="/">
+          <Link to="/forms/intakes" title="All intakes">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <Select
             value={selectedId ?? ''}
-            onValueChange={v => setSelectedId(v)}
+            onValueChange={v => {
+              setSelectedId(v)
+              setSearchParams({ intakeId: v }, { replace: true })
+            }}
           >
             <SelectTrigger className="h-9 max-w-[220px] border-neutral-800 bg-neutral-900/80 text-sm">
               <SelectValue placeholder="Intake" />
@@ -2228,89 +2824,6 @@ export default function BookingIntakePage() {
                     type="email"
                     value={data.contact_email}
                     onChange={e => patch({ contact_email: e.target.value })}
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">What do I already know?</h2>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">How they found us</Label>
-                  <Select
-                    value={data.inquiry_source || '__none__'}
-                    onValueChange={v => patch({ inquiry_source: v === '__none__' ? '' : (v as InquirySourceV3) })}
-                  >
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Optional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {INQUIRY_OPTIONS.map(o => (
-                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">What they told us so far</Label>
-                  <Textarea
-                    className="min-h-[72px] border-neutral-800 bg-neutral-950/80 resize-y"
-                    value={data.inquiry_summary}
-                    onChange={e => patch({ inquiry_summary: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Date mentioned</Label>
-                    <Input
-                      type="date"
-                      className="h-11 border-neutral-800 bg-neutral-950/80"
-                      value={data.known_event_date}
-                      onChange={e => patch({ known_event_date: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Event type mentioned</Label>
-                    <Select
-                      value={data.known_event_type || '__none__'}
-                      onValueChange={v => patch({ known_event_type: v === '__none__' ? '' : (v as KnownEventTypeV3) })}
-                    >
-                      <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                        <SelectValue placeholder="Optional" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">—</SelectItem>
-                        {EVENT_TYPE_OPTIONS.map(o => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Venue mentioned</Label>
-                    <Input
-                      className="h-11 border-neutral-800 bg-neutral-950/80"
-                      value={data.known_venue_name}
-                      onChange={e => patch({ known_venue_name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">City mentioned</Label>
-                    <Input
-                      className="h-11 border-neutral-800 bg-neutral-950/80"
-                      value={data.known_city}
-                      onChange={e => patch({ known_city: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Anything else to remember</Label>
-                  <Textarea
-                    className="min-h-[64px] border-neutral-800 bg-neutral-950/80"
-                    value={data.pre_call_notes}
-                    onChange={e => patch({ pre_call_notes: e.target.value })}
                   />
                 </div>
               </div>
@@ -3218,6 +3731,99 @@ export default function BookingIntakePage() {
                         )
                       },
                     )}
+                    <div className="space-y-3 pt-4 border-t border-white/[0.06] min-w-0">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+                        <div className="w-full shrink-0 space-y-4 sm:w-auto sm:max-w-[13.5rem]">
+                          {(!data.multi_show || data.same_for_all_2b ? showsSorted.slice(0, 1) : showsSorted).map(
+                            (row, idx) => {
+                              const sd = parseShowDataV3(row.show_data, row.sort_order)
+                              const est = sd.event_start_time.trim()
+                              const dRaw = sd.doors_open_time.trim()
+                              const display = dRaw || est
+                              const showDoorLabel =
+                                data.multi_show && !data.same_for_all_2b && showsSorted.length > 1
+                              return (
+                                <div
+                                  key={`doors-${row.id}`}
+                                  className={cn('min-w-0', idx > 0 && 'pt-3 border-t border-white/[0.06]')}
+                                >
+                                  {showDoorLabel ? (
+                                    <p className="text-[11px] text-neutral-500 mb-2 flex items-center gap-2">
+                                      <span
+                                        className="w-2 h-2 rounded-full shrink-0"
+                                        style={{ background: sd.color }}
+                                      />
+                                      {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
+                                    </p>
+                                  ) : null}
+                                  <IntakeQuarterHourTimeField
+                                    id={`intake-2b-doors-${row.id}`}
+                                    label="What time do doors open?"
+                                    value={display}
+                                    allowClear
+                                    onChange={v => {
+                                      const cleared = !v.trim()
+                                      if (cleared) {
+                                        applyShowPatch(row.id, { doors_open_time: '' }, '2b')
+                                        return
+                                      }
+                                      const sameAsEvent =
+                                        !!est && intakeHmKey(v) === intakeHmKey(est)
+                                      applyShowPatch(
+                                        row.id,
+                                        { doors_open_time: sameAsEvent ? '' : v },
+                                        '2b',
+                                      )
+                                    }}
+                                    triggerClassName="h-11"
+                                  />
+                                </div>
+                              )
+                            },
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <Label className="text-neutral-400 text-xs">
+                            Anything else we should know about getting to the venue?
+                          </Label>
+                          <IntakeYesNoPair
+                            value={data.venue_access_notes_flag}
+                            onChange={v => {
+                              const x = v as Phase2VenueAccessNotesFlagV3
+                              if (x === 'no') {
+                                patch({
+                                  venue_access_notes_flag: 'no',
+                                  venue_access_note_tags: [],
+                                  venue_access_other_notes: '',
+                                })
+                              } else {
+                                patch({ venue_access_notes_flag: 'yes' })
+                              }
+                            }}
+                            yesValue="yes"
+                            noValue="no"
+                            yesLabel="Yes"
+                            noLabel="No"
+                          />
+                        </div>
+                      </div>
+                      {data.venue_access_notes_flag === 'yes' ? (
+                        <IntakeCompactChipRow<VenueAccessNoteTagV3>
+                          label="Tap all that apply"
+                          selected={data.venue_access_note_tags}
+                          ids={[...VENUE_ACCESS_NOTE_TAG_KEYS]}
+                          labels={VENUE_ACCESS_NOTE_TAG_LABELS}
+                          onChange={next =>
+                            patch({
+                              venue_access_note_tags: next,
+                              venue_access_other_notes: next.includes('other')
+                                ? data.venue_access_other_notes
+                                : '',
+                            })
+                          }
+                        />
+                      ) : null}
+                    </div>
                   </>
                 ) : data.view_section === '2C' ? (
                   <>
@@ -3491,6 +4097,8 @@ export default function BookingIntakePage() {
                               sd={sd}
                               pricingCatalog={pricingCatalog}
                               soundTechPickOptions={equipmentSoundTechPickOptions}
+                              soundTechUiContext={soundTechUiContextForEquipment}
+                              onEnsureSoundTechContact={ensureSoundTechContact}
                               onPatch={partial => applyShowPatch(row.id, partial, '4a')}
                             />
                           </div>
@@ -3499,267 +4107,143 @@ export default function BookingIntakePage() {
                     )}
                   </>
                 ) : data.view_section === '4B' ? (
-                  <>
+                  <div className="space-y-4 min-w-0">
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Same as main contact?</Label>
-                      <IntakeYesNoPair
-                        value={data.onsite_same_contact}
-                        onChange={v => {
-                          const x = v as Phase4OnsiteSameContactV3
-                          if (x === 'same') {
-                            patch({
-                              onsite_same_contact: x,
-                              onsite_name_flag: '',
-                              onsite_phone_flag: '',
-                              onsite_poc_role: '',
-                              onsite_connect_method: '',
-                              onsite_connect_window: '',
-                            })
-                          } else {
-                            patch({ onsite_same_contact: x })
-                          }
-                        }}
-                        yesValue="same"
-                        noValue="different"
-                        yesLabel="Same person"
-                        noLabel="Different person"
+                      <div className="flex min-w-0 flex-col gap-3 sm:gap-2 lg:flex-row lg:flex-wrap lg:items-end">
+                        <div className="shrink-0">
+                          <IntakeYesNoPair
+                            value={data.onsite_same_contact}
+                            onChange={v => {
+                              const x = v as Phase4OnsiteSameContactV3
+                              if (x === 'same') {
+                                setOnsiteAddNewChosen(false)
+                                patch({
+                                  onsite_same_contact: x,
+                                  onsite_name_flag: '',
+                                  onsite_phone_flag: '',
+                                  onsite_linked_contact_id: null,
+                                  onsite_title_context: '',
+                                  onsite_contact_name: '',
+                                  onsite_contact_phone: '',
+                                  onsite_contact_role: '',
+                                  onsite_poc_role: '',
+                                  onsite_connect_method: '',
+                                  onsite_connect_window: '',
+                                })
+                              } else {
+                                setOnsiteAddNewChosen(false)
+                                patch({
+                                  onsite_same_contact: x,
+                                  onsite_poc_role: '',
+                                  onsite_connect_method: '',
+                                  onsite_connect_window: '',
+                                })
+                              }
+                            }}
+                            yesValue="same"
+                            noValue="different"
+                            yesLabel="Same person"
+                            noLabel="Different person"
+                          />
+                        </div>
+                        {data.onsite_same_contact === 'different' ? (
+                          <>
+                            {live4bShowVenueOnsiteChips ? (
+                              <div className="flex min-w-0 flex-wrap items-end gap-1.5">
+                                {otherVenueContactsForMismatch.map(c => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    title={
+                                      contactRoleForDisplay(c)
+                                        ? `${c.name} · ${contactRoleForDisplay(c)}`
+                                        : c.name
+                                    }
+                                    onClick={() => {
+                                      setOnsiteAddNewChosen(false)
+                                      const phone = (c.phone ?? '').trim()
+                                      patch({
+                                        onsite_linked_contact_id: c.id,
+                                        onsite_contact_name: c.name,
+                                        onsite_contact_phone: phone,
+                                        onsite_contact_role: contactRoleForDisplay(c),
+                                        onsite_title_context: contactToMismatchContext(c),
+                                        onsite_name_flag: 'capture_later',
+                                        onsite_phone_flag: phone ? 'capture_later' : 'not_discussed',
+                                      })
+                                    }}
+                                    className={cn(
+                                      'max-w-[9.5rem] truncate rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                      data.onsite_linked_contact_id === c.id
+                                        ? 'border-white/[0.35] bg-neutral-800/80 text-neutral-100'
+                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/[0.14] hover:text-neutral-100',
+                                    )}
+                                  >
+                                    {c.name}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOnsiteAddNewChosen(true)
+                                    patch({
+                                      onsite_linked_contact_id: null,
+                                      onsite_contact_name: '',
+                                      onsite_contact_phone: '',
+                                      onsite_title_context: INTAKE_4B_NEW_ONSITE_CONTACT_TITLE,
+                                      onsite_contact_role:
+                                        CONTACT_MISMATCH_CONTEXT_LABELS[INTAKE_4B_NEW_ONSITE_CONTACT_TITLE],
+                                      onsite_name_flag: 'capture_later',
+                                      onsite_phone_flag: 'capture_later',
+                                    })
+                                  }}
+                                  className={cn(
+                                    'rounded-md border border-dashed border-white/[0.18] bg-neutral-900/30 px-2.5 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:text-neutral-200',
+                                  )}
+                                >
+                                  Add new
+                                </button>
+                              </div>
+                            ) : null}
+                            {live4bShowOnsiteMismatchForm ? (
+                              <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[10rem] sm:max-w-xs">
+                                <Label className="text-neutral-400 text-[10px] sm:text-xs">Name</Label>
+                                <Input
+                                  className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                  value={data.onsite_contact_name}
+                                  onChange={e =>
+                                    patch({
+                                      onsite_contact_name: e.target.value,
+                                      onsite_title_context: INTAKE_4B_NEW_ONSITE_CONTACT_TITLE,
+                                      onsite_contact_role:
+                                        CONTACT_MISMATCH_CONTEXT_LABELS[INTAKE_4B_NEW_ONSITE_CONTACT_TITLE],
+                                    })
+                                  }
+                                  placeholder="Their name"
+                                  autoComplete="name"
+                                  aria-label="On-site contact name"
+                                />
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-neutral-400 text-xs">DJ parking</Label>
+                      <ToggleN
+                        value={data.dj_parking}
+                        onChange={v => patch({ dj_parking: v as Phase4DjParkingV3 })}
+                        options={DJ_PARKING_V3_KEYS.map(k => ({ value: k, label: DJ_PARKING_V3_LABELS[k] }))}
                       />
                     </div>
-                    <IntakeBranchPanel
-                      open={data.onsite_same_contact === 'different'}
-                      title="Different on-site contact"
-                    >
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">On-site name</Label>
-                          <ToggleN
-                            value={data.onsite_name_flag}
-                            onChange={v => patch({ onsite_name_flag: v as Phase4OnsiteFlagV3 })}
-                            options={[
-                              { value: 'capture_later' as const, label: 'They told me — capture later' },
-                              { value: 'not_discussed' as const, label: 'Not discussed' },
-                            ]}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">On-site phone</Label>
-                          <ToggleN
-                            value={data.onsite_phone_flag}
-                            onChange={v => patch({ onsite_phone_flag: v as Phase4OnsiteFlagV3 })}
-                            options={[
-                              { value: 'capture_later' as const, label: 'They told me — capture later' },
-                              { value: 'not_discussed' as const, label: 'Not discussed' },
-                            ]}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Their role on site</Label>
-                          <ToggleN
-                            value={data.onsite_poc_role}
-                            onChange={v => patch({ onsite_poc_role: v })}
-                            options={ONSITE_POC_ROLE_KEYS.filter(k => k !== '').map(k => ({
-                              value: k,
-                              label: ONSITE_POC_ROLE_LABELS[k],
-                            }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">How you’ll reach them</Label>
-                          <ToggleN
-                            value={data.onsite_connect_method}
-                            onChange={v => patch({ onsite_connect_method: v })}
-                            options={ONSITE_CONNECT_METHOD_KEYS.filter(k => k !== '').map(k => ({
-                              value: k,
-                              label: ONSITE_CONNECT_METHOD_LABELS[k],
-                            }))}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Best time window</Label>
-                          <ToggleN
-                            value={data.onsite_connect_window}
-                            onChange={v => patch({ onsite_connect_window: v })}
-                            options={ONSITE_CONNECT_WINDOW_KEYS.filter(k => k !== '').map(k => ({
-                              value: k,
-                              label: ONSITE_CONNECT_WINDOW_LABELS[k],
-                            }))}
-                          />
-                        </div>
-                      </div>
-                    </IntakeBranchPanel>
-                  </>
-                ) : data.view_section === '4C' ? (
-                  <>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same load-in plan for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_4c}
-                          onChange={v => onSameForAllChange('same_for_all_4c', v, pick4c)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_4c ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_4c ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
-                                />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Load-in set?</Label>
-                              <ToggleN
-                                value={sd.load_in_discussed}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { load_in_discussed: v }, '4c')
-                                }
-                                options={[
-                                  { value: 'yes' as const, label: 'Yes' },
-                                  { value: 'tbd' as const, label: 'TBD' },
-                                ]}
-                              />
-                            </div>
-                            {sd.load_in_discussed === 'yes' ? (
-                              <IntakeQuarterHourTimeField
-                                id={`intake-4c-load-in-${row.id}`}
-                                label="Load-in time"
-                                value={sd.load_in_time}
-                                allowClear
-                                onChange={v => applyShowPatch(row.id, { load_in_time: v }, '4c')}
-                                triggerClassName="h-11"
-                              />
-                            ) : null}
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Soundcheck</Label>
-                              <ToggleN
-                                value={sd.soundcheck}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { soundcheck: v as Phase4SoundcheckV3 }, '4c')
-                                }
-                                options={[
-                                  { value: 'yes' as const, label: 'Yes' },
-                                  { value: 'no' as const, label: 'No' },
-                                  { value: 'not_discussed' as const, label: 'Not discussed' },
-                                ]}
-                              />
-                            </div>
-                            <IntakeCompactChipRow<LoadAccessTagV3>
-                              label="Load-in access (tap all that apply)"
-                              selected={sd.load_in_access_tags}
-                              ids={LOAD_ACCESS_TAG_KEYS}
-                              labels={LOAD_ACCESS_TAG_LABELS}
-                              onChange={next =>
-                                applyShowPatch(row.id, { load_in_access_tags: next }, '4c')
-                              }
-                            />
-                          </div>
-                        )
-                      },
-                    )}
-                  </>
-                ) : data.view_section === '4D' ? (
-                  <>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same parking / access for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_4d}
-                          onChange={v => onSameForAllChange('same_for_all_4d', v, pick4d)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_4d ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_4d ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
-                                />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Parking / access</Label>
-                              <ToggleN
-                                value={sd.parking_status}
-                                onChange={v =>
-                                  applyShowPatch(row.id, { parking_status: v as Phase4ParkingStatusV3 }, '4d')
-                                }
-                                options={[
-                                  { value: 'confirmed' as const, label: 'Confirmed' },
-                                  { value: 'need_confirm' as const, label: 'Need to confirm' },
-                                  { value: 'not_discussed' as const, label: 'Not discussed' },
-                                ]}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">More detail needed?</Label>
-                              <ToggleN
-                                value={sd.parking_details_flag}
-                                onChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { parking_details_flag: v as Phase4ParkingDetailsFlagV3 },
-                                    '4d',
-                                  )
-                                }
-                                options={[
-                                  { value: 'capture_later' as const, label: 'Yes — capture later' },
-                                  { value: 'no' as const, label: 'No' },
-                                ]}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-neutral-400 text-xs">Parking type (if known)</Label>
-                              <ToggleN
-                                value={sd.parking_access_class}
-                                onChange={v =>
-                                  applyShowPatch(
-                                    row.id,
-                                    { parking_access_class: v as BookingIntakeShowDataV3['parking_access_class'] },
-                                    '4d',
-                                  )
-                                }
-                                options={[
-                                  { value: '' as const, label: '—' },
-                                  ...PARKING_ACCESS_CLASS_KEYS.filter(k => k !== '').map(k => ({
-                                    value: k,
-                                    label: PARKING_ACCESS_CLASS_LABELS[k],
-                                  })),
-                                ]}
-                              />
-                            </div>
-                          </div>
-                        )
-                      },
-                    )}
                     {primaryStateRegion === 'CA' ? (
                       <p className="text-[11px] text-neutral-500">
                         California venue — travel &amp; lodging is skipped on this path (see intake spec).
                       </p>
                     ) : null}
-                  </>
+                  </div>
                 ) : data.view_section === '4E' ? (
                   <>
                     {data.multi_show ? (
@@ -3903,7 +4387,70 @@ export default function BookingIntakePage() {
                     {showsSorted.map((row, idx) => {
                       const sd = parseShowDataV3(row.show_data, row.sort_order)
                       const svcOptions = servicesForEventDate(pricingCatalog, sd.event_date.trim())
+                      const svcOptionsHourly = svcOptions.filter(
+                        s =>
+                          s.priceType === 'per_hour' &&
+                          (!intakeServiceLooksDjOnlyUsb(s) || sd.equipment_provider === 'venue_provides'),
+                      )
+                      const svcHourlySelectList =
+                        sd.service_id.trim() &&
+                        !svcOptionsHourly.some(s => s.id === sd.service_id) &&
+                        pricingCatalog.services.some(s => s.id === sd.service_id)
+                          ? [
+                              ...svcOptionsHourly,
+                              pricingCatalog.services.find(s => s.id === sd.service_id)!,
+                            ]
+                          : svcOptionsHourly
+                      const overtimeSvcOptions = pricingCatalog.services.filter(
+                        s =>
+                          s.priceType === 'per_hour' &&
+                          (!intakeServiceLooksDjOnlyUsb(s) || sd.equipment_provider === 'venue_provides') &&
+                          (svcOptions.some(d => d.id === s.id) || s.dayType === 'any'),
+                      )
                       const isPkg = sd.pricing_mode === 'package'
+                      const pkgRow5a = pricingCatalog.packages.find(p => p.id === sd.package_id.trim())
+                      const billH5a =
+                        sd.performance_hours > 0 ? sd.performance_hours : suggestedBillableHoursFromShow(sd)
+                      const packageOvertimeAlert =
+                        isPkg &&
+                        pkgRow5a &&
+                        billH5a > 0 &&
+                        pkgRow5a.hoursIncluded > 0 &&
+                        billH5a > pkgRow5a.hoursIncluded
+                      const priceInp5a = buildPriceInputForShow(sd, pricingCatalog)
+                      let runningTotal5a = 0
+                      if (priceInp5a) {
+                        try {
+                          runningTotal5a = computeDealPrice(priceInp5a).gross
+                        } catch {
+                          runningTotal5a = 0
+                        }
+                      }
+                      const toggleSurcharge5a = (id: string) => {
+                        const has = sd.surcharge_ids.includes(id)
+                        applyShowPatch(
+                          row.id,
+                          { surcharge_ids: has ? sd.surcharge_ids.filter(x => x !== id) : [...sd.surcharge_ids, id] },
+                          '5a',
+                        )
+                      }
+                      const toggleDiscount5a = (id: string) => {
+                        const has = sd.discount_ids.includes(id)
+                        applyShowPatch(
+                          row.id,
+                          { discount_ids: has ? sd.discount_ids.filter(x => x !== id) : [...sd.discount_ids, id] },
+                          '5a',
+                        )
+                      }
+                      const manualDiscounts5a = pricingCatalog.discounts.filter(d => {
+                        if (discountIsRadioStation(d)) return false
+                        if (
+                          discountIsRepeatBooking(d) &&
+                          (data.commission_tier === 'kept_doors' || sd.event_schedule_type !== 'recurring')
+                        )
+                          return false
+                        return true
+                      })
                       return (
                         <div
                           key={row.id}
@@ -3918,6 +4465,14 @@ export default function BookingIntakePage() {
                               {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
                             </p>
                           ) : null}
+                          {isPkg &&
+                          sd.package_id.trim() &&
+                          (sd.equipment_dj_package_interest === 'yes_walkthrough' ||
+                            sd.equipment_hybrid_additions === 'yeah_see') ? (
+                            <p className="text-[11px] text-neutral-500 rounded-md border border-white/[0.08] bg-neutral-950/40 px-2 py-1.5">
+                              Package selected from equipment discussion.
+                            </p>
+                          ) : null}
                           <div className="space-y-2">
                             <Label className="text-neutral-400 text-xs">Pricing mode</Label>
                             <IntakeCompactDual
@@ -3928,6 +4483,18 @@ export default function BookingIntakePage() {
                               a={{ id: 'hr', label: 'Hourly' }}
                               b={{ id: 'pkg', label: 'Package' }}
                             />
+                            {!isPkg &&
+                            (sd.event_type === 'wedding' ||
+                              sd.event_type === 'private_event' ||
+                              isLargeCapacityForPackageHint(sd)) ? (
+                              <p className="text-[11px] text-neutral-500 leading-snug">
+                                {sd.event_type === 'wedding'
+                                  ? 'Weddings often use a full production package — switch to Package if that fits this quote.'
+                                  : sd.event_type === 'private_event'
+                                    ? 'Private events often start from Premium — switch to Package if you’re quoting bundled production.'
+                                    : 'Large-scale events may need Platinum or Exclusive — consider Package if production is bundled.'}
+                              </p>
+                            ) : null}
                           </div>
                           {isPkg ? (
                             <div className="space-y-1.5">
@@ -3983,7 +4550,7 @@ export default function BookingIntakePage() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="__none__">—</SelectItem>
-                                    {svcOptions.map(s => (
+                                    {svcHourlySelectList.map(s => (
                                       <SelectItem key={s.id} value={s.id}>
                                         {s.name} · ${s.price}
                                         {s.priceType === 'per_hour' ? '/hr' : ''}
@@ -4058,16 +4625,103 @@ export default function BookingIntakePage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__none__">—</SelectItem>
-                                  {pricingCatalog.services
-                                    .filter(s => s.priceType === 'per_hour')
-                                    .map(s => (
-                                      <SelectItem key={s.id} value={s.id}>
-                                        {s.name} · ${s.price}/hr
-                                      </SelectItem>
-                                    ))}
+                                  {overtimeSvcOptions.map(s => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                      {s.name} · ${s.price}/hr
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
+                          ) : null}
+                          {packageOvertimeAlert && pkgRow5a ? (
+                            <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
+                              Set length ({billH5a} hrs) exceeds package hours ({pkgRow5a.hoursIncluded} hrs) —{' '}
+                              {billH5a - pkgRow5a.hoursIncluded} hr overtime at the selected hourly rate.
+                            </p>
+                          ) : null}
+                          {peakSeasonHintLabel(sd.event_date.trim()) ? (
+                            <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
+                              {peakSeasonHintLabel(sd.event_date.trim())} — review surcharges; not auto-applied.
+                            </p>
+                          ) : null}
+                          {data.commission_tier === 'kept_doors' && repeatBookingDiscountId(pricingCatalog) ? (
+                            <p className="text-[11px] text-sky-200/85 rounded-md border border-sky-900/45 bg-sky-950/25 px-2 py-1.5 leading-snug">
+                              Kept doors — repeat booking discount is applied automatically (no need to toggle).
+                            </p>
+                          ) : null}
+                          {sd.event_schedule_type === 'recurring' &&
+                          data.commission_tier !== 'kept_doors' &&
+                          repeatBookingDiscountId(pricingCatalog) ? (
+                            <p className="text-[11px] text-sky-200/85 rounded-md border border-sky-900/45 bg-sky-950/25 px-2 py-1.5 leading-snug">
+                              Recurring event — repeat booking discount may apply.
+                            </p>
+                          ) : null}
+                          <div className="space-y-1.5">
+                            <Label className="text-neutral-400 text-xs">Surcharges (tap all that apply)</Label>
+                            {pricingCatalog.surcharges.length === 0 ? (
+                              <p className="text-sm text-neutral-500">None in catalog.</p>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {pricingCatalog.surcharges.map(s => {
+                                  const on = sd.surcharge_ids.includes(s.id)
+                                  const pct = Math.round((s.multiplier - 1) * 100)
+                                  const surHint = surchargeAutopopBadge(sd, s, sd.event_date)
+                                  return (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => toggleSurcharge5a(s.id)}
+                                      className={cn(
+                                        'min-h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors text-left',
+                                        on
+                                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                        !on && surHint ? 'ring-1 ring-amber-500/25' : '',
+                                      )}
+                                    >
+                                      <span className="block leading-tight">
+                                        {s.name}
+                                        {pct > 0 ? ` · +${pct}%` : ''}
+                                      </span>
+                                      {surHint ? (
+                                        <span className="block text-[10px] font-normal text-amber-200/80 mt-0.5">
+                                          {surHint}
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          {manualDiscounts5a.length > 0 ? (
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Discounts (tap all that apply)</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {manualDiscounts5a.map(d => {
+                                  const on = sd.discount_ids.includes(d.id)
+                                  return (
+                                    <button
+                                      key={d.id}
+                                      type="button"
+                                      onClick={() => toggleDiscount5a(d.id)}
+                                      className={cn(
+                                        'min-h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                        on
+                                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                      )}
+                                    >
+                                      {d.name} · −{d.percent}%
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+                          {priceInp5a ? (
+                            <p className="text-xs text-neutral-600 tabular-nums">Running total ~${runningTotal5a}</p>
                           ) : null}
                         </div>
                       )
@@ -4110,22 +4764,6 @@ export default function BookingIntakePage() {
                           runningTotal = 0
                         }
                       }
-                      const toggleSurcharge = (id: string) => {
-                        const has = sd.surcharge_ids.includes(id)
-                        applyShowPatch(
-                          row.id,
-                          { surcharge_ids: has ? sd.surcharge_ids.filter(x => x !== id) : [...sd.surcharge_ids, id] },
-                          '5b',
-                        )
-                      }
-                      const toggleDiscount = (id: string) => {
-                        const has = sd.discount_ids.includes(id)
-                        applyShowPatch(
-                          row.id,
-                          { discount_ids: has ? sd.discount_ids.filter(x => x !== id) : [...sd.discount_ids, id] },
-                          '5b',
-                        )
-                      }
                       return (
                         <div
                           key={row.id}
@@ -4148,104 +4786,159 @@ export default function BookingIntakePage() {
                             {pricingCatalog.addons.length === 0 ? (
                               <p className="text-sm text-neutral-500">No add-ons in catalog.</p>
                             ) : (
-                              <div className="flex flex-col gap-2">
-                                {pricingCatalog.addons.map(a => {
-                                  const q = sd.addon_quantities[a.id] ?? 0
-                                  return (
-                                    <div
-                                      key={a.id}
-                                      className="flex rounded-lg border border-white/[0.08] overflow-hidden bg-neutral-900/50"
-                                    >
-                                      <button
-                                        type="button"
-                                        disabled={q <= 0}
-                                        className="px-3 text-lg text-neutral-400 hover:text-neutral-100 disabled:opacity-30 shrink-0"
-                                        onClick={() => {
-                                          const next = { ...sd.addon_quantities }
-                                          if (q <= 1) delete next[a.id]
-                                          else next[a.id] = q - 1
-                                          applyShowPatch(row.id, { addon_quantities: next }, '5b')
-                                        }}
-                                      >
-                                        −
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="flex-1 min-h-[44px] px-3 text-sm text-left"
-                                        onClick={() => {
-                                          const n = q === 0 ? 1 : Math.min(20, q + 1)
-                                          applyShowPatch(
-                                            row.id,
-                                            { addon_quantities: { ...sd.addon_quantities, [a.id]: n } },
-                                            '5b',
-                                          )
-                                        }}
-                                      >
-                                        <span className="font-medium text-neutral-200">{a.name}</span>
-                                        <span className="text-neutral-500"> · ${a.price}</span>
-                                        {q > 0 ? (
-                                          <span className="ml-2 text-neutral-400 tabular-nums">×{q}</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                {pricingCatalog.addons
+                                  .filter(a => !shouldHideAddonTile(a, sd))
+                                  .map(a => {
+                                    const q = sd.addon_quantities[a.id] ?? 0
+                                    const on = q > 0
+                                    const chill = MUSIC_VIBE_PRESETS.find(p => p.id === 'chill_lounge')
+                                    const rnb = MUSIC_VIBE_PRESETS.find(p => p.id === 'rnb_x_latin')
+                                    const dimVibe =
+                                      isVisualEffectsAddon(a) &&
+                                      ((chill && genreSetsEqual(sd.genres, chill.genres)) ||
+                                        (rnb && genreSetsEqual(sd.genres, rnb.genres)))
+                                    const highlightWedCorp =
+                                      (sd.event_type === 'wedding' ||
+                                        sd.event_type === 'corporate' ||
+                                        sd.event_type === 'brand_activation') &&
+                                      (isCustomSetlistAddon(a) || isMcAddon(a))
+                                    const wantsQty =
+                                      isVisualEffectsAddon(a) ||
+                                      isGuestArtistAddon(a) ||
+                                      a.priceType === 'per_effect' ||
+                                      a.priceType === 'per_artist'
+                                    const sub = (a.category ?? '').trim() || 'Upgrade'
+                                    const priceLabel =
+                                      a.priceType === 'per_sq_ft' ? `$${a.price}/${a.unitLabel ?? 'sq ft'}` : `$${a.price}`
+                                    return (
+                                      <div key={a.id} className="space-y-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (on) {
+                                              const next = { ...sd.addon_quantities }
+                                              delete next[a.id]
+                                              const nextAutopop = sd.addon_autopop_ids.filter(id => id !== a.id)
+                                              applyShowPatch(
+                                                row.id,
+                                                {
+                                                  addon_quantities: next,
+                                                  addon_autopop_ids: nextAutopop,
+                                                  addon_autopop_dismissed_ids: [
+                                                    ...new Set([...sd.addon_autopop_dismissed_ids, a.id]),
+                                                  ],
+                                                },
+                                                '5b',
+                                              )
+                                            } else {
+                                              const nextDismiss = sd.addon_autopop_dismissed_ids.filter(
+                                                id => id !== a.id,
+                                              )
+                                              applyShowPatch(
+                                                row.id,
+                                                {
+                                                  addon_quantities: {
+                                                    ...sd.addon_quantities,
+                                                    [a.id]: a.priceType === 'per_sq_ft' ? 100 : 1,
+                                                  },
+                                                  addon_autopop_dismissed_ids: nextDismiss,
+                                                },
+                                                '5b',
+                                              )
+                                            }
+                                          }}
+                                          className={cn(
+                                            'w-full rounded-lg border px-2.5 py-2 text-left transition-colors min-h-[4.25rem]',
+                                            on
+                                              ? 'border-white/30 bg-neutral-800/80 ring-1 ring-white/10'
+                                              : 'border-white/[0.08] bg-neutral-900/45 hover:border-white/15',
+                                            dimVibe && !on ? 'opacity-45' : '',
+                                            highlightWedCorp && !on ? 'ring-1 ring-amber-500/35' : '',
+                                          )}
+                                        >
+                                          <div className="flex items-start justify-between gap-1">
+                                            <p className="text-[11px] text-neutral-500 leading-tight">{sub}</p>
+                                            {on && sd.addon_autopop_ids.includes(a.id) ? (
+                                              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-300/90 border border-sky-500/35 rounded px-1 py-px leading-none">
+                                                Auto
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          <p className="text-xs font-medium text-neutral-100 leading-snug line-clamp-2">
+                                            {a.name}
+                                          </p>
+                                          <p className="text-[11px] text-neutral-400 tabular-nums mt-0.5">
+                                            {priceLabel}
+                                            {on && q > 1 ? ` · ×${q}` : ''}
+                                          </p>
+                                        </button>
+                                        {on && wantsQty ? (
+                                          <div className="flex items-center justify-center gap-1">
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 border-neutral-700 p-0"
+                                              onClick={() => {
+                                                const nextQ = Math.max(1, q - 1)
+                                                const next = { ...sd.addon_quantities, [a.id]: nextQ }
+                                                applyShowPatch(row.id, { addon_quantities: next }, '5b')
+                                              }}
+                                            >
+                                              −
+                                            </Button>
+                                            <span className="text-xs tabular-nums w-6 text-center">{q}</span>
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 border-neutral-700 p-0"
+                                              onClick={() => {
+                                                const nextQ = Math.min(20, q + 1)
+                                                applyShowPatch(
+                                                  row.id,
+                                                  { addon_quantities: { ...sd.addon_quantities, [a.id]: nextQ } },
+                                                  '5b',
+                                                )
+                                              }}
+                                            >
+                                              +
+                                            </Button>
+                                          </div>
                                         ) : null}
-                                      </button>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-neutral-400 text-xs">Surcharges</Label>
-                            {pricingCatalog.surcharges.length === 0 ? (
-                              <p className="text-sm text-neutral-500">None in catalog.</p>
-                            ) : (
-                              <div className="flex flex-wrap gap-1.5">
-                                {pricingCatalog.surcharges.map(s => {
-                                  const on = sd.surcharge_ids.includes(s.id)
-                                  const pct = Math.round((s.multiplier - 1) * 100)
-                                  return (
-                                    <button
-                                      key={s.id}
-                                      type="button"
-                                      onClick={() => toggleSurcharge(s.id)}
-                                      className={cn(
-                                        'min-h-[44px] px-3 text-sm font-medium rounded-lg border transition-colors',
-                                        on
-                                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                      )}
-                                    >
-                                      {s.name}
-                                      {pct > 0 ? ` · +${pct}%` : ''}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-neutral-400 text-xs">Discounts</Label>
-                            {pricingCatalog.discounts.length === 0 ? (
-                              <p className="text-sm text-neutral-500">None in catalog.</p>
-                            ) : (
-                              <div className="flex flex-wrap gap-1.5">
-                                {pricingCatalog.discounts.map(d => {
-                                  const on = sd.discount_ids.includes(d.id)
-                                  return (
-                                    <button
-                                      key={d.id}
-                                      type="button"
-                                      onClick={() => toggleDiscount(d.id)}
-                                      className={cn(
-                                        'min-h-[44px] px-3 text-sm font-medium rounded-lg border transition-colors',
-                                        on
-                                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                      )}
-                                    >
-                                      {d.name} · −{d.percent}%
-                                    </button>
-                                  )
-                                })}
+                                        {on && a.priceType === 'per_sq_ft' ? (
+                                          <div className="flex flex-wrap gap-1 justify-center">
+                                            {[
+                                              { sq: 100, label: 'S' },
+                                              { sq: 200, label: 'M' },
+                                              { sq: 400, label: 'L' },
+                                            ].map(({ sq, label }) => (
+                                              <button
+                                                key={sq}
+                                                type="button"
+                                                className={cn(
+                                                  'text-[10px] px-1.5 py-0.5 rounded border',
+                                                  q === sq
+                                                    ? 'border-white/35 bg-neutral-800 text-neutral-100'
+                                                    : 'border-white/10 text-neutral-500 hover:text-neutral-200',
+                                                )}
+                                                onClick={() =>
+                                                  applyShowPatch(
+                                                    row.id,
+                                                    { addon_quantities: { ...sd.addon_quantities, [a.id]: sq } },
+                                                    '5b',
+                                                  )
+                                                }
+                                              >
+                                                {label} · {sq} {a.unitLabel ?? 'sq ft'}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  })}
                               </div>
                             )}
                           </div>
@@ -4277,99 +4970,26 @@ export default function BookingIntakePage() {
                         tax = 0
                       }
                       const dateLbl = showLabelFromEventDate(sd.event_date)
-                      return (
-                        <div
-                          key={row.id}
-                          className={cn('space-y-4', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                        >
-                          {data.multi_show ? (
-                            <p className="text-xs text-neutral-500 flex items-center gap-2">
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ background: sd.color }}
-                              />
-                              {dateLbl || `Show ${idx + 1}`}
-                            </p>
-                          ) : null}
-                          <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 p-4 space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-neutral-500">Subtotal (pre-tax)</span>
-                              <span className="tabular-nums text-neutral-200">${sub}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-neutral-500">Tax</span>
-                              <span className="tabular-nums text-neutral-200">${tax}</span>
-                            </div>
-                            <div className="flex justify-between text-lg font-semibold pt-2 border-t border-white/[0.06]">
-                              <span className="text-neutral-300">Total</span>
-                              <span className="tabular-nums">${total}</span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-neutral-400 text-xs">Quote source</Label>
-                            <IntakeCompactDual
-                              value={sd.pricing_source === 'manual'}
-                              onChange={v =>
-                                applyShowPatch(row.id, { pricing_source: v ? 'manual' : 'calculated' }, '5c')
-                              }
-                              a={{ id: 'calc', label: 'Use calculated' }}
-                              b={{ id: 'man', label: 'Manual override' }}
-                            />
-                          </div>
-                          {sd.pricing_source === 'manual' ? (
-                            <>
-                              <div className="space-y-1.5">
-                                <Label className="text-neutral-400 text-xs">Manual total (USD)</Label>
-                                <Input
-                                  inputMode="decimal"
-                                  className="h-11 border-neutral-800 bg-neutral-950/80 tabular-nums"
-                                  value={sd.manual_gross != null ? String(sd.manual_gross) : ''}
-                                  onChange={e => {
-                                    const raw = e.target.value.trim()
-                                    if (!raw) {
-                                      applyShowPatch(row.id, { manual_gross: null }, '5c')
-                                      return
-                                    }
-                                    const n = Number(raw)
-                                    if (!Number.isFinite(n) || n < 0) return
-                                    applyShowPatch(row.id, { manual_gross: Math.round(n) }, '5c')
-                                  }}
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-neutral-400 text-xs">Why manual (substance)</Label>
-                                <ToggleN
-                                  value={sd.manual_pricing_reason}
-                                  onChange={v =>
-                                    applyShowPatch(
-                                      row.id,
-                                      { manual_pricing_reason: v as BookingIntakeShowDataV3['manual_pricing_reason'] },
-                                      '5c',
-                                    )
-                                  }
-                                  options={[
-                                    { value: '' as const, label: '—' },
-                                    ...MANUAL_PRICING_REASON_KEYS.filter(k => k !== '').map(k => ({
-                                      value: k,
-                                      label: MANUAL_PRICING_REASON_LABELS[k],
-                                    })),
-                                  ]}
-                                />
-                              </div>
-                            </>
-                          ) : null}
-                        </div>
-                      )
-                    })}
-                  </>
-                ) : data.view_section === '5D' ? (
-                  <>
-                    {showsSorted.map((row, idx) => {
-                      const sd = parseShowDataV3(row.show_data, row.sort_order)
-                      const total = totalUsdForShow(sd)
-                      const dep = total > 0 ? roundUsd(total * (sd.deposit_percent / 100)) : 0
-                      const bal = Math.max(0, total - dep)
+                      const activeAddons = Object.entries(sd.addon_quantities).filter(([, qq]) => qq > 0)
+                      const addonLineNames = activeAddons
+                        .map(([id, qq]) => {
+                          const ad = pricingCatalog.addons.find(x => x.id === id)
+                          return ad ? `${ad.name}${qq > 1 ? ` ×${qq}` : ''}` : null
+                        })
+                        .filter(Boolean) as string[]
+                      let addonPremium = 0
+                      if (inp && sd.pricing_source !== 'manual') {
+                        try {
+                          const br = computeDealPriceBreakdown(inp)
+                          addonPremium = Math.max(0, br.afterAddons - br.afterBase)
+                        } catch {
+                          addonPremium = 0
+                        }
+                      }
+                      const totalDeal = totalUsdForShow(sd)
+                      const depAmt = totalDeal > 0 ? roundUsd(totalDeal * (sd.deposit_percent / 100)) : 0
+                      const balAmt = Math.max(0, totalDeal - depAmt)
+                      const hideBalance = sd.deposit_percent === 100
                       const togglePay = (k: PaymentMethodKeyV3) => {
                         const has = sd.payment_methods.includes(k)
                         applyShowPatch(
@@ -4393,294 +5013,418 @@ export default function BookingIntakePage() {
                                 className="w-2 h-2 rounded-full shrink-0"
                                 style={{ background: sd.color }}
                               />
-                              {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
+                              {dateLbl || `Show ${idx + 1}`}
                             </p>
                           ) : null}
-                          <div className="space-y-1.5">
-                            <Label className="text-neutral-400 text-xs">Deposit</Label>
-                            <Select
-                              value={String(sd.deposit_percent)}
-                              onValueChange={v =>
-                                applyShowPatch(
-                                  row.id,
-                                  { deposit_percent: Number(v) as Phase5DepositPercentV3 },
-                                  '5d',
-                                )
+                          <div className="space-y-2">
+                            <Label className="text-neutral-400 text-xs">Quote source</Label>
+                            <IntakeCompactDual
+                              value={sd.pricing_source === 'manual'}
+                              onChange={v =>
+                                applyShowPatch(row.id, { pricing_source: v ? 'manual' : 'calculated' }, '5c')
                               }
-                            >
-                              <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {depositOptions.map(o => (
-                                  <SelectItem key={o.value} value={String(o.value)}>
-                                    {o.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              a={{ id: 'calc', label: 'Use calculated' }}
+                              b={{ id: 'man', label: 'Manual override' }}
+                            />
                           </div>
-                          <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 p-3 space-y-1 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-neutral-500">Deposit amount</span>
-                              <span className="tabular-nums text-neutral-200">${dep}</span>
+                          <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 p-4 space-y-2">
+                            {sd.pricing_source !== 'manual' ? (
+                              <>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-neutral-500">Subtotal (pre-tax)</span>
+                                  <span className="tabular-nums text-neutral-200">${sub}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-neutral-500">Tax</span>
+                                  <span className="tabular-nums text-neutral-200">${tax}</span>
+                                </div>
+                              </>
+                            ) : null}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+                              <span className="text-lg font-semibold text-neutral-300">Total</span>
+                              {sd.pricing_source === 'manual' ? (
+                                <Input
+                                  inputMode="decimal"
+                                  className="h-10 w-[7.5rem] border-neutral-800 bg-neutral-950/80 tabular-nums text-lg font-semibold"
+                                  value={sd.manual_gross != null ? String(sd.manual_gross) : ''}
+                                  onChange={e => {
+                                    const raw = e.target.value.trim()
+                                    if (!raw) {
+                                      applyShowPatch(row.id, { manual_gross: null }, '5c')
+                                      return
+                                    }
+                                    const n = Number(raw)
+                                    if (!Number.isFinite(n) || n < 0) return
+                                    applyShowPatch(row.id, { manual_gross: Math.round(n) }, '5c')
+                                  }}
+                                  placeholder="0"
+                                />
+                              ) : (
+                                <span className="tabular-nums text-lg font-semibold">${total}</span>
+                              )}
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-neutral-500">Balance</span>
-                              <span className="tabular-nums text-neutral-200">${bal}</span>
-                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-neutral-400 text-xs">Balance due</Label>
-                            <Select
-                              value={sd.balance_timing || 'before_event'}
-                              onValueChange={v =>
-                                applyShowPatch(row.id, { balance_timing: v as Phase5BalanceTimingV3 }, '5d')
-                              }
-                            >
-                              <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {balanceTimingOptions.map(o => (
-                                  <SelectItem key={o.value} value={o.value}>
-                                    {o.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {sd.balance_timing === 'custom' ? (
+                          {sd.pricing_source === 'manual' ? (
                             <div className="space-y-1.5">
-                              <Label className="text-neutral-400 text-xs">Balance due date</Label>
-                              <Input
-                                type="date"
-                                className="h-11 border-neutral-800 bg-neutral-950/80"
-                                value={sd.balance_due_date}
-                                onChange={e =>
-                                  applyShowPatch(row.id, { balance_due_date: e.target.value }, '5d')
-                                }
-                              />
+                              <Label className="text-neutral-400 text-xs">Why manual</Label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {MANUAL_PRICING_REASON_KEYS.filter(k => k !== '').map(k => {
+                                  const on = sd.manual_pricing_reason === k
+                                  return (
+                                    <button
+                                      key={k}
+                                      type="button"
+                                      onClick={() =>
+                                        applyShowPatch(
+                                          row.id,
+                                          {
+                                            manual_pricing_reason: (on ? '' : k) as BookingIntakeShowDataV3['manual_pricing_reason'],
+                                          },
+                                          '5c',
+                                        )
+                                      }
+                                      className={cn(
+                                        'min-h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                        on
+                                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                                      )}
+                                    >
+                                      {MANUAL_PRICING_CHIP_LABELS[k]}
+                                    </button>
+                                  )
+                                })}
+                              </div>
                             </div>
                           ) : null}
-                          <div className="space-y-2">
-                            <Label className="text-neutral-400 text-xs">Payment methods discussed</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                              {PAYMENT_METHOD_KEYS.map(k => {
-                                const on = sd.payment_methods.includes(k)
-                                return (
-                                  <button
-                                    key={k}
-                                    type="button"
-                                    onClick={() => togglePay(k)}
-                                    className={cn(
-                                      'min-h-[40px] px-3 text-xs font-medium rounded-lg border transition-colors',
-                                      on
-                                        ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                        : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                                    )}
+                          {activeAddons.length > 0 ? (
+                            <details className="rounded-lg border border-white/[0.06] bg-neutral-950/35 px-3 py-2 text-xs text-neutral-400">
+                              <summary className="cursor-pointer text-neutral-300 select-none">
+                                Includes {activeAddons.length} add-on{activeAddons.length === 1 ? '' : 's'} (+
+                                ${addonPremium})
+                              </summary>
+                              <ul className="mt-2 space-y-1 list-disc pl-4 text-neutral-500">
+                                {addonLineNames.map((n, i) => (
+                                  <li key={i}>{n}</li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : null}
+                          {sd.event_schedule_type === 'recurring' ? (
+                            <p className="text-[11px] text-neutral-500">
+                              Recurring event — consider a multi-date rate.
+                            </p>
+                          ) : null}
+                          <div className="rounded-lg border border-white/[0.08] bg-neutral-950/40 p-3 space-y-3">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Label className="text-neutral-400 text-xs shrink-0">Deposit</Label>
+                                <Select
+                                  value={String(sd.deposit_percent)}
+                                  onValueChange={v =>
+                                    applyShowPatch(
+                                      row.id,
+                                      { deposit_percent: Number(v) as Phase5DepositPercentV3 },
+                                      '5d',
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger className="h-9 w-[5.75rem] border-neutral-800 bg-neutral-950/80 text-sm">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {depositOptions.map(o => (
+                                      <SelectItem key={o.value} value={String(o.value)}>
+                                        {o.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex flex-wrap items-baseline gap-x-4 text-sm tabular-nums text-neutral-200">
+                                <span>
+                                  <span className="text-neutral-500">Deposit: </span>${depAmt}
+                                </span>
+                                {!hideBalance ? (
+                                  <span>
+                                    <span className="text-neutral-500">Balance: </span>${balAmt}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            {!hideBalance ? (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-neutral-400 text-xs">Balance due</Label>
+                                  <Select
+                                    value={sd.balance_timing || 'before_event'}
+                                    onValueChange={v =>
+                                      applyShowPatch(row.id, { balance_timing: v as Phase5BalanceTimingV3 }, '5d')
+                                    }
                                   >
-                                    {PAYMENT_METHOD_LABELS[k]}
-                                  </button>
-                                )
-                              })}
+                                    <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {balanceTimingOptions.map(o => (
+                                        <SelectItem key={o.value} value={o.value}>
+                                          {o.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {sd.balance_timing === 'custom' ? (
+                                  <div className="space-y-1">
+                                    <Label className="text-neutral-400 text-xs">Balance due date</Label>
+                                    <Input
+                                      type="date"
+                                      className="h-10 border-neutral-800 bg-neutral-950/80"
+                                      value={sd.balance_due_date}
+                                      onChange={e =>
+                                        applyShowPatch(row.id, { balance_due_date: e.target.value }, '5d')
+                                      }
+                                    />
+                                  </div>
+                                ) : null}
+                              </>
+                            ) : null}
+                            <div className="space-y-1.5">
+                              <Label className="text-neutral-400 text-xs">Payment (tap all discussed)</Label>
+                              <div className="flex flex-wrap gap-1">
+                                {LIVE_PAYMENT_METHOD_KEYS.map(k => {
+                                  const on = sd.payment_methods.includes(k)
+                                  return (
+                                    <button
+                                      key={k}
+                                      type="button"
+                                      onClick={() => togglePay(k)}
+                                      className={cn(
+                                        'min-h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors',
+                                        on
+                                          ? 'border-neutral-200 bg-neutral-100'
+                                          : 'border-white/[0.08] bg-neutral-900/50',
+                                        paymentMethodChipTextClass(k, on),
+                                      )}
+                                    >
+                                      {PAYMENT_METHOD_LABELS[k]}
+                                    </button>
+                                  )
+                                })}
+                              </div>
                             </div>
                           </div>
                         </div>
                       )
                     })}
-                  </>
-                ) : data.view_section === '5E' ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-neutral-400 text-xs">Invoice to main contact?</Label>
-                      <ToggleN
-                        value={data.invoice_same_contact}
-                        onChange={v =>
-                          patch(
-                            v === 'yes'
-                              ? {
-                                  invoice_same_contact: 'yes',
-                                  invoice_company_confirmed: '',
-                                  invoice_email_confirmed: '',
-                                  billing_contact_flag: '',
-                                }
-                              : { invoice_same_contact: 'different' },
-                          )
-                        }
-                        options={[
-                          { value: 'yes' as const, label: 'Yes' },
-                          { value: 'different' as const, label: 'Different person' },
-                        ]}
-                      />
-                    </div>
-                    {data.invoice_same_contact === 'different' ? (
-                      <div className="space-y-4 rounded-lg border border-white/[0.06] bg-neutral-950/40 p-4">
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Company on invoice</Label>
-                          <ToggleN
-                            value={data.invoice_company_confirmed}
-                            onChange={v => patch({ invoice_company_confirmed: v })}
-                            options={[
-                              {
-                                value: 'correct' as const,
-                                label: data.contact_company.trim()
-                                  ? `${data.contact_company.trim()} — correct`
-                                  : 'Company — correct',
-                              },
-                              { value: 'capture_later' as const, label: 'Different — capture later' },
-                            ]}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Invoice email</Label>
-                          <ToggleN
-                            value={data.invoice_email_confirmed}
-                            onChange={v => patch({ invoice_email_confirmed: v })}
-                            options={[
-                              {
-                                value: 'correct' as const,
-                                label: data.contact_email.trim()
-                                  ? `${data.contact_email.trim()} — correct`
-                                  : 'Email — correct',
-                              },
-                              { value: 'capture_later' as const, label: 'Different — capture later' },
-                            ]}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">Billing contact</Label>
-                          <ToggleN
-                            value={data.billing_contact_flag}
-                            onChange={v => patch({ billing_contact_flag: v })}
-                            options={[
-                              { value: 'same_main' as const, label: 'Same as main' },
-                              { value: 'capture_later' as const, label: 'They told me — capture later' },
-                            ]}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </>
-                ) : data.view_section === '6A' ? (
-                  <>
-                    <p className="text-[11px] text-neutral-500">
-                      Quick taps only — confirm what you discussed; leave lines unset or mark not discussed. Items with
-                      an <span className="text-amber-500/90">Auto</span> tag were prefilled from earlier sections.
-                    </p>
-                    {data.multi_show ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-                        <span className="text-xs text-neutral-400">Same promise grid for all shows</span>
-                        <IntakeCompactDual
-                          value={data.same_for_all_6a}
-                          onChange={v => onSameForAllChange('same_for_all_6a', v, pick6a)}
-                          a={{ id: 'per', label: 'Per show' }}
-                          b={{ id: 'all', label: 'Same for all' }}
-                        />
-                      </div>
-                    ) : null}
-                    {(!data.multi_show || data.same_for_all_6a ? showsSorted.slice(0, 1) : showsSorted).map(
-                      (row, idx) => {
-                        const sd = parseShowDataV3(row.show_data, row.sort_order)
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn('space-y-3', idx > 0 && 'pt-4 border-t border-white/[0.06]')}
-                          >
-                            {data.multi_show && !data.same_for_all_6a ? (
-                              <p className="text-xs text-neutral-500 flex items-center gap-2">
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: sd.color }}
-                                />
-                                {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
-                              </p>
-                            ) : null}
-                            <div className="grid gap-3 sm:grid-cols-1">
-                              {SHOW_REPORT_PRESETS.map(preset => {
-                                const lineId = preset.id as VenuePromiseLineIdV3
-                                const rawVal = sd.promise_lines_v3[lineId]
-                                const opts = [
-                                  { value: '' as const, label: '—' },
-                                  ...VENUE_PROMISE_LINE_OPTIONS[lineId],
-                                ]
-                                const isAuto = sd.promise_lines_auto[lineId]
-                                return (
-                                  <div
-                                    key={lineId}
-                                    className="rounded-lg border border-white/[0.06] bg-neutral-950/40 p-3 space-y-2"
-                                  >
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <Label className="text-neutral-300 text-sm font-medium">{preset.label}</Label>
-                                      {isAuto ? (
-                                        <span className="text-[10px] uppercase tracking-wide text-amber-500/90">
-                                          Auto
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    <ToggleN
-                                      value={rawVal}
-                                      onChange={v => patchPromiseLine(row.id, lineId, v)}
-                                      options={opts}
-                                    />
-                                  </div>
+                    <div className="space-y-2 border-t border-white/[0.06] pt-4">
+                      <Label className="text-neutral-400 text-xs">Invoice to</Label>
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <div className="flex min-w-0 flex-wrap items-end gap-2">
+                          <div className="shrink-0">
+                            <ToggleN
+                              value={data.invoice_same_contact}
+                              onChange={v =>
+                                patch(
+                                  v === 'yes'
+                                    ? {
+                                        invoice_same_contact: 'yes',
+                                        invoice_company_confirmed: '',
+                                        invoice_email_confirmed: '',
+                                        billing_contact_flag: '',
+                                        billing_linked_contact_id: null,
+                                      }
+                                    : {
+                                        invoice_same_contact: 'different',
+                                        invoice_company_confirmed: 'capture_later',
+                                        invoice_email_confirmed: 'capture_later',
+                                        billing_linked_contact_id: null,
+                                        billing_contact_flag:
+                                          contactsForBillingPicker.length === 0 ? 'capture_later' : '',
+                                        billing_contact_name: '',
+                                        billing_contact_email: '',
+                                      },
                                 )
-                              })}
+                              }
+                              options={[
+                                {
+                                  value: 'yes' as const,
+                                  label:
+                                    data.contact_name.trim() && data.contact_company.trim()
+                                      ? `${data.contact_name.trim()} at ${data.contact_company.trim()}`
+                                      : data.contact_name.trim()
+                                        ? `${data.contact_name.trim()} · main`
+                                        : 'Main contact',
+                                },
+                                { value: 'different' as const, label: 'Different person' },
+                              ]}
+                            />
+                          </div>
+                        {data.invoice_same_contact === 'different' &&
+                        contactsForBillingPicker.length > BILLING_CONTACT_CHIP_MAX_NAMES ? (
+                          <div className="min-w-0 w-full sm:w-auto sm:min-w-[12rem] sm:max-w-sm space-y-0.5">
+                            <Label className="text-neutral-400 text-[10px] sm:text-xs sr-only sm:not-sr-only">
+                              Billing contact
+                            </Label>
+                            <Select
+                              value={
+                                data.billing_linked_contact_id ??
+                                (data.billing_contact_flag === 'capture_later'
+                                  ? BILLING_CONTACT_PICK_MANUAL
+                                  : BILLING_CONTACT_PICK_UNSET)
+                              }
+                              onValueChange={val => {
+                                if (val === BILLING_CONTACT_PICK_UNSET) {
+                                  patch({
+                                    billing_linked_contact_id: null,
+                                    billing_contact_flag: '',
+                                    billing_contact_name: '',
+                                    billing_contact_email: '',
+                                  })
+                                } else if (val === BILLING_CONTACT_PICK_MANUAL) {
+                                  patch({
+                                    billing_linked_contact_id: null,
+                                    billing_contact_flag: 'capture_later',
+                                    billing_contact_name: '',
+                                    billing_contact_email: '',
+                                  })
+                                } else {
+                                  patch({
+                                    billing_linked_contact_id: val,
+                                    billing_contact_flag: '',
+                                    billing_contact_name: '',
+                                    billing_contact_email: '',
+                                  })
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="h-9 border-neutral-800 bg-neutral-950/80 text-sm">
+                                <SelectValue placeholder="Select billing contact" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={BILLING_CONTACT_PICK_UNSET}>Select billing contact…</SelectItem>
+                                {contactsForBillingPicker.map(c => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {contactRoleForDisplay(c)
+                                      ? `${c.name} · ${contactRoleForDisplay(c)}`
+                                      : c.name}
+                                  </SelectItem>
+                                ))}
+                                <SelectSeparator />
+                                <SelectItem value={BILLING_CONTACT_PICK_MANUAL}>Type name</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
+                        {data.invoice_same_contact === 'different' &&
+                        contactsForBillingPicker.length > 0 &&
+                        contactsForBillingPicker.length <= BILLING_CONTACT_CHIP_MAX_NAMES ? (
+                          <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
+                            {contactsForBillingPicker.map(c => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                title={
+                                  contactRoleForDisplay(c)
+                                    ? `${c.name} · ${contactRoleForDisplay(c)}`
+                                    : c.name
+                                }
+                                onClick={() =>
+                                  patch({
+                                    billing_linked_contact_id: c.id,
+                                    billing_contact_flag: '',
+                                    billing_contact_name: '',
+                                    billing_contact_email: '',
+                                  })
+                                }
+                                className={cn(
+                                  'max-w-[9.5rem] truncate rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                  data.billing_linked_contact_id === c.id
+                                    ? 'border-white/[0.35] bg-neutral-800/80 text-neutral-100'
+                                    : 'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/[0.14] hover:text-neutral-100',
+                                )}
+                              >
+                                {c.name}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                patch({
+                                  billing_linked_contact_id: null,
+                                  billing_contact_flag: 'capture_later',
+                                  billing_contact_name: '',
+                                  billing_contact_email: '',
+                                })
+                              }
+                              className={cn(
+                                'rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                !data.billing_linked_contact_id &&
+                                  data.billing_contact_flag === 'capture_later'
+                                  ? 'border-white/[0.35] bg-neutral-800/80 text-neutral-100'
+                                  : 'border-white/[0.18] bg-neutral-900/30 text-neutral-400 hover:text-neutral-200',
+                              )}
+                            >
+                              Type name
+                            </button>
+                          </div>
+                        ) : null}
+                        </div>
+                        {data.invoice_same_contact === 'different' &&
+                        data.billing_contact_flag === 'capture_later' ? (
+                          <div className="flex min-w-0 w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                            <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[10rem]">
+                              <Label className="text-neutral-400 text-[10px] sm:text-xs">Billing name</Label>
+                              <Input
+                                className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                value={data.billing_contact_name}
+                                onChange={e => patch({ billing_contact_name: e.target.value })}
+                                placeholder="Name on invoice"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[12rem]">
+                              <Label className="text-neutral-400 text-[10px] sm:text-xs">Billing email</Label>
+                              <Input
+                                className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                value={data.billing_contact_email}
+                                onChange={e => patch({ billing_contact_email: e.target.value })}
+                                placeholder="Email for invoice"
+                              />
                             </div>
                           </div>
-                        )
-                      },
-                    )}
+                        ) : null}
+                      </div>
+                    </div>
                   </>
                 ) : data.view_section === '7A' ? (
                   <>
-                    <div className="space-y-2">
-                      <Label className="text-neutral-400 text-xs">Agreement</Label>
-                      <ToggleN
-                        value={data.send_agreement}
-                        onChange={v => patch({ send_agreement: v as Phase7SendAgreementV3 })}
-                        options={[
-                          { value: 'yes_sending' as const, label: 'Yes — sending' },
-                          { value: 'verbal_only' as const, label: 'No — verbal only' },
-                        ]}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-neutral-400 text-xs">Sending</Label>
+                        <ToggleN
+                          value={data.send_agreement}
+                          onChange={v => patch({ send_agreement: v as Phase7SendAgreementV3 })}
+                          options={[
+                            { value: 'yes_sending' as const, label: 'Agreement + invoice' },
+                            { value: 'invoice_only' as const, label: 'Invoice only' },
+                            { value: 'verbal_only' as const, label: 'Nothing yet — verbal hold' },
+                          ]}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-neutral-400 text-xs">Deposit</Label>
+                        <ToggleN
+                          value={data.deposit_on_call}
+                          onChange={v => patch({ deposit_on_call: v as Phase7DepositOnCallV3 })}
+                          options={[
+                            { value: 'paying_now' as const, label: 'Paying now' },
+                            { value: 'sending_invoice' as const, label: 'Sending invoice' },
+                          ]}
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-neutral-400 text-xs">Deposit</Label>
-                      <ToggleN
-                        value={data.deposit_on_call}
-                        onChange={v => patch({ deposit_on_call: v as Phase7DepositOnCallV3 })}
-                        options={[
-                          { value: 'paying_now' as const, label: 'Paying now' },
-                          { value: 'sending_invoice' as const, label: 'Sending invoice' },
-                        ]}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-neutral-400 text-xs">Energy at close</Label>
-                      <ToggleN
-                        value={data.client_energy}
-                        onChange={v => patch({ client_energy: v as Phase7ClientEnergyV3 })}
-                        options={[
-                          { value: 'very_excited' as const, label: 'Very excited' },
-                          { value: 'positive' as const, label: 'Positive' },
-                          { value: 'neutral' as const, label: 'Neutral' },
-                          { value: 'uncertain' as const, label: 'Uncertain' },
-                        ]}
-                      />
-                    </div>
-                    <IntakeCompactChipRow<CloseArtifactTagV3>
-                      label="What you're sending / holding (tap all that apply)"
-                      selected={data.close_artifact_tags}
-                      ids={CLOSE_ARTIFACT_TAG_KEYS}
-                      labels={CLOSE_ARTIFACT_TAG_LABELS}
-                      onChange={next => patch({ close_artifact_tags: next })}
-                    />
-                  </>
-                ) : data.view_section === '7B' ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-neutral-400 text-xs">Follow-ups?</Label>
+                      <Label className="text-neutral-400 text-xs">Anything still open?</Label>
                       <ToggleN
                         value={data.has_follow_ups}
                         onChange={v => {
@@ -4691,15 +5435,15 @@ export default function BookingIntakePage() {
                           }
                         }}
                         options={[
-                          { value: 'yes' as const, label: 'Yes' },
                           { value: 'all_clear' as const, label: 'All clear' },
+                          { value: 'yes' as const, label: 'Yes — items pending' },
                         ]}
                       />
                     </div>
                     {data.has_follow_ups === 'yes' ? (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-neutral-400 text-xs">When</Label>
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-end">
+                        <div className="space-y-1.5 min-w-[10rem] flex-1">
+                          <Label className="text-neutral-400 text-xs">Follow up by</Label>
                           <Input
                             type="date"
                             className="h-11 border-neutral-800 bg-neutral-950/80"
@@ -4707,9 +5451,9 @@ export default function BookingIntakePage() {
                             onChange={e => patch({ follow_up_date: e.target.value })}
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-neutral-400 text-xs">What</Label>
-                          <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <Label className="text-neutral-400 text-xs">Topics</Label>
+                          <div className="flex flex-wrap gap-1">
                             {FOLLOW_UP_TOPIC_KEYS.map(k => {
                               const on = data.follow_up_topics.includes(k)
                               return (
@@ -4718,7 +5462,7 @@ export default function BookingIntakePage() {
                                   type="button"
                                   onClick={() => toggleFollowTopic(k)}
                                   className={cn(
-                                    'min-h-[40px] px-3 text-xs font-medium rounded-lg border transition-colors',
+                                    'min-h-9 px-2.5 text-xs font-medium rounded-lg border transition-colors',
                                     on
                                       ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
                                       : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
@@ -4730,29 +5474,35 @@ export default function BookingIntakePage() {
                             })}
                           </div>
                         </div>
-                      </>
+                      </div>
                     ) : null}
-                  </>
-                ) : data.view_section === '7C' ? (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Call completed?</Label>
-                      <Select
-                        value={data.call_status.trim() ? data.call_status : '__none__'}
-                        onValueChange={v =>
-                          patch({ call_status: v === '__none__' ? '' : (v as Phase7CallStatusV3) })
-                        }
-                      >
-                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">—</SelectItem>
-                          <SelectItem value="full">Full call</SelectItem>
-                          <SelectItem value="partial">Partial — need follow-up</SelectItem>
-                          <SelectItem value="voicemail">Voicemail</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4">
+                      <div className="space-y-2 min-w-[12rem] flex-1">
+                        <Label className="text-neutral-400 text-xs">Energy at close</Label>
+                        <ToggleN
+                          value={data.client_energy}
+                          onChange={v => patch({ client_energy: v as Phase7ClientEnergyV3 })}
+                          options={[
+                            { value: 'very_excited' as const, label: 'Very excited' },
+                            { value: 'positive' as const, label: 'Positive' },
+                            { value: 'neutral' as const, label: 'Neutral' },
+                            { value: 'uncertain' as const, label: 'Uncertain' },
+                          ]}
+                        />
+                      </div>
+                      <div className="space-y-2 min-w-[12rem] flex-1">
+                        <Label className="text-neutral-400 text-xs">Call status</Label>
+                        <ToggleN
+                          value={data.call_status}
+                          onChange={v => patch({ call_status: v as Phase7CallStatusV3 })}
+                          options={[
+                            { value: '' as const, label: '—' },
+                            { value: 'full' as const, label: 'Full call' },
+                            { value: 'partial' as const, label: 'Partial — need follow-up' },
+                            { value: 'voicemail' as const, label: 'Voicemail' },
+                          ]}
+                        />
+                      </div>
                     </div>
                     <div className="pt-2">
                       <Button
@@ -4768,7 +5518,12 @@ export default function BookingIntakePage() {
                             Saving…
                           </>
                         ) : (
-                          'End call'
+                          <>
+                            <span className="text-base leading-none" aria-hidden>
+                              ●
+                            </span>
+                            End call
+                          </>
                         )}
                       </Button>
                       <p className="text-[11px] text-neutral-600 mt-2">
@@ -4806,7 +5561,7 @@ export default function BookingIntakePage() {
                     className="min-h-[48px] min-w-[7rem]"
                     disabled={
                       data.view_section.startsWith('__stub_') ||
-                      data.view_section === '7C' ||
+                      data.view_section === '7A' ||
                       (data.view_section === lastPathSection &&
                         data.last_active_section === lastPathSection)
                     }
@@ -4817,7 +5572,7 @@ export default function BookingIntakePage() {
                   {data.view_section === lastPathSection &&
                   data.last_active_section === lastPathSection ? (
                     <span className="text-xs text-neutral-500">
-                      On 7C, use End call — Next is disabled there.
+                      On The Close, use End call — Next is disabled there.
                     </span>
                   ) : null}
                 </div>
@@ -4895,6 +5650,28 @@ export default function BookingIntakePage() {
                     <p className="text-xs text-neutral-500">
                       Follow-up date: {data.follow_up_date.trim()} (maps to venue follow-up on import).
                     </p>
+                  ) : null}
+
+                  <div className="rounded-lg border border-white/[0.08] bg-neutral-950/20 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">
+                      <p className="text-[10px] text-neutral-500 uppercase tracking-wide">Flagged fields</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">
+                        Finish anything the call left open before you import.
+                      </p>
+                    </div>
+                    <div className="max-h-[min(420px,55vh)] overflow-y-auto overscroll-contain p-3 space-y-3">
+                  {data.venue_access_notes_flag === 'yes' &&
+                  data.venue_access_note_tags.includes('other') ? (
+                    <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-2">
+                      <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 2 — When</p>
+                      <p className="text-sm text-neutral-200">Venue access — other</p>
+                      <Textarea
+                        className="min-h-[88px] border-neutral-800 bg-neutral-950/80 text-sm"
+                        value={data.venue_access_other_notes}
+                        onChange={e => patch({ venue_access_other_notes: e.target.value })}
+                        placeholder="Gated code, special instructions — anything the chips don’t cover."
+                      />
+                    </div>
                   ) : null}
 
                   {data.confirmed_contact === 'no_different_person' ? (
@@ -5028,7 +5805,9 @@ export default function BookingIntakePage() {
                   ) : null}
 
                   {data.onsite_same_contact === 'different' &&
-                  (data.onsite_name_flag === 'capture_later' || data.onsite_phone_flag === 'capture_later') ? (
+                  (data.onsite_name_flag === 'capture_later' ||
+                    data.onsite_phone_flag === 'capture_later' ||
+                    !!data.onsite_linked_contact_id) ? (
                     <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-3">
                       <p className="text-[10px] text-neutral-500 uppercase tracking-wide">From: Phase 4 — On-site contact</p>
                       {data.onsite_name_flag === 'capture_later' ? (
@@ -5084,6 +5863,29 @@ export default function BookingIntakePage() {
                             value={data.invoice_email_text}
                             onChange={e => patch({ invoice_email_text: e.target.value })}
                           />
+                        </div>
+                      ) : null}
+                      {data.billing_linked_contact_id ? (
+                        <div className="space-y-1.5">
+                          <Label className="text-neutral-400 text-xs">Billing contact</Label>
+                          <p className="text-sm text-neutral-200 rounded-md border border-white/[0.06] bg-neutral-950/50 px-3 py-2">
+                            {(() => {
+                              const c = contactsForVenue.find(x => x.id === data.billing_linked_contact_id)
+                              if (!c) {
+                                return 'Linked to a venue contact — refresh or open Outreach if details are missing.'
+                              }
+                              const r = contactRoleForDisplay(c)
+                              return (
+                                <>
+                                  {c.name}
+                                  {r ? <span className="text-neutral-500"> · {r}</span> : null}
+                                  {c.email ? (
+                                    <span className="block text-xs text-neutral-500 mt-1">{c.email}</span>
+                                  ) : null}
+                                </>
+                              )
+                            })()}
+                          </p>
                         </div>
                       ) : null}
                       {data.billing_contact_flag === 'capture_later' ? (
@@ -5310,6 +6112,138 @@ export default function BookingIntakePage() {
                     if (blocks.length === 0) return null
                     return <div key={row.id} className="space-y-3">{blocks}</div>
                   })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.08] bg-neutral-900/30 p-3 space-y-3">
+                    <div>
+                      <p className="text-[10px] text-neutral-500 uppercase tracking-wide">Venue promise lines</p>
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Quick scan — tap a line to jump to the line-by-line editor.
+                      </p>
+                    </div>
+                    {showsSorted.map((row, idx) => {
+                      const sd = parseShowDataV3(row.show_data, row.sort_order)
+                      return (
+                        <div
+                          key={`sum-${row.id}`}
+                          className={cn('space-y-2', idx > 0 && 'pt-3 border-t border-white/[0.06]')}
+                        >
+                          {showsSorted.length > 1 ? (
+                            <p className="text-xs text-neutral-500 flex items-center gap-2">
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: sd.color }}
+                              />
+                              {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
+                            </p>
+                          ) : null}
+                          <div className="space-y-0.5 rounded-md border border-white/[0.06] bg-neutral-950/40 p-2">
+                            {SHOW_REPORT_PRESETS.map(preset => {
+                              const lineId = preset.id as VenuePromiseLineIdV3
+                              const rawVal = sd.promise_lines_v3[lineId]
+                              const { status, summary } = postCallPromiseLineUi(rawVal, lineId)
+                              const mark = status === 'set' ? '\u2713' : status === 'warn' ? '!' : '\u25cb'
+                              return (
+                                <button
+                                  key={lineId}
+                                  type="button"
+                                  className="w-full flex items-baseline gap-2 rounded px-2 py-1.5 text-left hover:bg-neutral-900/80 transition-colors"
+                                  onClick={() => {
+                                    const el = document.getElementById(`8a-promise-${row.id}-${lineId}`)
+                                    const details = el?.closest('details')
+                                    if (details && !details.open) details.open = true
+                                    requestAnimationFrame(() =>
+                                      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+                                    )
+                                  }}
+                                >
+                                  <span
+                                    className={cn(
+                                      'shrink-0 font-mono text-[11px] w-4 tabular-nums',
+                                      status === 'set' && 'text-emerald-400/90',
+                                      status === 'open' && 'text-neutral-500',
+                                      status === 'warn' && 'text-amber-500/90',
+                                    )}
+                                  >
+                                    {mark}
+                                  </span>
+                                  <span className="text-xs text-neutral-300 shrink-0 min-w-[7.5rem]">
+                                    {preset.label}
+                                  </span>
+                                  <span className="text-xs text-neutral-500 flex-1 text-right min-w-0 truncate">
+                                    {summary}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <details className="group rounded-md border border-white/[0.06] bg-neutral-950/30 open:pb-2">
+                      <summary className="cursor-pointer list-none px-3 py-2 text-xs text-neutral-400 hover:text-neutral-200 flex items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                        <span>Adjust line-by-line</span>
+                        <span className="text-[10px] text-neutral-600 shrink-0">
+                          <span className="group-open:hidden">Show</span>
+                          <span className="hidden group-open:inline">Hide</span>
+                        </span>
+                      </summary>
+                      <div className="px-2 pb-2 space-y-3 pt-1">
+                        {showsSorted.map((row, idx) => {
+                          const sd = parseShowDataV3(row.show_data, row.sort_order)
+                          return (
+                            <div
+                              key={row.id}
+                              className={cn('space-y-2', idx > 0 && 'pt-3 border-t border-white/[0.06]')}
+                            >
+                              {showsSorted.length > 1 ? (
+                                <p className="text-xs text-neutral-500 flex items-center gap-2">
+                                  <span
+                                    className="w-2 h-2 rounded-full shrink-0"
+                                    style={{ background: sd.color }}
+                                  />
+                                  {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
+                                </p>
+                              ) : null}
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {SHOW_REPORT_PRESETS.map(preset => {
+                                  const lineId = preset.id as VenuePromiseLineIdV3
+                                  const rawVal = sd.promise_lines_v3[lineId]
+                                  const opts = [
+                                    { value: '' as const, label: '—' },
+                                    ...VENUE_PROMISE_LINE_OPTIONS[lineId],
+                                  ]
+                                  const isAuto = sd.promise_lines_auto[lineId]
+                                  return (
+                                    <div
+                                      key={lineId}
+                                      id={`8a-promise-${row.id}-${lineId}`}
+                                      className="rounded-md border border-white/[0.06] bg-neutral-950/40 p-2 space-y-1.5 scroll-mt-28"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-neutral-300 text-xs font-medium leading-tight">
+                                          {preset.label}
+                                        </Label>
+                                        {isAuto ? (
+                                          <span className="text-[9px] uppercase text-amber-500/90">Auto</span>
+                                        ) : null}
+                                      </div>
+                                      <ToggleN
+                                        value={rawVal}
+                                        onChange={v => patchPromiseLine(row.id, lineId, v)}
+                                        options={opts}
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </details>
+                  </div>
                 </div>
               ) : null}
 
@@ -5346,8 +6280,9 @@ export default function BookingIntakePage() {
               {postCallSection === '8C' ? (
                 <div className="space-y-4">
                   <p className="text-sm text-neutral-400">
-                    Preview matches what will be written to Outreach (venue + contacts) and Earnings (deals). Import the
-                    venue first, then each show, or use Import all.
+                    Preview matches what will be written to Outreach (venue + contacts) and Earnings (deals). Each deal
+                    card uses the same accent as that show in the intake. Import the venue first, then each show, or use
+                    Import all.
                   </p>
                   {importBanner ? (
                     <div

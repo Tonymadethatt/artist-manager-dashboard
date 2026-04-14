@@ -1,3 +1,4 @@
+import { useId, useRef } from 'react'
 import { Star, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Label } from '@/components/ui/label'
@@ -13,8 +14,13 @@ import type { PricingCatalogDoc } from '@/types'
 import {
   EQUIPMENT_HYBRID_COVER_KEYS,
   EQUIPMENT_HYBRID_COVER_LABELS,
+  EQUIPMENT_SETUP_WINDOW_LABELS,
   EQUIPMENT_VENUE_INCLUDES_KEYS,
   EQUIPMENT_VENUE_INCLUDES_LABELS,
+  LOAD_ACCESS_TAG_KEYS,
+  LOAD_ACCESS_TAG_LABELS,
+  intakeShowIsFestivalLikeProduction,
+  intakeShowNeedsEquipmentArrivalSetup,
   resolveProductionPackageCandidates,
   resolveVenueProductionAddonCandidates,
   type BookingIntakeShowDataV3,
@@ -22,9 +28,19 @@ import {
   type EquipmentHybridAdditionsV3,
   type EquipmentMicV3,
   type EquipmentVenueIncludesIdV3,
+  type LoadAccessTagV3,
   type Phase4EquipmentProviderV3,
+  type Phase4SetupWindowV3,
 } from '@/lib/intake/intakePayloadV3'
+import { IntakeQuarterHourTimeField } from '@/pages/booking-intake/IntakeQuarterHourTimeField'
 import { IntakeCompactChipRow, IntakeInlineScriptBlock } from '@/pages/booking-intake/intakeLivePrimitives'
+
+const SETUP_WINDOW_CHIP_OPTIONS: { id: Exclude<Phase4SetupWindowV3, ''>; label: string }[] = [
+  { id: '30', label: EQUIPMENT_SETUP_WINDOW_LABELS['30'] },
+  { id: '60', label: EQUIPMENT_SETUP_WINDOW_LABELS['60'] },
+  { id: '120', label: EQUIPMENT_SETUP_WINDOW_LABELS['120'] },
+  { id: 'not_discussed', label: EQUIPMENT_SETUP_WINDOW_LABELS.not_discussed },
+]
 
 export type EquipmentSoundTechPickOption = {
   id: string
@@ -111,22 +127,79 @@ function resetStep2Fields(): Pick<
   }
 }
 
+export type SoundTechUiContext = {
+  /** Single first name when exactly one venue contact looks like FOH/sound tech. */
+  confirmFirstName: string | null
+  /** Full name for confirmed-state copy. */
+  confirmFullName: string | null
+  /** More than one sound-tech-ish contact on the venue. */
+  multipleOnFile: boolean
+  /** When exactly one match, this `contacts.id` is the on-file sound tech. */
+  preferredVenueContactId: string | null
+}
+
 export function EquipmentIntakeFlowCapture({
   sd,
   pricingCatalog,
   soundTechPickOptions = [],
+  soundTechUiContext,
+  onEnsureSoundTechContact,
   onPatch,
 }: {
   sd: BookingIntakeShowDataV3
   pricingCatalog: PricingCatalogDoc
   soundTechPickOptions?: readonly EquipmentSoundTechPickOption[]
+  /** When set, drives question copy and default picker row for venue sound techs. */
+  soundTechUiContext?: SoundTechUiContext | null
+  /** Persist free-text sound tech as a venue contact (`on_site_tech`); returns new `contacts.id`. */
+  onEnsureSoundTechContact?: (name: string) => Promise<string | null>
   onPatch: (partial: Partial<BookingIntakeShowDataV3>) => void
 }) {
+  const loadInFieldId = useId()
   const pkgCand = resolveProductionPackageCandidates(pricingCatalog)
   const addonCand = resolveVenueProductionAddonCandidates(pricingCatalog)
+  const soundTechSyncRef = useRef(false)
+
+  const confirmFirstName = soundTechUiContext?.confirmFirstName ?? null
+  const confirmFullName = soundTechUiContext?.confirmFullName ?? null
+  const multipleOnFile = soundTechUiContext?.multipleOnFile ?? false
+  const preferredVenueContactId = soundTechUiContext?.preferredVenueContactId ?? null
+
+  const singleFileTech = Boolean(
+    preferredVenueContactId && confirmFirstName && !multipleOnFile,
+  )
+
+  const soundTechSectionLabel = singleFileTech
+    ? `Is ${confirmFirstName} still the sound tech on site for this event?`
+    : multipleOnFile
+      ? 'Sound tech on site'
+      : 'Is there a sound tech on site?'
+
+  const soundTechStepComplete =
+    sd.equipment_sound_tech === 'no' ||
+    (sd.equipment_sound_tech === 'yes' &&
+      !!(sd.equipment_sound_tech_contact_id?.trim() || sd.equipment_sound_tech_name.trim()))
 
   const step1Complete =
-    !!sd.equipment_provider && !!sd.equipment_mic && !!sd.equipment_sound_tech
+    !!sd.equipment_provider && !!sd.equipment_mic && soundTechStepComplete
+
+  const isConfirmedFileTech =
+    singleFileTech &&
+    sd.equipment_sound_tech === 'yes' &&
+    !!preferredVenueContactId &&
+    sd.equipment_sound_tech_contact_id === preferredVenueContactId
+
+  const isReplacementMode =
+    singleFileTech &&
+    sd.equipment_sound_tech === 'yes' &&
+    !sd.equipment_sound_tech_contact_id?.trim()
+
+  /** Rare: yes + linked to someone other than the on-file sound tech (e.g. legacy data). */
+  const singleFileTechUseGenericPicker =
+    singleFileTech &&
+    sd.equipment_sound_tech === 'yes' &&
+    !isConfirmedFileTech &&
+    !isReplacementMode
 
   const showStep2 = step1Complete
 
@@ -147,6 +220,7 @@ export function EquipmentIntakeFlowCapture({
       ...STEP1_FLOW,
       equipment_provider: v,
       ...resetStep2Fields(),
+      ...(v === 'venue_provides' ? { pricing_mode: 'hourly' as const, package_id: '' } : {}),
     })
   }
 
@@ -181,19 +255,38 @@ export function EquipmentIntakeFlowCapture({
   const bumpAddon = (addonId: string | null, qty: number) => {
     if (!addonId) return
     const next = { ...sd.addon_quantities }
-    if (qty <= 0) delete next[addonId]
-    else next[addonId] = qty
-    onPatch({ ...STEP1_FLOW, addon_quantities: next })
+    const autopop = new Set(sd.addon_autopop_ids ?? [])
+    const dismissed = (sd.addon_autopop_dismissed_ids ?? []).filter(id => id !== addonId)
+    if (qty <= 0) {
+      delete next[addonId]
+      autopop.delete(addonId)
+    } else {
+      next[addonId] = qty
+      autopop.add(addonId)
+    }
+    onPatch({
+      ...STEP1_FLOW,
+      addon_quantities: next,
+      addon_autopop_ids: [...autopop],
+      addon_autopop_dismissed_ids: dismissed,
+    })
   }
 
   const clearVenueFlowAddons = () => {
     const next = { ...sd.addon_quantities }
-    for (const id of [addonCand.lighting?.id, addonCand.effects?.id, addonCand.danceFloor?.id].filter(
+    const ids = [addonCand.lighting?.id, addonCand.effects?.id, addonCand.danceFloor?.id].filter(
       Boolean,
-    ) as string[]) {
+    ) as string[]
+    const autopop = new Set(sd.addon_autopop_ids ?? [])
+    for (const id of ids) {
       delete next[id]
+      autopop.delete(id)
     }
-    onPatch({ ...STEP1_FLOW, addon_quantities: next })
+    onPatch({
+      ...STEP1_FLOW,
+      addon_quantities: next,
+      addon_autopop_ids: [...autopop],
+    })
   }
 
   const packageScriptDjHybrid =
@@ -217,6 +310,44 @@ export function EquipmentIntakeFlowCapture({
 
   const setSoundTechYes = () => {
     onPatch({ ...STEP1_FLOW, equipment_sound_tech: 'yes' })
+  }
+
+  const confirmFileSoundTech = () => {
+    if (!preferredVenueContactId) return
+    onPatch({
+      ...STEP1_FLOW,
+      equipment_sound_tech: 'yes',
+      equipment_sound_tech_contact_id: preferredVenueContactId,
+      equipment_sound_tech_name: '',
+    })
+  }
+
+  const chooseDifferentSoundTech = () => {
+    onPatch({
+      ...STEP1_FLOW,
+      equipment_sound_tech: 'yes',
+      equipment_sound_tech_contact_id: null,
+      equipment_sound_tech_name: '',
+    })
+  }
+
+  const restoreFileSoundTech = () => {
+    if (!preferredVenueContactId) return
+    onPatch({
+      ...STEP1_FLOW,
+      equipment_sound_tech: 'yes',
+      equipment_sound_tech_contact_id: preferredVenueContactId,
+      equipment_sound_tech_name: '',
+    })
+  }
+
+  const reopenSoundTechQuestion = () => {
+    onPatch({
+      ...STEP1_FLOW,
+      equipment_sound_tech: '',
+      equipment_sound_tech_contact_id: null,
+      equipment_sound_tech_name: '',
+    })
   }
 
   const setSoundTechNo = () => {
@@ -255,6 +386,20 @@ export function EquipmentIntakeFlowCapture({
     }
   }
 
+  const syncFreeTextSoundTechContact = async () => {
+    if (sd.equipment_sound_tech !== 'yes' || !onEnsureSoundTechContact) return
+    const name = sd.equipment_sound_tech_name.trim()
+    if (!name || sd.equipment_sound_tech_contact_id?.trim()) return
+    if (soundTechSyncRef.current) return
+    soundTechSyncRef.current = true
+    try {
+      const id = await onEnsureSoundTechContact(name)
+      if (id) onPatch({ ...STEP1_FLOW, equipment_sound_tech_contact_id: id })
+    } finally {
+      soundTechSyncRef.current = false
+    }
+  }
+
   return (
     <div className="space-y-5 min-w-0">
       <div className="space-y-3">
@@ -279,117 +424,309 @@ export function EquipmentIntakeFlowCapture({
           onChange={v => onPatch({ ...STEP1_FLOW, equipment_mic: v as EquipmentMicV3 })}
         />
         <div className="space-y-1.5 min-w-0">
-          <Label className="text-neutral-400 text-xs">Sound tech on site</Label>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-            <div
-              className="inline-flex rounded-lg border border-white/[0.08] p-0.5 bg-neutral-900/50 gap-0.5 shrink-0"
-              role="group"
-              aria-label="Sound tech on site"
-            >
+          <Label className="text-neutral-400 text-xs leading-snug">{soundTechSectionLabel}</Label>
+          {multipleOnFile ? (
+            <p className="text-[10px] text-neutral-500 leading-snug">
+              Several production contacts are on file — pick who runs sound.
+            </p>
+          ) : !singleFileTech ? (
+            <p className="text-[10px] text-neutral-500 leading-snug">
+              If someone runs FOH or house audio, capture them here (saved to this venue).
+            </p>
+          ) : null}
+
+          {singleFileTech && sd.equipment_sound_tech === 'no' ? (
+            <div className="space-y-2">
+              <p className="text-xs text-neutral-400">No sound tech on site for this event.</p>
               <button
                 type="button"
-                onClick={setSoundTechYes}
-                className={cn(
-                  'px-3 py-2 text-xs font-medium rounded-md transition-colors min-h-10',
-                  sd.equipment_sound_tech === 'yes'
-                    ? 'bg-neutral-100 text-neutral-950'
-                    : 'text-neutral-400 hover:text-neutral-200',
-                )}
+                className="text-[11px] text-amber-200/90 underline underline-offset-2 hover:text-amber-100"
+                onClick={reopenSoundTechQuestion}
               >
-                Yes
-              </button>
-              <button
-                type="button"
-                onClick={setSoundTechNo}
-                className={cn(
-                  'px-3 py-2 text-xs font-medium rounded-md transition-colors min-h-10',
-                  sd.equipment_sound_tech === 'no'
-                    ? 'bg-neutral-100 text-neutral-950'
-                    : 'text-neutral-400 hover:text-neutral-200',
-                )}
-              >
-                No
+                Change answer
               </button>
             </div>
-            {sd.equipment_sound_tech === 'yes' ? (
-              <>
-                {soundTechPickOptions.length > 0 ? (
-                  <>
-                    <Select value={soundTechSel} onValueChange={onSoundTechSelect}>
-                      <SelectTrigger className="h-11 w-[min(100%,260px)] border-neutral-800 bg-neutral-950/80 shrink-0">
-                        <SelectValue placeholder="Who is the sound tech?" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">—</SelectItem>
-                        {soundTechPickOptions.map(o => (
-                          <SelectItem key={o.id} value={o.id}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                        <SelectItem value="__other__">Other name…</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {soundTechSel === '__other__' ? (
-                      <div className="relative flex-1 min-w-[140px] max-w-[280px]">
-                        <Input
-                          className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
-                          placeholder="Sound tech name"
-                          value={sd.equipment_sound_tech_name}
-                          onChange={e =>
-                            onPatch({
-                              ...STEP1_FLOW,
-                              equipment_sound_tech_contact_id: null,
-                              equipment_sound_tech_name: e.target.value,
-                            })
-                          }
-                        />
+          ) : null}
+
+          {singleFileTech && isConfirmedFileTech ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-neutral-300">
+              <span>
+                Using{' '}
+                <span className="font-medium text-neutral-100">
+                  {confirmFullName ?? confirmFirstName}
+                </span>{' '}
+                as on-site sound tech.
+              </span>
+              <button
+                type="button"
+                className="text-[11px] text-amber-200/90 underline underline-offset-2 hover:text-amber-100 shrink-0"
+                onClick={chooseDifferentSoundTech}
+              >
+                Not them — someone else
+              </button>
+            </div>
+          ) : null}
+
+          {singleFileTech && isReplacementMode ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <p className="text-[10px] text-neutral-500 w-full leading-snug">
+                Enter who runs sound — we’ll save them on this venue as on-site tech.
+              </p>
+              <div className="relative flex-1 min-w-[140px] max-w-[320px]">
+                <Input
+                  className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+                  placeholder="Sound tech name"
+                  value={sd.equipment_sound_tech_name}
+                  onChange={e =>
+                    onPatch({
+                      ...STEP1_FLOW,
+                      equipment_sound_tech_contact_id: null,
+                      equipment_sound_tech_name: e.target.value,
+                    })
+                  }
+                  onBlur={() => void syncFreeTextSoundTechContact()}
+                />
+                <button
+                  type="button"
+                  aria-label="Use on-file sound tech instead"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
+                  onClick={restoreFileSoundTech}
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {singleFileTechUseGenericPicker ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              {soundTechPickOptions.length > 0 ? (
+                <>
+                  <Select value={soundTechSel} onValueChange={onSoundTechSelect}>
+                    <SelectTrigger className="h-11 w-[min(100%,260px)] border-neutral-800 bg-neutral-950/80 shrink-0">
+                      <SelectValue placeholder="Who is the sound tech?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {soundTechPickOptions.map(o => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__other__">Other name…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {soundTechSel === '__other__' ? (
+                    <div className="relative flex-1 min-w-[140px] max-w-[280px]">
+                      <Input
+                        className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+                        placeholder="Sound tech name"
+                        value={sd.equipment_sound_tech_name}
+                        onChange={e =>
+                          onPatch({
+                            ...STEP1_FLOW,
+                            equipment_sound_tech_contact_id: null,
+                            equipment_sound_tech_name: e.target.value,
+                          })
+                        }
+                        onBlur={() => void syncFreeTextSoundTechContact()}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Clear sound tech selection"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
+                        onClick={restoreFileSoundTech}
+                      >
+                        <X className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label="Use on-file sound tech"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-neutral-900/50 text-neutral-500 hover:text-neutral-200 hover:border-white/20"
+                      onClick={restoreFileSoundTech}
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="relative flex-1 min-w-[140px] max-w-[280px]">
+                  <Input
+                    className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+                    placeholder="Sound tech name"
+                    value={sd.equipment_sound_tech_name}
+                    onChange={e =>
+                      onPatch({
+                        ...STEP1_FLOW,
+                        equipment_sound_tech_contact_id: null,
+                        equipment_sound_tech_name: e.target.value,
+                      })
+                    }
+                    onBlur={() => void syncFreeTextSoundTechContact()}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Use on-file sound tech"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
+                    onClick={restoreFileSoundTech}
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {singleFileTech && sd.equipment_sound_tech === '' ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={confirmFileSoundTech}
+                  className={cn(
+                    'px-3 py-2 text-xs font-medium rounded-lg border transition-colors min-h-10',
+                    'border-white/[0.12] bg-neutral-100 text-neutral-950 hover:bg-white',
+                  )}
+                >
+                  Yes — still {confirmFirstName}
+                </button>
+                <button
+                  type="button"
+                  onClick={chooseDifferentSoundTech}
+                  className={cn(
+                    'px-3 py-2 text-xs font-medium rounded-lg border transition-colors min-h-10',
+                    'border-white/[0.08] bg-neutral-900/50 text-neutral-300 hover:border-white/20 hover:text-neutral-100',
+                  )}
+                >
+                  No — different person
+                </button>
+              </div>
+              <button
+                type="button"
+                className="text-[11px] text-neutral-500 underline underline-offset-2 hover:text-neutral-300"
+                onClick={clearSoundTechToNo}
+              >
+                No sound tech on site
+              </button>
+            </div>
+          ) : null}
+
+          {!singleFileTech ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <div
+                className="inline-flex rounded-lg border border-white/[0.08] p-0.5 bg-neutral-900/50 gap-0.5 shrink-0"
+                role="group"
+                aria-label="Sound tech on site"
+              >
+                <button
+                  type="button"
+                  onClick={setSoundTechYes}
+                  className={cn(
+                    'px-3 py-2 text-xs font-medium rounded-md transition-colors min-h-10',
+                    sd.equipment_sound_tech === 'yes'
+                      ? 'bg-neutral-100 text-neutral-950'
+                      : 'text-neutral-400 hover:text-neutral-200',
+                  )}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={setSoundTechNo}
+                  className={cn(
+                    'px-3 py-2 text-xs font-medium rounded-md transition-colors min-h-10',
+                    sd.equipment_sound_tech === 'no'
+                      ? 'bg-neutral-100 text-neutral-950'
+                      : 'text-neutral-400 hover:text-neutral-200',
+                  )}
+                >
+                  No
+                </button>
+              </div>
+              {sd.equipment_sound_tech === 'yes' ? (
+                <>
+                  {soundTechPickOptions.length > 0 ? (
+                    <>
+                      <Select value={soundTechSel} onValueChange={onSoundTechSelect}>
+                        <SelectTrigger className="h-11 w-[min(100%,260px)] border-neutral-800 bg-neutral-950/80 shrink-0">
+                          <SelectValue placeholder="Who is the sound tech?" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {soundTechPickOptions.map(o => (
+                            <SelectItem key={o.id} value={o.id}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__other__">Other name…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {soundTechSel === '__other__' ? (
+                        <div className="relative flex-1 min-w-[140px] max-w-[280px]">
+                          <Input
+                            className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+                            placeholder="Sound tech name"
+                            value={sd.equipment_sound_tech_name}
+                            onChange={e =>
+                              onPatch({
+                                ...STEP1_FLOW,
+                                equipment_sound_tech_contact_id: null,
+                                equipment_sound_tech_name: e.target.value,
+                              })
+                            }
+                            onBlur={() => void syncFreeTextSoundTechContact()}
+                          />
+                          <button
+                            type="button"
+                            aria-label="Clear sound tech selection"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
+                            onClick={clearSoundTechToNo}
+                          >
+                            <X className="h-4 w-4" aria-hidden />
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          aria-label="Mark no sound tech on site"
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
+                          aria-label="Clear sound tech selection"
+                          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-neutral-900/50 text-neutral-500 hover:text-neutral-200 hover:border-white/20"
                           onClick={clearSoundTechToNo}
                         >
                           <X className="h-4 w-4" aria-hidden />
                         </button>
-                      </div>
-                    ) : (
+                      )}
+                    </>
+                  ) : (
+                    <div className="relative flex-1 min-w-[140px] max-w-[280px]">
+                      <Input
+                        className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
+                        placeholder="Sound tech name"
+                        value={sd.equipment_sound_tech_name}
+                        onChange={e =>
+                          onPatch({
+                            ...STEP1_FLOW,
+                            equipment_sound_tech_contact_id: null,
+                            equipment_sound_tech_name: e.target.value,
+                          })
+                        }
+                        onBlur={() => void syncFreeTextSoundTechContact()}
+                      />
                       <button
                         type="button"
-                        aria-label="Mark no sound tech on site"
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-neutral-900/50 text-neutral-500 hover:text-neutral-200 hover:border-white/20"
+                        aria-label="Clear sound tech selection"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
                         onClick={clearSoundTechToNo}
                       >
                         <X className="h-4 w-4" aria-hidden />
                       </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="relative flex-1 min-w-[140px] max-w-[280px]">
-                    <Input
-                      className="h-11 border-neutral-800 bg-neutral-950/80 pr-10"
-                      placeholder="Sound tech name"
-                      value={sd.equipment_sound_tech_name}
-                      onChange={e =>
-                        onPatch({
-                          ...STEP1_FLOW,
-                          equipment_sound_tech_contact_id: null,
-                          equipment_sound_tech_name: e.target.value,
-                        })
-                      }
-                    />
-                    <button
-                      type="button"
-                      aria-label="Mark no sound tech on site"
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800/80"
-                      onClick={clearSoundTechToNo}
-                    >
-                      <X className="h-4 w-4" aria-hidden />
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : null}
-          </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -622,6 +959,62 @@ export function EquipmentIntakeFlowCapture({
                   No matching add-ons in your catalog — add lighting, effects, or dance floor items under Earnings →
                   Pricing to enable one-tap prefill here.
                 </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {intakeShowNeedsEquipmentArrivalSetup(sd) ? (
+            <div className="space-y-3 pt-4 border-t border-white/[0.08] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+                Arrival &amp; setup
+              </p>
+              <IntakeQuarterHourTimeField
+                id={loadInFieldId}
+                label="Load-in time"
+                value={sd.load_in_time}
+                allowClear
+                onChange={v => onPatch({ load_in_time: v })}
+                triggerClassName="h-11"
+              />
+              <SingleSelectChipRow<Phase4SetupWindowV3>
+                label="Setup window"
+                value={sd.equipment_setup_window}
+                options={[
+                  { id: '' as Phase4SetupWindowV3, label: '—' },
+                  ...SETUP_WINDOW_CHIP_OPTIONS,
+                ]}
+                onChange={v => onPatch({ equipment_setup_window: v })}
+              />
+              <IntakeCompactChipRow<LoadAccessTagV3>
+                label="Load-in access (tap all that apply)"
+                selected={sd.load_in_access_tags}
+                ids={LOAD_ACCESS_TAG_KEYS}
+                labels={LOAD_ACCESS_TAG_LABELS}
+                onChange={next => onPatch({ load_in_access_tags: next })}
+              />
+              {intakeShowIsFestivalLikeProduction(sd) ? (
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-neutral-400 text-xs">Production soundcheck</Label>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPatch({
+                          equipment_production_soundcheck:
+                            sd.equipment_production_soundcheck === 'scheduled' ? '' : 'scheduled',
+                        })
+                      }
+                      className={cn(
+                        'min-h-[32px] px-2 text-xs font-medium rounded-md border transition-colors leading-tight',
+                        sd.equipment_production_soundcheck === 'scheduled'
+                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                      )}
+                    >
+                      Scheduled with production
+                    </button>
+                  </div>
+                </div>
               ) : null}
             </div>
           ) : null}

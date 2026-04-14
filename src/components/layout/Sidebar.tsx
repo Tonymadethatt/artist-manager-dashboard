@@ -18,6 +18,7 @@ import {
   Eye,
   Calendar,
   Mic2,
+  ListChecks,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -34,6 +35,7 @@ const NAV_GROUPS = [
       { to: '/earnings',            label: 'Deals',         icon: Banknote,        end: false, badgeKey: null              },
       { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false, badgeKey: null              },
       { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false, badgeKey: 'show-reports'    },
+      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
@@ -47,7 +49,7 @@ const NAV_GROUPS = [
     label: 'Forms',
     items: [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
-      { to: '/forms/intake', label: 'Intake', icon: Mic2, end: false, badgeKey: null },
+      { to: '/forms/intakes', label: 'Intakes', icon: Mic2, end: false, badgeKey: null },
     ],
   },
   {

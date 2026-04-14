@@ -97,6 +97,19 @@ export function contactRoleForDisplay(c: Pick<Contact, 'title_key' | 'role'>): s
   return (c.role ?? '').trim()
 }
 
+const SOUND_TECH_TITLE_KEYS = new Set<ContactTitleKey>(['on_site_tech', 'audio_engineer'])
+
+/** Venue contact likely runs FOH / house sound — seeds 4A sound-tech copy and picker. */
+export function isVenueSoundTechContact(c: Pick<Contact, 'title_key' | 'role'>): boolean {
+  const k = c.title_key?.trim()
+  if (k && SOUND_TECH_TITLE_KEYS.has(k as ContactTitleKey)) return true
+  const disp = contactRoleForDisplay(c)
+  const blob = `${(c.role ?? '').toLowerCase()} ${disp.toLowerCase()}`
+  return /(sound tech|sound engineer|audio engineer|house tech|\ba1\b|\bfoh\b|monitor|production engineer)/i.test(
+    blob,
+  )
+}
+
 /** Map legacy role / title text to intake mismatch context (regex heuristic). */
 export function mapContactRoleTextToMismatchContext(
   role: string | null | undefined,

@@ -1,4 +1,4 @@
-import type { CommissionTier, Deal, DealPricingFinalSource, Venue } from '@/types'
+import type { CommissionTier, Contact, Deal, DealPricingFinalSource, Venue } from '@/types'
 import type { PricingCatalogDoc } from '@/types'
 import { buildPromiseLinesDocV2FromUi, defaultArtistPromisePresets, SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
 import { catalogHasMinimumForDealLogging, computeDealPrice } from '@/lib/pricing/computeDealPrice'
@@ -7,6 +7,7 @@ import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
 import { pacificWallToUtcIso, addCalendarDaysPacific } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
 import type { BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
+import { resolveIntakeOnsiteContactId } from '@/lib/intake/syncIntakeVenueContacts'
 import { supabase } from '@/lib/supabase'
 
 function allTrueVenuePresets(): Record<string, boolean> {
@@ -90,6 +91,8 @@ export async function importDealFromIntakeShow(params: {
   refetchVenues: () => Promise<void>
   artistEmail: string | null | undefined
   allowOverlap: boolean
+  /** Fresh venue roster; used to set deal.onsite_contact_id from intake. */
+  venueContacts?: Contact[] | null
 }): Promise<ImportDealFromShowResult> {
   const {
     rawShowData,
@@ -104,6 +107,7 @@ export async function importDealFromIntakeShow(params: {
     refetchVenues,
     artistEmail,
     allowOverlap,
+    venueContacts,
   } = params
 
   if (!catalogHasMinimumForDealLogging(catalog)) {
@@ -177,6 +181,7 @@ export async function importDealFromIntakeShow(params: {
   const depositPaidSafe = !Number.isNaN(depPaidRaw) && depPaidRaw >= 0 ? depPaidRaw : 0
 
   const roundedFormGross = Math.round(gross)
+  const onsiteContactId = resolveIntakeOnsiteContactId(venueData, venueContacts ?? [])
   const finalSource: DealPricingFinalSource =
     pricingComputed.gross === roundedFormGross ? 'calculated' : 'manual'
   const pricingSnapshotPayload = {
@@ -194,7 +199,7 @@ export async function importDealFromIntakeShow(params: {
     performance_genre: form.performance_genre.trim() || null,
     performance_start_at,
     performance_end_at,
-    onsite_contact_id: null,
+    onsite_contact_id: onsiteContactId,
     gross_amount: gross,
     commission_tier: commissionTier,
     payment_due_date: form.payment_due_date || null,
