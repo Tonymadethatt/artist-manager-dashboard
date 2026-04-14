@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { ListChecks, Loader2, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePartnershipRoll, type PartnershipRollEntry } from '@/hooks/usePartnershipRoll'
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { applySocialPreviewMeta } from '@/lib/documentMeta'
-import { PREVIOUS_CLIENTS_FORM_PATH, previousClientsFormUrl } from '@/lib/shareUrls'
+import { copyPreviousClientsFormUrlToClipboard, previousClientsFormUrl } from '@/lib/shareUrls'
 
 export type PartnershipRollVariant = 'artist' | 'admin'
 
@@ -39,7 +38,7 @@ const COPY: Record<
     modalBody: (name: string) => string
     modalCancel: string
     modalConfirm: string
-    crossLink?: { to: string; label: string }
+    crossLink?: { label: string }
     copyLinkLabel: string
     copyLinkDone: string
   }
@@ -69,7 +68,7 @@ const COPY: Record<
       `Mark “${name}” as confirmed for the last-12-months list? Use when you’ve aligned offline.`,
     modalCancel: 'Cancel',
     modalConfirm: 'Confirm relationship',
-    crossLink: { to: PREVIOUS_CLIENTS_FORM_PATH, label: 'Open client-facing page' },
+    crossLink: { label: 'Open client-facing page' },
     copyLinkLabel: 'Copy shareable link',
     copyLinkDone: 'Link copied',
   },
@@ -208,13 +207,16 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
     else flash('Marked confirmed.')
   }
 
+  const shareUrl = previousClientsFormUrl()
+
   const copyShareLink = async () => {
-    try {
-      await navigator.clipboard.writeText(previousClientsFormUrl())
+    const { ok, url } = await copyPreviousClientsFormUrlToClipboard()
+    if (ok) {
       flash(c.copyLinkDone)
-    } catch {
-      flash('Could not copy — copy the URL from the address bar.')
+      return
     }
+    window.prompt('Copy this link (Ctrl+C, then Enter):', url)
+    flash('Copy from the dialog above, or select the gray URL under the buttons.')
   }
 
   return (
@@ -234,13 +236,21 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
               {c.copyLinkLabel}
             </Button>
             {c.crossLink ? (
-              <Link
-                to={c.crossLink.to}
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[11px] text-neutral-400 underline underline-offset-2 hover:text-neutral-200 shrink-0"
               >
                 {c.crossLink.label}
-              </Link>
+              </a>
             ) : null}
+            <p
+              className="w-full max-w-xl text-[10px] text-neutral-600 font-mono break-all leading-snug cursor-text select-all"
+              title="Select and copy if the button does not work"
+            >
+              {shareUrl}
+            </p>
           </div>
         ) : null}
         {variant === 'admin' && publicRoll.enabled ? (
