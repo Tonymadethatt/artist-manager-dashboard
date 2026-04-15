@@ -86,26 +86,30 @@ const DEFAULT_EXPANDED: Record<NavGroupId, boolean> = {
   email: true,
 }
 
-/** Vibrant gradient text (bg-clip) + chevron tint per nav group */
+/** Vibrant gradient text (bg-clip) + chevron + vertical active-indicator stops (gradient-to-b) */
 const CATEGORY_TITLE_STYLE: Record<
   NavGroupId,
-  { label: string; chevron: string }
+  { label: string; chevron: string; indicator: string }
 > = {
   workspace: {
     label: 'bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500',
     chevron: 'text-cyan-300',
+    indicator: 'from-cyan-400 via-sky-400 to-blue-500',
   },
   content: {
     label: 'bg-gradient-to-r from-fuchsia-400 via-purple-400 to-violet-500',
     chevron: 'text-fuchsia-300',
+    indicator: 'from-fuchsia-400 via-purple-400 to-violet-500',
   },
   forms: {
     label: 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500',
     chevron: 'text-amber-300',
+    indicator: 'from-amber-400 via-orange-400 to-rose-500',
   },
   email: {
     label: 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400',
     chevron: 'text-emerald-300',
+    indicator: 'from-emerald-400 via-teal-400 to-cyan-400',
   },
 }
 
@@ -242,7 +246,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                           {({ isActive }) => (
                             <>
                               {(isActive || (to === '/pipeline' && onPipelinePath)) && (
-                                <span className="absolute left-0 top-0.5 bottom-0.5 w-[2px] bg-white/70 rounded-full" />
+                                <span
+                                  className={cn(
+                                    'sidebar-active-indicator absolute left-0 top-0.5 bottom-0.5 w-[2px] rounded-full bg-gradient-to-b',
+                                    CATEGORY_TITLE_STYLE[group.id].indicator
+                                  )}
+                                  aria-hidden
+                                />
                               )}
                               <Icon
                                 className={cn(
@@ -279,7 +289,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                             {({ isActive }) => (
                               <>
                                 {isActive && (
-                                  <span className="absolute left-0 top-0.5 bottom-0.5 w-[2px] bg-white/40 rounded-full" />
+                                  <span
+                                    className={cn(
+                                      'sidebar-active-indicator absolute left-0 top-0.5 bottom-0.5 w-[2px] rounded-full bg-gradient-to-b',
+                                      CATEGORY_TITLE_STYLE[group.id].indicator
+                                    )}
+                                    aria-hidden
+                                  />
                                 )}
                                 <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center" aria-hidden>
                                   <LayoutTemplate className="h-3 w-3 opacity-70" />

@@ -19,6 +19,28 @@
   }
 }
 
+/* Sidebar: active row left accent — slow opacity pulse (opacity-only, low cost) */
+.sidebar-active-indicator {
+  animation: sidebar-active-indicator-breathe 2.75s ease-in-out infinite;
+}
+
+@keyframes sidebar-active-indicator-breathe {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-active-indicator {
+    animation: none;
+    opacity: 0.88;
+  }
+}
+
 @layer base {
   * {
     border-color: hsl(var(--border));
