@@ -7,7 +7,7 @@ import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { captureLinkLabel } from '../../src/lib/emailCapture/kinds'
 import { resolveArtistFacingResend, resolveVenueFacingResend } from '../../src/lib/email/emailTestModeServer'
-import { fetchEmailTestModeRow } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -142,7 +142,15 @@ const handler: Handler = async (event) => {
   } = body
 
   const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
-  const testModeRow = await fetchEmailTestModeRow(userId)
+  const testModeFetch = await fetchEmailTestModeRowForSend(userId, false)
+  if (!testModeFetch.ok) {
+    return {
+      statusCode: testModeFetch.statusCode,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: testModeFetch.message }),
+    }
+  }
+  const testModeRow = testModeFetch.row
 
   if (!profile?.from_email || !recipient?.email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: profile.from_email, recipient.email' }) }

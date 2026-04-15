@@ -5,7 +5,7 @@
 import type { Handler } from '@netlify/functions'
 import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
-import { fetchEmailTestModeRow } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type Profile = {
   artist_name?: string
@@ -95,7 +95,11 @@ const handler: Handler = async (event) => {
   if (mgr && mgr.toLowerCase() !== payload.to.toLowerCase()) cc.push(mgr)
 
   const userId = typeof payload.user_id === 'string' ? payload.user_id.trim() || undefined : undefined
-  const testModeRow = await fetchEmailTestModeRow(userId)
+  const testModeFetch = await fetchEmailTestModeRowForSend(userId, false)
+  if (!testModeFetch.ok) {
+    return { statusCode: testModeFetch.statusCode, body: JSON.stringify({ message: testModeFetch.message }) }
+  }
+  const testModeRow = testModeFetch.row
   let resendTo = [payload.to]
   let resendCc = [...cc]
   const resolved = resolveArtistFacingResend({

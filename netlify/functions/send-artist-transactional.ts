@@ -6,7 +6,7 @@ import {
   type ArtistTransactionalKind,
 } from '../../src/lib/email/artistTransactionalEmailDocument'
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
-import { fetchEmailTestModeRow } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 interface ArtistProfile {
   artist_name: string
@@ -62,7 +62,11 @@ const handler: Handler = async (event) => {
   } = body
 
   const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
-  const testModeRow = await fetchEmailTestModeRow(userId)
+  const testModeFetch = await fetchEmailTestModeRowForSend(userId, testOnly)
+  if (!testModeFetch.ok) {
+    return { statusCode: testModeFetch.statusCode, body: JSON.stringify({ message: testModeFetch.message }) }
+  }
+  const testModeRow = testModeFetch.row
 
   if (kind !== 'performance_report_received') {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid kind' }) }

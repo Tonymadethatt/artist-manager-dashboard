@@ -132,27 +132,21 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const { counts } = useNavBadges()
   const { profile, updateProfile } = useArtistProfile()
   const [testModeBusy, setTestModeBusy] = useState(false)
-  const [testModeHint, setTestModeHint] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(() => ({ ...DEFAULT_EXPANDED }))
 
   const toggleEmailTestMode = async () => {
     if (!profile || testModeBusy) return
-    setTestModeHint(null)
     const next = !profile.email_test_mode
     if (next) {
       const a = profile.email_test_artist_inbox?.trim() ?? ''
       const c = profile.email_test_client_inbox?.trim() ?? ''
       if (!a.includes('@') || !c.includes('@')) {
-        setTestModeHint('Set both test inboxes in Settings first.')
         return
       }
     }
     setTestModeBusy(true)
-    const res = await updateProfile({ email_test_mode: next })
+    await updateProfile({ email_test_mode: next })
     setTestModeBusy(false)
-    if (res && 'error' in res && res.error) {
-      setTestModeHint(res.error.message || 'Could not update')
-    }
   }
 
   useEffect(() => {
@@ -342,9 +336,6 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
 
       {/* Email test mode — pinned above settings (does not scroll with nav) */}
       <div className="shrink-0 px-1.5 pt-1.5 pb-2 border-t border-white/[0.06]">
-        {testModeHint && (
-          <p className="text-[9px] text-amber-400/90 leading-snug px-0.5 mb-1.5">{testModeHint}</p>
-        )}
         <div className="flex items-center gap-1 min-w-0">
           <FlaskConical
             className={cn(

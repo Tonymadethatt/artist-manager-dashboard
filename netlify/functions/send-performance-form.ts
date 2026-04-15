@@ -10,7 +10,7 @@ import {
 } from '../../src/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
-import { fetchEmailTestModeRow } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 interface RequestBody {
   token: string
@@ -91,7 +91,11 @@ const handler: Handler = async (event) => {
   }
 
   const userId = typeof body.user_id === 'string' ? body.user_id.trim() || undefined : undefined
-  const testModeRow = await fetchEmailTestModeRow(userId)
+  const testModeFetch = await fetchEmailTestModeRowForSend(userId, false)
+  if (!testModeFetch.ok) {
+    return { statusCode: testModeFetch.statusCode, body: JSON.stringify({ message: testModeFetch.message }) }
+  }
+  const testModeRow = testModeFetch.row
 
   const siteUrl = process.env.URL || 'https://localhost:8888'
   const formUrl = `${siteUrl}/performance-report/${body.token}`

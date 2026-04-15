@@ -10,7 +10,7 @@ import {
 } from '../../src/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
-import { fetchEmailTestModeRow } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -208,7 +208,11 @@ const handler: Handler = async (event) => {
     user_id: rawUserId,
   } = body
   const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
-  const testModeRow = await fetchEmailTestModeRow(userId)
+  const testModeFetch = await fetchEmailTestModeRowForSend(userId, testOnly)
+  if (!testModeFetch.ok) {
+    return { statusCode: testModeFetch.statusCode, body: JSON.stringify({ message: testModeFetch.message }) }
+  }
+  const testModeRow = testModeFetch.row
   const L = artistLayoutForSend(layoutRaw, custom_subject, custom_intro)
   if (!profile?.from_email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing profile fields' }) }
