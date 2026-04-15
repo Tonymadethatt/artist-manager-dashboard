@@ -114,6 +114,21 @@ export default function GigCalendarPage() {
     )
   }, [user?.id])
 
+  const deleteCalendarSyncEvent = useCallback(
+    async (id: string) => {
+      if (!user?.id) return { ok: false as const, message: 'Sign in to remove events.' }
+      const { error } = await supabase.from('calendar_sync_event').delete().eq('id', id).eq('user_id', user.id)
+      if (error) {
+        console.warn('[GigCalendarPage] calendar_sync_event delete', error)
+        return { ok: false as const, message: error.message }
+      }
+      setCalendarSyncEvents(prev => prev.filter(e => e.id !== id))
+      window.dispatchEvent(new CustomEvent('calendar-sync-events-changed'))
+      return { ok: true as const }
+    },
+    [user?.id],
+  )
+
   useEffect(() => {
     void markSeen('calendar')
   }, [markSeen])
@@ -232,6 +247,7 @@ export default function GigCalendarPage() {
         venues={venues}
         calendarSyncEvents={calendarSyncEvents}
         loading={loading}
+        deleteCalendarSyncEvent={deleteCalendarSyncEvent}
         googleCalendarToolbar={{
           onSync: () => void handleGoogleToolbarSync(),
           onDedup: () => void handleGoogleToolbarDedup(),

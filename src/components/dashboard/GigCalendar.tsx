@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RefreshCw, ScanLine } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RefreshCw, ScanLine, Trash2 } from 'lucide-react'
 import type { Deal, Venue } from '@/types'
 import { COMMISSION_TIER_LABELS, OUTREACH_STATUS_LABELS, OUTREACH_TRACK_LABELS } from '@/types'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
@@ -136,6 +136,7 @@ export function GigCalendar({
   calendarSyncEvents = [],
   loading,
   googleCalendarToolbar,
+  deleteCalendarSyncEvent,
 }: {
   deals: CalendarDeal[]
   venues: Venue[]
@@ -144,6 +145,8 @@ export function GigCalendar({
   loading?: boolean
   /** Optional icon actions (same Netlify handlers as Settings → Google Calendar). */
   googleCalendarToolbar?: GigCalendarGoogleToolbarProps
+  /** Remove one imported row from `calendar_sync_event` (local Gig calendar only). */
+  deleteCalendarSyncEvent?: (id: string) => Promise<{ ok: boolean; message?: string }>
 }) {
   const [cursor, setCursor] = useState(() => new Date())
   /** Default month on tablet/desktop; day only below Tailwind `sm` (640px) where the month grid is too tight. */
@@ -156,6 +159,8 @@ export function GigCalendar({
   const [dayActionsFor, setDayActionsFor] = useState<string | null>(null)
   const [calendarNotice, setCalendarNotice] = useState<string | null>(null)
   const [queueingDayEmail, setQueueingDayEmail] = useState(false)
+  const [syncDeleting, setSyncDeleting] = useState(false)
+  const [syncDeleteError, setSyncDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     const mqNarrow = window.matchMedia('(max-width: 639px)')
@@ -164,6 +169,10 @@ export function GigCalendar({
     mqNarrow.addEventListener('change', apply)
     return () => mqNarrow.removeEventListener('change', apply)
   }, [])
+
+  useEffect(() => {
+    if (selectedSync) setSyncDeleteError(null)
+  }, [selectedSync?.id])
 
   const calendarDeals = useMemo(() => {
     return deals.filter(d => {
@@ -299,16 +308,23 @@ export function GigCalendar({
   function syncChipClass(row: CalendarSyncEventChip, compact: boolean, isPast: boolean) {
     const review = row.display_status === 'needs_review'
     const base = cn(
-      'block w-full text-left rounded-md font-medium border border-dashed text-[10px] sm:text-[11px] leading-tight transition-colors hover:brightness-110',
+      'block w-full text-left rounded-md font-semibold border-2 text-[10px] sm:text-[11px] leading-tight transition-colors hover:brightness-110',
       compact ? 'truncate px-1 py-0.5' : 'px-2 py-1.5 text-xs',
-      review &&
-        'border-amber-600/90 border-dashed ring-1 ring-amber-900/50 bg-amber-950/25 text-amber-100/95',
-      !review &&
-        (isPast
-          ? 'border-neutral-700 bg-neutral-950 text-neutral-400'
-          : 'border-neutral-600 bg-neutral-900/90 text-neutral-200'),
     )
-    return base
+    if (review) {
+      return cn(
+        base,
+        isPast
+          ? 'border-amber-800 bg-amber-950 text-white border-l-[6px] border-l-amber-500'
+          : 'border-amber-600 bg-amber-900 text-white border-l-[6px] border-l-amber-400',
+      )
+    }
+    return cn(
+      base,
+      isPast
+        ? 'border-emerald-800 bg-emerald-950 text-white border-l-[6px] border-l-emerald-500'
+        : 'border-emerald-600 bg-emerald-900 text-white border-l-[6px] border-l-emerald-400',
+    )
   }
 
   function chipClass(deal: CalendarDeal, compact: boolean) {
@@ -363,6 +379,22 @@ export function GigCalendar({
     }
   }
 
+  async function handleDeleteSelectedSync() {
+    if (!selectedSync || !deleteCalendarSyncEvent) return
+    setSyncDeleting(true)
+    setSyncDeleteError(null)
+    const res = await deleteCalendarSyncEvent(selectedSync.id)
+    setSyncDeleting(false)
+    if (res.ok) {
+      setSelectedSync(null)
+      setCalendarNotice(
+        'Removed this imported event from your Gig calendar. If it still exists in Google, a future sync may add it again.',
+      )
+    } else {
+      setSyncDeleteError(res.message ?? 'Could not remove this event.')
+    }
+  }
+
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-3 py-3 border-b border-neutral-800">
@@ -375,8 +407,8 @@ export function GigCalendar({
               <span className="text-blue-400 font-semibold">Pipeline</span>
               {' / '}
               <span className="text-amber-300 font-semibold">Community</span>
-              {' · '}
-              <span className="text-neutral-400">dashed = calendar import</span>
+              {' / '}
+              <span className="text-emerald-400 font-semibold">Google import</span>
             </p>
           </div>
         </div>
@@ -940,7 +972,8 @@ export function GigCalendar({
             return (
               <div className="flex flex-col gap-3 text-sm">
                 <p className="text-xs text-neutral-500">
-                  Imported from your shared Google calendar (see Settings). Dashed chips on the grid are these events.
+                  Imported from your shared Google calendar (see Settings). Green chips on the grid are these events; amber
+                  highlights a possible duplicate with a booked gig.
                 </p>
                 {selectedSync.display_status === 'needs_review' && (
                   <div className="rounded-md border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-100/95">
@@ -997,6 +1030,26 @@ export function GigCalendar({
                     </p>
                   )}
                 </section>
+                {deleteCalendarSyncEvent && (
+                  <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-3 space-y-2">
+                    <p className="text-[11px] text-neutral-500 leading-snug">
+                      Remove this copy from the Gig calendar only. This does not delete the event in Google Calendar.
+                    </p>
+                    {syncDeleteError && (
+                      <p className="text-xs text-red-300/95">{syncDeleteError}</p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="w-full h-9 text-sm gap-2"
+                      disabled={syncDeleting}
+                      onClick={() => void handleDeleteSelectedSync()}
+                    >
+                      <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                      {syncDeleting ? 'Removing…' : 'Remove from Gig calendar'}
+                    </Button>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4 sm:flex-row">
                   {matchedVenue && (
                     <Button asChild variant="default" className="flex-1 h-9 text-sm">
