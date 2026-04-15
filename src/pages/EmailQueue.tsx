@@ -44,6 +44,7 @@ import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
   addCalendarDaysPacific,
+  formatPacificDateLongFromYmd,
   pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
   stripOnTheHourMinutes12h,
@@ -105,7 +106,10 @@ function pendingNotesLine(email: VenueEmail): string | null {
   }
   if (email.email_type === 'gig_calendar_digest_weekly') {
     const n = parseGigCalendarQueueNotes(email.notes)
-    if (n?.kind === 'gig_calendar_digest_weekly') return `2-week digest · ${n.weekStart}`
+    if (n?.kind === 'gig_calendar_digest_weekly') {
+      const weekLabel = formatPacificDateLongFromYmd(n.weekStart)
+      return `Weekly gig digest · week of ${weekLabel} · next 2 weeks of shows`
+    }
   }
   if (email.email_type === 'gig_day_summary_manual') {
     const n = parseGigCalendarQueueNotes(email.notes)

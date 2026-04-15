@@ -1,13 +1,18 @@
 /**
- * Scheduled (hourly): when America/Los_Angeles is Sunday 05:00–05:59, enqueue one
- * gig_calendar_digest_weekly per eligible user (artist email configured). Dedup via notes.weekStart.
+ * Scheduled (hourly at :05 UTC): pre-enqueue `gig_calendar_digest_weekly` for the next Sunday 05:00 PT
+ * so rows appear under Email Queue → Scheduled with a real `scheduled_send_at`.
+ *
+ * Also on America/Los_Angeles Sunday hour 5, gap-fill any user missing this week's row (send time may
+ * already be in the past so process-email-queue sends on the next tick).
  */
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import { pacificTodayYmd } from '../../src/lib/calendar/pacificWallTime'
+import { pacificDateKeyFromUtcIso, pacificWallToUtcIso } from '../../src/lib/calendar/pacificWallTime'
+import {
+  isPacificSundayDigestHour,
+  nextWeeklyDigestSendAfterNow,
+} from '../../src/lib/calendar/weeklyDigestSchedule'
 import { ARTIST_EMAIL_TYPE_LABELS } from '../../src/types'
-
-const DIGEST_HOUR_PT = 5
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -32,24 +37,24 @@ const handler: Handler = async (event) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const now = new Date()
 
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    weekday: 'short',
-    hour: 'numeric',
-    hour12: false,
-  })
-  const parts = Object.fromEntries(
-    dtf.formatToParts(now).filter(p => p.type !== 'literal').map(p => [p.type, p.value]),
-  ) as Record<string, string>
-  const hour = parseInt(parts.hour, 10)
-  const wday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday)
+  const jobs: Array<{ weekStart: string; scheduledSendAtIso: string }> = []
 
-  if (wday !== 0 || hour !== DIGEST_HOUR_PT) {
-    return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: 'not_sunday_5am_pt' }) }
+  const upcoming = nextWeeklyDigestSendAfterNow(now.getTime())
+  if (upcoming) {
+    jobs.push(upcoming)
   }
 
-  /** Caller only runs on Sunday 5am PT; “week start” is that calendar day in Pacific. */
-  const weekStart = pacificTodayYmd()
+  if (isPacificSundayDigestHour(now)) {
+    const todayYmd = pacificDateKeyFromUtcIso(now.toISOString())
+    const iso = todayYmd ? pacificWallToUtcIso(todayYmd, '05:00') : null
+    if (todayYmd && iso && !jobs.some(j => j.weekStart === todayYmd)) {
+      jobs.push({ weekStart: todayYmd, scheduledSendAtIso: iso })
+    }
+  }
+
+  if (jobs.length === 0) {
+    return { statusCode: 200, body: JSON.stringify({ enqueued: 0, jobs: [], reason: 'no_digest_jobs' }) }
+  }
 
   const { data: profiles, error: pErr } = await supabase
     .from('artist_profile')
@@ -74,32 +79,41 @@ const handler: Handler = async (event) => {
   }
 
   let enqueued = 0
-  for (const p of profiles ?? []) {
-    const uid = p.user_id as string
-    const email = (p.artist_email as string)?.trim()
-    if (!email) continue
-    const key = `${uid}:${weekStart}`
-    if (seen.has(key)) continue
+  for (const job of jobs) {
+    const { weekStart, scheduledSendAtIso } = job
+    for (const p of profiles ?? []) {
+      const uid = p.user_id as string
+      const email = (p.artist_email as string)?.trim()
+      if (!email) continue
+      const key = `${uid}:${weekStart}`
+      if (seen.has(key)) continue
 
-    const { error: insErr } = await supabase.from('venue_emails').insert({
-      user_id: uid,
-      venue_id: null,
-      deal_id: null,
-      contact_id: null,
-      email_type: 'gig_calendar_digest_weekly',
-      recipient_email: email,
-      subject: ARTIST_EMAIL_TYPE_LABELS.gig_calendar_digest_weekly,
-      status: 'pending',
-      scheduled_send_at: null,
-      notes: JSON.stringify({ kind: 'gig_calendar_digest_weekly' as const, weekStart }),
-    })
-    if (!insErr) {
-      enqueued++
-      seen.add(key)
+      const { error: insErr } = await supabase.from('venue_emails').insert({
+        user_id: uid,
+        venue_id: null,
+        deal_id: null,
+        contact_id: null,
+        email_type: 'gig_calendar_digest_weekly',
+        recipient_email: email,
+        subject: ARTIST_EMAIL_TYPE_LABELS.gig_calendar_digest_weekly,
+        status: 'pending',
+        scheduled_send_at: scheduledSendAtIso,
+        notes: JSON.stringify({ kind: 'gig_calendar_digest_weekly' as const, weekStart }),
+      })
+      if (!insErr) {
+        enqueued++
+        seen.add(key)
+      }
     }
   }
 
-  return { statusCode: 200, body: JSON.stringify({ enqueued, weekStart }) }
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      enqueued,
+      jobs: jobs.map(j => ({ weekStart: j.weekStart, scheduledSendAt: j.scheduledSendAtIso })),
+    }),
+  }
 }
 
 export { handler }

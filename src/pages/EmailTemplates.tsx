@@ -225,7 +225,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
   performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
-  gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days (Netlify schedule enqueues; email sends on next queue run).',
+  gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days. Rows are pre-enqueued with that send time so they appear under Email Queue → Scheduled until they go out.',
   gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
   gig_booked_ics:             'First time a gig qualifies for the calendar: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a table of every booked gig on one day (queued; sends on next cron tick).',

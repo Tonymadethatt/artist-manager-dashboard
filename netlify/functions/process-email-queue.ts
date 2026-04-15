@@ -267,6 +267,7 @@ const handler: Handler = async (event) => {
       continue
     }
 
+    // Includes gig_calendar_digest_weekly pre-enqueued with Sunday 05:00 PT `scheduled_send_at`.
     if (schedMs != null && Number.isFinite(schedMs) && schedMs > nowMs) {
       continue
     }
