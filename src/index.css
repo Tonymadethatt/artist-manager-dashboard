@@ -41,6 +41,34 @@
   }
 }
 
+/* Email test mode: bright orange outline pulse on sidebar (matches toggle orange-500) */
+.sidebar-test-mode-outline {
+  animation: sidebar-test-mode-outline-blink 1.1s ease-in-out infinite;
+}
+
+@keyframes sidebar-test-mode-outline-blink {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgb(249 115 22),
+      0 0 16px 4px rgba(249, 115, 22, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(249, 115, 22, 0.45),
+      0 0 8px 1px rgba(249, 115, 22, 0.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-test-mode-outline {
+    animation: none;
+    box-shadow:
+      0 0 0 2px rgb(249 115 22),
+      0 0 12px 3px rgba(249, 115, 22, 0.4);
+  }
+}
+
 @layer base {
   * {
     border-color: hsl(var(--border));

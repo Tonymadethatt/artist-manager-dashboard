@@ -418,11 +418,18 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
     </nav>
   )
 
+  const asideFrameClass = cn(
+    'flex flex-col w-36 bg-[hsl(var(--sidebar-bg))] border overflow-hidden',
+    profile?.email_test_mode
+      ? 'border-orange-500 sidebar-test-mode-outline'
+      : 'border-white/[0.07]'
+  )
+
   return (
     <>
       {/* Desktop sidebar — floating card */}
       <div className="hidden md:block py-3 pl-3 shrink-0">
-        <aside className="flex flex-col w-36 h-full bg-[hsl(var(--sidebar-bg))] rounded-2xl overflow-hidden border border-white/[0.07]">
+        <aside className={cn(asideFrameClass, 'h-full rounded-2xl')}>
           {navContent}
         </aside>
       </div>
@@ -434,7 +441,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-36 bg-[hsl(var(--sidebar-bg))] flex flex-col shadow-2xl">
+          <aside className={cn(asideFrameClass, 'absolute left-0 top-0 bottom-0 shadow-2xl rounded-r-2xl')}>
             {navContent}
           </aside>
         </div>
