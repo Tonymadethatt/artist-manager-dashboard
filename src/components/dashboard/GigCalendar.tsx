@@ -13,6 +13,7 @@ import {
   pacificWallToUtcIso,
 } from '@/lib/calendar/pacificWallTime'
 import { queueManualGigDaySummary } from '@/lib/calendar/queueManualGigDaySummary'
+import { formatGoogleCalendarDescription } from '@/lib/calendar/formatGoogleCalendarDescription'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -1024,8 +1025,8 @@ export function GigCalendar({
                 {selectedSync.description?.trim() && (
                   <section className={sectionWrap}>
                     <h3 className={sectionTitle}>Notes</h3>
-                    <p className="text-white text-sm whitespace-pre-wrap max-h-48 overflow-y-auto pr-1">
-                      {selectedSync.description}
+                    <p className="text-white text-sm whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-1">
+                      {formatGoogleCalendarDescription(selectedSync.description)}
                     </p>
                   </section>
                 )}

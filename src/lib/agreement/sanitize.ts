@@ -49,11 +49,30 @@ export function isHtmlContent(content: string): boolean {
 export function stripHtmlToText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/li>/gi, '\n')
     .replace(/<\/tr>/gi, '\n')
     .replace(/<\/h[1-6]>/gi, '\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/&#x([0-9a-f]{1,6});/gi, (_, hex) => {
+      const cp = Number.parseInt(hex, 16)
+      if (!Number.isFinite(cp) || cp < 0) return ''
+      try {
+        return String.fromCodePoint(cp)
+      } catch {
+        return ''
+      }
+    })
+    .replace(/&#(\d{1,7});/g, (_, dec) => {
+      const cp = Number.parseInt(dec, 10)
+      if (!Number.isFinite(cp) || cp < 0) return ''
+      try {
+        return String.fromCodePoint(cp)
+      } catch {
+        return ''
+      }
+    })
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
