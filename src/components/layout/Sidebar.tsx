@@ -86,6 +86,29 @@ const DEFAULT_EXPANDED: Record<NavGroupId, boolean> = {
   email: true,
 }
 
+/** Vibrant gradient text (bg-clip) + chevron tint per nav group */
+const CATEGORY_TITLE_STYLE: Record<
+  NavGroupId,
+  { label: string; chevron: string }
+> = {
+  workspace: {
+    label: 'bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500',
+    chevron: 'text-cyan-300',
+  },
+  content: {
+    label: 'bg-gradient-to-r from-fuchsia-400 via-purple-400 to-violet-500',
+    chevron: 'text-fuchsia-300',
+  },
+  forms: {
+    label: 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500',
+    chevron: 'text-amber-300',
+  },
+  email: {
+    label: 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400',
+    chevron: 'text-emerald-300',
+  },
+}
+
 function pathnameMatchesNavItem(pathname: string, item: NavItem): boolean {
   if (item.end) return pathname === item.to
   return pathname === item.to || pathname.startsWith(`${item.to}/`)
@@ -169,16 +192,27 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                     [group.id]: !p[group.id],
                   }))
                 }
-                className="flex w-full items-center gap-0.5 px-1.5 py-0.5 rounded text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 hover:opacity-60 transition-opacity select-none"
+                className={cn(
+                  'flex w-full items-center gap-0.5 px-1.5 py-0.5 rounded text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] select-none',
+                  'hover:bg-white/[0.05] transition-colors'
+                )}
               >
                 <ChevronDown
                   className={cn(
-                    'h-3 w-3 shrink-0 opacity-70 transition-transform duration-150',
+                    CATEGORY_TITLE_STYLE[group.id].chevron,
+                    'h-3 w-3 shrink-0 opacity-95 transition-transform duration-150',
                     !isOpen && '-rotate-90'
                   )}
                   aria-hidden
                 />
-                <span className="truncate min-w-0">{group.label}</span>
+                <span
+                  className={cn(
+                    'truncate min-w-0 bg-clip-text text-transparent',
+                    CATEGORY_TITLE_STYLE[group.id].label
+                  )}
+                >
+                  {group.label}
+                </span>
               </button>
               <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
                 <div className="space-y-0">
