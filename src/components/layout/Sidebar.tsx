@@ -171,7 +171,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       {/* Nav groups */}
       <div
         className={cn(
-          'flex-1 py-2 px-1.5 overflow-y-auto space-y-1',
+          'flex-1 py-2 px-1.5 overflow-y-auto space-y-1.5',
           '[scrollbar-width:none] [-ms-overflow-style:none]',
           '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0'
         )}
@@ -180,7 +180,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
           const isOpen = expandedGroups[group.id]
           const sectionId = `nav-section-${group.id}`
           return (
-            <div key={group.id} className="rounded-md">
+            <div
+              key={group.id}
+              className={cn(
+                'flex flex-col gap-0.5 rounded-lg border border-white/[0.07] bg-black/20 p-0.5',
+                'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]'
+              )}
+            >
               <button
                 type="button"
                 id={`${sectionId}-label`}
@@ -193,8 +199,8 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                   }))
                 }
                 className={cn(
-                  'flex w-full items-center gap-0.5 px-1.5 py-0.5 rounded text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] select-none',
-                  'hover:bg-white/[0.05] transition-colors'
+                  'flex w-full items-center gap-0.5 px-1 py-0.5 rounded-md text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] select-none',
+                  'hover:bg-white/[0.06] transition-colors'
                 )}
               >
                 <ChevronDown
@@ -215,7 +221,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                 </span>
               </button>
               <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
-                <div className="space-y-0">
+                <div className="flex flex-col gap-px pb-px">
                   {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
                     const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
                     return (
