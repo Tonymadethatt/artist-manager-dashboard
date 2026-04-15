@@ -1036,7 +1036,7 @@ export function GigCalendar({
                 {selectedSync.description?.trim() && (
                   <section className={sectionWrap}>
                     <h3 className={sectionTitle}>Notes</h3>
-                    <p className="text-white text-sm whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-1">
+                    <p className="text-white text-sm whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto pr-1 sm:max-h-72">
                       {formatGoogleCalendarDescription(selectedSync.description)}
                     </p>
                   </section>
