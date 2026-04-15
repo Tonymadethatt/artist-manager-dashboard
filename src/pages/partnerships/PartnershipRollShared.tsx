@@ -170,6 +170,7 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
   const [confirmTarget, setConfirmTarget] = useState<PartnershipRollEntry | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
   const [resetDownloadBusy, setResetDownloadBusy] = useState(false)
+  const [resetListBusy, setResetListBusy] = useState(false)
 
   const rows = useMemo(() => roll.entries, [roll.entries])
 
@@ -211,8 +212,32 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
 
   const shareUrl = previousClientsFormUrl()
 
+  const clearListConfirmation = async () => {
+    if (resetListBusy || resetDownloadBusy) return
+    if (
+      !window.confirm(
+        'Undo public list confirmation? The artist can edit the client link again until they reconfirm. Download tracking will also clear, and they’ll get a fresh time window on the public page.',
+      )
+    ) {
+      return
+    }
+    setResetListBusy(true)
+    const { data, error } = await supabase.rpc('partnership_roll_clear_list_confirmation')
+    setResetListBusy(false)
+    if (error) {
+      flash(error.message)
+      return
+    }
+    await publicRoll.reload()
+    if (!data) {
+      flash('Could not reset list confirmation (nothing to clear or session mismatch).')
+      return
+    }
+    flash('Public list re-opened — the artist can make changes on the link again.')
+  }
+
   const clearDownloadTracking = async () => {
-    if (resetDownloadBusy) return
+    if (resetDownloadBusy || resetListBusy) return
     setResetDownloadBusy(true)
     const { data, error } = await supabase.rpc('partnership_roll_clear_document_downloaded')
     setResetDownloadBusy(false)
@@ -279,20 +304,34 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
               <p className="text-[11px] text-red-400/90">{publicRoll.error}</p>
             ) : (
               <>
-                <p className="text-[11px] text-neutral-400 leading-snug flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                  <span className="text-neutral-500">List confirmation: </span>
+                <div className="text-[11px] text-neutral-400 leading-snug space-y-1">
+                  <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                    <span className="text-neutral-500">List confirmation: </span>
+                    {publicRoll.row?.confirmed_at ? (
+                      <>
+                        <span className="inline-flex items-center gap-0.5 text-emerald-500 font-medium">
+                          <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
+                          Confirmed
+                        </span>
+                        <span className="text-neutral-300">{formatStatusTs(publicRoll.row.confirmed_at)}</span>
+                      </>
+                    ) : (
+                      <span className="text-neutral-500">Not confirmed yet</span>
+                    )}
+                  </p>
                   {publicRoll.row?.confirmed_at ? (
-                    <>
-                      <span className="inline-flex items-center gap-0.5 text-emerald-500 font-medium">
-                        <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
-                        Confirmed
-                      </span>
-                      <span className="text-neutral-300">{formatStatusTs(publicRoll.row.confirmed_at)}</span>
-                    </>
-                  ) : (
-                    <span className="text-neutral-500">Not confirmed yet</span>
-                  )}
-                </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[10px] text-neutral-500 hover:text-neutral-200 -ml-1"
+                      disabled={resetListBusy || resetDownloadBusy}
+                      onClick={() => void clearListConfirmation()}
+                    >
+                      {resetListBusy ? 'Resetting…' : 'Reset list confirmation'}
+                    </Button>
+                  ) : null}
+                </div>
                 <div className="text-[11px] text-neutral-400 leading-snug space-y-1">
                   <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
                     <span className="text-neutral-500">Confirmation .txt downloaded: </span>
@@ -321,7 +360,7 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
                       variant="ghost"
                       size="sm"
                       className="h-7 px-2 text-[10px] text-neutral-500 hover:text-neutral-200 -ml-1"
-                      disabled={resetDownloadBusy}
+                      disabled={resetDownloadBusy || resetListBusy}
                       onClick={() => void clearDownloadTracking()}
                     >
                       {resetDownloadBusy ? 'Resetting…' : 'Reset download tracking'}
