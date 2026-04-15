@@ -402,13 +402,12 @@ export function GigCalendar({
           <CalendarIcon className="h-5 w-5 text-neutral-500 shrink-0" aria-hidden />
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-neutral-100 truncate">Gig calendar</h2>
-            <p className="text-[11px] text-neutral-500 truncate">
-              Booked shows · Google sync · Pacific time ·{' '}
+            <p className="text-[11px] truncate">
               <span className="text-blue-400 font-semibold">Pipeline</span>
-              {' / '}
+              <span className="text-neutral-600"> · </span>
               <span className="text-amber-300 font-semibold">Community</span>
-              {' / '}
-              <span className="text-emerald-400 font-semibold">Google import</span>
+              <span className="text-neutral-600"> · </span>
+              <span className="text-emerald-400 font-semibold">Google Calendar</span>
             </p>
           </div>
         </div>
