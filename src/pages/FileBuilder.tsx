@@ -471,6 +471,9 @@ export default function FileBuilder() {
               <p className="text-[11px] text-neutral-600 leading-snug pt-0.5">
                 Stored on the file record. Pipeline agreement emails use the deal link when set.
               </p>
+              {searchParams.get('dealId')?.trim() && deals.length === 0 ? (
+                <p className="text-[11px] text-neutral-500">Loading deals…</p>
+              ) : null}
             </div>
 
             {selectedDealId && (
