@@ -1414,6 +1414,10 @@ export interface Database {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      partnership_roll_clear_document_downloaded: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       outreach_status: OutreachStatus

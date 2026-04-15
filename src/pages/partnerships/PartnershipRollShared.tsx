@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ListChecks, Loader2, Trash2 } from 'lucide-react'
+import { Check, ListChecks, Loader2, Trash2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePartnershipRoll, type PartnershipRollEntry } from '@/hooks/usePartnershipRoll'
 import { usePartnershipRollPublicStatus } from '@/hooks/usePartnershipRollPublicStatus'
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 import { applySocialPreviewMeta } from '@/lib/documentMeta'
 import { copyPreviousClientsFormUrlToClipboard, previousClientsFormUrl } from '@/lib/shareUrls'
 
@@ -168,6 +169,7 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
   const [newName, setNewName] = useState('')
   const [confirmTarget, setConfirmTarget] = useState<PartnershipRollEntry | null>(null)
   const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [resetDownloadBusy, setResetDownloadBusy] = useState(false)
 
   const rows = useMemo(() => roll.entries, [roll.entries])
 
@@ -208,6 +210,23 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
   }
 
   const shareUrl = previousClientsFormUrl()
+
+  const clearDownloadTracking = async () => {
+    if (resetDownloadBusy) return
+    setResetDownloadBusy(true)
+    const { data, error } = await supabase.rpc('partnership_roll_clear_document_downloaded')
+    setResetDownloadBusy(false)
+    if (error) {
+      flash(error.message)
+      return
+    }
+    await publicRoll.reload()
+    if (!data) {
+      flash('Could not reset download tracking (nothing to clear or session mismatch).')
+      return
+    }
+    flash('Download tracking reset — you’ll see when they download next.')
+  }
 
   const copyShareLink = async () => {
     const { ok, url } = await copyPreviousClientsFormUrlToClipboard()
@@ -260,28 +279,55 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
               <p className="text-[11px] text-red-400/90">{publicRoll.error}</p>
             ) : (
               <>
-                <p className="text-[11px] text-neutral-400 leading-snug">
+                <p className="text-[11px] text-neutral-400 leading-snug flex flex-wrap items-center gap-x-1 gap-y-0.5">
                   <span className="text-neutral-500">List confirmation: </span>
                   {publicRoll.row?.confirmed_at ? (
-                    <span className="text-neutral-200">Confirmed {formatStatusTs(publicRoll.row.confirmed_at)}</span>
+                    <>
+                      <span className="inline-flex items-center gap-0.5 text-emerald-500 font-medium">
+                        <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
+                        Confirmed
+                      </span>
+                      <span className="text-neutral-300">{formatStatusTs(publicRoll.row.confirmed_at)}</span>
+                    </>
                   ) : (
                     <span className="text-neutral-500">Not confirmed yet</span>
                   )}
                 </p>
-                <p className="text-[11px] text-neutral-400 leading-snug">
-                  <span className="text-neutral-500">Confirmation .txt downloaded: </span>
-                  {publicRoll.row?.confirmed_at ? (
-                    publicRoll.row.confirmation_document_downloaded_at ? (
-                      <span className="text-neutral-200">
-                        Yes · {formatStatusTs(publicRoll.row.confirmation_document_downloaded_at)}
-                      </span>
+                <div className="text-[11px] text-neutral-400 leading-snug space-y-1">
+                  <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                    <span className="text-neutral-500">Confirmation .txt downloaded: </span>
+                    {publicRoll.row?.confirmed_at ? (
+                      publicRoll.row.confirmation_document_downloaded_at ? (
+                        <>
+                          <span className="inline-flex items-center gap-0.5 text-emerald-500 font-medium">
+                            <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
+                            Yes
+                          </span>
+                          <span className="text-neutral-500">·</span>
+                          <span className="text-neutral-300">
+                            {formatStatusTs(publicRoll.row.confirmation_document_downloaded_at)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-amber-600/90">Not yet</span>
+                      )
                     ) : (
-                      <span className="text-amber-600/90">Not yet</span>
-                    )
-                  ) : (
-                    <span className="text-neutral-600">—</span>
-                  )}
-                </p>
+                      <span className="text-neutral-600">—</span>
+                    )}
+                  </p>
+                  {publicRoll.row?.confirmed_at && publicRoll.row.confirmation_document_downloaded_at ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[10px] text-neutral-500 hover:text-neutral-200 -ml-1"
+                      disabled={resetDownloadBusy}
+                      onClick={() => void clearDownloadTracking()}
+                    >
+                      {resetDownloadBusy ? 'Resetting…' : 'Reset download tracking'}
+                    </Button>
+                  ) : null}
+                </div>
               </>
             )}
           </div>
