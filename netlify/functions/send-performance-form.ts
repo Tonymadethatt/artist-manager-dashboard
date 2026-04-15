@@ -9,6 +9,8 @@ import {
   EMAIL_ROW_LABEL,
 } from '../../src/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
+import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { fetchEmailTestModeRow } from './supabaseAdmin'
 
 interface RequestBody {
   token: string
@@ -26,6 +28,7 @@ interface RequestBody {
   custom_subject?: string | null
   custom_intro?: string | null
   layout?: unknown | null
+  user_id?: string
 }
 
 function escapeHtmlEnt(s: string): string {
@@ -86,6 +89,9 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ message: `Missing field: ${field}` }) }
     }
   }
+
+  const userId = typeof body.user_id === 'string' ? body.user_id.trim() || undefined : undefined
+  const testModeRow = await fetchEmailTestModeRow(userId)
 
   const siteUrl = process.env.URL || 'https://localhost:8888'
   const formUrl = `${siteUrl}/performance-report/${body.token}`
@@ -171,14 +177,28 @@ const handler: Handler = async (event) => {
 </body>
 </html>`
 
+  let resendTo = [body.artistEmail]
+  const resolved = resolveArtistFacingResend({
+    row: testModeRow,
+    testOnly: false,
+    to: resendTo,
+    cc: [],
+    subject,
+  })
+  if (!resolved.ok) {
+    return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
+  }
+  resendTo = resolved.to
+  const subjectOut = resolved.subject
+
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: body.fromEmail,
-      to: [body.artistEmail],
+      to: resendTo,
       reply_to: body.replyToEmail,
-      subject,
+      subject: subjectOut,
       html,
     }),
   })

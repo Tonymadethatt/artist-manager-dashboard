@@ -5,6 +5,8 @@ import {
   buildArtistTransactionalEmailHtml,
   type ArtistTransactionalKind,
 } from '../../src/lib/email/artistTransactionalEmailDocument'
+import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { fetchEmailTestModeRow } from './supabaseAdmin'
 
 interface ArtistProfile {
   artist_name: string
@@ -39,6 +41,7 @@ const handler: Handler = async (event) => {
     custom_intro?: string | null
     layout?: unknown | null
     testOnly?: boolean
+    user_id?: string
   }
   try {
     body = JSON.parse(event.body ?? '{}')
@@ -55,7 +58,11 @@ const handler: Handler = async (event) => {
     custom_intro,
     layout: layoutRaw,
     testOnly = false,
+    user_id: rawUserId,
   } = body
+
+  const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
+  const testModeRow = await fetchEmailTestModeRow(userId)
 
   if (kind !== 'performance_report_received') {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid kind' }) }
@@ -99,8 +106,21 @@ const handler: Handler = async (event) => {
   const defaultSubject = testOnly ? `[TEST] ${defaultSubjectBase}` : defaultSubjectBase
   const subject = L.subject?.trim() || defaultSubject
 
-  const to = testOnly ? [profile.manager_email!] : [profile.artist_email]
-  const cc = testOnly ? [] : (profile.manager_email ? [profile.manager_email] : [])
+  let to = testOnly ? [profile.manager_email!] : [profile.artist_email]
+  let cc = testOnly ? [] : (profile.manager_email ? [profile.manager_email] : [])
+  const resolved = resolveArtistFacingResend({
+    row: testModeRow,
+    testOnly,
+    to,
+    cc,
+    subject,
+  })
+  if (!resolved.ok) {
+    return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
+  }
+  to = resolved.to
+  cc = resolved.cc
+  const subjectOut = resolved.subject
 
   const resendRes = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -112,7 +132,7 @@ const handler: Handler = async (event) => {
       from: profile.from_email,
       to,
       ...(cc.length > 0 ? { cc } : {}),
-      subject,
+      subject: subjectOut,
       html,
     }),
   })

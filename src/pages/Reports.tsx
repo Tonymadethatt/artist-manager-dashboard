@@ -105,6 +105,8 @@ export default function Reports() {
     const cc: string[] = ccMyself && profile.manager_email ? [profile.manager_email] : []
 
     try {
+      const { data: { user: reportUser } } = await supabase.auth.getUser()
+      if (!reportUser) throw new Error('Not signed in')
       const res = await fetch('/.netlify/functions/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,6 +119,7 @@ export default function Reports() {
           custom_subject: reportTemplate?.custom_subject ?? null,
           custom_intro: reportTemplate?.custom_intro ?? null,
           layout: reportTemplate?.layout ?? null,
+          user_id: reportUser.id,
         }),
       })
       if (res.ok) {

@@ -6,6 +6,8 @@ import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { captureLinkLabel } from '../../src/lib/emailCapture/kinds'
+import { resolveArtistFacingResend, resolveVenueFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { fetchEmailTestModeRow } from './supabaseAdmin'
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -85,6 +87,8 @@ interface RequestBody {
   layout?: EmailTemplateLayoutV1 | null
   invoice_url?: string | null
   capture_url?: string | null
+  /** Authenticated user — used to load email_test_mode from DB (service role). */
+  user_id?: string
 }
 
 const VENUE_TYPES = new Set<string>([
@@ -134,7 +138,11 @@ const handler: Handler = async (event) => {
     attachment: rawAttachment,
     invoice_url: rawInvoiceUrl,
     capture_url: rawCaptureUrl,
+    user_id: rawUserId,
   } = body
+
+  const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
+  const testModeRow = await fetchEmailTestModeRow(userId)
 
   if (!profile?.from_email || !recipient?.email) {
     return { statusCode: 400, body: JSON.stringify({ message: 'Missing required fields: profile.from_email, recipient.email' }) }
@@ -262,10 +270,42 @@ const handler: Handler = async (event) => {
     }
   }
 
-  // CC the manager on all outgoing emails
+  // CC the manager on all outgoing emails (may be cleared when test mode redirects)
   const cc: string[] = []
   if (profile.manager_email && profile.manager_email !== recipient.email) {
     cc.push(profile.manager_email)
+  }
+
+  let resendTo: string[] = [recipient.email]
+  let resendCc: string[] = [...cc]
+  let resendSubject = subject
+  if (custom_artist_template) {
+    const r = resolveArtistFacingResend({
+      row: testModeRow,
+      testOnly: false,
+      to: resendTo,
+      cc: resendCc,
+      subject: resendSubject,
+    })
+    if (!r.ok) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: r.message }) }
+    }
+    resendTo = r.to
+    resendCc = r.cc
+    resendSubject = r.subject
+  } else {
+    const r = resolveVenueFacingResend({
+      row: testModeRow,
+      to: resendTo,
+      cc: resendCc,
+      subject: resendSubject,
+    })
+    if (!r.ok) {
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: r.message }) }
+    }
+    resendTo = r.to
+    resendCc = r.cc
+    resendSubject = r.subject
   }
 
   // For invoice_sent: attempt to fetch the PDF and attach it server-side.
@@ -306,10 +346,10 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         from: profile.from_email,
-        to: [recipient.email],
-        ...(cc.length > 0 ? { cc } : {}),
+        to: resendTo,
+        ...(resendCc.length > 0 ? { cc: resendCc } : {}),
         reply_to: [replyTo],
-        subject,
+        subject: resendSubject,
         html,
         ...(attachments.length > 0 ? { attachments } : {}),
       }),

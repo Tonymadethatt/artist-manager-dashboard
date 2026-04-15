@@ -183,6 +183,8 @@ export async function sendEmailTemplateTest(
       }
     }
 
+    payload.user_id = user.id
+
     const res = await fetch('/.netlify/functions/send-venue-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -208,6 +210,7 @@ export async function sendEmailTemplateTest(
           custom_subject: null,
           custom_intro: null,
           layout: layoutNorm,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -228,6 +231,7 @@ export async function sendEmailTemplateTest(
           custom_intro: null,
           layout: layoutNorm,
           testOnly: true,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -248,6 +252,7 @@ export async function sendEmailTemplateTest(
           custom_intro: null,
           layout: layoutNorm,
           testOnly: true,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -274,6 +279,7 @@ export async function sendEmailTemplateTest(
           custom_subject: layoutNorm.subject ?? null,
           custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -293,6 +299,7 @@ export async function sendEmailTemplateTest(
           custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
           testOnly: true,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -337,6 +344,7 @@ export async function sendEmailTemplateTest(
           to: managerRecipient.email,
           subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || `Reminder: ${PREVIEW_MOCK_VENUE.name}`,
           html,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -393,6 +401,7 @@ export async function sendEmailTemplateTest(
           to: managerRecipient.email,
           subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Booked gig — show details (test)',
           html,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -431,6 +440,7 @@ export async function sendEmailTemplateTest(
           to: managerRecipient.email,
           subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Your gigs — next two weeks (test)',
           html,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -470,6 +480,7 @@ export async function sendEmailTemplateTest(
           to: managerRecipient.email,
           subject: Lsend.subject?.trim() || layoutNorm.subject?.trim() || 'Your gigs — one day (test)',
           html,
+          user_id: user.id,
         }),
       })
       if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
@@ -516,6 +527,8 @@ export async function sendEmailTemplateTest(
   if (vType === 'invoice_sent') {
     venuePayload.invoice_url = EMAIL_TEMPLATE_PREVIEW_INVOICE_URL
   }
+
+  venuePayload.user_id = user.id
 
   const res = await fetch('/.netlify/functions/send-venue-email', {
     method: 'POST',

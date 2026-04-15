@@ -403,6 +403,10 @@ export interface ArtistProfile {
   reply_to_email: string | null
   /** Minutes after queue before cron auto-sends; 5|10|15|20|30 (default 10 if column missing pre-migration) */
   email_queue_buffer_minutes?: number
+  /** When true, Netlify send functions replace To with test inboxes (see Settings). */
+  email_test_mode?: boolean
+  email_test_artist_inbox?: string | null
+  email_test_client_inbox?: string | null
   created_at: string
   updated_at: string
 }

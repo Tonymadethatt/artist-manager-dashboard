@@ -18,6 +18,9 @@ const DEFAULTS: Omit<ArtistProfile, 'user_id' | 'created_at' | 'updated_at'> = {
   tagline: null,
   reply_to_email: null,
   email_queue_buffer_minutes: DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
+  email_test_mode: false,
+  email_test_artist_inbox: null,
+  email_test_client_inbox: null,
 }
 
 export function useArtistProfile() {

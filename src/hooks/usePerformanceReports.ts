@@ -90,6 +90,7 @@ export function usePerformanceReports() {
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
           layout: perfTmpl?.layout ?? null,
+          user_id: user.id,
         }),
       })
       if (!res.ok) {
@@ -255,6 +256,7 @@ export function usePerformanceReports() {
           custom_subject: perfTmpl?.custom_subject ?? null,
           custom_intro: perfTmpl?.custom_intro ?? null,
           layout: perfTmpl?.layout ?? null,
+          user_id: resendUser.id,
         }),
       })
       if (!res.ok) {

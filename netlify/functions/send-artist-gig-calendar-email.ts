@@ -4,6 +4,8 @@
  */
 import type { Handler } from '@netlify/functions'
 import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
+import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { fetchEmailTestModeRow } from './supabaseAdmin'
 
 type Profile = {
   artist_name?: string
@@ -19,6 +21,7 @@ export type GigCalendarEmailPayload =
     to: string
     subject: string
     html: string
+    user_id?: string
   }
   | {
     kind: 'gig_reminder_24h'
@@ -28,6 +31,7 @@ export type GigCalendarEmailPayload =
     html: string
     /** UTC ISO of deal.event_start_at — send function verifies timing before Resend. */
     showStartIso?: string
+    user_id?: string
   }
   | {
     kind: 'gig_calendar_digest_weekly'
@@ -35,6 +39,7 @@ export type GigCalendarEmailPayload =
     to: string
     subject: string
     html: string
+    user_id?: string
   }
   | {
     kind: 'gig_day_summary_manual'
@@ -42,6 +47,7 @@ export type GigCalendarEmailPayload =
     to: string
     subject: string
     html: string
+    user_id?: string
   }
 
 const handler: Handler = async (event) => {
@@ -88,6 +94,24 @@ const handler: Handler = async (event) => {
   const mgr = payload.profile.manager_email?.trim()
   if (mgr && mgr.toLowerCase() !== payload.to.toLowerCase()) cc.push(mgr)
 
+  const userId = typeof payload.user_id === 'string' ? payload.user_id.trim() || undefined : undefined
+  const testModeRow = await fetchEmailTestModeRow(userId)
+  let resendTo = [payload.to]
+  let resendCc = [...cc]
+  const resolved = resolveArtistFacingResend({
+    row: testModeRow,
+    testOnly: false,
+    to: resendTo,
+    cc: resendCc,
+    subject: payload.subject,
+  })
+  if (!resolved.ok) {
+    return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
+  }
+  resendTo = resolved.to
+  resendCc = resolved.cc
+  const subjectOut = resolved.subject
+
   const attachments: { filename: string; content: string }[] = []
 
   try {
@@ -99,10 +123,10 @@ const handler: Handler = async (event) => {
       },
       body: JSON.stringify({
         from: payload.profile.from_email,
-        to: [payload.to],
-        ...(cc.length ? { cc } : {}),
+        to: resendTo,
+        ...(resendCc.length ? { cc: resendCc } : {}),
         reply_to: [replyTo],
-        subject: payload.subject,
+        subject: subjectOut,
         html: payload.html,
         ...(attachments.length ? { attachments } : {}),
       }),

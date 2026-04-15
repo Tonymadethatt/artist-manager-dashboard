@@ -352,6 +352,8 @@ export function SendVenueEmailModal({
         }
       }
 
+      payload.user_id = authUser.id
+
       const res = await fetch('/.netlify/functions/send-venue-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -220,6 +220,8 @@ function RetainerTab(_: { hideSummary?: boolean }) {
       .filter(f => f.balance > 0)
       .map(f => ({ month: fmtMonth(f.month), owed: f.amount, paid: f.totalPaid, balance: f.balance }))
     try {
+      const { data: { user: reminderUser } } = await supabase.auth.getUser()
+      if (!reminderUser) throw new Error('Not signed in')
       const res = await fetch('/.netlify/functions/send-reminder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,6 +232,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
           custom_subject: reminderTemplate?.custom_subject ?? null,
           custom_intro: reminderTemplate?.custom_intro ?? null,
           layout: reminderTemplate?.layout ?? null,
+          user_id: reminderUser.id,
         }),
       })
       if (res.ok) {

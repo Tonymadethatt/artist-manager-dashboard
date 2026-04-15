@@ -405,6 +405,7 @@ const handler: Handler = async (event) => {
             custom_subject: perfTmpl?.custom_subject ?? null,
             custom_intro: perfTmpl?.custom_intro ?? null,
             layout: perfTmpl?.layout ?? null,
+            user_id: email.user_id as string,
           }),
         })
         if (sendRes.ok) {
@@ -531,6 +532,7 @@ const handler: Handler = async (event) => {
               to: String(row.artist_email ?? ''),
               subject: subj,
               html,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -615,6 +617,7 @@ const handler: Handler = async (event) => {
               to: String(row.artist_email ?? ''),
               subject: subj,
               html,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -698,6 +701,7 @@ const handler: Handler = async (event) => {
               to: String(row.artist_email ?? ''),
               subject: subj,
               html,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -765,6 +769,7 @@ const handler: Handler = async (event) => {
             subject: subj,
             html,
             showStartIso: deal.event_start_at,
+            user_id: email.user_id as string,
           }),
         })
         if (sendRes.ok) {
@@ -929,6 +934,7 @@ const handler: Handler = async (event) => {
           }
           : { name: '', city: null, location: null },
         ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
+        user_id: email.user_id as string,
       }
       try {
         const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-venue-email`, {
@@ -1011,6 +1017,7 @@ const handler: Handler = async (event) => {
             custom_subject: txTmpl?.custom_subject ?? null,
             custom_intro: txTmpl?.custom_intro ?? null,
             layout: txTmpl?.layout ?? null,
+            user_id: email.user_id as string,
           }),
         })
         if (sendRes.ok) {
@@ -1086,6 +1093,7 @@ const handler: Handler = async (event) => {
               custom_subject: mrTmpl?.custom_subject ?? null,
               custom_intro: mrTmpl?.custom_intro ?? null,
               layout: mrTmpl?.layout ?? null,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -1127,6 +1135,7 @@ const handler: Handler = async (event) => {
               custom_subject: rrTmpl?.custom_subject ?? null,
               custom_intro: rrTmpl?.custom_intro ?? null,
               layout: rrTmpl?.layout ?? null,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -1157,6 +1166,7 @@ const handler: Handler = async (event) => {
               custom_subject: rxTmpl?.custom_subject ?? null,
               custom_intro: rxTmpl?.custom_intro ?? null,
               layout: rxTmpl?.layout ?? null,
+              user_id: email.user_id as string,
             }),
           })
           if (sendRes.ok) {
@@ -1239,6 +1249,7 @@ const handler: Handler = async (event) => {
         },
         ...(customAttachmentPayload ? { attachment: customAttachmentPayload } : {}),
         ...(captureUrlForSend ? { capture_url: captureUrlForSend } : {}),
+        user_id: email.user_id as string,
       }
       : {
         type: email.email_type as VenueEmailType,
@@ -1255,6 +1266,7 @@ const handler: Handler = async (event) => {
           : {}),
         ...(invoiceUrlForSend ? { invoice_url: invoiceUrlForSend } : {}),
         ...(captureUrlForSend ? { capture_url: captureUrlForSend } : {}),
+        user_id: email.user_id as string,
       }
 
     try {

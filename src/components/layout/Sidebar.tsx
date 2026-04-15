@@ -21,11 +21,13 @@ import {
   Mic2,
   ListChecks,
   ChevronDown,
+  FlaskConical,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavBadges } from '@/context/NavBadgesContext'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
 
 type NavGroupId = 'workspace' | 'content' | 'forms' | 'email'
 
@@ -128,7 +130,30 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const onPipelinePath = location.pathname.startsWith('/pipeline')
   const { counts } = useNavBadges()
+  const { profile, updateProfile } = useArtistProfile()
+  const [testModeBusy, setTestModeBusy] = useState(false)
+  const [testModeHint, setTestModeHint] = useState<string | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(() => ({ ...DEFAULT_EXPANDED }))
+
+  const toggleEmailTestMode = async () => {
+    if (!profile || testModeBusy) return
+    setTestModeHint(null)
+    const next = !profile.email_test_mode
+    if (next) {
+      const a = profile.email_test_artist_inbox?.trim() ?? ''
+      const c = profile.email_test_client_inbox?.trim() ?? ''
+      if (!a.includes('@') || !c.includes('@')) {
+        setTestModeHint('Set both test inboxes in Settings first.')
+        return
+      }
+    }
+    setTestModeBusy(true)
+    const res = await updateProfile({ email_test_mode: next })
+    setTestModeBusy(false)
+    if (res && 'error' in res && res.error) {
+      setTestModeHint(res.error.message || 'Could not update')
+    }
+  }
 
   useEffect(() => {
     const pathname = location.pathname
@@ -313,6 +338,27 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             </div>
           )
         })}
+        <div className="pt-1.5 mt-1 border-t border-white/[0.06] space-y-1">
+          {testModeHint && (
+            <p className="text-[9px] text-amber-400/90 leading-snug px-0.5">{testModeHint}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => void toggleEmailTestMode()}
+            disabled={testModeBusy || !profile}
+            aria-pressed={!!profile?.email_test_mode}
+            className={cn(
+              'flex w-full items-center gap-1.5 px-1.5 py-1 rounded-md text-[11px] font-medium border transition-colors',
+              profile?.email_test_mode
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+                : 'border-white/[0.08] text-[hsl(var(--sidebar-muted))] hover:bg-white/[0.06] hover:text-neutral-200',
+              (testModeBusy || !profile) && 'opacity-50 pointer-events-none'
+            )}
+          >
+            <FlaskConical className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+            <span className="truncate text-left">{profile?.email_test_mode ? 'Test mode on' : 'Test mode'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Bottom: settings + sign out */}

@@ -973,6 +973,7 @@ export default function EmailQueue() {
               custom_subject: tmpl?.custom_subject ?? null,
               custom_intro: tmpl?.custom_intro ?? null,
               layout: tmpl?.layout ?? null,
+              user_id: user.id,
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
@@ -997,6 +998,7 @@ export default function EmailQueue() {
               custom_subject: tmpl?.custom_subject ?? null,
               custom_intro: tmpl?.custom_intro ?? null,
               layout: tmpl?.layout ?? null,
+              user_id: user.id,
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
@@ -1018,6 +1020,7 @@ export default function EmailQueue() {
               custom_subject: tmpl?.custom_subject ?? null,
               custom_intro: tmpl?.custom_intro ?? null,
               layout: tmpl?.layout ?? null,
+              user_id: user.id,
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
@@ -1043,6 +1046,7 @@ export default function EmailQueue() {
               custom_subject: txTmpl?.custom_subject ?? null,
               custom_intro: txTmpl?.custom_intro ?? null,
               layout: txTmpl?.layout ?? null,
+              user_id: user.id,
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
@@ -1120,6 +1124,7 @@ export default function EmailQueue() {
                 to: profile.artist_email.trim(),
                 subject: subj,
                 html,
+                user_id: user.id,
               }),
             })
             if (!res.ok) throw new Error(await parseErr(res))
@@ -1177,6 +1182,7 @@ export default function EmailQueue() {
                 to: profile.artist_email.trim(),
                 subject: subj,
                 html,
+                user_id: user.id,
               }),
             })
             if (!res.ok) throw new Error(await parseErr(res))
@@ -1224,6 +1230,7 @@ export default function EmailQueue() {
                   subject: subj,
                   html,
                   showStartIso: deal.event_start_at,
+                  user_id: user.id,
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))
@@ -1255,6 +1262,7 @@ export default function EmailQueue() {
                   to: profile.artist_email.trim(),
                   subject: subj,
                   html,
+                  user_id: user.id,
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))
@@ -1305,6 +1313,7 @@ export default function EmailQueue() {
             custom_subject: perfTmpl?.custom_subject ?? null,
             custom_intro: perfTmpl?.custom_intro ?? null,
             layout: perfTmpl?.layout ?? null,
+            user_id: user.id,
           }),
         })
         if (!res.ok) {
@@ -1477,6 +1486,8 @@ export default function EmailQueue() {
         )
         if (capUrl) payload.capture_url = capUrl
       }
+
+      payload.user_id = user.id
 
       const res = await fetch(sendPath, {
         method: 'POST',

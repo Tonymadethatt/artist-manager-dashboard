@@ -4,6 +4,7 @@ import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useProfileFieldPresets } from '@/hooks/useProfileFieldPresets'
 import { FieldWithPresets } from '@/components/settings/FieldWithPresets'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -34,6 +35,8 @@ type FormState = {
   social_handle: string
   tagline: string
   reply_to_email: string
+  email_test_artist_inbox: string
+  email_test_client_inbox: string
 }
 
 type FormKey = keyof FormState
@@ -52,6 +55,8 @@ const EMPTY_FORM: FormState = {
   social_handle: '',
   tagline: '',
   reply_to_email: '',
+  email_test_artist_inbox: '',
+  email_test_client_inbox: '',
 }
 
 function formFromProfile(p: ArtistProfile): FormState {
@@ -69,6 +74,8 @@ function formFromProfile(p: ArtistProfile): FormState {
     social_handle: p.social_handle ?? '',
     tagline: p.tagline ?? '',
     reply_to_email: p.reply_to_email ?? '',
+    email_test_artist_inbox: p.email_test_artist_inbox ?? '',
+    email_test_client_inbox: p.email_test_client_inbox ?? '',
   }
 }
 
@@ -102,6 +109,10 @@ function buildPartial(key: FormKey, f: FormState): Partial<Omit<ArtistProfile, '
       return { tagline: t(f.tagline) || null }
     case 'reply_to_email':
       return { reply_to_email: t(f.reply_to_email) || null }
+    case 'email_test_artist_inbox':
+      return { email_test_artist_inbox: t(f.email_test_artist_inbox) || null }
+    case 'email_test_client_inbox':
+      return { email_test_client_inbox: t(f.email_test_client_inbox) || null }
   }
 }
 
@@ -191,10 +202,12 @@ export default function Settings() {
       }
       const pk = Object.keys(partial)[0] as keyof typeof partial
       const stored = partial[pk] as string | null | undefined
-      const presetKey = key as ProfileFieldPresetKey
-      const presetRes = await addPreset(presetKey, stored)
-      if (!presetRes.ok && 'error' in presetRes && presetRes.error) {
-        console.warn('profile_field_preset insert failed', presetRes.error)
+      if (key !== 'email_test_artist_inbox' && key !== 'email_test_client_inbox') {
+        const presetKey = key as ProfileFieldPresetKey
+        const presetRes = await addPreset(presetKey, stored)
+        if (!presetRes.ok && 'error' in presetRes && presetRes.error) {
+          console.warn('profile_field_preset insert failed', presetRes.error)
+        }
       }
       showToast('Saved', 'ok')
     },
@@ -465,6 +478,43 @@ export default function Settings() {
         </SectionCard>
 
         <GoogleCalendarSettingsCard userId={user?.id ?? null} showToast={showToast} />
+
+        <SectionCard
+          title="Email test mode"
+          description="When test mode is on (toggle in the sidebar), every outbound send is delivered only to these two addresses—never to real venue contacts or the artist inbox. Use safe mailboxes you control. Subjects are prefixed with [TEST]."
+          className="lg:col-span-2"
+        >
+          <div className={fieldGrid}>
+            <div className="space-y-1">
+              <Label htmlFor="test-artist-inbox">Artist-facing test inbox</Label>
+              <Input
+                id="test-artist-inbox"
+                type="email"
+                autoComplete="email"
+                className="h-9 text-sm bg-neutral-950 border-neutral-700"
+                value={form.email_test_artist_inbox}
+                onChange={e => setField('email_test_artist_inbox', e.target.value)}
+                onBlur={blur('email_test_artist_inbox')}
+                placeholder="you+test-artist@example.com"
+              />
+              <p className={hint}>Receives reports, gig calendar, performance form links, retainers, etc.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="test-client-inbox">Client / venue test inbox</Label>
+              <Input
+                id="test-client-inbox"
+                type="email"
+                autoComplete="email"
+                className="h-9 text-sm bg-neutral-950 border-neutral-700"
+                value={form.email_test_client_inbox}
+                onChange={e => setField('email_test_client_inbox', e.target.value)}
+                onBlur={blur('email_test_client_inbox')}
+                placeholder="you+test-venue@example.com"
+              />
+              <p className={hint}>Receives outreach, agreements, invoices, and other venue-targeted mail.</p>
+            </div>
+          </div>
+        </SectionCard>
 
         <SectionCard
           title="Email queue"
