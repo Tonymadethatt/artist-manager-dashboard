@@ -968,10 +968,25 @@ export function GigCalendar({
 
       <Dialog open={!!selectedSync} onOpenChange={v => !v && setSelectedSync(null)}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto border-neutral-800 bg-neutral-900 p-5 gap-0">
-          <DialogHeader className="pb-3 space-y-0">
+          <DialogHeader className="space-y-2 pb-3">
             <DialogTitle className="text-base text-white pr-8 leading-snug">
               {selectedSync ? longSyncTitle(selectedSync) : 'Calendar event'}
             </DialogTitle>
+            {selectedSync && deleteCalendarSyncEvent && (
+              <div className="space-y-1">
+                {syncDeleteError && <p className="text-xs text-red-300/95">{syncDeleteError}</p>}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 justify-start gap-2 px-2 -ml-2 text-sm font-medium text-red-500 hover:bg-red-950/35 hover:text-red-400"
+                  disabled={syncDeleting}
+                  onClick={() => void handleDeleteSelectedSync()}
+                >
+                  <Trash2 className="h-4 w-4 shrink-0 text-red-500" aria-hidden />
+                  {syncDeleting ? 'Deleting…' : 'Delete from calendar'}
+                </Button>
+              </div>
+            )}
           </DialogHeader>
           {selectedSync && (() => {
             const matchedVenue = selectedSync.matched_venue_id
@@ -1036,26 +1051,6 @@ export function GigCalendar({
                     </p>
                   )}
                 </section>
-                {deleteCalendarSyncEvent && (
-                  <div className="rounded-md border border-neutral-800 bg-neutral-950/40 p-3 space-y-2">
-                    <p className="text-[11px] text-neutral-500 leading-snug">
-                      Remove this copy from the Gig calendar only. This does not delete the event in Google Calendar.
-                    </p>
-                    {syncDeleteError && (
-                      <p className="text-xs text-red-300/95">{syncDeleteError}</p>
-                    )}
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="w-full h-9 text-sm gap-2"
-                      disabled={syncDeleting}
-                      onClick={() => void handleDeleteSelectedSync()}
-                    >
-                      <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
-                      {syncDeleting ? 'Removing…' : 'Remove from Gig calendar'}
-                    </Button>
-                  </div>
-                )}
                 <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4 sm:flex-row">
                   {matchedVenue && (
                     <Button asChild variant="default" className="flex-1 h-9 text-sm">
