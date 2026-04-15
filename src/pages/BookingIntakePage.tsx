@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  CheckCircle2,
   ChevronLeft,
+  Circle,
   Loader2,
   Mic2,
   Pin,
@@ -138,6 +140,7 @@ import { mapIntakeVenueDataV3ToVenueRow, intakeContactsFromVenueDataV3 } from '@
 import { buildEndCallOutreachNote, buildVenueImportOutreachNote } from '@/lib/intake/intakeOutreachActivity'
 import { upsertIntakeVenueContactsForVenue } from '@/lib/intake/syncIntakeVenueContacts'
 import { importDealFromIntakeShow } from '@/lib/intake/importDealFromIntakeShow'
+import { getArtistGigEmailBlockers } from '@/lib/calendar/artistGigEmailEligibility'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -822,6 +825,7 @@ export default function BookingIntakePage() {
   const [endCallBusy, setEndCallBusy] = useState(false)
   const [importBusyKey, setImportBusyKey] = useState<string | null>(null)
   const [importBanner, setImportBanner] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [intakeFileBuilderLink, setIntakeFileBuilderLink] = useState<{ venueId: string; dealId: string } | null>(null)
   const [advanceNudge, setAdvanceNudge] = useState<string | null>(null)
   /** Live 1A: user chose “Add new” for different-person flow (skip venue contact chips). */
   const [mismatchAddNewChosen, setMismatchAddNewChosen] = useState(false)
@@ -2257,6 +2261,7 @@ export default function BookingIntakePage() {
   const handleImportVenueClick = useCallback(async () => {
     setImportBusyKey('venue')
     setImportBanner(null)
+    setIntakeFileBuilderLink(null)
     try {
       const r = await executeImportVenue()
       setImportBanner({ tone: r.ok ? 'ok' : 'err', text: r.message })
@@ -2270,6 +2275,7 @@ export default function BookingIntakePage() {
       if (!selectedId || !data) return
       setImportBusyKey(`deal-${showRow.id}`)
       setImportBanner(null)
+      setIntakeFileBuilderLink(null)
       try {
         await booking.flushAllPending()
         const venueId = data.existing_venue_id ?? data.post_import_venue_id ?? null
@@ -2304,7 +2310,23 @@ export default function BookingIntakePage() {
           setImportBanner({ tone: 'err', text: 'error' in r ? r.error : 'Import failed' })
           return
         }
-        setImportBanner({ tone: 'ok', text: `Deal logged: ${r.deal.description}` })
+        const okParts: string[] = [`Deal logged: ${r.deal.description}`]
+        if (r.calendarEmailsSkippedForTerminalVenue) {
+          okParts.push('Calendar emails were not queued — venue is rejected or archived.')
+        }
+        const gigBlock = getArtistGigEmailBlockers(profile)
+        if (
+          !gigBlock.canQueueArtistGigMail &&
+          r.deal.event_start_at &&
+          r.deal.event_end_at &&
+          !r.deal.event_cancelled_at
+        ) {
+          okParts.push(
+            'Artist gig confirmation/reminder emails are off until you add Artist email in Settings.',
+          )
+        }
+        setImportBanner({ tone: 'ok', text: okParts.join(' ') })
+        setIntakeFileBuilderLink({ venueId, dealId: r.deal.id })
         await booking.refetch()
         await refetchDeals()
         void refreshNavBadges()
@@ -2332,6 +2354,7 @@ export default function BookingIntakePage() {
     if (!selectedId || !data) return
     setImportBusyKey('all')
     setImportBanner(null)
+    setIntakeFileBuilderLink(null)
     try {
       await booking.flushAllPending()
       let venueId: string | null = data.existing_venue_id ?? data.post_import_venue_id ?? null
@@ -2410,6 +2433,9 @@ export default function BookingIntakePage() {
         tone: 'ok',
         text: `Imported ${rows.length} deal(s). Last: ${lastDeal}`,
       })
+      if (venueId && dealsAcc.length > 0) {
+        setIntakeFileBuilderLink({ venueId, dealId: dealsAcc[0].id })
+      }
     } finally {
       setImportBusyKey(null)
     }
@@ -4378,7 +4404,13 @@ export default function BookingIntakePage() {
                   <>
                     {!catalogHasMinimumForDealLogging(pricingCatalog) ? (
                       <p className="text-sm text-amber-200/90 rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2">
-                        Add at least one package or hourly rate in Earnings → Pricing so quotes can run here.
+                        Add at least one package or hourly rate in Earnings → Pricing so quotes can run here.{' '}
+                        <Link
+                          to="/earnings?tab=pricing"
+                          className="font-medium underline underline-offset-2 text-amber-100/95 hover:text-white"
+                        >
+                          Open pricing editor
+                        </Link>
                       </p>
                     ) : null}
                     <p className="text-[11px] text-neutral-500">
@@ -6284,6 +6316,78 @@ export default function BookingIntakePage() {
                     card uses the same accent as that show in the intake. Import the venue first, then each show, or use
                     Import all.
                   </p>
+                  {data ? (
+                    <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">Database checklist</p>
+                      <ul className="space-y-2 text-sm text-neutral-300">
+                        <li className="flex gap-2 items-start">
+                          {linkedVenueIdForDeals ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-neutral-600 shrink-0 mt-0.5" />
+                          )}
+                          <span>
+                            <span className="font-medium text-neutral-200">Venue in Outreach</span>
+                            {linkedVenueIdForDeals ? ' — linked for imports.' : ' — not in CRM until you import the venue.'}
+                            {data.existing_venue_id ? (
+                              <span className="block text-xs text-neutral-500 mt-0.5">
+                                End call updated Outreach status from Phase 7 when you ended the call.
+                              </span>
+                            ) : (
+                              <span className="block text-xs text-neutral-500 mt-0.5">
+                                New venue: status is set when you Import venue (from intake data), not on End call alone.
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                        <li className="flex gap-2 items-start">
+                          {showsSorted.length > 0 && showsSorted.every(s => s.imported_deal_id) ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-neutral-600 shrink-0 mt-0.5" />
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-medium text-neutral-200">Deals in Earnings</span>
+                            <span className="text-neutral-500"> — per show below.</span>
+                            <ul className="mt-1 space-y-0.5 text-xs text-neutral-500">
+                              {showsSorted.map((row, idx) => {
+                                const sd = parseShowDataV3(row.show_data, row.sort_order)
+                                const lab = showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`
+                                return (
+                                  <li key={row.id} className="flex items-center gap-1.5">
+                                    {row.imported_deal_id ? (
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                                    ) : (
+                                      <Circle className="h-3 w-3 text-neutral-600 shrink-0" />
+                                    )}
+                                    {lab}
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </div>
+                        </li>
+                        <li className="flex gap-2 items-start">
+                          {data.call_ended_at ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-neutral-600 shrink-0 mt-0.5" />
+                          )}
+                          <span>
+                            <span className="font-medium text-neutral-200">End call recorded</span>
+                            {data.call_ended_at
+                              ? ` — ${new Date(data.call_ended_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`
+                              : ' — end the call first so Phase 7/8 post-call data is flushed to this intake.'}
+                          </span>
+                        </li>
+                      </ul>
+                      <p className="text-xs text-neutral-500 pt-1 border-t border-white/[0.06] leading-snug">
+                        End call saves this intake only. Import venue / Import deal create Outreach and Earnings records.
+                        Venues marked rejected or archived are not auto-promoted to booked when logging deals (calendar
+                        automations stay off until you fix status manually).
+                      </p>
+                    </div>
+                  ) : null}
                   {importBanner ? (
                     <div
                       className={cn(
@@ -6295,6 +6399,25 @@ export default function BookingIntakePage() {
                     >
                       {importBanner.text}
                     </div>
+                  ) : null}
+                  {intakeFileBuilderLink ? (
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Button type="button" variant="outline" size="sm" className="border-neutral-600" asChild>
+                        <Link
+                          to={`/files/new?${new URLSearchParams({
+                            venueId: intakeFileBuilderLink.venueId,
+                            dealId: intakeFileBuilderLink.dealId,
+                          }).toString()}`}
+                        >
+                          Open File Builder
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : null}
+                  {!data?.call_ended_at ? (
+                    <p className="text-xs text-neutral-500">
+                      End call first so post-call data is flushed; then use Import (venue / deals).
+                    </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -6337,8 +6460,14 @@ export default function BookingIntakePage() {
                     </Button>
                   </div>
                   {!canImportDeals ? (
-                    <p className="text-xs text-amber-600/90">
-                      Add at least one package or hourly rate under Pricing &amp; fees before deal import.
+                    <p className="text-xs text-amber-600/90 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      Add at least one package or hourly rate under Pricing &amp; fees before deal import.{' '}
+                      <Link
+                        to="/earnings?tab=pricing"
+                        className="font-medium underline underline-offset-2 text-amber-200/95 hover:text-amber-100"
+                      >
+                        Open pricing editor
+                      </Link>
                     </p>
                   ) : null}
                   {linkedVenueIdForDeals ? (

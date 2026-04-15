@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { queueImmediateEmailsForTemplate } from '@/lib/queueEmailsFromTemplate'
+import { resolveDealIdForTemplateApply, type DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import type { TaskTemplate, TaskTemplateItem, TaskPriority, TaskRecurrence } from '@/types'
 
 function addDays(dateStr: string, n: number) {
@@ -383,13 +384,25 @@ export function useTaskTemplates() {
   const applyTemplate = async (
     templateId: string,
     venueId: string,
-    dealId?: string | null
-  ): Promise<{ count: number; emailsQueued?: number; error?: Error }> => {
+    dealId?: string | null,
+  ): Promise<{
+    count: number
+    emailsQueued?: number
+    error?: Error
+    needsDealPick?: boolean
+    dealOptions?: DealPickOption[]
+  }> => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { count: 0, error: new Error('Not authenticated') }
 
     const template = templates.find(t => t.id === templateId)
     if (!template || !template.items?.length) return { count: 0 }
+
+    const resolved = await resolveDealIdForTemplateApply(venueId, dealId)
+    if (!resolved.ok) {
+      return { count: 0, needsDealPick: true, dealOptions: resolved.options }
+    }
+    const effectiveDealId = resolved.dealId
 
     const today = new Date().toISOString().split('T')[0]
     const inserts = template.items.map(item => ({
@@ -400,7 +413,7 @@ export function useTaskTemplates() {
       priority: item.priority,
       recurrence: item.recurrence,
       venue_id: venueId,
-      deal_id: dealId ?? null,
+      deal_id: effectiveDealId,
       email_type: item.email_type ?? null,
       generated_file_id: item.generated_file_id ?? null,
       completed: false,
@@ -409,7 +422,7 @@ export function useTaskTemplates() {
     const { error } = await supabase.from('tasks').insert(inserts)
     if (error) return { count: 0, error: new Error(error.message) }
 
-    const { queued: emailsQueued } = await queueImmediateEmailsForTemplate(venueId, template, dealId)
+    const { queued: emailsQueued } = await queueImmediateEmailsForTemplate(venueId, template, effectiveDealId)
     return { count: inserts.length, emailsQueued }
   }
 

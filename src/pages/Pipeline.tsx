@@ -32,6 +32,11 @@ import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customT
 import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
 import { isTaskCompletedToday } from '@/lib/tasks/completedAtLocalDate'
 import { useNavBadges } from '@/context/NavBadgesContext'
+import { supabase } from '@/lib/supabase'
+import { validateTaskEmailType } from '@/lib/tasks/validateTaskEmailType'
+import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
+import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
+import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
@@ -94,7 +99,11 @@ function VenueProgressPanelConnected({
   onUpdateVenue: (id: string, updates: Partial<Venue>) => Promise<unknown>
   onQueueEmail: ReturnType<typeof useVenueEmails>['queueEmail']
   onOpenSendModal: (venue: Venue, contact: Contact, emailType: string) => void
-  onApplyTemplate: (templateId: string, venueId: string) => Promise<{ count: number }>
+  onApplyTemplate: (
+    templateId: string,
+    venueId: string,
+    dealId?: string | null,
+  ) => ReturnType<ReturnType<typeof useTaskTemplates>['applyTemplate']>
   refetchEmails: () => void | Promise<void>
   onRefreshNavBadges: () => Promise<void>
 }) {
@@ -103,6 +112,10 @@ function VenueProgressPanelConnected({
   const venueEmails = allEmails.filter(e => e.venue_id === venue.id)
   const venueTasks = tasks.filter(t => t.venue_id === venue.id)
   const { templates } = useTaskTemplates()
+  const [progressTemplateDealPick, setProgressTemplateDealPick] = useState<{
+    templateIds: string[]
+    options: DealPickOption[]
+  } | null>(null)
 
   const handleConfirm = useCallback(async (updates: ProgressUpdate) => {
     const promises: Promise<unknown>[] = []
@@ -138,8 +151,18 @@ function VenueProgressPanelConnected({
     // 4. Auto-apply template if status changed
     if (updates.newStatus) {
       const matching = templates.filter(t => t.trigger_status === updates.newStatus)
-      for (const t of matching) {
-        await onApplyTemplate(t.id, venue.id)
+      if (matching.length > 0) {
+        const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
+        if (!resolve.ok) {
+          setProgressTemplateDealPick({
+            templateIds: matching.map(t => t.id),
+            options: resolve.options,
+          })
+        } else {
+          for (const t of matching) {
+            await onApplyTemplate(t.id, venue.id, resolve.dealId)
+          }
+        }
       }
     }
 
@@ -170,16 +193,35 @@ function VenueProgressPanelConnected({
     }
   }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails, onRefreshNavBadges])
 
+  const finishProgressTemplateDealPick = async (dealId: string) => {
+    const ctx = progressTemplateDealPick
+    if (!ctx) return
+    setProgressTemplateDealPick(null)
+    for (const tid of ctx.templateIds) {
+      await onApplyTemplate(tid, venue.id, dealId)
+    }
+  }
+
   return (
-    <VenueProgressPanel
-      venue={venue}
-      tasks={venueTasks}
-      contacts={contacts}
-      deals={venueDeals}
-      sentEmails={venueEmails}
-      onClose={onClose}
-      onConfirm={handleConfirm}
-    />
+    <>
+      <VenueProgressPanel
+        venue={venue}
+        tasks={venueTasks}
+        contacts={contacts}
+        deals={venueDeals}
+        sentEmails={venueEmails}
+        onClose={onClose}
+        onConfirm={handleConfirm}
+      />
+      <DealPickForTemplateDialog
+        open={!!progressTemplateDealPick}
+        title="Which deal should these tasks link to?"
+        description="This venue has multiple deals. Choose the gig for the progress checklist."
+        options={progressTemplateDealPick?.options ?? []}
+        onPick={finishProgressTemplateDealPick}
+        onCancel={() => setProgressTemplateDealPick(null)}
+      />
+    </>
   )
 }
 
@@ -464,6 +506,17 @@ export default function Pipeline() {
       deal_id: form.deal_id || null,
       email_type: form.email_type === '__none__' ? null : form.email_type,
       generated_file_id: form.generated_file_id || null,
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setSaving(false)
+      return
+    }
+    const typeCheck = await validateTaskEmailType(payload.email_type, user.id)
+    if (!typeCheck.ok) {
+      showToast(typeCheck.message)
+      setSaving(false)
+      return
     }
     if (editTask) {
       await updateTask(editTask.id, payload)

@@ -22,7 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { Venue, OutreachStatus, OutreachTrack, VenueType } from '@/types'
+import type { Venue, OutreachStatus, OutreachTrack, VenueType, TaskTemplate } from '@/types'
+import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
+import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
+import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -59,6 +62,12 @@ export default function Outreach() {
   const [venueAddSeedNonce, setVenueAddSeedNonce] = useState(0)
   const pendingVenueContactsRef = useRef<IntakeDerivedContactRow[]>([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [statusTemplateDealPick, setStatusTemplateDealPick] = useState<{
+    venue: Venue
+    newStatus: OutreachStatus
+    matching: TaskTemplate[]
+    options: DealPickOption[]
+  } | null>(null)
 
   // Inline follow-up date editing
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | null>(null)
@@ -82,8 +91,47 @@ export default function Outreach() {
     const matching = templates.filter(t => t.trigger_status === newStatus)
     let totalTasks = 0
     let emailsQueued = 0
-    for (const t of matching) {
-      const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id)
+    let deferredDealPick = false
+    if (matching.length > 0) {
+      const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
+      if (!resolve.ok) {
+        setStatusTemplateDealPick({ venue, newStatus, matching, options: resolve.options })
+        deferredDealPick = true
+        showToast(
+          `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · Pick a deal to apply checklist tasks`,
+        )
+      } else {
+        for (const t of matching) {
+          const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id, resolve.dealId)
+          totalTasks += count
+          emailsQueued += q ?? 0
+        }
+      }
+    }
+    if (!deferredDealPick) {
+      const parts: string[] = []
+      if (totalTasks > 0) parts.push(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created`)
+      if (emailsQueued > 0) parts.push(`${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued`)
+      showToast(
+        parts.length > 0
+          ? `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · ${parts.join(' · ')}`
+          : `${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`,
+      )
+    }
+    // Keep detail panel in sync if open
+    if (selectedVenue?.id === venue.id) {
+      setSelectedVenue(v => v ? { ...v, status: newStatus } : v)
+    }
+  }
+
+  const finishStatusTemplateDealPick = async (dealId: string) => {
+    const ctx = statusTemplateDealPick
+    if (!ctx) return
+    setStatusTemplateDealPick(null)
+    let totalTasks = 0
+    let emailsQueued = 0
+    for (const t of ctx.matching) {
+      const { count, emailsQueued: q } = await applyTemplate(t.id, ctx.venue.id, dealId)
       totalTasks += count
       emailsQueued += q ?? 0
     }
@@ -92,13 +140,9 @@ export default function Outreach() {
     if (emailsQueued > 0) parts.push(`${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued`)
     showToast(
       parts.length > 0
-        ? `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · ${parts.join(' · ')}`
-        : `${venue.name} - ${OUTREACH_STATUS_LABELS[newStatus]}`
+        ? `${ctx.venue.name} → ${OUTREACH_STATUS_LABELS[ctx.newStatus]} · ${parts.join(' · ')}`
+        : `${ctx.venue.name} - ${OUTREACH_STATUS_LABELS[ctx.newStatus]}`
     )
-    // Keep detail panel in sync if open
-    if (selectedVenue?.id === venue.id) {
-      setSelectedVenue(v => v ? { ...v, status: newStatus } : v)
-    }
   }
 
   const startEditFollowUp = (venue: Venue, e: React.MouseEvent) => {
@@ -424,9 +468,6 @@ export default function Outreach() {
         addFormSeed={venueAddSeed}
         addFormSeedNonce={venueAddSeedNonce}
         templates={templates}
-        onApplyTemplate={async (templateId, venueId) => {
-          await applyTemplate(templateId, venueId)
-        }}
       />
 
       {selectedVenue && (
@@ -444,6 +485,15 @@ export default function Outreach() {
           }}
         />
       )}
+
+      <DealPickForTemplateDialog
+        open={!!statusTemplateDealPick}
+        title="Which deal should these tasks link to?"
+        description="This venue has multiple deals. Choose the gig for the status checklist."
+        options={statusTemplateDealPick?.options ?? []}
+        onPick={finishStatusTemplateDealPick}
+        onCancel={() => setStatusTemplateDealPick(null)}
+      />
     </div>
   )
 }

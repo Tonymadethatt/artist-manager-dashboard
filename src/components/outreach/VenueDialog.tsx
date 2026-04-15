@@ -20,6 +20,9 @@ import type { DealTerms, Venue, VenueType, OutreachStatus, OutreachTrack, TaskTe
 
 type VenueFormState = Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deal_terms'>
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER, VENUE_TYPE_ORDER, VENUE_TYPE_LABELS } from '@/types'
+import { useTaskTemplates } from '@/hooks/useTaskTemplates'
+import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
+import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
 
 const VENUE_TYPES: { value: VenueType; label: string }[] = VENUE_TYPE_ORDER.map(value => ({
   value,
@@ -54,7 +57,6 @@ interface VenueDialogProps {
   addFormSeed?: Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at'> | null
   addFormSeedNonce?: number
   templates?: TaskTemplate[]
-  onApplyTemplate?: (templateId: string, venueId: string) => Promise<void>
 }
 
 const EMPTY: VenueFormState = {
@@ -81,12 +83,17 @@ export function VenueDialog({
   addFormSeed,
   addFormSeedNonce = 0,
   templates,
-  onApplyTemplate,
 }: VenueDialogProps) {
+  const { applyTemplate } = useTaskTemplates()
   const [form, setForm] = useState<VenueFormState>(EMPTY)
   const [selectedTemplate, setSelectedTemplate] = useState('__none__')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dealPick, setDealPick] = useState<{
+    templateId: string
+    venueId: string
+    options: DealPickOption[]
+  } | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -127,6 +134,7 @@ export function VenueDialog({
       }
       setSelectedTemplate('__none__')
       setError(null)
+      setDealPick(null)
     }
   }, [open, initialData, addFormSeed, addFormSeedNonce])
 
@@ -157,14 +165,43 @@ export function VenueDialog({
       return
     }
     // Apply template if selected and we're adding (not editing)
-    if (!initialData && selectedTemplate !== '__none__' && result?.data?.id && onApplyTemplate) {
-      await onApplyTemplate(selectedTemplate, result.data.id)
+    if (!initialData && selectedTemplate !== '__none__' && result?.data?.id) {
+      const applied = await applyTemplate(selectedTemplate, result.data.id)
+      if (applied.needsDealPick && applied.dealOptions?.length) {
+        setDealPick({
+          templateId: selectedTemplate,
+          venueId: result.data.id,
+          options: applied.dealOptions,
+        })
+        setSaving(false)
+        return
+      }
+      if (applied.error) {
+        setSaving(false)
+        setError(applied.error.message)
+        return
+      }
     }
     setSaving(false)
     onClose()
   }
 
+  const finishDealPick = async (dealId: string) => {
+    if (!dealPick) return
+    setSaving(true)
+    setError(null)
+    const applied = await applyTemplate(dealPick.templateId, dealPick.venueId, dealId)
+    setSaving(false)
+    setDealPick(null)
+    if (applied.error) {
+      setError(applied.error.message)
+      return
+    }
+    onClose()
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[min(90vh,800px)] overflow-y-auto">
         <DialogHeader>
@@ -364,5 +401,18 @@ export function VenueDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      <DealPickForTemplateDialog
+        open={!!dealPick}
+        title="Which deal should these tasks link to?"
+        description="This venue has multiple deals. Pick the gig this template applies to."
+        options={dealPick?.options ?? []}
+        onPick={finishDealPick}
+        onCancel={() => {
+          setDealPick(null)
+          onClose()
+        }}
+      />
+    </>
   )
 }

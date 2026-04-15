@@ -6,6 +6,7 @@ import { mapShowBundleToEarningsImport, type DealFormImportShape } from '@/lib/i
 import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
 import { pacificWallToUtcIso, addCalendarDaysPacific } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
+import { refreshVenueAndPromoteForCalendarDeal } from '@/lib/calendar/promoteVenueForCalendarDeal'
 import type { BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
 import { resolveIntakeOnsiteContactId } from '@/lib/intake/syncIntakeVenueContacts'
 import { supabase } from '@/lib/supabase'
@@ -74,7 +75,7 @@ export type ImportIntakeDealAddDeal = (deal: {
 }) => Promise<{ data?: Deal; error?: { message?: string } | Error }>
 
 export type ImportDealFromShowResult =
-  | { ok: true; deal: Deal }
+  | { ok: true; deal: Deal; calendarEmailsSkippedForTerminalVenue?: boolean }
   | { ok: false; error: string }
   | { ok: false; needsOverlapConfirm: true }
 
@@ -226,7 +227,10 @@ export async function importDealFromIntakeShow(params: {
 
   await supabase.from('booking_intake_shows').update({ imported_deal_id: saved.id }).eq('id', showId)
 
-  const vAfter = (saved.venue ?? linkedVenue) as Venue | null
+  const { venueAfter, calendarEmailsSkippedForTerminalVenue } =
+    await refreshVenueAndPromoteForCalendarDeal(saved)
+  const vAfter = venueAfter ?? ((saved.venue ?? linkedVenue) as Venue | null)
+  await refetchVenues()
 
   await syncDealCalendarSideEffects({
     beforeDeal: null,
@@ -236,5 +240,9 @@ export async function importDealFromIntakeShow(params: {
     artistEmail,
   })
 
-  return { ok: true, deal: saved }
+  return {
+    ok: true,
+    deal: saved,
+    ...(calendarEmailsSkippedForTerminalVenue ? { calendarEmailsSkippedForTerminalVenue: true } : {}),
+  }
 }

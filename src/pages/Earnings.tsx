@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useBookingIntakes, isV3IntakeRow } from '@/hooks/useBookingIntakes'
 import { IntakePickerDialog } from '@/components/intake/IntakePickerDialog'
 import { mapShowBundleToEarningsImport } from '@/lib/intake/mapIntakeToDealForm'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Pencil, Trash2, Clock, Mail, ClipboardList, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, CalendarOff, RotateCcw, Copy, Download, Upload } from 'lucide-react'
 import { useDeals } from '@/hooks/useDeals'
 import { useVenues } from '@/hooks/useVenues'
@@ -68,6 +68,9 @@ import {
   addCalendarDaysPacific,
 } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
+import { getArtistGigEmailBlockers } from '@/lib/calendar/artistGigEmailEligibility'
+import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
+import { refreshVenueAndPromoteForCalendarDeal } from '@/lib/calendar/promoteVenueForCalendarDeal'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
@@ -1191,10 +1194,14 @@ export default function Earnings() {
         dealIntakeLinkRef.current = null
         void bookingIntakes.refetch()
       }
-      const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
       const vBefore = editDeal
         ? venues.find(v => v.id === editDeal.venue_id) ?? editDeal.venue
         : null
+      const { venueAfter: vPromoted, calendarEmailsSkippedForTerminalVenue } =
+        await refreshVenueAndPromoteForCalendarDeal(saved)
+      const vAfter =
+        vPromoted
+        ?? (saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue)
       await syncDealCalendarSideEffects({
         beforeDeal: editDeal,
         afterDeal: saved,
@@ -1202,6 +1209,25 @@ export default function Earnings() {
         venueAfter: vAfter ?? null,
         artistEmail: profile?.artist_email,
       })
+      const postSaveMsgs: string[] = []
+      if (calendarEmailsSkippedForTerminalVenue) {
+        postSaveMsgs.push(
+          'Calendar / artist gig emails are skipped until the venue is not rejected or archived.',
+        )
+      } else {
+        const gigMail = getArtistGigEmailBlockers(profile)
+        if (
+          !gigMail.canQueueArtistGigMail &&
+          vAfter &&
+          dealQualifiesForCalendar(saved, vAfter)
+        ) {
+          postSaveMsgs.push(
+            'Artist gig confirmation/reminder emails are off until you add Artist email in Settings.',
+          )
+        }
+      }
+      if (postSaveMsgs.length) showFormToast(postSaveMsgs.join(' '))
+      await refetchVenues()
       await refetch()
       await refreshNavBadges()
     }
@@ -1474,6 +1500,17 @@ export default function Earnings() {
                           Report received
                         </span>
                       )}
+                      {!deal.agreement_url?.trim() && !deal.agreement_generated_file_id && deal.venue_id ? (
+                        <Link
+                          to={`/files/new?${new URLSearchParams({
+                            venueId: deal.venue_id,
+                            dealId: deal.id,
+                          }).toString()}`}
+                          className="text-[10px] text-neutral-400 hover:text-neutral-200 underline underline-offset-2"
+                        >
+                          File Builder (agreement)
+                        </Link>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-3 py-3 hidden sm:table-cell">

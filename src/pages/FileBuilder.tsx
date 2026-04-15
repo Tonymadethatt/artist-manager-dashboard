@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { ArrowLeft, Download, Save, FileText, Monitor, FileOutput } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useVenues, useVenueDetail } from '@/hooks/useVenues'
@@ -34,6 +34,7 @@ import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
 
 export default function FileBuilder() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { templates, loading: tplLoading } = useTemplates()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
@@ -87,6 +88,30 @@ export default function FileBuilder() {
   useEffect(() => {
     setSelectedContactId(null)
   }, [selectedVenueId])
+
+  /** Deep link: `/files/new?venueId=&dealId=` — waits for deals/venues to load before applying. */
+  useEffect(() => {
+    const vParam = searchParams.get('venueId')?.trim() ?? ''
+    const dParam = searchParams.get('dealId')?.trim() ?? ''
+    if (!vParam && !dParam) return
+
+    if (dParam) {
+      const deal = deals.find(d => d.id === dParam)
+      if (!deal) {
+        if (deals.length === 0) return
+        return
+      }
+      if (deal.venue_id) {
+        setSelectedVenueId(deal.venue_id)
+        setSelectedDealId(dParam)
+      }
+      return
+    }
+
+    if (vParam && venues.some(v => v.id === vParam)) {
+      setSelectedVenueId(vParam)
+    }
+  }, [searchParams, deals, venues])
 
   useEffect(() => {
     if (!selectedDealId || !selectedDeal) return

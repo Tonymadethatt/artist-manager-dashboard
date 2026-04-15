@@ -31,7 +31,10 @@ import {
   isContactTitleLegacy,
   type ContactTitleKey,
 } from '@/lib/contacts/contactTitles'
-import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms } from '@/types'
+import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms, TaskTemplate } from '@/types'
+import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
+import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
+import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
 import { cn } from '@/lib/utils'
 import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
@@ -67,6 +70,11 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
   const [showPerfReports, setShowPerfReports] = useState(false)
   const [sendingPerfForm, setSendingPerfForm] = useState(false)
   const [perfFormMsg, setPerfFormMsg] = useState<string | null>(null)
+  const [statusTemplateDealPick, setStatusTemplateDealPick] = useState<{
+    matching: TaskTemplate[]
+    status: OutreachStatus
+    options: DealPickOption[]
+  } | null>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
 
   const venueReports = perfReports.filter(r => r.venue_id === venue.id)
@@ -108,21 +116,44 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
   const handleStatusChange = async (status: OutreachStatus) => {
     await onUpdate(venue.id, { status })
-    // Auto-apply any template that triggers on this status
     const matching = templates.filter(t => t.trigger_status === status)
-    if (matching.length > 0) {
-      let totalTasks = 0
-      let emailsQueued = 0
-      for (const t of matching) {
-        const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id)
-        totalTasks += count
-        emailsQueued += q ?? 0
-      }
-      if (totalTasks > 0) {
-        const emailPart = emailsQueued > 0 ? ` · ${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued` : ''
-        setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[status]}"${emailPart}`)
-        setTimeout(() => setAutoApplyMsg(null), 4000)
-      }
+    if (matching.length === 0) return
+
+    const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
+    if (!resolve.ok) {
+      setStatusTemplateDealPick({ matching, status, options: resolve.options })
+      return
+    }
+
+    let totalTasks = 0
+    let emailsQueued = 0
+    for (const t of matching) {
+      const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id, resolve.dealId)
+      totalTasks += count
+      emailsQueued += q ?? 0
+    }
+    if (totalTasks > 0) {
+      const emailPart = emailsQueued > 0 ? ` · ${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued` : ''
+      setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[status]}"${emailPart}`)
+      setTimeout(() => setAutoApplyMsg(null), 4000)
+    }
+  }
+
+  const finishStatusTemplateDealPick = async (dealId: string) => {
+    const ctx = statusTemplateDealPick
+    if (!ctx) return
+    setStatusTemplateDealPick(null)
+    let totalTasks = 0
+    let emailsQueued = 0
+    for (const t of ctx.matching) {
+      const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id, dealId)
+      totalTasks += count
+      emailsQueued += q ?? 0
+    }
+    if (totalTasks > 0) {
+      const emailPart = emailsQueued > 0 ? ` · ${emailsQueued} email${emailsQueued !== 1 ? 's' : ''} queued` : ''
+      setAutoApplyMsg(`${totalTasks} task${totalTasks !== 1 ? 's' : ''} created for "${OUTREACH_STATUS_LABELS[ctx.status]}"${emailPart}`)
+      setTimeout(() => setAutoApplyMsg(null), 4000)
     }
   }
 
@@ -563,6 +594,15 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
         recipientEmail={primaryContact?.email ?? ''}
         recipientName={primaryContact?.name ?? ''}
         contactId={primaryContact?.id ?? null}
+      />
+
+      <DealPickForTemplateDialog
+        open={!!statusTemplateDealPick}
+        title="Which deal should these tasks link to?"
+        description="This venue has multiple deals. Choose the gig for the status checklist."
+        options={statusTemplateDealPick?.options ?? []}
+        onPick={finishStatusTemplateDealPick}
+        onCancel={() => setStatusTemplateDealPick(null)}
       />
     </>
   )

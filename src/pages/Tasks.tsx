@@ -24,6 +24,8 @@ import {
   VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS,
 } from '@/types'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { validateTaskEmailType } from '@/lib/tasks/validateTaskEmailType'
 import { parseDealGrossReconciliationNotes } from '@/lib/dealGrossReconciliationTask'
 
 const PRIORITY_BADGE: Record<TaskPriority, 'destructive' | 'warning' | 'secondary'> = {
@@ -117,6 +119,7 @@ export default function Tasks() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [taskFormError, setTaskFormError] = useState<string | null>(null)
 
   const customAudienceForForm = useMemo(() => {
     const cid = parseCustomTemplateId(form.email_type)
@@ -142,10 +145,12 @@ export default function Tasks() {
   const openAdd = () => {
     setForm(EMPTY_FORM)
     setEditTask(null)
+    setTaskFormError(null)
     setAddOpen(true)
   }
 
   const openEdit = (t: Task) => {
+    setTaskFormError(null)
     setForm({
       title: t.title,
       notes: t.notes ?? '',
@@ -167,6 +172,7 @@ export default function Tasks() {
   const handleSave = async () => {
     if (!form.title.trim()) return
     setSaving(true)
+    setTaskFormError(null)
     const payload = {
       title: form.title.trim(),
       notes: form.notes || null,
@@ -177,6 +183,17 @@ export default function Tasks() {
       deal_id: form.deal_id || null,
       email_type: form.email_type === '__none__' ? null : form.email_type,
       generated_file_id: form.generated_file_id || null,
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setSaving(false)
+      return
+    }
+    const typeCheck = await validateTaskEmailType(payload.email_type, user.id)
+    if (!typeCheck.ok) {
+      setTaskFormError(typeCheck.message)
+      setSaving(false)
+      return
     }
     if (editTask) {
       await updateTask(editTask.id, payload)
@@ -405,7 +422,12 @@ export default function Tasks() {
       )}
 
       {/* Add / Edit dialog */}
-      <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
+      <Dialog open={addOpen} onOpenChange={v => {
+        if (!v) {
+          setAddOpen(false)
+          setTaskFormError(null)
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editTask ? 'Edit task' : 'Add a task'}</DialogTitle>
@@ -526,6 +548,10 @@ export default function Tasks() {
                 placeholder="Any context…"
               />
             </div>
+
+            {taskFormError ? (
+              <p className="text-xs text-red-400">{taskFormError}</p>
+            ) : null}
           </div>
 
           <DialogFooter>

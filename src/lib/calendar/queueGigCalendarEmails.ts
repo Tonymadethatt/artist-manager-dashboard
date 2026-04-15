@@ -110,6 +110,8 @@ export async function syncDealCalendarEmails(args: {
  * Idempotent: if the deal is calendar-qualified and the booked confirmation email not yet sent, queue `gig_booked_ics`;
  * reconcile pending `gig_reminder_24h`. Use when qualification can happen without an Earnings save
  * (e.g. task completion or venue status change).
+ *
+ * Requires the parent venue to use a calendar-eligible status (e.g. booked); see `promoteVenueForCalendarDeal`.
  */
 export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<void> {
   await backfillDealShowInstantsIfNeeded(dealId)
