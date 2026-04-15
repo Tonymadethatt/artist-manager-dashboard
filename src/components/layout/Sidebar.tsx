@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -19,13 +20,26 @@ import {
   Calendar,
   Mic2,
   ListChecks,
+  ChevronDown,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavBadges } from '@/context/NavBadgesContext'
 
-const NAV_GROUPS = [
+type NavGroupId = 'workspace' | 'content' | 'forms' | 'email'
+
+type NavItem = {
+  to: string
+  label: string
+  icon: LucideIcon
+  end?: boolean
+  badgeKey: string | null
+}
+
+const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
   {
+    id: 'workspace',
     label: 'Workspace',
     items: [
       { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true,  badgeKey: null              },
@@ -35,10 +49,10 @@ const NAV_GROUPS = [
       { to: '/earnings',            label: 'Deals',         icon: Banknote,        end: false, badgeKey: null              },
       { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false, badgeKey: null              },
       { to: '/performance-reports', label: 'Show Reports',  icon: ClipboardList,   end: false, badgeKey: 'show-reports'    },
-      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
+    id: 'content',
     label: 'Content',
     items: [
       { to: '/templates', label: 'Documents', icon: FileText,   end: false, badgeKey: null },
@@ -46,13 +60,16 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'forms',
     label: 'Forms',
     items: [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
       { to: '/forms/intakes', label: 'Intakes', icon: Mic2, end: false, badgeKey: null },
+      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
+    id: 'email',
     label: 'Email',
     items: [
       { to: '/reports',         label: 'Reports',         icon: FileBarChart2, end: false, badgeKey: null          },
@@ -61,6 +78,18 @@ const NAV_GROUPS = [
     ],
   },
 ]
+
+const DEFAULT_EXPANDED: Record<NavGroupId, boolean> = {
+  workspace: true,
+  content: false,
+  forms: false,
+  email: true,
+}
+
+function pathnameMatchesNavItem(pathname: string, item: NavItem): boolean {
+  if (item.end) return pathname === item.to
+  return pathname === item.to || pathname.startsWith(`${item.to}/`)
+}
 
 interface SidebarProps {
   mobileOpen: boolean
@@ -72,6 +101,27 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const onPipelinePath = location.pathname.startsWith('/pipeline')
   const { counts } = useNavBadges()
+  const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(() => ({ ...DEFAULT_EXPANDED }))
+
+  useEffect(() => {
+    const pathname = location.pathname
+    setExpandedGroups((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const group of NAV_GROUPS) {
+        const hasActive = group.items.some((item) => pathnameMatchesNavItem(pathname, item))
+        if (hasActive && !next[group.id]) {
+          next[group.id] = true
+          changed = true
+        }
+      }
+      if (onPipelinePath && !next.workspace) {
+        next.workspace = true
+        changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [location.pathname, onPipelinePath])
 
   const navContent = (
     <nav className="flex flex-col h-full">
@@ -96,94 +146,121 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Nav groups */}
-      <div className="flex-1 py-3 px-2 overflow-y-auto space-y-4">
-        {NAV_GROUPS.map((group, gi) => (
-          <div key={gi}>
-            <p className="px-2 mb-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 select-none">
-              {group.label}
-            </p>
-            <div className="space-y-px">
-              {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
-                const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
-                return (
-                <div key={to}>
-                  <NavLink
-                    to={to}
-                    end={end}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      cn(
-                        'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-sm transition-all duration-150',
-                        (isActive || (to === '/pipeline' && onPipelinePath))
-                          ? 'bg-[hsl(var(--sidebar-active))] text-white'
-                          : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
-                      )
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {/* Active left accent */}
-                        {(isActive || (to === '/pipeline' && onPipelinePath)) && (
-                          <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-white/70 rounded-full" />
-                        )}
-                        <Icon className={cn(
-                          'h-[15px] w-[15px] shrink-0 transition-colors',
-                          (isActive || (to === '/pipeline' && onPipelinePath)) ? 'text-white' : 'text-[hsl(var(--sidebar-muted))]'
-                        )} />
-                        <span className="text-[12px] font-medium tracking-[0.01em] truncate flex-1 min-w-0">{label}</span>
-                        {badgeCount > 0 && (
-                          <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold bg-red-600 text-white leading-none shrink-0">
-                            {badgeCount > 99 ? '99+' : badgeCount}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-
-                  {/* Tasks sub-item: Templates (same horizontal rhythm as parent row, no deep indent) */}
-                  {to === '/pipeline' && onPipelinePath && (
-                    <NavLink
-                      to="/pipeline/templates"
-                      end
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        cn(
-                          'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1 rounded text-[12px] transition-colors mt-px',
-                          isActive
-                            ? 'text-neutral-200'
-                            : 'text-[hsl(var(--sidebar-muted))] hover:text-neutral-300'
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && (
-                            <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-white/40 rounded-full" />
-                          )}
-                          <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center" aria-hidden>
-                            <LayoutTemplate className="h-3 w-3 opacity-70" />
-                          </span>
-                          <span className="font-medium tracking-[0.01em] truncate flex-1 min-w-0">Templates</span>
-                        </>
-                      )}
-                    </NavLink>
+      <div className="flex-1 py-2 px-1.5 overflow-y-auto space-y-1">
+        {NAV_GROUPS.map((group) => {
+          const isOpen = expandedGroups[group.id]
+          const sectionId = `nav-section-${group.id}`
+          return (
+            <div key={group.id} className="rounded-md">
+              <button
+                type="button"
+                id={`${sectionId}-label`}
+                aria-expanded={isOpen}
+                aria-controls={sectionId}
+                onClick={() =>
+                  setExpandedGroups((p) => ({
+                    ...p,
+                    [group.id]: !p[group.id],
+                  }))
+                }
+                className="flex w-full items-center gap-0.5 px-1.5 py-0.5 rounded text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--sidebar-muted))] opacity-40 hover:opacity-60 transition-opacity select-none"
+              >
+                <ChevronDown
+                  className={cn(
+                    'h-3 w-3 shrink-0 opacity-70 transition-transform duration-150',
+                    !isOpen && '-rotate-90'
                   )}
+                  aria-hidden
+                />
+                <span className="truncate min-w-0">{group.label}</span>
+              </button>
+              <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
+                <div className="space-y-0">
+                  {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
+                    const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
+                    return (
+                      <div key={to}>
+                        <NavLink
+                          to={to}
+                          end={end}
+                          onClick={onClose}
+                          className={({ isActive }) =>
+                            cn(
+                              'relative flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded text-sm transition-all duration-150',
+                              (isActive || (to === '/pipeline' && onPipelinePath))
+                                ? 'bg-[hsl(var(--sidebar-active))] text-white'
+                                : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
+                            )
+                          }
+                        >
+                          {({ isActive }) => (
+                            <>
+                              {(isActive || (to === '/pipeline' && onPipelinePath)) && (
+                                <span className="absolute left-0 top-0.5 bottom-0.5 w-[2px] bg-white/70 rounded-full" />
+                              )}
+                              <Icon
+                                className={cn(
+                                  'h-[15px] w-[15px] shrink-0 transition-colors',
+                                  (isActive || (to === '/pipeline' && onPipelinePath))
+                                    ? 'text-white'
+                                    : 'text-[hsl(var(--sidebar-muted))]'
+                                )}
+                              />
+                              <span className="text-[12px] font-medium tracking-[0.01em] truncate flex-1 min-w-0">{label}</span>
+                              {badgeCount > 0 && (
+                                <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold bg-red-600 text-white leading-none shrink-0">
+                                  {badgeCount > 99 ? '99+' : badgeCount}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </NavLink>
+
+                        {to === '/pipeline' && onPipelinePath && (
+                          <NavLink
+                            to="/pipeline/templates"
+                            end
+                            onClick={onClose}
+                            className={({ isActive }) =>
+                              cn(
+                                'relative flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded text-[12px] transition-colors',
+                                isActive
+                                  ? 'text-neutral-200'
+                                  : 'text-[hsl(var(--sidebar-muted))] hover:text-neutral-300'
+                              )
+                            }
+                          >
+                            {({ isActive }) => (
+                              <>
+                                {isActive && (
+                                  <span className="absolute left-0 top-0.5 bottom-0.5 w-[2px] bg-white/40 rounded-full" />
+                                )}
+                                <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center" aria-hidden>
+                                  <LayoutTemplate className="h-3 w-3 opacity-70" />
+                                </span>
+                                <span className="font-medium tracking-[0.01em] truncate flex-1 min-w-0">Templates</span>
+                              </>
+                            )}
+                          </NavLink>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-                )
-              })}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Bottom: settings + sign out */}
-      <div className="px-2 pb-3 pt-2 border-t border-[hsl(var(--sidebar-border))] space-y-px shrink-0">
+      <div className="px-1.5 pb-2 pt-1.5 border-t border-[hsl(var(--sidebar-border))] space-y-0 shrink-0">
         <NavLink
           to="/settings"
           onClick={onClose}
           className={({ isActive }) =>
             cn(
-              'relative flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] font-medium transition-all duration-150',
+              'relative flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded text-[12px] font-medium transition-all duration-150',
               isActive
                 ? 'bg-[hsl(var(--sidebar-active))] text-white'
                 : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200'
@@ -192,7 +269,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         >
           {({ isActive }) => (
             <>
-              {isActive && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-white/70 rounded-full" />}
+              {isActive && <span className="absolute left-0 top-0.5 bottom-0.5 w-[2px] bg-white/70 rounded-full" />}
               <Settings2 className={cn('h-[15px] w-[15px] shrink-0', isActive ? 'text-white' : 'text-[hsl(var(--sidebar-muted))]')} />
               Settings
             </>
@@ -200,7 +277,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </NavLink>
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded text-[12px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
+          className="flex w-full items-center gap-1.5 pl-2 pr-1.5 py-1 rounded text-[12px] font-medium text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200 transition-all duration-150"
         >
           <LogOut className="h-[15px] w-[15px] shrink-0" />
           Sign out
