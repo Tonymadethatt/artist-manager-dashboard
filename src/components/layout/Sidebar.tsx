@@ -146,7 +146,13 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Nav groups */}
-      <div className="flex-1 py-2 px-1.5 overflow-y-auto space-y-1">
+      <div
+        className={cn(
+          'flex-1 py-2 px-1.5 overflow-y-auto space-y-1',
+          '[scrollbar-width:none] [-ms-overflow-style:none]',
+          '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0'
+        )}
+      >
         {NAV_GROUPS.map((group) => {
           const isOpen = expandedGroups[group.id]
           const sectionId = `nav-section-${group.id}`
