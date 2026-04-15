@@ -27,6 +27,8 @@ export type GigBookedEmailDealInput = Pick<
   | 'event_start_at'
   | 'event_end_at'
   | 'event_date'
+  | 'performance_start_at'
+  | 'performance_end_at'
   | 'gross_amount'
   | 'payment_due_date'
   | 'commission_tier'
@@ -266,6 +268,8 @@ export function buildGigBookedPreviewBundle(args: {
   event_start_at: string | null
   event_end_at: string | null
   event_date: string | null
+  performance_start_at?: string | null
+  performance_end_at?: string | null
   description: string
   gross_amount: number
   payment_due_date: string | null
@@ -361,6 +365,8 @@ export function buildGigBookedPreviewBundle(args: {
     event_start_at: args.event_start_at,
     event_end_at: args.event_end_at,
     event_date: args.event_date,
+    performance_start_at: args.performance_start_at ?? null,
+    performance_end_at: args.performance_end_at ?? null,
     gross_amount: args.gross_amount,
     payment_due_date: args.payment_due_date,
     commission_tier: 'new_doors',

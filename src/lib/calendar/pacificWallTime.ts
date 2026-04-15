@@ -251,14 +251,19 @@ function compactDateFromYmd(ymd: string): string {
   return COMPACT_DAY_SAME_YEAR.format(new Date(iso))
 }
 
-/**
- * Short show window for digest / day-summary tables (12h, minimal date noise).
- */
-export function whenLineCompactFromDeal(d: {
+/** Event window + optional performance/set instants (Pacific-interprets ISO fields). */
+export type DealWhenAndPerformanceInput = {
   event_start_at?: string | null
   event_end_at?: string | null
   event_date?: string | null
-}): string {
+  performance_start_at?: string | null
+  performance_end_at?: string | null
+}
+
+/**
+ * Short show window for digest / day-summary tables (12h, minimal date noise).
+ */
+export function whenLineCompactFromDeal(d: DealWhenAndPerformanceInput): string {
   if (d.event_start_at && d.event_end_at) {
     return formatPacificTimeRangeCompact(d.event_start_at, d.event_end_at)
   }
@@ -267,11 +272,7 @@ export function whenLineCompactFromDeal(d: {
 }
 
 /** Human-readable show window for emails and calendar detail (Pacific). */
-export function whenLineFriendlyFromDeal(d: {
-  event_start_at?: string | null
-  event_end_at?: string | null
-  event_date?: string | null
-}): string {
+export function whenLineFriendlyFromDeal(d: DealWhenAndPerformanceInput): string {
   if (d.event_start_at && d.event_end_at) {
     return formatPacificTimeRangeReadable(d.event_start_at, d.event_end_at)
   }
@@ -297,8 +298,33 @@ const MDY_STACK = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
 })
 
-/** Stacked email “when” cell: weekday, calendar date, time range (or all day). */
-export type ScheduleWhenStack = { dayLine: string; dateLine: string; timeLine: string }
+/** Stacked email “when” cell: weekday, calendar date, event time range (or all day), optional DJ/set window. */
+export type ScheduleWhenStack = {
+  dayLine: string
+  dateLine: string
+  timeLine: string
+  /** When present, rendered under the event window with a “Your set” label (Pacific). */
+  setTimeLine?: string | null
+}
+
+/**
+ * Compact Pacific line for the artist’s performance/set window (separate from venue event hours).
+ * Both instants: same style as event window (`formatPacificTimeRangeCompact`).
+ * Start only: time + PT (no redundant date if caller shows event date above).
+ */
+export function performanceWindowCompactFromDeal(d: DealWhenAndPerformanceInput): string | null {
+  const ps = d.performance_start_at?.trim()
+  const pe = d.performance_end_at?.trim()
+  if (ps && pe) {
+    const line = formatPacificTimeRangeCompact(ps, pe)
+    return line || null
+  }
+  if (ps) {
+    const t = formatPacificTime12h(ps)
+    return t ? `${t} PT` : null
+  }
+  return null
+}
 
 /** Pacific wall date (YYYY-MM-DD) → three display lines for table cells. */
 export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null {
@@ -320,34 +346,36 @@ export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null 
 }
 
 /** Deal instants or event_date → stack for gig digest / day-summary tables. */
-export function scheduleWhenStackFromDeal(d: {
-  event_start_at?: string | null
-  event_end_at?: string | null
-  event_date?: string | null
-}): ScheduleWhenStack | null {
+export function scheduleWhenStackFromDeal(d: DealWhenAndPerformanceInput): ScheduleWhenStack | null {
+  const setTimeLine = performanceWindowCompactFromDeal(d)
+  const withSet = (base: ScheduleWhenStack): ScheduleWhenStack =>
+    setTimeLine ? { ...base, setTimeLine } : base
+
   if (d.event_start_at && d.event_end_at) {
     const ms0 = new Date(d.event_start_at).getTime()
     const ms1 = new Date(d.event_end_at).getTime()
     if (!Number.isFinite(ms0) || !Number.isFinite(ms1)) {
       const ed = d.event_date?.trim()
-      return ed ? scheduleWhenStackFromYmd(ed) : null
+      const ymdStack = ed ? scheduleWhenStackFromYmd(ed) : null
+      return ymdStack ? withSet(ymdStack) : null
     }
     const k0 = pacificDateKeyFromUtcIso(d.event_start_at)
     const k1 = pacificDateKeyFromUtcIso(d.event_end_at)
     if (!k0 || !k1) {
       const ed = d.event_date?.trim()
-      return ed ? scheduleWhenStackFromYmd(ed) : null
+      const ymdStack = ed ? scheduleWhenStackFromYmd(ed) : null
+      return ymdStack ? withSet(ymdStack) : null
     }
     const yNow = pacificTodayYmd().slice(0, 4)
     const t0 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms0)))
     const t1 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms1)))
     if (k0 === k1) {
       const yEv = k0.slice(0, 4)
-      return {
+      return withSet({
         dayLine: WEEKDAY_SHORT_STACK.format(new Date(ms0)),
         dateLine: yEv === yNow ? MD_STACK.format(new Date(ms0)) : MDY_STACK.format(new Date(ms0)),
         timeLine: `${t0} – ${t1}`,
-      }
+      })
     }
     const dayLine =
       `${WEEKDAY_SHORT_STACK.format(new Date(ms0))} – ${WEEKDAY_SHORT_STACK.format(new Date(ms1))}`
@@ -358,8 +386,9 @@ export function scheduleWhenStackFromDeal(d: {
         ? `${MD_STACK.format(new Date(ms0))} – ${MD_STACK.format(new Date(ms1))}, ${y0}`
         : `${MDY_STACK.format(new Date(ms0))} – ${MDY_STACK.format(new Date(ms1))}`
     const timeLine = `${t0} – ${t1}`
-    return { dayLine, dateLine, timeLine }
+    return withSet({ dayLine, dateLine, timeLine })
   }
   const ed = d.event_date?.trim()
-  return ed ? scheduleWhenStackFromYmd(ed) : null
+  const ymdOnly = ed ? scheduleWhenStackFromYmd(ed) : null
+  return ymdOnly ? withSet(ymdOnly) : null
 }

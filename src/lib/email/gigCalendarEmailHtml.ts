@@ -30,6 +30,8 @@ export function buildGigCalendarTableRow(
     event_start_at?: string | null
     event_end_at?: string | null
     event_date?: string | null
+    performance_start_at?: string | null
+    performance_end_at?: string | null
   },
   title: string,
   venue: string,
@@ -111,7 +113,7 @@ export type BuildBrandedGigCalendarEmailArgs = {
   phone?: string | null
   digest?: { rows: GigCalendarScheduleRow[] }
   daySummary?: { rows: GigCalendarScheduleRow[]; dayLabel: string }
-  reminder?: { venueName: string; dealDescription: string; whenLine: string }
+  reminder?: { venueName: string; dealDescription: string; whenLine: string; setLine?: string | null }
   /** Pre-built HTML fragment from `buildGigBookedEmailMiddleHtml` (stacked section cards). */
   icsBody?: { middleSectionsHtml: string }
 }
@@ -163,10 +165,21 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '24-hour reminder',
       )
       const r = args.reminder!
+      const setBlock = r.setLine?.trim()
+        ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12);">`
+          + `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Your set</div>`
+          + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.setLine.trim())}</p>`
+          + `</div>`
+        : ''
+      const eventLabel = setBlock
+        ? `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Event</div>`
+        : ''
       const reminderBody =
         `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(r.dealDescription)}</p>`
         + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(r.venueName)}</p>`
+        + eventLabel
         + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.whenLine)}</p>`
+        + setBlock
       middleHtml = emailSectionCardHtml('Show details', reminderBody, '#f97316')
       defaultIntro = 'Quick heads-up — your show is coming up in about <strong>24 hours</strong>.'
       defaultClosing = 'Break a leg. Reply if you need anything from the team.'

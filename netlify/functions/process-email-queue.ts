@@ -46,7 +46,13 @@ import { buildGigBookedEmailMiddleHtml, catalogDocFromSupabaseRow } from '../../
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
-import { addCalendarDaysPacific, pacificDayEndExclusiveUtcIso, pacificWallToUtcIso, whenLineCompactFromDeal } from '../../src/lib/calendar/pacificWallTime'
+import {
+  addCalendarDaysPacific,
+  pacificDayEndExclusiveUtcIso,
+  pacificWallToUtcIso,
+  performanceWindowCompactFromDeal,
+  whenLineCompactFromDeal,
+} from '../../src/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '../../src/types'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
@@ -757,6 +763,7 @@ const handler: Handler = async (event) => {
             venueName,
             dealDescription: deal.description?.trim() || 'Gig',
             whenLine: whenLineCompactFromDeal(deal) || '',
+            setLine: performanceWindowCompactFromDeal(deal),
           },
         })
         const subj = layoutMerged.subject?.trim() || email.subject || `Reminder: ${venueName} tomorrow`

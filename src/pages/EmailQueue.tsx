@@ -47,6 +47,7 @@ import {
   formatPacificDateLongFromYmd,
   pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
+  performanceWindowCompactFromDeal,
   stripOnTheHourMinutes12h,
   whenLineCompactFromDeal,
 } from '@/lib/calendar/pacificWallTime'
@@ -705,6 +706,7 @@ export default function EmailQueue() {
                   venueName: vn,
                   dealDescription: deal.description?.trim() || 'Gig',
                   whenLine: whenLineCompactFromDeal(deal),
+                  setLine: performanceWindowCompactFromDeal(deal),
                 },
               }))
             } else {
@@ -1222,6 +1224,7 @@ export default function EmailQueue() {
                   venueName,
                   dealDescription: deal.description?.trim() || 'Gig',
                   whenLine: whenLineCompactFromDeal(deal),
+                  setLine: performanceWindowCompactFromDeal(deal),
                 },
               })
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {

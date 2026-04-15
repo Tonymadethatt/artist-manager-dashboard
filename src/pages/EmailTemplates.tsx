@@ -34,7 +34,11 @@ import {
 } from '@/lib/buildVenueEmailHtml'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
-import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
+import {
+  formatPacificTimeRangeCompact,
+  pacificWallToUtcIso,
+  performanceWindowCompactFromDeal,
+} from '@/lib/calendar/pacificWallTime'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
   venueEmailTypeToCaptureKind,
@@ -85,15 +89,28 @@ function gigEmailPreviewWhenLine(): string {
   return a && b ? formatPacificTimeRangeCompact(a, b) : d
 }
 
+/** Sample DJ set inside the preview event window (for reminder / booked / digest previews). */
+function gigEmailPreviewSetLine(): string | null {
+  const d = PREVIEW_MOCK_DEAL.event_date?.trim()
+  if (!d) return null
+  const a = pacificWallToUtcIso(d, '21:00')
+  const b = pacificWallToUtcIso(d, '22:30')
+  return performanceWindowCompactFromDeal({ performance_start_at: a, performance_end_at: b })
+}
+
 function gigEmailPreviewTableRow() {
   const d = PREVIEW_MOCK_DEAL.event_date?.trim()
   const start = d ? pacificWallToUtcIso(d, '20:00') : null
   const end = d ? pacificWallToUtcIso(d, '23:00') : null
+  const pStart = d ? pacificWallToUtcIso(d, '21:00') : null
+  const pEnd = d ? pacificWallToUtcIso(d, '22:30') : null
   return buildGigCalendarTableRow(
     {
       event_start_at: start,
       event_end_at: end,
       event_date: PREVIEW_MOCK_DEAL.event_date,
+      performance_start_at: pStart,
+      performance_end_at: pEnd,
     },
     PREVIEW_MOCK_DEAL.description,
     PREVIEW_MOCK_VENUE.name,
@@ -593,6 +610,7 @@ export default function EmailTemplates() {
             venueName: PREVIEW_MOCK_VENUE.name,
             dealDescription: PREVIEW_MOCK_DEAL.description,
             whenLine: gigEmailPreviewWhenLine(),
+            setLine: gigEmailPreviewSetLine(),
           },
         })
       }
@@ -601,10 +619,14 @@ export default function EmailTemplates() {
         const d0 = PREVIEW_MOCK_DEAL.event_date?.trim()
         const startIso = d0 ? pacificWallToUtcIso(d0, '20:00') : null
         const endIso = d0 ? pacificWallToUtcIso(d0, '23:00') : null
+        const perfStartIso = d0 ? pacificWallToUtcIso(d0, '21:00') : null
+        const perfEndIso = d0 ? pacificWallToUtcIso(d0, '22:30') : null
         const { deal: bookedDeal, venue: bookedVenue, catalog: bookedCat } = buildGigBookedPreviewBundle({
           event_start_at: startIso,
           event_end_at: endIso,
           event_date: PREVIEW_MOCK_DEAL.event_date,
+          performance_start_at: perfStartIso,
+          performance_end_at: perfEndIso,
           description: PREVIEW_MOCK_DEAL.description,
           gross_amount: PREVIEW_MOCK_DEAL.gross_amount,
           payment_due_date: PREVIEW_MOCK_DEAL.payment_due_date,

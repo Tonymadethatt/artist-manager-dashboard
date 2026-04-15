@@ -23,7 +23,11 @@ import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
-import { formatPacificTimeRangeCompact, pacificWallToUtcIso } from '@/lib/calendar/pacificWallTime'
+import {
+  formatPacificTimeRangeCompact,
+  pacificWallToUtcIso,
+  performanceWindowCompactFromDeal,
+} from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
   'booking_confirmation',
@@ -309,6 +313,8 @@ export async function sendEmailTemplateTest(
     const previewEventDay = PREVIEW_MOCK_DEAL.event_date ?? '2026-05-17'
     const startIso = pacificWallToUtcIso(previewEventDay, '20:00')
     const endIso = pacificWallToUtcIso(previewEventDay, '23:00')
+    const previewPerfStart = pacificWallToUtcIso(previewEventDay, '21:00')
+    const previewPerfEnd = pacificWallToUtcIso(previewEventDay, '22:30')
     const Lsend = artistLayoutForSend(layoutNorm, null, null)
     const gigShell = {
       artistName: profile.artist_name ?? '',
@@ -328,6 +334,10 @@ export async function sendEmailTemplateTest(
           venueName: PREVIEW_MOCK_VENUE.name,
           dealDescription: PREVIEW_MOCK_DEAL.description,
           whenLine: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : '',
+          setLine: performanceWindowCompactFromDeal({
+            performance_start_at: previewPerfStart,
+            performance_end_at: previewPerfEnd,
+          }),
         },
       })
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
@@ -356,6 +366,8 @@ export async function sendEmailTemplateTest(
         event_start_at: startIso,
         event_end_at: endIso,
         event_date: previewEventDay,
+        performance_start_at: previewPerfStart,
+        performance_end_at: previewPerfEnd,
         description: PREVIEW_MOCK_DEAL.description,
         gross_amount: PREVIEW_MOCK_DEAL.gross_amount,
         payment_due_date: PREVIEW_MOCK_DEAL.payment_due_date,
