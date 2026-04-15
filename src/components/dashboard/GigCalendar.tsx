@@ -981,10 +981,6 @@ export function GigCalendar({
             const sectionTitle = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-400'
             return (
               <div className="flex flex-col gap-3 text-sm">
-                <p className="text-xs text-neutral-500">
-                  Imported from your shared Google calendar (see Settings). Green chips on the grid are these events; amber
-                  highlights a possible duplicate with a booked gig.
-                </p>
                 {selectedSync.display_status === 'needs_review' && (
                   <div className="rounded-md border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-100/95">
                     Possible duplicate with a booked gig — review times and titles in Earnings vs this import. Run{' '}
