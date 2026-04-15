@@ -89,6 +89,7 @@ function VenueProgressPanelConnected({
   onApplyTemplate,
   refetchEmails,
   onRefreshNavBadges,
+  showToast,
 }: {
   venue: Venue
   tasks: Task[]
@@ -106,6 +107,7 @@ function VenueProgressPanelConnected({
   ) => ReturnType<ReturnType<typeof useTaskTemplates>['applyTemplate']>
   refetchEmails: () => void | Promise<void>
   onRefreshNavBadges: () => Promise<void>
+  showToast: (msg: string) => void
 }) {
   const { contacts, addNote } = useVenueDetail(venue.id)
   const venueDeals = deals.filter(d => d.venue_id === venue.id)
@@ -154,10 +156,14 @@ function VenueProgressPanelConnected({
       if (matching.length > 0) {
         const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
         if (!resolve.ok) {
-          setProgressTemplateDealPick({
-            templateIds: matching.map(t => t.id),
-            options: resolve.options,
-          })
+          if (resolve.error === 'fetch_failed') {
+            showToast('Could not load deals — check connection and try again.')
+          } else {
+            setProgressTemplateDealPick({
+              templateIds: matching.map(t => t.id),
+              options: resolve.options,
+            })
+          }
         } else {
           for (const t of matching) {
             await onApplyTemplate(t.id, venue.id, resolve.dealId)
@@ -191,7 +197,7 @@ function VenueProgressPanelConnected({
         onOpenSendModal(venue, primaryContact, updates.emailType)
       }
     }
-  }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails, onRefreshNavBadges])
+  }, [venue, contacts, templates, venueTasks, addNote, onCompleteTask, onUpdateVenue, onQueueEmail, onOpenSendModal, onApplyTemplate, refetchEmails, onRefreshNavBadges, showToast])
 
   const finishProgressTemplateDealPick = async (dealId: string) => {
     const ctx = progressTemplateDealPick
@@ -858,6 +864,7 @@ export default function Pipeline() {
               onApplyTemplate={applyTemplate}
               refetchEmails={refetchEmails}
               onRefreshNavBadges={refreshNavBadges}
+              showToast={showToast}
             />
           </div>
         )}

@@ -400,6 +400,9 @@ export function useTaskTemplates() {
 
     const resolved = await resolveDealIdForTemplateApply(venueId, dealId)
     if (!resolved.ok) {
+      if (resolved.error === 'fetch_failed') {
+        return { count: 0, error: new Error('Could not load deals for this venue. Try again.') }
+      }
       return { count: 0, needsDealPick: true, dealOptions: resolved.options }
     }
     const effectiveDealId = resolved.dealId

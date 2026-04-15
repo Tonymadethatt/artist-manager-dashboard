@@ -95,11 +95,15 @@ export default function Outreach() {
     if (matching.length > 0) {
       const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
       if (!resolve.ok) {
-        setStatusTemplateDealPick({ venue, newStatus, matching, options: resolve.options })
-        deferredDealPick = true
-        showToast(
-          `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · Pick a deal to apply checklist tasks`,
-        )
+        if (resolve.error === 'fetch_failed') {
+          showToast('Could not load deals — check connection and try again.')
+        } else {
+          setStatusTemplateDealPick({ venue, newStatus, matching, options: resolve.options })
+          deferredDealPick = true
+          showToast(
+            `${venue.name} → ${OUTREACH_STATUS_LABELS[newStatus]} · Pick a deal to apply checklist tasks`,
+          )
+        }
       } else {
         for (const t of matching) {
           const { count, emailsQueued: q } = await applyTemplate(t.id, venue.id, resolve.dealId)

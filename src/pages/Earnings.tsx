@@ -1197,8 +1197,11 @@ export default function Earnings() {
       const vBefore = editDeal
         ? venues.find(v => v.id === editDeal.venue_id) ?? editDeal.venue
         : null
-      const { venueAfter: vPromoted, calendarEmailsSkippedForTerminalVenue } =
-        await refreshVenueAndPromoteForCalendarDeal(saved)
+      const {
+        venueAfter: vPromoted,
+        calendarEmailsSkippedForTerminalVenue,
+        promotionAbortedUnauthenticated,
+      } = await refreshVenueAndPromoteForCalendarDeal(saved)
       const vAfter =
         vPromoted
         ?? (saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue)
@@ -1210,11 +1213,16 @@ export default function Earnings() {
         artistEmail: profile?.artist_email,
       })
       const postSaveMsgs: string[] = []
+      if (promotionAbortedUnauthenticated) {
+        postSaveMsgs.push(
+          'Deal saved, but the venue could not be auto-set to booked (session). Sign in and save again, or set the venue to booked in Outreach for calendar emails.',
+        )
+      }
       if (calendarEmailsSkippedForTerminalVenue) {
         postSaveMsgs.push(
           'Calendar / artist gig emails are skipped until the venue is not rejected or archived.',
         )
-      } else {
+      } else if (!promotionAbortedUnauthenticated) {
         const gigMail = getArtistGigEmailBlockers(profile)
         if (
           !gigMail.canQueueArtistGigMail &&

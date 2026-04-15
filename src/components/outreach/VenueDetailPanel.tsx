@@ -121,7 +121,12 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
 
     const resolve = await resolveDealIdForTemplateApply(venue.id, undefined)
     if (!resolve.ok) {
-      setStatusTemplateDealPick({ matching, status, options: resolve.options })
+      if (resolve.error === 'fetch_failed') {
+        setAutoApplyMsg('Could not load deals — check connection and try again.')
+        setTimeout(() => setAutoApplyMsg(null), 4000)
+      } else {
+        setStatusTemplateDealPick({ matching, status, options: resolve.options })
+      }
       return
     }
 

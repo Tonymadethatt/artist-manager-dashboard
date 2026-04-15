@@ -75,7 +75,12 @@ export type ImportIntakeDealAddDeal = (deal: {
 }) => Promise<{ data?: Deal; error?: { message?: string } | Error }>
 
 export type ImportDealFromShowResult =
-  | { ok: true; deal: Deal; calendarEmailsSkippedForTerminalVenue?: boolean }
+  | {
+      ok: true
+      deal: Deal
+      calendarEmailsSkippedForTerminalVenue?: boolean
+      promotionAbortedUnauthenticated?: boolean
+    }
   | { ok: false; error: string }
   | { ok: false; needsOverlapConfirm: true }
 
@@ -227,8 +232,11 @@ export async function importDealFromIntakeShow(params: {
 
   await supabase.from('booking_intake_shows').update({ imported_deal_id: saved.id }).eq('id', showId)
 
-  const { venueAfter, calendarEmailsSkippedForTerminalVenue } =
-    await refreshVenueAndPromoteForCalendarDeal(saved)
+  const {
+    venueAfter,
+    calendarEmailsSkippedForTerminalVenue,
+    promotionAbortedUnauthenticated,
+  } = await refreshVenueAndPromoteForCalendarDeal(saved)
   const vAfter = venueAfter ?? ((saved.venue ?? linkedVenue) as Venue | null)
   await refetchVenues()
 
@@ -244,5 +252,6 @@ export async function importDealFromIntakeShow(params: {
     ok: true,
     deal: saved,
     ...(calendarEmailsSkippedForTerminalVenue ? { calendarEmailsSkippedForTerminalVenue: true } : {}),
+    ...(promotionAbortedUnauthenticated ? { promotionAbortedUnauthenticated: true } : {}),
   }
 }

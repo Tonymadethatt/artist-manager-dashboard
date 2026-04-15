@@ -2314,6 +2314,11 @@ export default function BookingIntakePage() {
         if (r.calendarEmailsSkippedForTerminalVenue) {
           okParts.push('Calendar emails were not queued — venue is rejected or archived.')
         }
+        if (r.promotionAbortedUnauthenticated) {
+          okParts.push(
+            'Venue could not be auto-set to booked (session). Sign in and try again, or set booked in Outreach.',
+          )
+        }
         const gigBlock = getArtistGigEmailBlockers(profile)
         if (
           !gigBlock.canQueueArtistGigMail &&
@@ -2387,6 +2392,9 @@ export default function BookingIntakePage() {
       const venueContactsAll = (vcAll ?? []) as Contact[]
       let dealsAcc: Deal[] = [...deals]
       let lastDeal = ''
+      let anyTerminalCalendarSkip = false
+      let anyPromotionAbortedUnauthenticated = false
+      let anyArtistGigEmailBlocked = false
       for (const showRow of rows) {
         const tryImport = (allowOverlap: boolean) =>
           importDealFromIntakeShow({
@@ -2425,13 +2433,36 @@ export default function BookingIntakePage() {
         }
         dealsAcc = [r.deal, ...dealsAcc]
         lastDeal = r.deal.description
+        if (r.calendarEmailsSkippedForTerminalVenue) anyTerminalCalendarSkip = true
+        if (r.promotionAbortedUnauthenticated) anyPromotionAbortedUnauthenticated = true
+        const gigBlockAll = getArtistGigEmailBlockers(profile)
+        if (
+          !gigBlockAll.canQueueArtistGigMail &&
+          r.deal.event_start_at &&
+          r.deal.event_end_at &&
+          !r.deal.event_cancelled_at
+        ) {
+          anyArtistGigEmailBlocked = true
+        }
         await refetchDeals()
         await booking.refetch()
         void refreshNavBadges()
       }
+      const importAllNotes: string[] = [`Imported ${rows.length} deal(s). Last: ${lastDeal}`]
+      if (anyTerminalCalendarSkip) {
+        importAllNotes.push('Calendar skipped for rejected/archived venue on at least one deal.')
+      }
+      if (anyPromotionAbortedUnauthenticated) {
+        importAllNotes.push(
+          'Venue auto-book failed on at least one deal (session) — sign in and retry or set booked in Outreach.',
+        )
+      }
+      if (anyArtistGigEmailBlocked) {
+        importAllNotes.push('Artist gig emails need Artist email in Settings.')
+      }
       setImportBanner({
         tone: 'ok',
-        text: `Imported ${rows.length} deal(s). Last: ${lastDeal}`,
+        text: importAllNotes.join(' '),
       })
       if (venueId && dealsAcc.length > 0) {
         setIntakeFileBuilderLink({ venueId, dealId: dealsAcc[0].id })
@@ -2452,7 +2483,7 @@ export default function BookingIntakePage() {
     refetchVenues,
     refetchDeals,
     booking,
-    profile?.artist_email,
+    profile,
     refreshNavBadges,
   ])
 
