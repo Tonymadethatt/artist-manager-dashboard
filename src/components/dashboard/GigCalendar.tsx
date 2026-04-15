@@ -407,7 +407,7 @@ export function GigCalendar({
               <span className="text-neutral-600"> · </span>
               <span className="text-amber-300 font-semibold">Community</span>
               <span className="text-neutral-600"> · </span>
-              <span className="text-emerald-400 font-semibold">Google Calendar</span>
+              <span className="text-emerald-400 font-semibold">Google</span>
             </p>
           </div>
         </div>
