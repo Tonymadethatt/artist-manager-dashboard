@@ -197,10 +197,10 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
         </div>
       </div>
 
-      {/* Nav groups */}
+      {/* Nav groups (scrolls); test mode is pinned below this strip */}
       <div
         className={cn(
-          'flex-1 py-2 px-1.5 overflow-y-auto space-y-1.5',
+          'flex-1 min-h-0 py-2 px-1.5 overflow-y-auto space-y-1.5',
           '[scrollbar-width:none] [-ms-overflow-style:none]',
           '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0'
         )}
@@ -338,26 +338,59 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             </div>
           )
         })}
-        <div className="pt-1.5 mt-1 border-t border-white/[0.06] space-y-1">
-          {testModeHint && (
-            <p className="text-[9px] text-amber-400/90 leading-snug px-0.5">{testModeHint}</p>
-          )}
-          <button
-            type="button"
-            onClick={() => void toggleEmailTestMode()}
-            disabled={testModeBusy || !profile}
-            aria-pressed={!!profile?.email_test_mode}
+      </div>
+
+      {/* Email test mode — pinned above settings (does not scroll with nav) */}
+      <div className="shrink-0 px-1.5 pt-1.5 pb-2 border-t border-white/[0.06]">
+        {testModeHint && (
+          <p className="text-[9px] text-amber-400/90 leading-snug px-0.5 mb-1.5">{testModeHint}</p>
+        )}
+        <div className="flex items-center gap-1 min-w-0">
+          <FlaskConical
             className={cn(
-              'flex w-full items-center gap-1.5 px-1.5 py-1 rounded-md text-[11px] font-medium border transition-colors',
-              profile?.email_test_mode
-                ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-                : 'border-white/[0.08] text-[hsl(var(--sidebar-muted))] hover:bg-white/[0.06] hover:text-neutral-200',
-              (testModeBusy || !profile) && 'opacity-50 pointer-events-none'
+              'h-3.5 w-3.5 shrink-0',
+              profile?.email_test_mode ? 'text-orange-400' : 'text-[hsl(var(--sidebar-muted))]'
+            )}
+            aria-hidden
+          />
+          <span
+            className={cn(
+              'text-[8px] font-semibold uppercase tracking-wide shrink-0 w-[18px]',
+              !profile?.email_test_mode ? 'text-neutral-200' : 'text-[hsl(var(--sidebar-muted))]'
             )}
           >
-            <FlaskConical className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
-            <span className="truncate text-left">{profile?.email_test_mode ? 'Test mode on' : 'Test mode'}</span>
+            Off
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!profile?.email_test_mode}
+            aria-label="Email test mode"
+            disabled={testModeBusy || !profile}
+            onClick={() => void toggleEmailTestMode()}
+            className={cn(
+              'relative mx-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 focus-visible:ring-offset-1 focus-visible:ring-offset-[hsl(var(--sidebar-bg))]',
+              profile?.email_test_mode ? 'bg-orange-500' : 'bg-neutral-600',
+              (testModeBusy || !profile) && 'opacity-45 cursor-not-allowed'
+            )}
+          >
+            <span
+              className={cn(
+                'pointer-events-none absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out',
+                profile?.email_test_mode ? 'translate-x-4' : 'translate-x-0'
+              )}
+              aria-hidden
+            />
           </button>
+          <span
+            className={cn(
+              'text-[8px] font-semibold uppercase tracking-wide shrink-0 w-[18px] text-right',
+              profile?.email_test_mode ? 'text-orange-300' : 'text-[hsl(var(--sidebar-muted))]'
+            )}
+          >
+            On
+          </span>
         </div>
       </div>
 
