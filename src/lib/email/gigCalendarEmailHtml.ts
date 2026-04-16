@@ -59,46 +59,61 @@ function roleBannerRgba(
     + `</div>`
 }
 
-/**
- * Schedule grid: same visual language as custom-template / prose tables (#333 outer, #383838 cells)
- * and always includes column headers (parity for weekly digest + day summary).
- */
-const TABLE_OUTER_BORDER = '#333333'
-const TABLE_CELL_BORDER = '#383838'
-const TABLE_TH_BG = '#1e1e1e'
-/** Middle column — subtle band so Show scans between When and Venue */
-const TABLE_MID_BG = '#141414'
+const EVENT_LABEL_HTML =
+  `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Event</div>`
 
-function scheduleWhenCellHtml(r: GigCalendarScheduleRow): string {
+/** One gig card body — matches 24h reminder hierarchy (title, venue, Event + timing). */
+function showDetailsBodyFromScheduleRow(r: GigCalendarScheduleRow): string {
+  const titleBlock =
+    `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(r.title)}</p>`
+  const venueBlock =
+    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(r.venue)}</p>`
+  let timingBlock = ''
   if (r.whenStack) {
-    return stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', 'digest')
+    timingBlock = EVENT_LABEL_HTML + stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', 'digest')
+  } else if (r.when.trim()) {
+    timingBlock = EVENT_LABEL_HTML
+      + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.when.trim())}</p>`
   }
-  return escapeHtmlPlain(r.when)
+  return titleBlock + venueBlock + timingBlock
 }
 
-function scheduleTableHtml(rows: GigCalendarScheduleRow[], emptyMsg: string): string {
-  const fs = '13px'
-  const pad = '9px 10px'
-  const thShared =
-    `padding:${pad};text-align:left;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};background:${TABLE_TH_BG};border:1px solid ${TABLE_CELL_BORDER};vertical-align:bottom;`
-  const td = (extra: string) =>
-    `padding:${pad};border:1px solid ${TABLE_CELL_BORDER};vertical-align:top;font-size:${fs};line-height:1.45;${extra}`
+function showDetailsBodyFromReminder(args: {
+  dealDescription: string
+  venueName: string
+  whenLine: string
+  setLine?: string | null
+}): string {
+  const setBlock = args.setLine?.trim()
+    ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12);">`
+      + `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Your set</div>`
+      + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(args.setLine.trim())}</p>`
+      + `</div>`
+    : ''
+  const whenTrim = args.whenLine.trim()
+  const whenBlock = whenTrim
+    ? EVENT_LABEL_HTML
+      + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(whenTrim)}</p>`
+    : ''
+  return `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(args.dealDescription)}</p>`
+    + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(args.venueName)}</p>`
+    + whenBlock
+    + setBlock
+}
 
-  const bodyRows = rows.length
-    ? rows.map(r => `<tr>
-        <td style="${td('color:#ffffff;width:1%;')}">${scheduleWhenCellHtml(r)}</td>
-        <td style="${td(`color:#ffffff;background:${TABLE_MID_BG};`)}">${escapeHtmlPlain(r.title)}</td>
-        <td style="${td(`color:${EMAIL_BODY_SECONDARY};`)}">${escapeHtmlPlain(r.venue)}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="3" style="padding:14px ${pad};font-size:${fs};color:${EMAIL_BODY_SECONDARY};border:1px solid ${TABLE_CELL_BORDER};">${emptyMsg}</td></tr>`
-
-  const head = `<thead><tr>
-      <th style="${thShared}width:1%;">When</th>
-      <th style="${thShared}">Show</th>
-      <th style="${thShared}">Venue</th>
-    </tr></thead>`
-
-  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:10px 0 4px;border:1px solid ${TABLE_OUTER_BORDER};font-size:${fs};">${head}<tbody>${bodyRows}</tbody></table>`
+function scheduleCardsFromRows(
+  rows: GigCalendarScheduleRow[],
+  emptyMsg: string,
+  accent: string,
+): string {
+  if (rows.length === 0) {
+    return `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.6;">${escapeHtmlPlain(emptyMsg)}</p>`
+  }
+  return rows
+    .map((r, i) =>
+      emailSectionCardHtml(`Gig ${i + 1}`, showDetailsBodyFromScheduleRow(r), accent),
+    )
+    .join('')
 }
 
 export type BuildBrandedGigCalendarEmailArgs = {
@@ -147,9 +162,9 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '#fbbf24',
         'Two-week schedule',
       )
-      middleHtml = emailSectionCardHtml(
-        'Upcoming gigs',
-        scheduleTableHtml(args.digest?.rows ?? [], 'No booked shows in this window.'),
+      middleHtml = scheduleCardsFromRows(
+        args.digest?.rows ?? [],
+        'No booked shows in this window.',
         '#fbbf24',
       )
       defaultIntro =
@@ -165,22 +180,16 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         '24-hour reminder',
       )
       const r = args.reminder!
-      const setBlock = r.setLine?.trim()
-        ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12);">`
-          + `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Your set</div>`
-          + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.setLine.trim())}</p>`
-          + `</div>`
-        : ''
-      const eventLabel = setBlock
-        ? `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Event</div>`
-        : ''
-      const reminderBody =
-        `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(r.dealDescription)}</p>`
-        + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(r.venueName)}</p>`
-        + eventLabel
-        + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.whenLine)}</p>`
-        + setBlock
-      middleHtml = emailSectionCardHtml('Show details', reminderBody, '#f97316')
+      middleHtml = emailSectionCardHtml(
+        'Show details',
+        showDetailsBodyFromReminder({
+          dealDescription: r.dealDescription,
+          venueName: r.venueName,
+          whenLine: r.whenLine,
+          setLine: r.setLine,
+        }),
+        '#f97316',
+      )
       defaultIntro = 'Quick heads-up — your show is coming up in about <strong>24 hours</strong>.'
       defaultClosing = 'Break a leg. Reply if you need anything from the team.'
       break
@@ -206,11 +215,7 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         'Day schedule',
       )
       const d = args.daySummary!
-      middleHtml = emailSectionCardHtml(
-        'Day schedule',
-        scheduleTableHtml(d.rows, 'No booked shows on this day.'),
-        '#60a5fa',
-      )
+      middleHtml = scheduleCardsFromRows(d.rows, 'No booked shows on this day.', '#60a5fa')
       defaultIntro = `Here’s everything on your calendar for <strong>${escapeHtmlPlain(d.dayLabel)}</strong>.`
       defaultClosing = 'Reply if you want changes or a different snapshot.'
       break
