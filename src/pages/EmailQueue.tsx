@@ -1523,7 +1523,7 @@ export default function EmailQueue() {
   }, [profile, updateEmailStatus])
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 w-full min-w-0">
       <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-neutral-800">
         <div className="flex gap-1 flex-1 min-w-[12rem]">
           <button

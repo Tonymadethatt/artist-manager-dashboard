@@ -341,7 +341,7 @@ export default function FileBuilder() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto relative px-4 sm:px-5 lg:px-6 pb-8">
+    <div className="relative w-full min-w-0 pb-8">
       {toast && (
         <div
           className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border ${

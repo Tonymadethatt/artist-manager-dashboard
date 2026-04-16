@@ -217,7 +217,7 @@ export default function Tasks() {
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 w-full min-w-0">
       {emailAutomationFeedback && (
         <div
           role="status"

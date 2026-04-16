@@ -142,7 +142,7 @@ export default function Templates() {
   }
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-4 w-full min-w-0">
       <Dialog
         open={importOpen}
         onOpenChange={open => {

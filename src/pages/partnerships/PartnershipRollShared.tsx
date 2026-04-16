@@ -264,7 +264,7 @@ export function PartnershipRollView({ variant }: { variant: PartnershipRollVaria
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
+    <div className="w-full min-w-0 space-y-4">
       <div className="space-y-2">
         <h1 className="text-base font-semibold text-neutral-100 tracking-tight">{c.pageTitle}</h1>
         {variant === 'admin' ? (

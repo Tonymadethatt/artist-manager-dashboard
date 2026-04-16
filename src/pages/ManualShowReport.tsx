@@ -16,7 +16,7 @@ export default function ManualShowReport() {
 
   if (!state?.token) {
     return (
-      <div className="p-6 max-w-lg mx-auto text-neutral-400 text-sm">
+      <div className="p-6 w-full max-w-2xl mx-auto text-neutral-400 text-sm">
         Nothing to show. Open{' '}
         <button
           type="button"
@@ -32,7 +32,7 @@ export default function ManualShowReport() {
 
   return (
     <div className="min-h-[calc(100dvh-6rem)] bg-[#0d0d0d] text-white">
-      <div className="max-w-md mx-auto px-4 py-6">
+      <div className="w-full max-w-4xl mx-auto px-4 py-6">
         <ShowReportWizard
           token={state.token}
           submittedBy="manager_dashboard"

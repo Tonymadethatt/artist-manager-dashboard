@@ -311,7 +311,7 @@ export default function Settings() {
   const blur = (key: FormKey) => handleFieldBlur(key)
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="w-full min-w-0">
       {toast && (
         <div
           className={cn(

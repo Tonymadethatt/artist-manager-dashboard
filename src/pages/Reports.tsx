@@ -169,7 +169,7 @@ export default function Reports() {
   const handleTestSend = () => doSend(true)
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5 w-full min-w-0">
       {/* Date range */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3">

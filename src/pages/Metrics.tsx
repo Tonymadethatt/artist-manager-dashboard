@@ -119,7 +119,7 @@ export default function Metrics() {
   ]
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5 w-full min-w-0">
       {/* Category tabs */}
       <div className="flex gap-1 border-b border-neutral-800">
         {tabs.map(tab => (

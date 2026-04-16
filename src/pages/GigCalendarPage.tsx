@@ -229,7 +229,7 @@ export default function GigCalendarPage() {
   }, [googleConnected, loadSync, showGcalToast])
 
   return (
-    <div className="max-w-5xl space-y-4 relative">
+    <div className="w-full min-w-0 space-y-4 relative">
       {gcalToast && (
         <div
           className={`fixed top-4 right-4 z-50 max-w-[min(20rem,calc(100vw-2rem))] px-3 py-2 rounded-lg text-xs font-medium shadow-lg border ${

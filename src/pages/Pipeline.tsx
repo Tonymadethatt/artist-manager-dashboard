@@ -781,7 +781,7 @@ export default function Pipeline() {
                       No open tasks or items completed today for this filter. Older completions are below.
                     </p>
                   ) : (
-                    <div className="space-y-6 max-w-2xl shrink-0">
+                    <div className="space-y-6 w-full min-w-0 shrink-0">
                       {listGroups.map(group => (
                         <div key={group.label}>
                           <div className={cn('text-xs font-semibold uppercase tracking-wider mb-2 px-1', group.color)}>

@@ -239,7 +239,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5 w-full min-w-0">
       {/* ── Row 1: Stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Tasks due */}

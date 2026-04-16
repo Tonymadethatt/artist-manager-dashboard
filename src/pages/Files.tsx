@@ -171,7 +171,7 @@ export default function Files() {
   }
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-4 w-full min-w-0">
       {clipboardBanner && (
         <p className="text-xs text-amber-400/90 border border-amber-900/50 bg-amber-950/30 rounded-md px-3 py-2">
           {clipboardBanner}

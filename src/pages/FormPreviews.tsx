@@ -36,7 +36,7 @@ export default function FormPreviews() {
   const [active, setActive] = useState<PreviewKind>('show-report')
 
   return (
-    <div className="flex flex-col gap-4 min-h-0 flex-1 max-w-[1600px] mx-auto md:min-h-[calc(100dvh-7.5rem)]">
+    <div className="flex flex-col gap-4 min-h-0 flex-1 w-full min-w-0 md:min-h-[calc(100dvh-7.5rem)]">
       <p className="text-sm text-neutral-500 shrink-0">
         Pick a preview on the left. Nothing is saved — walk through UI with sample data only. Show report uses your live{' '}
         <span className="text-neutral-400">Settings → Artist profile</span> for header/footer branding.
@@ -128,7 +128,7 @@ export default function FormPreviews() {
                 <span className="text-[10px] text-neutral-600">Checklist only · nothing saved</span>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto bg-neutral-950">
-                <div className="max-w-3xl mx-auto px-4 py-4">
+                <div className="w-full min-w-0 px-4 py-4">
                   <CallIntakeScriptChecklist embedded />
                 </div>
               </div>

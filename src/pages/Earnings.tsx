@@ -1261,7 +1261,7 @@ export default function Earnings() {
   const combinedOutstanding = stats.outstanding + retainerStats.outstanding
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full min-w-0">
       {/* Performance form toast */}
       {formToast && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border bg-neutral-900 border-emerald-500/30 text-emerald-400">
