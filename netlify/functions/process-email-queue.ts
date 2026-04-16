@@ -784,6 +784,11 @@ const handler: Handler = async (event) => {
           + ` now=${new Date().toISOString()}`,
         )
         if (!sendNowCheck) {
+          // Claim set status to `sending`; release so the next cron run can retry when the window opens.
+          await supabase
+            .from('venue_emails')
+            .update({ status: 'pending', processing_started_at: null })
+            .eq('id', email.id)
           continue
         }
         const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'

@@ -68,7 +68,7 @@ const handler: Handler = async (event) => {
     .from('venue_emails')
     .select('id, user_id, notes')
     .eq('email_type', 'gig_calendar_digest_weekly')
-    .in('status', ['pending', 'sent'])
+    .in('status', ['pending', 'sending', 'sent'])
 
   const seen = new Set<string>()
   for (const row of existing ?? []) {
