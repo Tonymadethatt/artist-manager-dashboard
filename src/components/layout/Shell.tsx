@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useAutoSendQueue } from '@/hooks/useAutoSendQueue'
+import { useNavBadges } from '@/context/NavBadgesContext'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { NavBadgesProvider } from '@/context/NavBadgesContext'
@@ -27,6 +28,22 @@ const PAGE_TITLES: Record<string, string> = {
   '/forms/intakes':       'Call intakes',
   '/forms/intake':        'Call intake',
   '/workspace/partnerships': 'Previous Clients — Workspace',
+}
+
+/**
+ * Clears “new since last visit” badges when the user is actually in that workspace
+ * (including sub-routes like /pipeline/templates and /performance-reports/manual).
+ */
+function NavBadgeSectionSync({ pathname }: { pathname: string }) {
+  const { markSeen } = useNavBadges()
+  useEffect(() => {
+    const marks: Promise<void>[] = []
+    if (pathname.startsWith('/pipeline')) marks.push(markSeen('pipeline'))
+    if (pathname.startsWith('/calendar')) marks.push(markSeen('calendar'))
+    if (pathname.startsWith('/performance-reports')) marks.push(markSeen('show-reports'))
+    if (marks.length) void Promise.all(marks)
+  }, [pathname, markSeen])
+  return null
 }
 
 export function Shell() {
@@ -55,6 +72,7 @@ export function Shell() {
 
   return (
     <NavBadgesProvider pathname={location.pathname}>
+      <NavBadgeSectionSync pathname={location.pathname} />
       <div className="flex h-screen overflow-hidden bg-neutral-950">
         <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

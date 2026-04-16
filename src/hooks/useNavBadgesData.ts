@@ -15,7 +15,9 @@ type SeenSection = (typeof ALL_SECTIONS)[number]
  * Fetches nav badge counts and manages seen_at persistence.
  *
  * - pipeline / show-reports / calendar: "new since last visit" — count items
- *   that qualify after seen_at[section]. Cleared when you visit the page (markSeen).
+ *   that qualify after seen_at[section]. Cleared when you visit the section
+ *   (`markSeen` from `NavBadgeSectionSync` in Shell, including sub-routes like
+ *   `/pipeline/templates` and `/performance-reports/manual`).
  * - email-queue: "live actionable count" — pending emails now; no seen_at.
  *
  * @param pathname  Pass location.pathname so counts refresh on navigation.

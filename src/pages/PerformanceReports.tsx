@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Clock, ExternalLink, Send, Trash2, UserPen } from 'lucide-react'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
@@ -11,7 +11,6 @@ import {
   formatFrictionTagsForNote,
 } from '@/lib/performanceReportV1'
 import { NIGHT_MOODS } from '@/lib/showReportCatalog'
-import { useNavBadges } from '@/context/NavBadgesContext'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -186,15 +185,12 @@ export default function PerformanceReports() {
   const { venues } = useVenues()
   const { deals } = useDeals()
   const { profile } = useArtistProfile()
-  const { markSeen } = useNavBadges()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [manualOpen, setManualOpen] = useState(false)
   const [manualVenueId, setManualVenueId] = useState('')
   const [manualDealId, setManualDealId] = useState('')
   const [manualSaving, setManualSaving] = useState(false)
 
-  // Mark Show Reports as seen on mount — clears the badge for newly submitted reports
-  useEffect(() => { void markSeen('show-reports') }, [markSeen])
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PerformanceReport | null>(null)

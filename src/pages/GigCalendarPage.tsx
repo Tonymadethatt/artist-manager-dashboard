@@ -6,7 +6,6 @@ import { GigCalendar, type CalendarSyncEventChip } from '@/components/dashboard/
 import type { GoogleCalendarSyncResponseBody } from '@/lib/calendar/googleCalendarSyncToast'
 import { googleCalendarSyncSuccessMessageGigPage } from '@/lib/calendar/googleCalendarSyncToast'
 import { logGoogleCalendarSyncClient } from '@/lib/calendar/logGoogleCalendarSyncClient'
-import { useNavBadges } from '@/context/NavBadgesContext'
 import { supabase } from '@/lib/supabase'
 
 function netlifyFunctionPath(name: string): string {
@@ -17,7 +16,6 @@ export default function GigCalendarPage() {
   const { user } = useAuth()
   const { deals, loading: dealsLoading } = useDeals()
   const { venues, loading: venuesLoading } = useVenues()
-  const { markSeen } = useNavBadges()
   const loading = dealsLoading || venuesLoading
   const [calendarSyncEvents, setCalendarSyncEvents] = useState<CalendarSyncEventChip[]>([])
   const [gcalConn, setGcalConn] = useState<{
@@ -128,10 +126,6 @@ export default function GigCalendarPage() {
     },
     [user?.id],
   )
-
-  useEffect(() => {
-    void markSeen('calendar')
-  }, [markSeen])
 
   useEffect(() => {
     void loadSync()
