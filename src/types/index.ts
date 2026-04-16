@@ -585,7 +585,7 @@ export type ArtistEmailType =
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
-export type VenueEmailStatus = 'pending' | 'sent' | 'failed'
+export type VenueEmailStatus = 'pending' | 'sending' | 'sent' | 'failed'
 
 export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
   booking_confirmation: 'Booking Confirmation',
@@ -699,6 +699,8 @@ export interface VenueEmail {
   sent_at: string | null
   /** When set, row is not eligible to send until this time (24h reminders, etc.). */
   scheduled_send_at: string | null
+  /** Set while process-email-queue holds an exclusive send lock (status=sending). */
+  processing_started_at?: string | null
   notes: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null

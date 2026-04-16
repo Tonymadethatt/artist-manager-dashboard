@@ -245,7 +245,7 @@ export function useTasks() {
           .delete()
           .eq('user_id', user.id)
           .eq('email_type', task.email_type)
-          .eq('status', 'pending')
+          .in('status', ['pending', 'sending'])
           .gte('created_at', twoHoursAgo)
 
         if (task.email_type === 'performance_report_request') {

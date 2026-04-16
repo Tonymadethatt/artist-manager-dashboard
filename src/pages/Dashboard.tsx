@@ -137,7 +137,7 @@ export default function Dashboard() {
   }, [deals, fees])
 
   const pendingEmailCount = useMemo(() =>
-    emails.filter(e => e.status === 'pending').length,
+        emails.filter(e => e.status === 'pending' || e.status === 'sending').length,
   [emails])
 
   // ── Row 2: tasks list + follow-ups ────────────────────────────────────────

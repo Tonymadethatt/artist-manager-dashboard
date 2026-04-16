@@ -23,6 +23,14 @@ export function applyTestSubjectPrefix(subject: string): string {
   return `${TEST_SUBJ_PREFIX}${subject}`
 }
 
+/** Drop CC entries that duplicate a To address (Resend may deliver duplicates; common when artist_email === manager_email). */
+export function dedupeCcAgainstTo(to: string[], cc: string[]): string[] {
+  const toLower = new Set(
+    to.map(t => t.trim().toLowerCase()).filter(Boolean),
+  )
+  return cc.filter(c => c.trim() && !toLower.has(c.trim().toLowerCase()))
+}
+
 export type ResolvedResend =
   | { ok: true; to: string[]; cc: string[]; subject: string }
   | { ok: false; message: string }

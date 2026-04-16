@@ -153,6 +153,23 @@ const handler: Handler = async (event) => {
   // Admin client — bypasses RLS
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
+  /** Workers that crash after claim leave rows in `sending`; recover so mail is not stuck forever. */
+  const staleClaimIso = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+  {
+    const { error: e1 } = await supabase
+      .from('venue_emails')
+      .update({ status: 'pending', processing_started_at: null })
+      .eq('status', 'sending')
+      .lt('processing_started_at', staleClaimIso)
+    if (e1) console.warn('[process-email-queue] stale sending reset (timed):', e1.message)
+    const { error: e2 } = await supabase
+      .from('venue_emails')
+      .update({ status: 'pending', processing_started_at: null })
+      .eq('status', 'sending')
+      .is('processing_started_at', null)
+    if (e2) console.warn('[process-email-queue] stale sending reset (null ts):', e2.message)
+  }
+
   // Pending rows are filtered per-user by `email_queue_buffer_minutes`. Artist custom templates use 0 so cron can send on the next run.
   const { data: rawCandidates, error: fetchError } = await supabase
     .from('venue_emails')
@@ -348,6 +365,22 @@ const handler: Handler = async (event) => {
 
   // Sending does not delete or archive `generated_files`; pending rows only read deal + file joins for URLs.
   for (const email of emails) {
+    const claimNow = new Date().toISOString()
+    const { data: claimedRow, error: claimErr } = await supabase
+      .from('venue_emails')
+      .update({ status: 'sending', processing_started_at: claimNow })
+      .eq('id', email.id as string)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
+    if (claimErr) {
+      console.error('[process-email-queue] claim error:', claimErr.message)
+      continue
+    }
+    if (!claimedRow) {
+      continue
+    }
+
     const profile = profileByUser.get(email.user_id) as {
       artist_name?: string
       company_name?: string | null

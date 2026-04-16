@@ -12,7 +12,7 @@ import {
 } from '../../src/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
-import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 function escapeHtmlEnt(s: string): string {
@@ -340,7 +340,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
   }
   to = resolved.to
-  ccOut = resolved.cc
+  ccOut = dedupeCcAgainstTo(resolved.to, resolved.cc)
   const subjectOut = resolved.subject
 
   const resendRes = await fetch('https://api.resend.com/emails', {

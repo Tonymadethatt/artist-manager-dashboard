@@ -4,7 +4,7 @@
  */
 import type { Handler } from '@netlify/functions'
 import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
-import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type Profile = {
@@ -113,7 +113,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
   }
   resendTo = resolved.to
-  resendCc = resolved.cc
+  resendCc = dedupeCcAgainstTo(resolved.to, resolved.cc)
   const subjectOut = resolved.subject
 
   if (process.env.EMAIL_TEST_MODE_DEBUG === '1') {

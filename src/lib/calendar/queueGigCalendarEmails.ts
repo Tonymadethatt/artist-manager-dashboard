@@ -42,7 +42,7 @@ export async function syncDealCalendarEmails(args: {
       .select('id')
       .eq('deal_id', afterDeal.id)
       .eq('email_type', 'gig_booked_ics')
-      .eq('status', 'pending')
+      .in('status', ['pending', 'sending'])
       .maybeSingle()
     if (!pending) {
       await supabase.from('venue_emails').insert({
@@ -65,7 +65,7 @@ export async function syncDealCalendarEmails(args: {
     .delete()
     .eq('deal_id', afterDeal.id)
     .eq('email_type', 'gig_reminder_24h')
-    .eq('status', 'pending')
+    .in('status', ['pending', 'sending'])
 
   if (dealQualifiesForCalendar(afterDeal, venueAfter) && afterDeal.event_start_at) {
     const sendAt = gigReminderSendAtMs(afterDeal.event_start_at)
@@ -133,7 +133,7 @@ export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<vo
         .select('id')
         .eq('deal_id', afterDeal.id)
         .eq('email_type', 'gig_booked_ics')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'sending'])
         .maybeSingle()
       if (!pending) {
         await supabase.from('venue_emails').insert({
@@ -156,7 +156,7 @@ export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<vo
       .delete()
       .eq('deal_id', afterDeal.id)
       .eq('email_type', 'gig_reminder_24h')
-      .eq('status', 'pending')
+      .in('status', ['pending', 'sending'])
 
     if (dealQualifiesForCalendar(afterDeal, venueAfter) && afterDeal.event_start_at) {
       const sendAt = gigReminderSendAtMs(afterDeal.event_start_at)

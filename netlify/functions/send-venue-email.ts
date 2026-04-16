@@ -6,7 +6,11 @@ import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { captureLinkLabel } from '../../src/lib/emailCapture/kinds'
-import { resolveArtistFacingResend, resolveVenueFacingResend } from '../../src/lib/email/emailTestModeServer'
+import {
+  dedupeCcAgainstTo,
+  resolveArtistFacingResend,
+  resolveVenueFacingResend,
+} from '../../src/lib/email/emailTestModeServer'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type VenueEmailType =
@@ -299,7 +303,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: r.message }) }
     }
     resendTo = r.to
-    resendCc = r.cc
+    resendCc = dedupeCcAgainstTo(r.to, r.cc)
     resendSubject = r.subject
   } else {
     const r = resolveVenueFacingResend({
@@ -312,7 +316,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: r.message }) }
     }
     resendTo = r.to
-    resendCc = r.cc
+    resendCc = dedupeCcAgainstTo(r.to, r.cc)
     resendSubject = r.subject
   }
 

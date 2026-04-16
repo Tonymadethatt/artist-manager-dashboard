@@ -93,7 +93,7 @@ export function useNavBadgesData(pathname: string) {
     const { count: queueCount } = await supabase
       .from('venue_emails')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending')
+      .in('status', ['pending', 'sending'])
 
     setCounts({
       pipeline: pipelineCount ?? 0,

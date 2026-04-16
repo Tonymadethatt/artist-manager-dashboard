@@ -146,6 +146,10 @@ function splitPendingBySchedule(pending: VenueEmail[]): {
   const immediate: VenueEmail[] = []
   const scheduled: VenueEmail[] = []
   for (const e of pending) {
+    if (e.status === 'sending') {
+      immediate.push(e)
+      continue
+    }
     if (isPendingScheduledForLater(e)) scheduled.push(e)
     else immediate.push(e)
   }
@@ -165,6 +169,11 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'failed') return (
     <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800">
       <XCircle className="h-3 w-3" />Failed
+    </span>
+  )
+  if (status === 'sending') return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/80">
+      <Clock className="h-3 w-3" />Sending
     </span>
   )
   return (
@@ -311,7 +320,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
           variant="outline"
           className="gap-1.5"
           onClick={() => onSendNow(email)}
-          disabled={sending || dismissing}
+          disabled={sending || dismissing || email.status === 'sending'}
         >
           <Send className="h-3.5 w-3.5" />
           Send now
@@ -321,7 +330,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
           variant="ghost"
           className="h-8 w-8 p-0 text-neutral-500 hover:text-red-400"
           onClick={() => onDismiss(email.id)}
-          disabled={dismissing || sending}
+          disabled={dismissing || sending || email.status === 'sending'}
           title="Cancel & remove"
         >
           <X className="h-3.5 w-3.5" />
@@ -916,6 +925,10 @@ export default function EmailQueue() {
   const handleSendNow = useCallback(async (email: VenueEmail) => {
     if (!profile?.from_email) {
       setSendError('Artist profile not configured. Set up your profile first.')
+      return
+    }
+    if (email.status === 'sending') {
+      setSendError('This email is already being sent by the queue.')
       return
     }
 

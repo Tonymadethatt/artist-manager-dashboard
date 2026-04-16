@@ -21,7 +21,7 @@ export async function queueManualGigDaySummary(ymd: string): Promise<{ ok: true 
     .from('venue_emails')
     .select('id, notes')
     .eq('user_id', user.id)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'sending'])
     .eq('email_type', 'gig_day_summary_manual')
 
   for (const row of pending ?? []) {

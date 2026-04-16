@@ -100,8 +100,8 @@ export function useVenueEmails() {
     return {}
   }
 
-  const pendingEmails = emails.filter(e => e.status === 'pending')
-  const sentEmails = emails.filter(e => e.status !== 'pending')
+  const pendingEmails = emails.filter(e => e.status === 'pending' || e.status === 'sending')
+  const sentEmails = emails.filter(e => e.status !== 'pending' && e.status !== 'sending')
 
   return {
     emails,

@@ -198,7 +198,7 @@ export async function hasRecentPendingVenueEmail(
     .select('id')
     .eq('venue_id', venueId)
     .eq('email_type', emailType)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'sending'])
     .gte('created_at', since)
     .limit(1)
   return (rows?.length ?? 0) > 0
@@ -219,7 +219,7 @@ export async function hasRecentPendingArtistCustomEmail(
     .is('venue_id', null)
     .eq('email_type', emailType)
     .eq('recipient_email', recipientEmail)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'sending'])
     .gte('created_at', since)
     .limit(1)
   return (rows?.length ?? 0) > 0
@@ -238,7 +238,7 @@ export async function hasPendingArtistEmail(
     .is('venue_id', null)
     .eq('email_type', emailType)
     .eq('recipient_email', recipientEmail)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'sending'])
     .limit(1)
   return (rows?.length ?? 0) > 0
 }

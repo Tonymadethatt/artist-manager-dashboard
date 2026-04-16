@@ -2,7 +2,7 @@ import type { Handler } from '@netlify/functions'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { buildRetainerReceivedEmailHtml } from '../../src/lib/email/retainerReceivedEmailDocument'
 import type { RetainerReceivedSettledRow } from '../../src/lib/email/retainerReceivedEmailDocument'
-import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 interface ArtistProfile {
@@ -112,7 +112,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: resolved.message }) }
   }
   to = resolved.to
-  cc = resolved.cc
+  cc = dedupeCcAgainstTo(resolved.to, resolved.cc)
   const subjectOut = resolved.subject
 
   const resendRes = await fetch('https://api.resend.com/emails', {

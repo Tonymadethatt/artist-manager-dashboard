@@ -662,6 +662,7 @@ export interface Database {
           sent_at: string | null
           notes: string | null
           scheduled_send_at: string | null
+          processing_started_at: string | null
           created_at: string
         }
         Insert: {
@@ -677,6 +678,7 @@ export interface Database {
           sent_at?: string | null
           notes?: string | null
           scheduled_send_at?: string | null
+          processing_started_at?: string | null
           created_at?: string
         }
         Update: {
@@ -692,6 +694,7 @@ export interface Database {
           sent_at?: string | null
           notes?: string | null
           scheduled_send_at?: string | null
+          processing_started_at?: string | null
           created_at?: string
         }
         Relationships: [
