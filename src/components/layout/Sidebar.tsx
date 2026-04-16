@@ -81,11 +81,29 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
   },
 ]
 
+/** v2: default all groups expanded; state persists per device until the user changes it. */
+const SIDEBAR_GROUPS_STORAGE_KEY = 'artist-manager-sidebar-groups-v2'
+
 const DEFAULT_EXPANDED: Record<NavGroupId, boolean> = {
   workspace: true,
-  content: false,
-  forms: false,
+  content: true,
+  forms: true,
   email: true,
+}
+
+function loadExpandedGroupsFromStorage(): Record<NavGroupId, boolean> {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_GROUPS_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_EXPANDED }
+    const parsed = JSON.parse(raw) as Partial<Record<NavGroupId, boolean>>
+    const out = { ...DEFAULT_EXPANDED }
+    for (const g of NAV_GROUPS) {
+      if (typeof parsed[g.id] === 'boolean') out[g.id] = parsed[g.id] as boolean
+    }
+    return out
+  } catch {
+    return { ...DEFAULT_EXPANDED }
+  }
 }
 
 /** Vibrant gradient text (bg-clip) + chevron + vertical active-indicator stops (gradient-to-b) */
@@ -115,11 +133,6 @@ const CATEGORY_TITLE_STYLE: Record<
   },
 }
 
-function pathnameMatchesNavItem(pathname: string, item: NavItem): boolean {
-  if (item.end) return pathname === item.to
-  return pathname === item.to || pathname.startsWith(`${item.to}/`)
-}
-
 interface SidebarProps {
   mobileOpen: boolean
   onClose: () => void
@@ -132,7 +145,15 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const { counts } = useNavBadges()
   const { profile, updateProfile } = useArtistProfile()
   const [testModeBusy, setTestModeBusy] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(() => ({ ...DEFAULT_EXPANDED }))
+  const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(loadExpandedGroupsFromStorage)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroups))
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [expandedGroups])
 
   const toggleEmailTestMode = async () => {
     if (!profile || testModeBusy) return
@@ -155,26 +176,6 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
     await updateProfile({ email_test_mode: next })
     setTestModeBusy(false)
   }
-
-  useEffect(() => {
-    const pathname = location.pathname
-    setExpandedGroups((prev) => {
-      const next = { ...prev }
-      let changed = false
-      for (const group of NAV_GROUPS) {
-        const hasActive = group.items.some((item) => pathnameMatchesNavItem(pathname, item))
-        if (hasActive && !next[group.id]) {
-          next[group.id] = true
-          changed = true
-        }
-      }
-      if (onPipelinePath && !next.workspace) {
-        next.workspace = true
-        changed = true
-      }
-      return changed ? next : prev
-    })
-  }, [location.pathname, onPipelinePath])
 
   const navContent = (
     <nav className="flex flex-col h-full">
