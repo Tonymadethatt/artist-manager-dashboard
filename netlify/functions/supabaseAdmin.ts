@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { EmailTestModeRow } from '../../src/lib/email/emailTestModeServer'
+import { normalizeTestInbox, type EmailTestModeRow } from '../../src/lib/email/emailTestModeServer'
 
 let client: SupabaseClient | null = null
 
@@ -64,10 +64,31 @@ export async function fetchEmailTestModeRowForSend(
         'Artist profile not found for this account; cannot verify email test mode. Open Settings once to initialize your profile, then retry.',
     }
   }
+  const testModeOn = !!data.email_test_mode
+  if (testModeOn) {
+    const artistBox = normalizeTestInbox(data.email_test_artist_inbox)
+    const clientBox = normalizeTestInbox(data.email_test_client_inbox)
+    if (!artistBox || !clientBox) {
+      return {
+        ok: false,
+        statusCode: 400,
+        message:
+          'Email test mode is on but both test inboxes must be set in Settings (artist + client) before any email can send. Turn test mode off or fill both addresses.',
+      }
+    }
+    if (artistBox.trim().toLowerCase() === clientBox.trim().toLowerCase()) {
+      return {
+        ok: false,
+        statusCode: 400,
+        message:
+          'Email test mode: artist and client test inboxes must be different addresses so venue and artist sends do not collapse into one mailbox by mistake.',
+      }
+    }
+  }
   return {
     ok: true,
     row: {
-      email_test_mode: !!data.email_test_mode,
+      email_test_mode: testModeOn,
       email_test_artist_inbox: data.email_test_artist_inbox ?? null,
       email_test_client_inbox: data.email_test_client_inbox ?? null,
     },

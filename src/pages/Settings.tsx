@@ -139,6 +139,18 @@ function validateTestInboxesVsArtist(f: FormState): string | null {
   return null
 }
 
+/** Both test inboxes must differ so server can enforce separate artist vs venue redirects. */
+function validateTestInboxesDistinct(f: FormState): string | null {
+  if (emailsConflict(f.email_test_artist_inbox, f.email_test_client_inbox)) {
+    return 'Artist test inbox and client test inbox must be two different email addresses.'
+  }
+  return null
+}
+
+function validateTestInboxes(f: FormState): string | null {
+  return validateTestInboxesVsArtist(f) ?? validateTestInboxesDistinct(f)
+}
+
 function fieldMatchesProfile(key: FormKey, f: FormState, p: ArtistProfile): boolean {
   const partial = buildPartial(key, f)
   const k = Object.keys(partial)[0] as keyof typeof partial
@@ -215,7 +227,7 @@ export default function Settings() {
         || key === 'email_test_client_inbox'
         || key === 'artist_email'
       ) {
-        const err = validateTestInboxesVsArtist(state)
+        const err = validateTestInboxes(state)
         if (err) {
           showToast(err, 'err')
           return

@@ -165,6 +165,9 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       if (!a.includes('@') || !c.includes('@')) {
         return
       }
+      if (a.toLowerCase() === c.toLowerCase()) {
+        return
+      }
       if (artist && a.toLowerCase() === artist) {
         return
       }
