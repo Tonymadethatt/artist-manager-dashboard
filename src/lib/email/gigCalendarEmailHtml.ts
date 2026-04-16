@@ -1,13 +1,11 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import {
-  scheduleWhenStackFromDeal,
+  performanceWindowCompactFromDeal,
   whenLineCompactFromDeal,
-  type ScheduleWhenStack,
 } from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
-import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
 import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
 
 export type GigCalendarBrandedKind =
@@ -17,14 +15,15 @@ export type GigCalendarBrandedKind =
   | 'gig_day_summary_manual'
 
 export type GigCalendarScheduleRow = {
-  /** Legacy single-line when (used only if `whenStack` is absent). */
+  /** Same string as 24h reminder `whenLine` (`whenLineCompactFromDeal`). */
   when: string
-  whenStack?: ScheduleWhenStack
+  /** Same as reminder `setLine` (`performanceWindowCompactFromDeal`); optional. */
+  setLine?: string | null
   title: string
   venue: string
 }
 
-/** Shared by queue worker, previews, and tests — prefers stacked “when” when instants or date exist. */
+/** Shared by queue worker, previews, and tests — matches 24h reminder time fields. */
 export function buildGigCalendarTableRow(
   deal: {
     event_start_at?: string | null
@@ -36,12 +35,9 @@ export function buildGigCalendarTableRow(
   title: string,
   venue: string,
 ): GigCalendarScheduleRow {
-  const stack = scheduleWhenStackFromDeal(deal)
-  if (stack) {
-    return { when: '', whenStack: stack, title, venue }
-  }
   return {
     when: whenLineCompactFromDeal(deal) || deal.event_date?.trim() || '',
+    setLine: performanceWindowCompactFromDeal(deal),
     title,
     venue,
   }
@@ -62,20 +58,14 @@ function roleBannerRgba(
 const EVENT_LABEL_HTML =
   `<div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 4px;">Event</div>`
 
-/** One gig card body — matches 24h reminder hierarchy (title, venue, Event + timing). */
+/** One gig card body — delegates to the same HTML as `gig_reminder_24h` show-details card. */
 function showDetailsBodyFromScheduleRow(r: GigCalendarScheduleRow): string {
-  const titleBlock =
-    `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(r.title)}</p>`
-  const venueBlock =
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.6;">${escapeHtmlPlain(r.venue)}</p>`
-  let timingBlock = ''
-  if (r.whenStack) {
-    timingBlock = EVENT_LABEL_HTML + stackedScheduleWhenCellHtml(r.whenStack, '#ffffff', 'digest')
-  } else if (r.when.trim()) {
-    timingBlock = EVENT_LABEL_HTML
-      + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(r.when.trim())}</p>`
-  }
-  return titleBlock + venueBlock + timingBlock
+  return showDetailsBodyFromReminder({
+    dealDescription: r.title,
+    venueName: r.venue,
+    whenLine: r.when,
+    setLine: r.setLine,
+  })
 }
 
 function showDetailsBodyFromReminder(args: {
