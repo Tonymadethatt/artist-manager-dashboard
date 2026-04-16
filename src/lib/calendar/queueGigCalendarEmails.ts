@@ -3,27 +3,17 @@ import type { Deal, Venue } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import { backfillDealShowInstantsIfNeeded } from '@/lib/calendar/backfillDealShowInstants'
 import { gigReminderScheduledSendAtIso, gigReminderSendAtMs } from '@/lib/calendar/gigReminderSchedule'
-import { calendarQualificationFirstTouch, dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
+import {
+  canInsertPendingGigBookedIcs,
+  dealQualifiesForCalendar,
+  shouldQueueArtistGigBookedConfirmation,
+} from '@/lib/calendar/gigCalendarRules'
 import {
   shouldRunGoogleCalendarDealPush,
   syncDealToGoogleSharedCalendar,
 } from '@/lib/calendar/googleCalendarDealPushClient'
 
 type VenueStatus = Pick<Venue, 'status'> | null | undefined
-
-function beforePatch(
-  deal: Deal | null,
-): Pick<Deal, 'venue_id' | 'event_start_at' | 'event_end_at' | 'event_cancelled_at'> {
-  if (!deal) {
-    return { venue_id: null, event_start_at: null, event_end_at: null, event_cancelled_at: null }
-  }
-  return {
-    venue_id: deal.venue_id,
-    event_start_at: deal.event_start_at,
-    event_end_at: deal.event_end_at,
-    event_cancelled_at: deal.event_cancelled_at ?? null,
-  }
-}
 
 /**
  * After a deal is saved: queue artist “gig booked” confirmation email on first calendar qualification
@@ -39,19 +29,14 @@ export async function syncDealCalendarEmails(args: {
   const { beforeDeal, afterDeal, venueBefore, venueAfter, artistEmail } = args
   if (!artistEmail?.trim()) return
 
-  const before = beforePatch(beforeDeal)
-  const after = {
-    venue_id: afterDeal.venue_id,
-    event_start_at: afterDeal.event_start_at,
-    event_end_at: afterDeal.event_end_at,
-    event_cancelled_at: afterDeal.event_cancelled_at ?? null,
-  }
+  const queueBookedConfirmation = shouldQueueArtistGigBookedConfirmation({
+    beforeDeal,
+    afterDeal,
+    venueBefore,
+    venueAfter,
+  })
 
-  const icsFirst =
-    calendarQualificationFirstTouch({ before, after, venueBefore, venueAfter }) &&
-    !afterDeal.ics_invite_sent_at
-
-  if (icsFirst) {
+  if (queueBookedConfirmation) {
     const { data: pending } = await supabase
       .from('venue_emails')
       .select('id')
@@ -142,7 +127,7 @@ export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<vo
   const artistEmail = (profileRow as { artist_email?: string | null } | null)?.artist_email
 
   if (artistEmail?.trim()) {
-    if (dealQualifiesForCalendar(afterDeal, venueAfter) && !afterDeal.ics_invite_sent_at) {
+    if (canInsertPendingGigBookedIcs(afterDeal, venueAfter)) {
       const { data: pending } = await supabase
         .from('venue_emails')
         .select('id')

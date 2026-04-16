@@ -57,7 +57,12 @@ export async function fetchEmailTestModeRowForSend(
     }
   }
   if (!data) {
-    return { ok: true, row: null }
+    return {
+      ok: false,
+      statusCode: 503,
+      message:
+        'Artist profile not found for this account; cannot verify email test mode. Open Settings once to initialize your profile, then retry.',
+    }
   }
   return {
     ok: true,

@@ -27,6 +27,10 @@ export type ResolvedResend =
   | { ok: true; to: string[]; cc: string[]; subject: string }
   | { ok: false; message: string }
 
+function emailAddressesEqual(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
 /** Artist-facing: reports, reminders, retainers, transactional, gig calendar, performance form */
 export function resolveArtistFacingResend(args: {
   row: EmailTestModeRow | null | undefined
@@ -44,6 +48,14 @@ export function resolveArtistFacingResend(args: {
     return {
       ok: false,
       message: 'Email test mode is on but the artist test inbox is empty. Add it in Settings.',
+    }
+  }
+  const intended = (to[0] ?? '').trim()
+  if (intended && emailAddressesEqual(inbox, intended)) {
+    return {
+      ok: false,
+      message:
+        'Artist test inbox cannot be the same as the real artist email — mail would still reach the artist. Change it in Settings → Email test mode.',
     }
   }
   return {
@@ -69,6 +81,14 @@ export function resolveVenueFacingResend(args: {
     return {
       ok: false,
       message: 'Email test mode is on but the client test inbox is empty. Add it in Settings.',
+    }
+  }
+  const intended = (to[0] ?? '').trim()
+  if (intended && emailAddressesEqual(inbox, intended)) {
+    return {
+      ok: false,
+      message:
+        'Client test inbox cannot match the real recipient address. Use a separate test mailbox in Settings.',
     }
   }
   return {

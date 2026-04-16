@@ -1701,8 +1701,26 @@ export default function EmailQueue() {
       {/* History tab */}
       {activeTab === 'history' && (
         <>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+            </div>
+          ) : sentEmails.length === 0 ? (
+            <EmptyState message="No emails sent yet. Sent and failed emails will appear here." />
+          ) : (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
+                <p className="text-xs font-medium text-neutral-500">
+                  {sentEmails.length} email{sentEmails.length !== 1 ? 's' : ''} in history
+                </p>
+              </div>
+              {sentEmails.map(email => (
+                <HistoryRow key={email.id} email={email} onPreview={handlePreview} />
+              ))}
+            </div>
+          )}
           {recentCaptures.length > 0 && (
-            <div className="mb-5 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+            <div className="mt-5 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
               <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
                 <p className="text-xs font-medium text-neutral-500">Recent venue form responses</p>
               </div>
@@ -1724,24 +1742,6 @@ export default function EmailQueue() {
                   )
                 })}
               </ul>
-            </div>
-          )}
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
-            </div>
-          ) : sentEmails.length === 0 ? (
-            <EmptyState message="No emails sent yet. Sent and failed emails will appear here." />
-          ) : (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-neutral-800 bg-neutral-950">
-                <p className="text-xs font-medium text-neutral-500">
-                  {sentEmails.length} email{sentEmails.length !== 1 ? 's' : ''} in history
-                </p>
-              </div>
-              {sentEmails.map(email => (
-                <HistoryRow key={email.id} email={email} onPreview={handlePreview} />
-              ))}
             </div>
           )}
         </>

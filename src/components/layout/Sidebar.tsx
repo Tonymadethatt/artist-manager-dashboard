@@ -140,7 +140,14 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
     if (next) {
       const a = profile.email_test_artist_inbox?.trim() ?? ''
       const c = profile.email_test_client_inbox?.trim() ?? ''
+      const artist = profile.artist_email?.trim().toLowerCase() ?? ''
       if (!a.includes('@') || !c.includes('@')) {
+        return
+      }
+      if (artist && a.toLowerCase() === artist) {
+        return
+      }
+      if (artist && c.toLowerCase() === artist) {
         return
       }
     }

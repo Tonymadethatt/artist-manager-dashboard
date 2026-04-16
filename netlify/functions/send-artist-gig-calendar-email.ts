@@ -116,6 +116,18 @@ const handler: Handler = async (event) => {
   resendCc = resolved.cc
   const subjectOut = resolved.subject
 
+  if (process.env.EMAIL_TEST_MODE_DEBUG === '1') {
+    const mask = (e: string) => {
+      const t = e.trim()
+      const at = t.indexOf('@')
+      if (at <= 0) return '[empty]'
+      return `${t.slice(0, 1)}***${t.slice(at)}`
+    }
+    console.log(
+      `[send-artist-gig-calendar-email] kind=${payload.kind} test_mode=${String(!!testModeRow?.email_test_mode)} to=${resendTo.map(mask).join(',')}`,
+    )
+  }
+
   const attachments: { filename: string; content: string }[] = []
 
   try {

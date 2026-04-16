@@ -244,7 +244,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days. Rows are pre-enqueued with that send time so they appear under Email Queue → Scheduled until they go out.',
   gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
-  gig_booked_ics:             'First time a gig qualifies for the calendar: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
+  gig_booked_ics:             'After a gig is calendar-ready and the deal has an agreement on file or deposit paid: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a table of every booked gig on one day (queued; sends on next cron tick).',
 }
 

@@ -34,7 +34,7 @@ This is your **Settings** area—do it before venues so gig mail and calendar ar
 - Confirm **artist name / company / tagline** (whatever your agreement and emails pull from). Save if you change anything.
 - Set or confirm **artist email** (the inbox **you** read for show-related automations). Save, refresh, confirm it **stuck**.
 - If you use **Google Calendar** from here: connect or confirm connection, or deliberately note “we don’t use this” so you’re not surprised later.
-- If you use **email test mode** (sending real automations to **safe test inboxes** instead of clients): turn it on only if both **test artist** and **test client** addresses are filled in; flip it once and confirm it **saves**. Turn it **off** when you’re done testing if that’s your norm.
+- If you use **email test mode** (sending real automations to **safe test inboxes** instead of clients): turn it on only if both **test artist** and **test client** addresses are filled in and **neither matches your real Artist email** (the app blocks that on save). Flip it once and confirm it **saves**. Turn it **off** when you’re done testing if that’s your norm.
 - Skim any other **billing / identity** fields you rely on (phone, address, logo) so File Builder and emails aren’t pulling blanks.
 
 *The app knows who you are and how hard to hit real inboxes. Next you’ll use the **home screen** as mission control.*
@@ -51,6 +51,12 @@ This is your **Settings** area—do it before venues so gig mail and calendar ar
 - **Mobile or narrow window:** open the **menu button**, slide the menu out, tap a few destinations, **close** the menu—nothing should trap you with a frozen overlay.
 
 *You trust navigation. Next you’ll work **venues and people**—the spine of the CRM.*
+
+---
+
+### Mobile / narrow screens (expectation)
+
+The dashboard is **built for desktop** first (dense tables, intake steps, sidebar). On a phone or very narrow window you can still navigate, but it may feel cramped or slow for real work. Treat **full mobile polish** as a separate project if you need reliable on-the-go ops.
 
 ---
 

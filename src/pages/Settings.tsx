@@ -121,6 +121,24 @@ function norm(v: unknown): string {
   return String(v).trim()
 }
 
+function emailsConflict(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase()
+  const y = b.trim().toLowerCase()
+  return x.length > 0 && y.length > 0 && x === y
+}
+
+/** Block saving test inboxes that equal the real artist inbox (defeats test mode). */
+function validateTestInboxesVsArtist(f: FormState): string | null {
+  const artist = f.artist_email
+  if (emailsConflict(f.email_test_artist_inbox, artist)) {
+    return 'Artist test inbox must not be the same as Artist email, or test mail will still reach the artist.'
+  }
+  if (emailsConflict(f.email_test_client_inbox, artist)) {
+    return 'Client test inbox must not be the same as Artist email. Use a separate mailbox for venue-facing tests.'
+  }
+  return null
+}
+
 function fieldMatchesProfile(key: FormKey, f: FormState, p: ArtistProfile): boolean {
   const partial = buildPartial(key, f)
   const k = Object.keys(partial)[0] as keyof typeof partial
@@ -192,6 +210,17 @@ export default function Settings() {
     async (key: FormKey, state: FormState) => {
       if (!profile || savingRef.current) return
       if (fieldMatchesProfile(key, state, profile)) return
+      if (
+        key === 'email_test_artist_inbox'
+        || key === 'email_test_client_inbox'
+        || key === 'artist_email'
+      ) {
+        const err = validateTestInboxesVsArtist(state)
+        if (err) {
+          showToast(err, 'err')
+          return
+        }
+      }
       savingRef.current = true
       const partial = buildPartial(key, state)
       const result = await updateProfile(partial)

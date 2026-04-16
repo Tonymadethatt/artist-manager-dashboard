@@ -2893,7 +2893,14 @@ export default function BookingIntakePage() {
                   <Label className="text-neutral-400 text-xs">Lead source *</Label>
                   <IntakeCompactDual
                     value={data.outreach_track === 'community'}
-                    onChange={v => patch({ outreach_track: (v ? 'community' : 'pipeline') as OutreachTrack })}
+                    onChange={v => {
+                      const track = (v ? 'community' : 'pipeline') as OutreachTrack
+                      if (track === 'community') {
+                        patch({ outreach_track: track, commission_tier: 'artist_network' })
+                      } else {
+                        patch({ outreach_track: track })
+                      }
+                    }}
                     a={{ id: 'pipe', label: OUTREACH_TRACK_LABELS.pipeline }}
                     b={{ id: 'comm', label: OUTREACH_TRACK_LABELS.community }}
                   />
@@ -2902,20 +2909,24 @@ export default function BookingIntakePage() {
                   <Label className="text-neutral-400 text-xs">Commission tier *</Label>
                   <Select
                     value={data.commission_tier}
-                    disabled={data.outreach_track === 'community'}
                     onValueChange={v => patch({ commission_tier: v as CommissionTier })}
                   >
                     <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {COMMISSION_ORDER.map(t => (
+                      {(data.outreach_track === 'community'
+                        ? (['artist_network'] as const)
+                        : COMMISSION_ORDER
+                      ).map(t => (
                         <SelectItem key={t} value={t}>{commissionLabel(t)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {data.outreach_track === 'community' ? (
-                    <p className="text-[11px] text-neutral-500">Community leads use artist network (0%).</p>
+                    <p className="text-[11px] text-neutral-500">
+                      Community leads use artist network (0%). Switch the venue track to Pipeline above to choose other tiers.
+                    </p>
                   ) : null}
                 </div>
                 <div className="space-y-2">

@@ -31,11 +31,18 @@ import {
   isContactTitleLegacy,
   type ContactTitleKey,
 } from '@/lib/contacts/contactTitles'
-import type { Venue, OutreachStatus, OutreachTrack, Contact, DealTerms, TaskTemplate } from '@/types'
+import type { Venue, VenueType, OutreachStatus, OutreachTrack, Contact, DealTerms, TaskTemplate } from '@/types'
 import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
 import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
+import {
+  OUTREACH_STATUS_LABELS,
+  OUTREACH_STATUS_ORDER,
+  OUTREACH_TRACK_LABELS,
+  OUTREACH_TRACK_ORDER,
+  VENUE_TYPE_LABELS,
+  VENUE_TYPE_ORDER,
+} from '@/types'
 import { cn } from '@/lib/utils'
 import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
 
@@ -256,6 +263,27 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Venue type</Label>
+              <Select
+                value={venue.venue_type ?? 'other'}
+                onValueChange={v => onUpdate(venue.id, { venue_type: v as VenueType })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VENUE_TYPE_ORDER.map(t => (
+                    <SelectItem key={t} value={t}>
+                      {VENUE_TYPE_LABELS[t]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-neutral-600 leading-snug">
+                Saved on the venue record (not on each contact).
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Follow-up date</Label>
