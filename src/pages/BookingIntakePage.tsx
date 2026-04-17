@@ -117,6 +117,8 @@ import {
 import {
   contactRoleForDisplay,
   contactToMismatchContext,
+  intakeContactRoleFieldFromContact,
+  intakeContactRoleSelectControlValue,
   isVenueSoundTechContact,
 } from '@/lib/contacts/contactTitles'
 import type {
@@ -1831,7 +1833,7 @@ export default function BookingIntakePage() {
         existing_venue_id: venue.id,
         selected_contact_id: primary?.id ?? null,
         contact_name: primary?.name ?? '',
-        contact_role: primary?.role ?? '',
+        contact_role: intakeContactRoleFieldFromContact(primary),
         contact_email: primary?.email ?? '',
         contact_phone: primary?.phone ?? '',
         contact_company: primary?.company ?? '',
@@ -1867,7 +1869,7 @@ export default function BookingIntakePage() {
       booking.updateVenueData(selectedId, {
         selected_contact_id: contactId,
         contact_name: c.name,
-        contact_role: c.role ?? '',
+        contact_role: intakeContactRoleFieldFromContact(c),
         contact_email: c.email ?? '',
         contact_phone: c.phone ?? '',
         contact_company: c.company ?? '',
@@ -2911,11 +2913,32 @@ export default function BookingIntakePage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Role / title</Label>
-                  <Input
-                    className="h-11 border-neutral-800 bg-neutral-950/80"
-                    value={data.contact_role}
-                    onChange={e => patch({ contact_role: e.target.value })}
-                  />
+                  <Select
+                    value={intakeContactRoleSelectControlValue(data.contact_role)}
+                    onValueChange={v => {
+                      if (v === '__none__') patch({ contact_role: '' })
+                      else if (v === '__legacy__') return
+                      else patch({ contact_role: v })
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-11 border-neutral-800 bg-neutral-950/80"
+                      aria-label="Contact role or title"
+                    >
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {intakeContactRoleSelectControlValue(data.contact_role) === '__legacy__' ? (
+                        <SelectItem value="__legacy__">Custom (from record)</SelectItem>
+                      ) : null}
+                      {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
+                        <SelectItem key={key} value={key}>
+                          {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Phone *</Label>

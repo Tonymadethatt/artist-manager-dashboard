@@ -1,4 +1,7 @@
-import type { Phase1ContactMismatchContextV3 } from '@/lib/intake/intakePayloadV3'
+import {
+  CONTACT_MISMATCH_ROLE_ORDER,
+  type Phase1ContactMismatchContextV3,
+} from '@/lib/intake/intakePayloadV3'
 import type { Contact } from '@/types'
 
 type Mismatch = Exclude<Phase1ContactMismatchContextV3, ''>
@@ -73,6 +76,31 @@ export const CONTACT_TITLE_LABELS = Object.fromEntries(
 export const CONTACT_TITLE_MISMATCH = Object.fromEntries(
   CONTACT_TITLE_ROWS.map(r => [r.key, r.m]),
 ) as Record<ContactTitleKey, Mismatch>
+
+const CONTACT_MISMATCH_ROLE_KEY_SET = new Set<string>(CONTACT_MISMATCH_ROLE_ORDER)
+
+/** String stored on `BookingIntakeVenueDataV3.contact_role` when picking an existing contact or editing pre-call. */
+export function intakeContactRoleFieldFromContact(
+  c: Pick<Contact, 'title_key' | 'role'> | null | undefined,
+): string {
+  if (!c) return ''
+  const r = c.role?.trim() ?? ''
+  if (r && CONTACT_MISMATCH_ROLE_KEY_SET.has(r)) return r
+  const k = c.title_key?.trim()
+  if (k && k in CONTACT_TITLE_MISMATCH) return CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
+  return r
+}
+
+/** Radix Select `value` for pre-call / venue intake role (sentinels `__none__`, `__legacy__`). */
+export function intakeContactRoleSelectControlValue(
+  raw: string,
+): '__none__' | '__legacy__' | Exclude<Phase1ContactMismatchContextV3, ''> {
+  const t = raw.trim()
+  if (!t) return '__none__'
+  if (CONTACT_MISMATCH_ROLE_KEY_SET.has(t)) return t as Exclude<Phase1ContactMismatchContextV3, ''>
+  if (t in CONTACT_TITLE_MISMATCH) return CONTACT_TITLE_MISMATCH[t as ContactTitleKey]
+  return '__legacy__'
+}
 
 export const CONTACT_TITLE_GROUPS: { label: string; keys: readonly ContactTitleKey[] }[] = (() => {
   const map = new Map<string, ContactTitleKey[]>()
