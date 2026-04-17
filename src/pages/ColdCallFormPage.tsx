@@ -1083,14 +1083,21 @@ export default function ColdCallFormPage() {
               <p className="text-sm text-neutral-400">Lead source: Pipeline · Commission: New Doors</p>
               <div className="space-y-1.5 max-w-xs">
                 <Label className="text-neutral-400 text-xs">Priority (1–5)</Label>
-                <Input
-                  className="h-11 border-neutral-800 bg-neutral-950/80"
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={data.priority}
-                  onChange={e => patch({ priority: Math.min(5, Math.max(1, Number(e.target.value) || 3)) })}
-                />
+                <Select
+                  value={String(Math.min(5, Math.max(1, data.priority || 3)))}
+                  onValueChange={v => patch({ priority: Number(v) })}
+                >
+                  <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} star{n !== 1 ? 's' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </section>
 
