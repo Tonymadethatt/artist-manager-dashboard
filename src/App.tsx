@@ -25,6 +25,8 @@ import ManualShowReport from '@/pages/ManualShowReport'
 import FormPreviews from '@/pages/FormPreviews'
 import BookingIntakePage from '@/pages/BookingIntakePage'
 import BookingIntakesHubPage from '@/pages/BookingIntakesHubPage'
+import ColdCallFormPage from '@/pages/ColdCallFormPage'
+import ColdCallsHubPage from '@/pages/ColdCallsHubPage'
 import PartnershipRollAdminPage from '@/pages/PartnershipRollAdminPage'
 import PublicPreviousClientsPage from '@/pages/public/PublicPreviousClientsPage'
 import { supabaseConfigured } from '@/lib/supabase'
@@ -61,6 +63,8 @@ export default function App() {
         <Route path="/venue-email-ack/:token" element={<VenueEmailAckBridge />} />
         <Route path="/forms/intakes" element={<BookingIntakesHubPage />} />
         <Route path="/forms/intake" element={<BookingIntakePage />} />
+        <Route path="/forms/cold-calls" element={<ColdCallsHubPage />} />
+        <Route path="/forms/cold-call" element={<ColdCallFormPage />} />
         <Route path={PREVIOUS_CLIENTS_FORM_PATH} element={<PublicPreviousClientsPage />} />
         <Route path="/forms/partnerships" element={<Navigate to={PREVIOUS_CLIENTS_FORM_PATH} replace />} />
 

@@ -307,6 +307,55 @@ export function useBookingIntakes() {
     return row
   }, [load])
 
+  const createIntakeFromColdCall = useCallback(
+    async (params: {
+      coldCallId: string
+      title: string
+      venueData: BookingIntakeVenueDataV3
+      showData: BookingIntakeShowDataV3
+    }): Promise<BookingIntakeRow | null> => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const vd = { ...params.venueData, _v: 3 as const }
+      const sd = { ...params.showData, _v: 3 as const }
+      const { data: intake, error: ie } = await supabase
+        .from('booking_intakes')
+        .insert({
+          user_id: user.id,
+          title: params.title,
+          venue_data: vd as unknown as Database['public']['Tables']['booking_intakes']['Insert']['venue_data'],
+          schema_version: INTAKE_SCHEMA_VERSION_V3,
+          source_type: 'cold_call',
+          source_cold_call_id: params.coldCallId,
+        })
+        .select()
+        .single()
+      if (ie || !intake) {
+        setError(ie?.message ?? 'Could not create intake')
+        return null
+      }
+      const row = intake as BookingIntakeRow
+      const { error: se } = await supabase.from('booking_intake_shows').insert({
+        intake_id: row.id,
+        label: 'Show 1',
+        sort_order: 0,
+        show_data: sd as unknown as Database['public']['Tables']['booking_intake_shows']['Insert']['show_data'],
+      })
+      if (se) setError(se.message)
+      await supabase
+        .from('cold_calls')
+        .update({
+          converted_to_intake_id: row.id,
+          outcome: 'converting_intake',
+          temperature: 'converting',
+        })
+        .eq('id', params.coldCallId)
+      await load()
+      return row
+    },
+    [load],
+  )
+
   const deleteIntake = useCallback(
     async (intakeId: string) => {
       const { error: de } = await supabase.from('booking_intakes').delete().eq('id', intakeId)
@@ -388,6 +437,7 @@ export function useBookingIntakes() {
     parseVenue,
     parseShow,
     createIntake,
+    createIntakeFromColdCall,
     deleteIntake,
     updateVenueData,
     replaceVenueData,

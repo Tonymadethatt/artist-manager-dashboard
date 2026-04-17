@@ -19,6 +19,7 @@ import {
   Eye,
   Calendar,
   Mic2,
+  PhoneForwarded,
   ListChecks,
   ChevronDown,
   FlaskConical,
@@ -67,6 +68,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
     items: [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
       { to: '/forms/intakes', label: 'Intakes', icon: Mic2, end: false, badgeKey: null },
+      { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null },
       { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },

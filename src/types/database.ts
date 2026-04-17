@@ -79,6 +79,78 @@ export interface Database {
         }
         Relationships: []
       }
+      cold_calls: {
+        Row: {
+          id: string
+          user_id: string
+          venue_id: string | null
+          contact_id: string | null
+          title: string
+          call_date: string | null
+          temperature: string
+          outcome: string
+          call_purpose: string
+          duration_feel: string
+          who_answered: string
+          rejection_reason: string | null
+          save_to_pipeline: boolean
+          converted_to_intake_id: string | null
+          previous_call_id: string | null
+          call_data: unknown
+          notes: string | null
+          follow_up_date: string | null
+          next_actions: unknown
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          venue_id?: string | null
+          contact_id?: string | null
+          title?: string
+          call_date?: string | null
+          temperature?: string
+          outcome?: string
+          call_purpose?: string
+          duration_feel?: string
+          who_answered?: string
+          rejection_reason?: string | null
+          save_to_pipeline?: boolean
+          converted_to_intake_id?: string | null
+          previous_call_id?: string | null
+          call_data?: unknown
+          notes?: string | null
+          follow_up_date?: string | null
+          next_actions?: unknown
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          venue_id?: string | null
+          contact_id?: string | null
+          title?: string
+          call_date?: string | null
+          temperature?: string
+          outcome?: string
+          call_purpose?: string
+          duration_feel?: string
+          who_answered?: string
+          rejection_reason?: string | null
+          save_to_pipeline?: boolean
+          converted_to_intake_id?: string | null
+          previous_call_id?: string | null
+          call_data?: unknown
+          notes?: string | null
+          follow_up_date?: string | null
+          next_actions?: unknown
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           id: string
@@ -586,6 +658,8 @@ export interface Database {
           title: string
           venue_data: unknown
           schema_version: number
+          source_type: string
+          source_cold_call_id: string | null
           created_at: string
           updated_at: string
         }
@@ -595,6 +669,8 @@ export interface Database {
           title?: string
           venue_data?: unknown
           schema_version?: number
+          source_type?: string
+          source_cold_call_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -604,6 +680,8 @@ export interface Database {
           title?: string
           venue_data?: unknown
           schema_version?: number
+          source_type?: string
+          source_cold_call_id?: string | null
           created_at?: string
           updated_at?: string
         }

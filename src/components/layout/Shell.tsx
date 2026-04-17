@@ -27,6 +27,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/forms/preview':       'Forms preview',
   '/forms/intakes':       'Call intakes',
   '/forms/intake':        'Call intake',
+  '/forms/cold-calls':    'Cold calls',
+  '/forms/cold-call':     'Cold call',
   '/workspace/partnerships': 'Previous Clients — Workspace',
 }
 
