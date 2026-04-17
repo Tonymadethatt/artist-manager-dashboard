@@ -313,7 +313,8 @@ function peakSeasonHintLabel(eventIso: string | undefined): string | null {
   if (m === 12 && d >= 20) return 'Peak season window (Christmas / NYE)'
   if (m === 1 && d <= 2) return 'Peak season window (Christmas / NYE)'
   if (md >= 1025 && md <= 1101) return 'Peak season window (Halloween week)'
-  if (m === 4 && d >= 10 && d <= 25) return 'Peak season window (festival week — check Coachella)'
+  if (m === 4 && d >= 10 && d <= 25)
+    return 'Peak season window (mid-April — often high travel & event demand)'
   if (m === 6 && d >= 28) return 'Peak season window (July 4th week)'
   if (m === 7 && d <= 6) return 'Peak season window (July 4th week)'
   if (m === 2 && md >= 213 && md <= 215) return 'Peak season window (Valentine’s weekend)'
@@ -4571,6 +4572,7 @@ export default function BookingIntakePage() {
                         billH5a > 0 &&
                         pkgRow5a.hoursIncluded > 0 &&
                         billH5a > pkgRow5a.hoursIncluded
+                      const peakSeasonHint = peakSeasonHintLabel(sd.event_date.trim())
                       const priceInp5a = buildPriceInputForShow(sd, pricingCatalog)
                       let runningTotal5a = 0
                       if (priceInp5a) {
@@ -4794,9 +4796,9 @@ export default function BookingIntakePage() {
                               {billH5a - pkgRow5a.hoursIncluded} hr overtime at the selected hourly rate.
                             </p>
                           ) : null}
-                          {peakSeasonHintLabel(sd.event_date.trim()) ? (
+                          {peakSeasonHint ? (
                             <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
-                              {peakSeasonHintLabel(sd.event_date.trim())} — review surcharges; not auto-applied.
+                              {peakSeasonHint} — review surcharges; not auto-applied.
                             </p>
                           ) : null}
                           {data.commission_tier === 'kept_doors' && repeatBookingDiscountId(pricingCatalog) ? (
