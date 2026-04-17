@@ -610,7 +610,7 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Performance Report Request',
   performance_report_received: 'Performance report received',
   gig_calendar_digest_weekly: 'Weekly (Sundays, PT) — next 2 weeks of gigs',
-  gig_reminder_24h: 'Gig reminder — 24h before show',
+  gig_reminder_24h: 'Gig reminder — day before show (morning PT)',
   gig_booked_ics: 'Gig booked — confirmation email (calendar synced)',
   gig_day_summary_manual: 'Gig schedule — day summary (manual)',
 }

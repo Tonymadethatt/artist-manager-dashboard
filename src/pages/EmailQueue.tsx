@@ -118,7 +118,7 @@ function pendingNotesLine(email: VenueEmail): string | null {
   }
   if (email.email_type === 'gig_reminder_24h' || email.email_type === 'gig_booked_ics') {
     const n = parseGigCalendarQueueNotes(email.notes)
-    if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'Booked gig email · queued' : '24h reminder · queued'
+    if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'Booked gig email · queued' : 'Day-before reminder · queued'
   }
   return email.notes?.trim() || null
 }
@@ -131,7 +131,7 @@ function effectiveQueueBufferMinutes(email: VenueEmail, userBuffer: number): num
   return userBuffer
 }
 
-/** Pending row is held until a future wall time (e.g. 24h reminder)—show under Scheduled, not Active. */
+/** Pending row is held until a future wall time (e.g. day-before reminder)—show under Scheduled, not Active. */
 function isPendingScheduledForLater(email: VenueEmail): boolean {
   const raw = email.scheduled_send_at
   if (raw == null || String(raw).trim() === '') return false
@@ -242,7 +242,7 @@ function CountdownBadge({
     if (emailType === 'gig_reminder_24h') {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] text-neutral-500">
-          <Clock className="h-2.5 w-2.5" />Automated — ~24h before show
+          <Clock className="h-2.5 w-2.5" />Automated — day before show (~10 AM PT)
         </span>
       )
     }
@@ -1216,7 +1216,7 @@ export default function EmailQueue() {
             if (!deal?.event_start_at || !deal.event_end_at) throw new Error('Deal or show times missing.')
             if (gigN.kind === 'gig_reminder_24h' && !shouldSendGigReminderNow(Date.now(), deal.event_start_at)) {
               throw new Error(
-                'This 24h reminder is not due yet — it is sent automatically about one day before show time.',
+                'This reminder is not due yet — it sends automatically on the morning of the day before your show (Pacific).',
               )
             }
             const { data: venueRow } = await supabase

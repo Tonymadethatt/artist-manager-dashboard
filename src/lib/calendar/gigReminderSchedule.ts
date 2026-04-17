@@ -1,35 +1,47 @@
-/** One calendar day before show start instant (UTC ms since epoch). */
-const MS_BEFORE_SHOW = 24 * 60 * 60 * 1000
+import {
+  addCalendarDaysPacific,
+  pacificDateKeyFromUtcIso,
+  pacificWallToUtcIso,
+} from '@/lib/calendar/pacificWallTime'
 
 /**
- * Millisecond timestamp when the 24h-before-show reminder should first be eligible to send.
- * Returns null if `showStartIso` is not a finite instant.
+ * Wall time (HH:mm, 24h) in America/Los_Angeles on the **calendar day before** the show
+ * when the reminder becomes eligible to send. Not tied to show clock time — avoids late-night sends.
  */
-export function gigReminderSendAtMs(showStartIso: string): number | null {
-  const startMs = new Date(showStartIso).getTime()
-  if (!Number.isFinite(startMs)) return null
-  return startMs - MS_BEFORE_SHOW
-}
+export const GIG_REMINDER_DAY_BEFORE_WALL_TIME_PT = '10:00'
 
 /**
- * ISO string stored on `venue_emails.scheduled_send_at` (authoritative target; cron still
- * re-checks `deals.event_start_at` when sending).
+ * UTC instant: previous Pacific calendar day relative to show start, at {@link GIG_REMINDER_DAY_BEFORE_WALL_TIME_PT}.
+ * Stored on `venue_emails.scheduled_send_at`; queue treats `scheduled_send_at <= now` as eligible.
  */
 export function gigReminderScheduledSendAtIso(showStartIso: string): string | null {
-  const ms = gigReminderSendAtMs(showStartIso)
-  return ms == null ? null : new Date(ms).toISOString()
+  const showYmd = pacificDateKeyFromUtcIso(showStartIso)
+  if (!showYmd) return null
+  const dayBeforeYmd = addCalendarDaysPacific(showYmd, -1)
+  return pacificWallToUtcIso(dayBeforeYmd, GIG_REMINDER_DAY_BEFORE_WALL_TIME_PT)
 }
 
 /**
- * Cron / processor: true when local `nowMs` is at or past the 24h-before-show moment (minus slack).
- * Slack absorbs 1-minute cron granularity and clock skew.
+ * Same instant as {@link gigReminderScheduledSendAtIso} as epoch ms (for comparisons).
+ */
+export function gigReminderSendAtMs(showStartIso: string): number | null {
+  const iso = gigReminderScheduledSendAtIso(showStartIso)
+  if (!iso) return null
+  const ms = new Date(iso).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
+/**
+ * Cron / send boundary: eligible once we're at or past the scheduled day-before send (minus slack),
+ * and the show has not started yet.
  */
 export function shouldSendGigReminderNow(nowMs: number, showStartIso: string, slackMs = 90_000): boolean {
   const startMs = new Date(showStartIso).getTime()
   if (!Number.isFinite(startMs)) return false
   if (nowMs >= startMs) return false
-  const sendAfter = startMs - MS_BEFORE_SHOW
-  return nowMs >= sendAfter - slackMs
+  const sendAfterMs = gigReminderSendAtMs(showStartIso)
+  if (sendAfterMs == null) return false
+  return nowMs >= sendAfterMs - slackMs
 }
 
 /**

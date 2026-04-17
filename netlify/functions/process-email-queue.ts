@@ -3,7 +3,7 @@
  *
  * Called by an external cron job every minute.
  * Sends pending `venue_emails`: each row waits for the user's `email_queue_buffer_minutes` (5–30; artist_profile), except artist-targeted custom templates and builtin artist rows (`management_report`, `retainer_reminder`, `retainer_received`, `performance_report_received`, gig-calendar builtins) — buffer 0 so the next cron run can send.
- * `gig_reminder_24h` uses `venue_emails.deal_id` → batch `deals.event_start_at` for eligibility (embedded `deal` join is fallback only), and re-checks `shouldSendGigReminderNow` immediately before Resend.
+ * `gig_reminder_24h` uses `venue_emails.deal_id` → batch `deals.event_start_at` for eligibility (embedded `deal` join is fallback only), and re-checks `shouldSendGigReminderNow` (day-before morning PT vs exact 24h) immediately before Resend.
  *
  * Required environment variables (set in Netlify dashboard → Site configuration → Environment variables):
  *   SUPABASE_URL             – same value as VITE_SUPABASE_URL (without the VITE_ prefix)

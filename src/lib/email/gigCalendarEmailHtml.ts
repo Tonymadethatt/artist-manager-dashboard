@@ -167,7 +167,7 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         'rgba(249,115,22,0.08)',
         'rgba(249,115,22,0.25)',
         '#f97316',
-        '24-hour reminder',
+        'Day-before reminder',
       )
       const r = args.reminder!
       middleHtml = emailSectionCardHtml(
@@ -180,7 +180,7 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         }),
         '#f97316',
       )
-      defaultIntro = 'Quick heads-up — your show is coming up in about <strong>24 hours</strong>.'
+      defaultIntro = 'Quick heads-up — your show is <strong>coming up soon</strong>.'
       defaultClosing = 'Break a leg. Reply if you need anything from the team.'
       break
     }

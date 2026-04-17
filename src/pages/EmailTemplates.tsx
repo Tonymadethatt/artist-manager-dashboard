@@ -243,7 +243,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days — one card per show. Jobs are pre-enqueued with that send time so they appear under Email Queue → Scheduled until they go out.',
-  gig_reminder_24h:           'Per show: one email 24 hours before start (queued when a gig is on the calendar).',
+  gig_reminder_24h:           'Per show: one email the calendar day before start (~10:00 AM Pacific), not tied to show clock time (queued when a gig is on the calendar).',
   gig_booked_ics:             'After a gig is calendar-ready and the deal has an agreement on file or deposit paid: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a stacked card for each booked gig on one day (queued; sends on next cron tick).',
 }
@@ -255,7 +255,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
   performance_report_received: '{firstName}, we received your show check-in',
   gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
-  gig_reminder_24h:           '{firstName}, reminder: {venue} in 24 hours',
+  gig_reminder_24h:           '{firstName}, reminder: {venue} tomorrow',
   gig_booked_ics:             '{firstName}, you’re booked — show details',
   gig_day_summary_manual:     '{firstName}, your gigs — one day',
 }

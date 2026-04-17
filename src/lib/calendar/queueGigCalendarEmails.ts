@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase'
 import type { Deal, Venue } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import { backfillDealShowInstantsIfNeeded } from '@/lib/calendar/backfillDealShowInstants'
-import { gigReminderScheduledSendAtIso, gigReminderSendAtMs } from '@/lib/calendar/gigReminderSchedule'
+import { gigReminderScheduledSendAtIso } from '@/lib/calendar/gigReminderSchedule'
 import {
   canInsertPendingGigBookedIcs,
   dealQualifiesForCalendar,
@@ -68,9 +68,9 @@ export async function syncDealCalendarEmails(args: {
     .in('status', ['pending', 'sending'])
 
   if (dealQualifiesForCalendar(afterDeal, venueAfter) && afterDeal.event_start_at) {
-    const sendAt = gigReminderSendAtMs(afterDeal.event_start_at)
+    const startMs = new Date(afterDeal.event_start_at).getTime()
     const schedIso = gigReminderScheduledSendAtIso(afterDeal.event_start_at)
-    if (sendAt != null && sendAt > Date.now() && schedIso) {
+    if (Number.isFinite(startMs) && startMs > Date.now() && schedIso) {
       await supabase.from('venue_emails').insert({
         user_id: afterDeal.user_id,
         venue_id: afterDeal.venue_id,
@@ -159,9 +159,9 @@ export async function ensureDealCalendarEmailsQueued(dealId: string): Promise<vo
       .in('status', ['pending', 'sending'])
 
     if (dealQualifiesForCalendar(afterDeal, venueAfter) && afterDeal.event_start_at) {
-      const sendAt = gigReminderSendAtMs(afterDeal.event_start_at)
+      const startMs = new Date(afterDeal.event_start_at).getTime()
       const schedIso = gigReminderScheduledSendAtIso(afterDeal.event_start_at)
-      if (sendAt != null && sendAt > Date.now() && schedIso) {
+      if (Number.isFinite(startMs) && startMs > Date.now() && schedIso) {
         await supabase.from('venue_emails').insert({
           user_id: afterDeal.user_id,
           venue_id: afterDeal.venue_id,
