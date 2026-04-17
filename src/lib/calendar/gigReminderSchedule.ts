@@ -2,7 +2,7 @@ import {
   addCalendarDaysPacific,
   pacificDateKeyFromUtcIso,
   pacificWallToUtcIso,
-} from '@/lib/calendar/pacificWallTime'
+} from './pacificWallTime'
 
 /**
  * Wall time (HH:mm, 24h) in America/Los_Angeles on the **calendar day before** the show
