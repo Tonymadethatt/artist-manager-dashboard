@@ -1,8 +1,8 @@
 import {
   CONTACT_MISMATCH_ROLE_ORDER,
   type Phase1ContactMismatchContextV3,
-} from '@/lib/intake/intakePayloadV3'
-import type { Contact } from '@/types'
+} from '../intake/contactMismatchCatalog'
+import type { Contact } from '../../types'
 
 type Mismatch = Exclude<Phase1ContactMismatchContextV3, ''>
 

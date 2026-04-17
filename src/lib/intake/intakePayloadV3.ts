@@ -3,6 +3,18 @@ import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 import { SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
 import { applyGearIntakeNormalization, intakeShowsGearVerification } from '@/lib/gear/gearIntakeDerived'
 import { GEAR_MODEL_OTHER_ID, getDeckById, getMixerById } from '@/lib/gear/djGearCatalog'
+import {
+  CONTACT_MISMATCH_CONTEXT_KEYS,
+  CONTACT_MISMATCH_CONTEXT_LABELS,
+  type Phase1ContactMismatchContextV3,
+} from './contactMismatchCatalog'
+
+export {
+  CONTACT_MISMATCH_CONTEXT_KEYS,
+  type Phase1ContactMismatchContextV3,
+  CONTACT_MISMATCH_CONTEXT_LABELS,
+  CONTACT_MISMATCH_ROLE_ORDER,
+} from './contactMismatchCatalog'
 
 const COMMISSION_TIERS: CommissionTier[] = ['new_doors', 'kept_doors', 'bigger_doors', 'artist_network']
 
@@ -292,49 +304,6 @@ export const PHASE1_COMPANY_CONFIRMED_LABELS: Record<Exclude<Phase1CompanyConfir
   confirmed: 'Company / org: confirmed',
   update_needed: 'Company / org: update needed',
 }
-
-/** Phase 1 — substantive context (venue_data). Who’s on the line when not the contact on file. */
-export const CONTACT_MISMATCH_CONTEXT_KEYS = [
-  '',
-  'talent_buyer',
-  'event_planner',
-  'day_of_coordinator',
-  'wedding_planner',
-  'agency_rep',
-  'venue_manager',
-  'production',
-  'hospitality_manager',
-  'marketing_pr',
-  'billing',
-  'owner',
-  'assistant',
-  'security_box',
-  'other_party',
-] as const
-
-export type Phase1ContactMismatchContextV3 = (typeof CONTACT_MISMATCH_CONTEXT_KEYS)[number]
-
-export const CONTACT_MISMATCH_CONTEXT_LABELS: Record<Exclude<Phase1ContactMismatchContextV3, ''>, string> = {
-  talent_buyer: 'Talent buyer / booker',
-  event_planner: 'Event planner / producer',
-  day_of_coordinator: 'Day-of coordinator',
-  wedding_planner: 'Wedding / private planner',
-  agency_rep: 'Agency / rep',
-  venue_manager: 'Venue manager / ops',
-  production: 'Production / tech',
-  hospitality_manager: 'Hospitality / F&B',
-  marketing_pr: 'Marketing / PR',
-  billing: 'Billing / AP',
-  owner: 'Owner / principal',
-  assistant: 'Assistant / coordinator',
-  security_box: 'Security / box office / door',
-  other_party: 'Other',
-}
-
-/** Non-empty keys in call-flow order (dropdowns). */
-export const CONTACT_MISMATCH_ROLE_ORDER = CONTACT_MISMATCH_CONTEXT_KEYS.filter(
-  (k): k is Exclude<Phase1ContactMismatchContextV3, ''> => k !== '',
-)
 
 export type Phase1PreferredEmailChannelV3 = '' | 'work' | 'personal' | 'billing' | 'production'
 
