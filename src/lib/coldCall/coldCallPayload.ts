@@ -2,6 +2,10 @@
 
 export const COLD_CALL_DATA_VERSION = 1 as const
 
+/** Pre-filled on new cold calls; `state_region` must match `US_STATE_OPTIONS[].value` (e.g. CA for California). */
+export const DEFAULT_COLD_CALL_CITY = 'Los Angeles'
+export const DEFAULT_COLD_CALL_STATE_REGION = 'CA'
+
 export type ColdCallSessionMode = 'pre_call' | 'live_call' | 'post_call'
 
 export type ColdCallTemperature = '' | 'dead' | 'cold' | 'warm' | 'hot' | 'converting'
@@ -315,8 +319,8 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     existing_venue_id: null,
     venue_name: '',
     venue_type: '',
-    city: '',
-    state_region: '',
+    city: DEFAULT_COLD_CALL_CITY,
+    state_region: DEFAULT_COLD_CALL_STATE_REGION,
     venue_vibe: '',
     known_events: '',
     social_handle: '',
