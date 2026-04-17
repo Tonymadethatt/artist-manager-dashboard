@@ -19,8 +19,10 @@ import {
   EQUIPMENT_VENUE_INCLUDES_LABELS,
   LOAD_ACCESS_TAG_KEYS,
   LOAD_ACCESS_TAG_LABELS,
+  emptyGearVerificationSlice,
   intakeShowIsFestivalLikeProduction,
   intakeShowNeedsEquipmentArrivalSetup,
+  resolveGearRentalAddonCandidate,
   resolveProductionPackageCandidates,
   resolveVenueProductionAddonCandidates,
   type BookingIntakeShowDataV3,
@@ -31,7 +33,21 @@ import {
   type LoadAccessTagV3,
   type Phase4EquipmentProviderV3,
   type Phase4SetupWindowV3,
+  type VenueBoothMonitorV3,
+  type VenueDeckTypeV3,
+  type VenueLaptopConnectionV3,
+  type VenueMixerBrandV3,
+  type VenueProDjLinkV3,
+  type VenueUsbFormatV3,
 } from '@/lib/intake/intakePayloadV3'
+import {
+  GEAR_MODEL_OTHER_ID,
+  listDecksForKind,
+  listMixersForBrand,
+  type MixerBrandKeyV3,
+} from '@/lib/gear/djGearCatalog'
+import { gearPhaseADetailEligible, selectedDeckShowsIncompatibleAlert } from '@/lib/gear/gearIntakeDerived'
+import { IntakeGearSearchPick } from '@/pages/booking-intake/IntakeGearSearchPick'
 import { IntakeQuarterHourTimeField } from '@/pages/booking-intake/IntakeQuarterHourTimeField'
 import { IntakeCompactChipRow, IntakeInlineScriptBlock } from '@/pages/booking-intake/intakeLivePrimitives'
 
@@ -158,6 +174,7 @@ export function EquipmentIntakeFlowCapture({
   const loadInFieldId = useId()
   const pkgCand = resolveProductionPackageCandidates(pricingCatalog)
   const addonCand = resolveVenueProductionAddonCandidates(pricingCatalog)
+  const gearAddon = resolveGearRentalAddonCandidate(pricingCatalog)
   const soundTechSyncRef = useRef(false)
 
   const confirmFirstName = soundTechUiContext?.confirmFirstName ?? null
@@ -203,6 +220,79 @@ export function EquipmentIntakeFlowCapture({
 
   const showStep2 = step1Complete
 
+  const showStep2Gear =
+    showStep2 && (sd.equipment_provider === 'venue_provides' || sd.equipment_provider === 'hybrid')
+
+  const deckKind =
+    sd.venue_deck_type === 'cdj'
+      ? ('cdj' as const)
+      : sd.venue_deck_type === 'controller'
+        ? ('controller' as const)
+        : sd.venue_deck_type === 'turntable'
+          ? ('turntable' as const)
+          : sd.venue_deck_type === 'all_in_one'
+            ? ('all_in_one' as const)
+            : null
+
+  const deckRows = deckKind ? listDecksForKind(deckKind) : []
+
+  const mixerBrandKey: MixerBrandKeyV3 | null =
+    sd.venue_mixer_brand === 'pioneer_djm' ||
+    sd.venue_mixer_brand === 'rane' ||
+    sd.venue_mixer_brand === 'allen_heath'
+      ? sd.venue_mixer_brand
+      : null
+
+  const mixerRows = mixerBrandKey ? listMixersForBrand(mixerBrandKey) : []
+
+  const gearIncompatible = selectedDeckShowsIncompatibleAlert(sd)
+  const showGearDetail = gearPhaseADetailEligible(sd)
+
+  const clearGearAddon = () => {
+    if (!gearAddon?.id) return
+    const next = { ...sd.addon_quantities }
+    const autopop = new Set(sd.addon_autopop_ids ?? [])
+    delete next[gearAddon.id]
+    autopop.delete(gearAddon.id)
+    onPatch({
+      ...STEP1_FLOW,
+      addon_quantities: next,
+      addon_autopop_ids: [...autopop],
+    })
+  }
+
+  const applyGearByo = () => {
+    const base: Partial<BookingIntakeShowDataV3> = {
+      ...STEP1_FLOW,
+      gear_bring_own_fee: true,
+      gear_flagged_for_discussion: false,
+    }
+    if (gearAddon?.id) {
+      const next = { ...sd.addon_quantities, [gearAddon.id]: 1 }
+      const autopop = new Set(sd.addon_autopop_ids ?? [])
+      autopop.add(gearAddon.id)
+      onPatch({
+        ...base,
+        addon_quantities: next,
+        addon_autopop_ids: [...autopop],
+        addon_autopop_dismissed_ids: (sd.addon_autopop_dismissed_ids ?? []).filter(
+          id => id !== gearAddon.id,
+        ),
+      })
+    } else {
+      onPatch(base)
+    }
+  }
+
+  const applyGearFlagDiscussion = () => {
+    clearGearAddon()
+    onPatch({
+      ...STEP1_FLOW,
+      gear_bring_own_fee: false,
+      gear_flagged_for_discussion: true,
+    })
+  }
+
   const showStep3Packages =
     showStep2 &&
     ((sd.equipment_provider === 'dj_brings' && sd.equipment_dj_package_interest === 'yes_walkthrough') ||
@@ -220,6 +310,7 @@ export function EquipmentIntakeFlowCapture({
       ...STEP1_FLOW,
       equipment_provider: v,
       ...resetStep2Fields(),
+      ...(v === 'dj_brings' ? emptyGearVerificationSlice() : {}),
       ...(v === 'venue_provides' ? { pricing_mode: 'hourly' as const, package_id: '' } : {}),
     })
   }
@@ -729,6 +820,277 @@ export function EquipmentIntakeFlowCapture({
           ) : null}
         </div>
       </div>
+
+      {showStep2Gear ? (
+        <div
+          className={cn(
+            'space-y-3 pt-2 border-t border-white/[0.06] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200',
+          )}
+        >
+          <IntakeInlineScriptBlock>
+            <p>
+              Perfect — and do you know what kind of decks and mixer they&apos;ve got in the booth? Like is it Pioneer
+              CDJs, a controller, turntables?
+            </p>
+          </IntakeInlineScriptBlock>
+          <SingleSelectChipRow<VenueDeckTypeV3>
+            label="Deck type"
+            value={sd.venue_deck_type}
+            options={[
+              { id: 'cdj', label: 'CDJs' },
+              { id: 'controller', label: 'Controller' },
+              { id: 'turntable', label: 'Turntables' },
+              { id: 'all_in_one', label: 'All-in-one' },
+              { id: 'not_sure', label: 'Not sure — ask tech' },
+            ]}
+            onChange={v =>
+              onPatch({
+                ...STEP1_FLOW,
+                venue_deck_type: v,
+                venue_deck_model_id: '',
+                venue_deck_other_notes: '',
+                venue_laptop_connection: '',
+                venue_pro_dj_link: '',
+                venue_usb_format: '',
+              })
+            }
+          />
+          {sd.venue_deck_type === 'not_sure' ? (
+            <p className="text-[11px] text-neutral-500 leading-snug">
+              We&apos;ll confirm the exact setup with your tech person.
+            </p>
+          ) : sd.venue_deck_type ? (
+            <div className="flex flex-wrap gap-3 items-end">
+              <IntakeGearSearchPick
+                label="Deck model"
+                placeholder="Search or pick model…"
+                valueId={sd.venue_deck_model_id === GEAR_MODEL_OTHER_ID ? '' : sd.venue_deck_model_id}
+                rows={deckRows}
+                onPick={id =>
+                  onPatch({
+                    ...STEP1_FLOW,
+                    venue_deck_model_id: id,
+                    venue_deck_other_notes: '',
+                    gear_flagged_for_discussion: false,
+                  })
+                }
+                className="min-w-[200px]"
+              />
+              <div className="space-y-1.5 shrink-0">
+                <Label className="text-neutral-400 text-xs block">&nbsp;</Label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onPatch({
+                      ...STEP1_FLOW,
+                      venue_deck_model_id: GEAR_MODEL_OTHER_ID,
+                      gear_flagged_for_discussion: false,
+                    })
+                  }
+                  className={cn(
+                    'min-h-[44px] px-3 text-xs font-medium rounded-lg border transition-colors',
+                    sd.venue_deck_model_id === GEAR_MODEL_OTHER_ID
+                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                  )}
+                >
+                  Other — post-call
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="space-y-1.5 min-w-0 flex-1 min-w-[160px]">
+              <Label className="text-neutral-400 text-xs">Mixer brand</Label>
+              <Select
+                value={sd.venue_mixer_brand || '__none__'}
+                onValueChange={v => {
+                  const val = v === '__none__' ? ('' as VenueMixerBrandV3) : (v as VenueMixerBrandV3)
+                  onPatch({
+                    ...STEP1_FLOW,
+                    venue_mixer_brand: val,
+                    venue_mixer_model_id: '',
+                    venue_mixer_other_notes: '',
+                  })
+                }}
+              >
+                <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                  <SelectValue placeholder="Mixer brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">—</SelectItem>
+                  <SelectItem value="pioneer_djm">Pioneer DJM</SelectItem>
+                  <SelectItem value="rane">Rane</SelectItem>
+                  <SelectItem value="allen_heath">Allen &amp; Heath</SelectItem>
+                  <SelectItem value="built_in">Built-in (on controller)</SelectItem>
+                  <SelectItem value="not_sure">Not sure — ask tech</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {sd.venue_mixer_brand === 'not_sure' ? (
+              <p className="text-[11px] text-neutral-500 flex-1 min-w-[200px] self-end pb-2 leading-snug">
+                We&apos;ll confirm the mixer with your tech person.
+              </p>
+            ) : null}
+            {sd.venue_mixer_brand === 'built_in' ? (
+              <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 flex-1 min-w-[200px] leading-snug">
+                Built-in mixers on all-in-one units may not meet requirements — confirm deck model.
+              </p>
+            ) : null}
+            {mixerBrandKey ? (
+              <IntakeGearSearchPick
+                label="Mixer model"
+                placeholder="Search or pick model…"
+                valueId={sd.venue_mixer_model_id === GEAR_MODEL_OTHER_ID ? '' : sd.venue_mixer_model_id}
+                rows={mixerRows}
+                onPick={id =>
+                  onPatch({
+                    ...STEP1_FLOW,
+                    venue_mixer_model_id: id,
+                    venue_mixer_other_notes: '',
+                    gear_flagged_for_discussion: false,
+                  })
+                }
+                className="min-w-[200px]"
+              />
+            ) : null}
+            {sd.venue_mixer_brand === 'other' ? (
+              <p className="text-[11px] text-neutral-500 flex-1 min-w-[200px] self-end pb-2 leading-snug">
+                Capture mixer details in post-call wrap-up.
+              </p>
+            ) : null}
+            {mixerBrandKey ? (
+              <div className="space-y-1.5 shrink-0">
+                <Label className="text-neutral-400 text-xs block">&nbsp;</Label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onPatch({
+                      ...STEP1_FLOW,
+                      venue_mixer_model_id: GEAR_MODEL_OTHER_ID,
+                      gear_flagged_for_discussion: false,
+                    })
+                  }
+                  className={cn(
+                    'min-h-[44px] px-3 text-xs font-medium rounded-lg border transition-colors',
+                    sd.venue_mixer_model_id === GEAR_MODEL_OTHER_ID
+                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                  )}
+                >
+                  Other — post-call
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <SingleSelectChipRow<VenueBoothMonitorV3>
+            label="Booth monitor / foldback"
+            value={sd.venue_booth_monitor}
+            options={[
+              { id: 'yes', label: 'Yes — available' },
+              { id: 'no', label: 'No' },
+              { id: 'not_sure', label: 'Not sure' },
+            ]}
+            onChange={v => onPatch({ ...STEP1_FLOW, venue_booth_monitor: v })}
+          />
+          {sd.venue_booth_monitor === 'no' ? (
+            <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
+              DJ requires a booth monitor — we&apos;ll need to arrange one.
+            </p>
+          ) : null}
+
+          {showGearDetail ? (
+            <div className="space-y-3 pt-1 border-t border-white/[0.05]">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-neutral-500">Quick tech details</p>
+              <SingleSelectChipRow<VenueLaptopConnectionV3>
+                label="Laptop connection"
+                value={sd.venue_laptop_connection}
+                options={[
+                  { id: 'usb_b_mixer', label: 'USB-B into mixer' },
+                  { id: 'usb_drives_only', label: 'USB drives only' },
+                  { id: 'not_sure', label: 'Not sure' },
+                ]}
+                onChange={v =>
+                  onPatch({
+                    ...STEP1_FLOW,
+                    venue_laptop_connection: v,
+                    venue_usb_format: v !== 'usb_drives_only' ? '' : sd.venue_usb_format,
+                  })
+                }
+              />
+              {sd.venue_laptop_connection === 'usb_drives_only' ? (
+                <SingleSelectChipRow<VenueUsbFormatV3>
+                  label="USB format"
+                  value={sd.venue_usb_format}
+                  options={[
+                    { id: 'fat32', label: 'FAT32' },
+                    { id: 'exfat', label: 'exFAT' },
+                    { id: 'not_sure', label: 'Not sure' },
+                  ]}
+                  onChange={v => onPatch({ ...STEP1_FLOW, venue_usb_format: v })}
+                />
+              ) : null}
+              {sd.venue_deck_type === 'cdj' ? (
+                <SingleSelectChipRow<VenueProDjLinkV3>
+                  label="CDJs on Pro DJ Link?"
+                  value={sd.venue_pro_dj_link}
+                  options={[
+                    { id: 'yes', label: 'Yes — networked' },
+                    { id: 'standalone_usb', label: 'Standalone USB' },
+                    { id: 'no', label: 'No' },
+                    { id: 'not_sure', label: 'Not sure' },
+                  ]}
+                  onChange={v => onPatch({ ...STEP1_FLOW, venue_pro_dj_link: v })}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {gearIncompatible && sd.gear_bring_own_fee ? (
+            <p className="text-[11px] text-neutral-200/90 rounded-md border border-white/[0.08] bg-neutral-900/40 px-2 py-1.5 leading-snug">
+              Bring-your-own gear fee is included on the estimate (add-on).
+            </p>
+          ) : null}
+          {gearIncompatible && sd.gear_flagged_for_discussion && !sd.gear_bring_own_fee ? (
+            <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
+              Gear flagged for discussion — confirm before finalizing the contract.
+            </p>
+          ) : null}
+          {gearIncompatible && !sd.gear_bring_own_fee && !sd.gear_flagged_for_discussion ? (
+            <div className="rounded-md border border-amber-900/45 bg-amber-950/25 px-3 py-2.5 space-y-2">
+              <p className="text-xs font-semibold text-amber-100/95">Gear alert</p>
+              <p className="text-[11px] text-amber-200/85 leading-snug">
+                This setup may not be compatible with DJ Luijay&apos;s standard performance requirements. He can bring
+                his own rig for an additional $200 when that&apos;s agreed.
+              </p>
+              {!gearAddon ? (
+                <p className="text-[11px] text-amber-200/70 leading-snug">
+                  Add a ~$200 flat gear / BYO add-on in Pricing so we can auto-attach it here.
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyGearByo()}
+                  className="min-h-[40px] px-3 text-xs font-medium rounded-lg border border-amber-700/50 bg-amber-950/40 text-amber-100 hover:bg-amber-950/60"
+                >
+                  Add $200 bring-your-own fee
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGearFlagDiscussion()}
+                  className="min-h-[40px] px-3 text-xs font-medium rounded-lg border border-white/[0.12] bg-neutral-900/60 text-neutral-200 hover:border-white/20"
+                >
+                  Flag for discussion
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {showStep2 && sd.equipment_provider === 'venue_provides' ? (
         <div

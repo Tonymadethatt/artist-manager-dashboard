@@ -167,6 +167,8 @@ import {
   type EquipmentSoundTechPickOption,
   type SoundTechUiContext,
 } from '@/pages/booking-intake/EquipmentIntakeFlowCapture'
+import { TechGearFollowUpSection } from '@/pages/booking-intake/TechGearFollowUpSection'
+import { computeGearTechFollowupNeeded } from '@/lib/gear/gearIntakeDerived'
 import { Intake2bSchedulePanel } from '@/pages/booking-intake/Intake2bSchedulePanel'
 import { addHoursToQuarterHm, INTAKE_DEFAULT_EVENT_DURATION_HOURS } from '@/lib/intake/quarterHourTimes'
 import { IntakeQuarterHourTimeField } from '@/pages/booking-intake/IntakeQuarterHourTimeField'
@@ -558,6 +560,28 @@ function pick4a(
   | 'addon_quantities'
   | 'addon_autopop_ids'
   | 'addon_autopop_dismissed_ids'
+  | 'venue_deck_type'
+  | 'venue_deck_model_id'
+  | 'venue_deck_compatible'
+  | 'venue_mixer_brand'
+  | 'venue_mixer_model_id'
+  | 'venue_mixer_compatible'
+  | 'venue_booth_monitor'
+  | 'venue_laptop_connection'
+  | 'venue_usb_format'
+  | 'venue_pro_dj_link'
+  | 'venue_software'
+  | 'gear_compatible'
+  | 'gear_bring_own_fee'
+  | 'gear_flagged_for_discussion'
+  | 'gear_tech_followup_needed'
+  | 'gear_tech_followup_completed'
+  | 'gear_tech_call_active'
+  | 'gear_tech_call_step'
+  | 'tech_soundcheck_time'
+  | 'tech_setup_access'
+  | 'venue_deck_other_notes'
+  | 'venue_mixer_other_notes'
   | 'load_in_time'
   | 'equipment_setup_window'
   | 'load_in_access_tags'
@@ -581,6 +605,28 @@ function pick4a(
     addon_quantities: { ...d.addon_quantities },
     addon_autopop_ids: [...d.addon_autopop_ids],
     addon_autopop_dismissed_ids: [...d.addon_autopop_dismissed_ids],
+    venue_deck_type: d.venue_deck_type,
+    venue_deck_model_id: d.venue_deck_model_id,
+    venue_deck_compatible: d.venue_deck_compatible,
+    venue_mixer_brand: d.venue_mixer_brand,
+    venue_mixer_model_id: d.venue_mixer_model_id,
+    venue_mixer_compatible: d.venue_mixer_compatible,
+    venue_booth_monitor: d.venue_booth_monitor,
+    venue_laptop_connection: d.venue_laptop_connection,
+    venue_usb_format: d.venue_usb_format,
+    venue_pro_dj_link: d.venue_pro_dj_link,
+    venue_software: d.venue_software,
+    gear_compatible: d.gear_compatible,
+    gear_bring_own_fee: d.gear_bring_own_fee,
+    gear_flagged_for_discussion: d.gear_flagged_for_discussion,
+    gear_tech_followup_needed: d.gear_tech_followup_needed,
+    gear_tech_followup_completed: d.gear_tech_followup_completed,
+    gear_tech_call_active: d.gear_tech_call_active,
+    gear_tech_call_step: d.gear_tech_call_step,
+    tech_soundcheck_time: d.tech_soundcheck_time,
+    tech_setup_access: d.tech_setup_access,
+    venue_deck_other_notes: d.venue_deck_other_notes,
+    venue_mixer_other_notes: d.venue_mixer_other_notes,
     load_in_time: d.load_in_time,
     equipment_setup_window: d.equipment_setup_window,
     load_in_access_tags: [...d.load_in_access_tags],
@@ -848,6 +894,12 @@ export default function BookingIntakePage() {
         .slice()
         .sort((a, b) => a.sort_order - b.sort_order),
     [booking.showsByIntake, selectedId],
+  )
+
+  const anyShowNeedsGearTechFollowUp = useMemo(
+    () =>
+      showsSorted.some(r => computeGearTechFollowupNeeded(parseShowDataV3(r.show_data, r.sort_order))),
+    [showsSorted],
   )
 
   const primaryStateRegion = useMemo(() => {
@@ -4176,6 +4228,11 @@ export default function BookingIntakePage() {
                   </>
                 ) : data.view_section === '4B' ? (
                   <div className="space-y-4 min-w-0">
+                    {anyShowNeedsGearTechFollowUp ? (
+                      <p className="text-[11px] text-amber-200/85 rounded-md border border-amber-900/45 bg-amber-950/25 px-2 py-1.5 leading-snug">
+                        Tech follow-up needed — confirm gear details with on-site tech before finalizing.
+                      </p>
+                    ) : null}
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Same as main contact?</Label>
                       <div className="flex min-w-0 flex-col gap-3 sm:gap-2 lg:flex-row lg:flex-wrap lg:items-end">
@@ -5725,6 +5782,17 @@ export default function BookingIntakePage() {
                       Follow-up date: {data.follow_up_date.trim()} (maps to venue follow-up on import).
                     </p>
                   ) : null}
+
+                  <div className="space-y-3">
+                    {showsSorted.map(row => (
+                      <TechGearFollowUpSection
+                        key={`tech-gear-${row.id}`}
+                        showRow={row}
+                        venueData={data}
+                        applyShowPost={(showId, partial) => applyShowPatch(showId, partial, 'post')}
+                      />
+                    ))}
+                  </div>
 
                   <div className="rounded-lg border border-white/[0.08] bg-neutral-950/20 overflow-hidden">
                     <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">

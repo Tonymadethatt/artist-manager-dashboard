@@ -1,6 +1,8 @@
 import type { CommissionTier, OutreachTrack, PricingAddon, PricingCatalogDoc, PricingPackage, VenueType } from '@/types'
 import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 import { SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
+import { applyGearIntakeNormalization, intakeShowsGearVerification } from '@/lib/gear/gearIntakeDerived'
+import { GEAR_MODEL_OTHER_ID, getDeckById, getMixerById } from '@/lib/gear/djGearCatalog'
 
 const COMMISSION_TIERS: CommissionTier[] = ['new_doors', 'kept_doors', 'bigger_doors', 'artist_network']
 
@@ -812,6 +814,38 @@ export type EquipmentMicV3 = '' | 'venue_has_mic' | 'dj_brings_mic' | 'not_discu
 
 export type EquipmentSoundTechV3 = '' | 'yes' | 'no' | 'not_discussed'
 
+/** Gear verification — venue / hybrid only (§4A extension). */
+export type VenueDeckTypeV3 = '' | 'cdj' | 'controller' | 'turntable' | 'all_in_one' | 'not_sure'
+
+export type VenueMixerBrandV3 =
+  | ''
+  | 'pioneer_djm'
+  | 'rane'
+  | 'allen_heath'
+  | 'built_in'
+  | 'not_sure'
+  | 'other'
+
+export type VenueBoothMonitorV3 = '' | 'yes' | 'no' | 'not_sure'
+
+export type VenueLaptopConnectionV3 =
+  | ''
+  | 'usb_b_mixer'
+  | 'usb_drives_only'
+  | 'audio_interface'
+  | 'other'
+  | 'not_sure'
+
+export type VenueUsbFormatV3 = '' | 'fat32' | 'exfat' | 'not_sure'
+
+export type VenueProDjLinkV3 = '' | 'yes' | 'no' | 'not_sure' | 'standalone_usb'
+
+export type VenueSoftwareV3 = '' | 'rekordbox' | 'serato' | 'traktor' | 'engine_dj' | 'not_sure'
+
+export type TechSetupAccessV3 = '' | 'before_doors' | 'during_event' | 'no_soundcheck'
+
+export type GearTechCallStepV3 = '' | 'T1' | 'T2' | 'T3' | 'T4' | 'T5'
+
 export type EquipmentDjPackageInterestV3 = '' | 'yes_walkthrough' | 'no_simple' | 'think_later'
 
 export type EquipmentHybridAdditionsV3 = '' | 'yeah_see' | 'no_good' | 'maybe_later'
@@ -940,6 +974,23 @@ export function resolveVenueProductionAddonCandidates(doc: PricingCatalogDoc): {
     doc.addons.find(a => a.priceType === 'per_sq_ft') ??
     null
   return { lighting, effects, danceFloor }
+}
+
+/** BYO / gear rental add-on (~$200) — heuristic match on catalog name or price. */
+export function resolveGearRentalAddonCandidate(doc: PricingCatalogDoc): PricingAddon | null {
+  const lower = (s: string) => s.toLowerCase()
+  const byName =
+    doc.addons.find(a =>
+      /gear|byo|bring[\s-]*own|controller|deck|rental|dj\s*gear/i.test(lower(a.name)),
+    ) ?? null
+  if (byName) return byName
+  return (
+    doc.addons.find(
+      a =>
+        (a.priceType === 'flat_fee' || a.priceType === 'per_event' || a.priceType === 'per_setup') &&
+        Math.abs(a.price - 200) <= 40,
+    ) ?? null
+  )
 }
 
 const VENUE_PA_CAPABILITY_IDS: readonly EquipmentCapabilityIdV3[] = [
@@ -1870,6 +1921,30 @@ export type BookingIntakeShowDataV3 = {
   equipment_sound_tech_contact_id: string | null
   /** Free-typed sound tech or snapshot name (primary / on-call picks). */
   equipment_sound_tech_name: string
+  /** Gear verification (venue provides / hybrid). */
+  venue_deck_type: VenueDeckTypeV3
+  /** {@link import('@/lib/gear/djGearCatalog').GEAR_MODEL_OTHER_ID} = other — type notes in post-call. */
+  venue_deck_model_id: string
+  venue_deck_compatible: boolean | null
+  venue_mixer_brand: VenueMixerBrandV3
+  venue_mixer_model_id: string
+  venue_mixer_compatible: boolean | null
+  venue_booth_monitor: VenueBoothMonitorV3
+  venue_laptop_connection: VenueLaptopConnectionV3
+  venue_usb_format: VenueUsbFormatV3
+  venue_pro_dj_link: VenueProDjLinkV3
+  venue_software: VenueSoftwareV3
+  gear_compatible: boolean | null
+  gear_bring_own_fee: boolean
+  gear_flagged_for_discussion: boolean
+  gear_tech_followup_needed: boolean
+  gear_tech_followup_completed: boolean
+  gear_tech_call_active: boolean
+  gear_tech_call_step: GearTechCallStepV3
+  tech_soundcheck_time: string
+  tech_setup_access: TechSetupAccessV3
+  venue_deck_other_notes: string
+  venue_mixer_other_notes: string
   equipment_venue_includes: EquipmentVenueIncludesIdV3[]
   equipment_hybrid_covers: EquipmentHybridCoverIdV3[]
   equipment_dj_package_interest: EquipmentDjPackageInterestV3
@@ -2362,6 +2437,28 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     equipment_sound_tech: '',
     equipment_sound_tech_contact_id: null,
     equipment_sound_tech_name: '',
+    venue_deck_type: '',
+    venue_deck_model_id: '',
+    venue_deck_compatible: null,
+    venue_mixer_brand: '',
+    venue_mixer_model_id: '',
+    venue_mixer_compatible: null,
+    venue_booth_monitor: '',
+    venue_laptop_connection: '',
+    venue_usb_format: '',
+    venue_pro_dj_link: '',
+    venue_software: '',
+    gear_compatible: null,
+    gear_bring_own_fee: false,
+    gear_flagged_for_discussion: false,
+    gear_tech_followup_needed: false,
+    gear_tech_followup_completed: false,
+    gear_tech_call_active: false,
+    gear_tech_call_step: '',
+    tech_soundcheck_time: '',
+    tech_setup_access: '',
+    venue_deck_other_notes: '',
+    venue_mixer_other_notes: '',
     equipment_venue_includes: [],
     equipment_hybrid_covers: [],
     equipment_dj_package_interest: '',
@@ -2412,6 +2509,58 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     equipment_details_text: '',
     parking_details_text: '',
     travel_notes_text: '',
+  }
+}
+
+/** Reset all gear verification fields (e.g. DJ brings own, or clearing show). */
+export function emptyGearVerificationSlice(): Pick<
+  BookingIntakeShowDataV3,
+  | 'venue_deck_type'
+  | 'venue_deck_model_id'
+  | 'venue_deck_compatible'
+  | 'venue_mixer_brand'
+  | 'venue_mixer_model_id'
+  | 'venue_mixer_compatible'
+  | 'venue_booth_monitor'
+  | 'venue_laptop_connection'
+  | 'venue_usb_format'
+  | 'venue_pro_dj_link'
+  | 'venue_software'
+  | 'gear_compatible'
+  | 'gear_bring_own_fee'
+  | 'gear_flagged_for_discussion'
+  | 'gear_tech_followup_needed'
+  | 'gear_tech_followup_completed'
+  | 'gear_tech_call_active'
+  | 'gear_tech_call_step'
+  | 'tech_soundcheck_time'
+  | 'tech_setup_access'
+  | 'venue_deck_other_notes'
+  | 'venue_mixer_other_notes'
+> {
+  return {
+    venue_deck_type: '',
+    venue_deck_model_id: '',
+    venue_deck_compatible: null,
+    venue_mixer_brand: '',
+    venue_mixer_model_id: '',
+    venue_mixer_compatible: null,
+    venue_booth_monitor: '',
+    venue_laptop_connection: '',
+    venue_usb_format: '',
+    venue_pro_dj_link: '',
+    venue_software: '',
+    gear_compatible: null,
+    gear_bring_own_fee: false,
+    gear_flagged_for_discussion: false,
+    gear_tech_followup_needed: false,
+    gear_tech_followup_completed: false,
+    gear_tech_call_active: false,
+    gear_tech_call_step: '',
+    tech_soundcheck_time: '',
+    tech_setup_access: '',
+    venue_deck_other_notes: '',
+    venue_mixer_other_notes: '',
   }
 }
 
@@ -3212,6 +3361,54 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
         : null,
     equipment_sound_tech_name:
       typeof o.equipment_sound_tech_name === 'string' ? o.equipment_sound_tech_name : '',
+    venue_deck_type: parsePhase1Enum(
+      o.venue_deck_type,
+      ['', 'cdj', 'controller', 'turntable', 'all_in_one', 'not_sure'],
+      '',
+    ),
+    venue_deck_model_id: typeof o.venue_deck_model_id === 'string' ? o.venue_deck_model_id : '',
+    venue_deck_compatible:
+      o.venue_deck_compatible === true ? true : o.venue_deck_compatible === false ? false : null,
+    venue_mixer_brand: parsePhase1Enum(
+      o.venue_mixer_brand,
+      ['', 'pioneer_djm', 'rane', 'allen_heath', 'built_in', 'not_sure', 'other'],
+      '',
+    ),
+    venue_mixer_model_id: typeof o.venue_mixer_model_id === 'string' ? o.venue_mixer_model_id : '',
+    venue_mixer_compatible:
+      o.venue_mixer_compatible === true ? true : o.venue_mixer_compatible === false ? false : null,
+    venue_booth_monitor: parsePhase1Enum(o.venue_booth_monitor, ['', 'yes', 'no', 'not_sure'], ''),
+    venue_laptop_connection: parsePhase1Enum(
+      o.venue_laptop_connection,
+      ['', 'usb_b_mixer', 'usb_drives_only', 'audio_interface', 'other', 'not_sure'],
+      '',
+    ),
+    venue_usb_format: parsePhase1Enum(o.venue_usb_format, ['', 'fat32', 'exfat', 'not_sure'], ''),
+    venue_pro_dj_link: parsePhase1Enum(
+      o.venue_pro_dj_link,
+      ['', 'yes', 'no', 'not_sure', 'standalone_usb'],
+      '',
+    ),
+    venue_software: parsePhase1Enum(
+      o.venue_software,
+      ['', 'rekordbox', 'serato', 'traktor', 'engine_dj', 'not_sure'],
+      '',
+    ),
+    gear_compatible: o.gear_compatible === true ? true : o.gear_compatible === false ? false : null,
+    gear_bring_own_fee: o.gear_bring_own_fee === true,
+    gear_flagged_for_discussion: o.gear_flagged_for_discussion === true,
+    gear_tech_followup_needed: o.gear_tech_followup_needed === true,
+    gear_tech_followup_completed: o.gear_tech_followup_completed === true,
+    gear_tech_call_active: o.gear_tech_call_active === true,
+    gear_tech_call_step: parsePhase1Enum(o.gear_tech_call_step, ['', 'T1', 'T2', 'T3', 'T4', 'T5'], ''),
+    tech_soundcheck_time: typeof o.tech_soundcheck_time === 'string' ? o.tech_soundcheck_time : '',
+    tech_setup_access: parsePhase1Enum(
+      o.tech_setup_access,
+      ['', 'before_doors', 'during_event', 'no_soundcheck'],
+      '',
+    ),
+    venue_deck_other_notes: typeof o.venue_deck_other_notes === 'string' ? o.venue_deck_other_notes : '',
+    venue_mixer_other_notes: typeof o.venue_mixer_other_notes === 'string' ? o.venue_mixer_other_notes : '',
     equipment_venue_includes: asEquipmentVenueIncludesIds(o.equipment_venue_includes),
     equipment_hybrid_covers: asEquipmentHybridCoverIds(o.equipment_hybrid_covers),
     equipment_dj_package_interest: parsePhase1Enum(
@@ -3393,6 +3590,9 @@ export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIn
     out.equipment_sound_tech_contact_id = null
     out.equipment_sound_tech_name = ''
   }
+  if (out.equipment_provider !== 'venue_provides' && out.equipment_provider !== 'hybrid') {
+    Object.assign(out, emptyGearVerificationSlice())
+  }
   const needsGearArrival = intakeShowNeedsEquipmentArrivalSetup(out)
   if (!needsGearArrival) {
     out.load_in_time = ''
@@ -3404,7 +3604,7 @@ export function finalizeShowPostCaptures(sd: BookingIntakeShowDataV3): BookingIn
   }
   out.soundcheck = ''
   out.load_in_discussed = ''
-  return out
+  return applyGearIntakeNormalization(out)
 }
 
 /** Human lines for deal/venue notes — structured fields captured on the live call. */
@@ -3505,6 +3705,43 @@ export function substantiveShowCaptureLines(sd: BookingIntakeShowDataV3): string
     else lines.push('Sound tech on site: Yes')
   } else if (sd.equipment_sound_tech === 'no') {
     lines.push('Sound tech on site: No')
+  }
+  if (intakeShowsGearVerification(sd) && (sd.venue_deck_type || sd.venue_mixer_brand || sd.venue_booth_monitor)) {
+    const g: string[] = []
+    if (sd.venue_deck_type === 'not_sure') g.push('Decks: not sure — confirm with tech')
+    else if (sd.venue_deck_type) {
+      const deckLabel =
+        sd.venue_deck_model_id === GEAR_MODEL_OTHER_ID
+          ? sd.venue_deck_other_notes.trim() || 'Other (post-call)'
+          : sd.venue_deck_model_id.trim()
+            ? getDeckById(sd.venue_deck_model_id)?.display ?? sd.venue_deck_model_id
+            : '(model TBD)'
+      g.push(`Decks (${sd.venue_deck_type}): ${deckLabel}`)
+    }
+    if (sd.venue_mixer_brand === 'not_sure') g.push('Mixer: not sure — confirm with tech')
+    else if (sd.venue_mixer_brand === 'built_in') g.push('Mixer: built-in on controller')
+    else if (sd.venue_mixer_brand === 'other') {
+      g.push(
+        `Mixer: other${sd.venue_mixer_other_notes.trim() ? ` — ${sd.venue_mixer_other_notes.trim()}` : ''}`,
+      )
+    } else if (sd.venue_mixer_brand) {
+      const mx =
+        sd.venue_mixer_model_id === GEAR_MODEL_OTHER_ID
+          ? sd.venue_mixer_other_notes.trim() || 'Other (post-call)'
+          : sd.venue_mixer_model_id.trim()
+            ? getMixerById(sd.venue_mixer_model_id)?.display ?? sd.venue_mixer_model_id
+            : '(model TBD)'
+      g.push(`Mixer: ${mx}`)
+    }
+    if (sd.venue_booth_monitor === 'yes') g.push('Booth monitor: yes')
+    else if (sd.venue_booth_monitor === 'no') g.push('Booth monitor: no — needs arrangement')
+    else if (sd.venue_booth_monitor === 'not_sure') g.push('Booth monitor: not sure')
+    if (sd.gear_bring_own_fee) g.push('BYO decks/controller fee ($200) agreed')
+    if (sd.gear_flagged_for_discussion) g.push('Gear: flagged for discussion')
+    if (sd.tech_soundcheck_time.trim() && sd.tech_setup_access) {
+      g.push(`Tech soundcheck: ${sd.tech_soundcheck_time.trim()} (${sd.tech_setup_access})`)
+    }
+    if (g.length) lines.push(`Gear / tech: ${g.join(' · ')}`)
   }
   if (sd.equipment_venue_includes.length) {
     lines.push(

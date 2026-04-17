@@ -7,12 +7,22 @@ import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
 import { pacificWallToUtcIso, addCalendarDaysPacific } from '@/lib/calendar/pacificWallTime'
 import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
 import { refreshVenueAndPromoteForCalendarDeal } from '@/lib/calendar/promoteVenueForCalendarDeal'
-import type { BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
+import { parseShowDataV3, type BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
 import { resolveIntakeOnsiteContactId } from '@/lib/intake/syncIntakeVenueContacts'
 import { supabase } from '@/lib/supabase'
 
 function allTrueVenuePresets(): Record<string, boolean> {
   return Object.fromEntries(SHOW_REPORT_PRESETS.map(p => [p.id, true])) as Record<string, boolean>
+}
+
+function isIntakeShowV3(raw: unknown): raw is Record<string, unknown> {
+  return raw !== null && typeof raw === 'object' && !Array.isArray(raw) && (raw as { _v?: unknown })._v === 3
+}
+
+function gearBringOwnPromiseCustomLine(rawShowData: unknown): string | null {
+  if (!isIntakeShowV3(rawShowData)) return null
+  const sd = parseShowDataV3(rawShowData, 0)
+  return sd.gear_bring_own_fee ? 'DJ provides own decks/controller ($200 fee agreed).' : null
 }
 
 function buildEventWallUtc(form: DealFormImportShape): { event_start_at: string | null; event_end_at: string | null } {
@@ -132,7 +142,14 @@ export async function importDealFromIntakeShow(params: {
 
   const presetAny = Object.values(imp.promisePresets).some(Boolean)
   const venuePresets = presetAny ? imp.promisePresets : allTrueVenuePresets()
-  const promiseDoc = buildPromiseLinesDocV2FromUi(venuePresets, [''], defaultArtistPromisePresets(), [''])
+  const gearLine = gearBringOwnPromiseCustomLine(rawShowData)
+  const venueCustoms = gearLine ? [gearLine] : []
+  const promiseDoc = buildPromiseLinesDocV2FromUi(
+    venuePresets,
+    venueCustoms,
+    defaultArtistPromisePresets(),
+    [''],
+  )
   if (promiseDoc.venue.lines.length === 0) {
     return { ok: false, error: 'No venue recap lines could be built. Check Phase 6 promises on the intake.' }
   }
