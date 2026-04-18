@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type DragEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Plus,
@@ -16,6 +16,10 @@ import {
   ChevronRight,
   Pencil,
   FolderInput,
+  GripVertical,
+  Check,
+  Square,
+  Search,
 } from 'lucide-react'
 import { useFiles } from '@/hooks/useFiles'
 import { useDeals } from '@/hooks/useDeals'
@@ -48,10 +52,18 @@ import {
   folderBreadcrumbItems,
   flatFolderPickList,
   collectFolderSubtreeIds,
+  folderDisplayPath,
 } from '@/lib/files/folderTree'
+import {
+  FOLDER_ACCENT_FOLDER_BORDER,
+  FOLDER_ACCENT_FOLDER_ICON,
+  FOLDER_ACCENT_DROP_RING,
+  FOLDER_ACCENT_LABELS,
+} from '@/lib/files/folderAccent'
 import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
 import type { Deal, GeneratedFile, DocumentFolder } from '@/types'
+import { FOLDER_ACCENTS } from '@/types'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 
@@ -72,12 +84,53 @@ function fileKind(f: GeneratedFile): FileKind {
   return f.output_format === 'pdf' ? 'pdf' : 'text'
 }
 
+const DOC_SORT_KEY_LS = 'documents:sort:key'
+const DOC_SORT_DIR_LS = 'documents:sort:dir'
+
+type DocSortKey = 'name' | 'date' | 'kind'
+type DocSortDir = 'asc' | 'desc'
+
+function readDocSortKey(): DocSortKey {
+  try {
+    const v = localStorage.getItem(DOC_SORT_KEY_LS)
+    if (v === 'name' || v === 'date' || v === 'kind') return v
+  } catch { /* ignore */ }
+  return 'date'
+}
+
+function readDocSortDir(): DocSortDir {
+  try {
+    const v = localStorage.getItem(DOC_SORT_DIR_LS)
+    if (v === 'asc' || v === 'desc') return v
+  } catch { /* ignore */ }
+  return 'desc'
+}
+
+const FILE_DRAG_MIME = 'application/x-artist-manager-file-ids'
+
 export default function Files() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const folderParamRaw = searchParams.get('folder')
   const folderIdFromUrl = useMemo(() => parseFolderQuery(folderParamRaw), [folderParamRaw])
   const filterFolderId: string | null = folderIdFromUrl
+
+  const [searchDraft, setSearchDraft] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchAll, setSearchAll] = useState(false)
+  const [sortKey, setSortKey] = useState<DocSortKey>(() => readDocSortKey())
+  const [sortDir, setSortDir] = useState<DocSortDir>(() => readDocSortDir())
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [fileSelection, setFileSelection] = useState<Set<string>>(new Set())
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
+  const [bulkMoveDest, setBulkMoveDest] = useState<string>('__root__')
+  const [bulkMoveSaving, setBulkMoveSaving] = useState(false)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false)
+  const [bulkDeleteSummary, setBulkDeleteSummary] = useState<string | null>(null)
+  const [accentFolder, setAccentFolder] = useState<DocumentFolder | null>(null)
+  const [accentSavingKey, setAccentSavingKey] = useState<string | null>(null)
 
   const {
     files,
@@ -92,7 +145,14 @@ export default function Files() {
     deleteFolder,
     moveFolder,
     moveFile,
-  } = useFiles({ filterFolderId })
+    moveFiles,
+    deleteFiles,
+    updateFolderAccent,
+  } = useFiles({
+    filterFolderId,
+    searchQuery: debouncedSearch,
+    searchAll: searchAll && debouncedSearch.trim().length > 0,
+  })
 
   const { deals, updateDeal } = useDeals()
   const uploadInputRef = useRef<HTMLInputElement>(null)
@@ -135,6 +195,32 @@ export default function Files() {
       setSearchParams({}, { replace: true })
     }
   }, [folderParamRaw, setSearchParams])
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchDraft.trim()), 200)
+    return () => window.clearTimeout(t)
+  }, [searchDraft])
+
+  useEffect(() => {
+    if (!searchDraft.trim()) setSearchAll(false)
+  }, [searchDraft])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DOC_SORT_KEY_LS, sortKey)
+    } catch { /* ignore */ }
+  }, [sortKey])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DOC_SORT_DIR_LS, sortDir)
+    } catch { /* ignore */ }
+  }, [sortDir])
+
+  useEffect(() => {
+    setFileSelection(new Set())
+    setSelectionMode(false)
+  }, [filterFolderId])
 
   useEffect(() => {
     if (!loading && folderIdFromUrl && !folders.some(f => f.id === folderIdFromUrl)) {
@@ -184,6 +270,44 @@ export default function Files() {
       .filter(f => f.parent_id === filterFolderId)
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [folders, filterFolderId])
+
+  const effectiveSearchAll = searchAll && debouncedSearch.trim().length > 0
+  const showChildFolders = !effectiveSearchAll
+
+  const sortedFiles = useMemo(() => {
+    const list = [...files]
+    const dirMul = sortDir === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      let cmp = 0
+      if (sortKey === 'name') cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      else if (sortKey === 'date') cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      else cmp = fileKind(a).localeCompare(fileKind(b))
+      if (cmp !== 0) return cmp * dirMul
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
+    return list
+  }, [files, sortKey, sortDir])
+
+  const fileIdsInView = useMemo(() => new Set(files.map(f => f.id)), [files])
+  useEffect(() => {
+    setFileSelection(prev => {
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (fileIdsInView.has(id)) next.add(id)
+      }
+      if (next.size === prev.size) {
+        let same = true
+        for (const id of prev) {
+          if (!next.has(id)) {
+            same = false
+            break
+          }
+        }
+        if (same) return prev
+      }
+      return next
+    })
+  }, [fileIdsInView])
 
   const fileMoveTargets = useMemo(() => flatFolderPickList(folders), [folders])
 
@@ -295,7 +419,39 @@ export default function Files() {
     window.setTimeout(() => setUrlFeedback(null), 3000)
   }
 
-  const totalItemsHere = childFolders.length + files.length
+  const totalItemsHere = (showChildFolders ? childFolders.length : 0) + sortedFiles.length
+
+  const toggleFileSelected = (id: string) => {
+    setFileSelection(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAllInView = () => {
+    setFileSelection(new Set(sortedFiles.map(f => f.id)))
+  }
+
+  const clearFileSelection = () => setFileSelection(new Set())
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false)
+    setFileSelection(new Set())
+  }
+
+  const parseDraggedFileIds = (e: DragEvent): string[] | null => {
+    const raw = e.dataTransfer.getData(FILE_DRAG_MIME) || e.dataTransfer.getData('text/plain')
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (!Array.isArray(parsed) || !parsed.every(x => typeof x === 'string')) return null
+      return parsed as string[]
+    } catch {
+      return null
+    }
+  }
 
   return (
     <div className="space-y-4 w-full min-w-0">
@@ -327,10 +483,123 @@ export default function Files() {
         ))}
       </nav>
 
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
+            <Input
+              value={searchDraft}
+              onChange={e => setSearchDraft(e.target.value)}
+              placeholder="Search by file name…"
+              className="pl-8 h-9 bg-neutral-950 border-neutral-800 text-sm"
+              aria-label="Search documents"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-neutral-400 shrink-0 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="rounded border-neutral-600 bg-neutral-950"
+              checked={searchAll}
+              onChange={e => setSearchAll(e.target.checked)}
+              disabled={!searchDraft.trim()}
+            />
+            All documents
+          </label>
+          {effectiveSearchAll && (
+            <span className="text-[11px] text-neutral-500">Up to 200 matches, newest first.</span>
+          )}
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <span className="text-xs text-neutral-500">Sort</span>
+            <Select value={sortKey} onValueChange={v => setSortKey(v as DocSortKey)}>
+              <SelectTrigger className="h-8 w-[120px] text-xs bg-neutral-950 border-neutral-800">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="date">Date</SelectItem>
+                <SelectItem value="kind">Type</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortDir} onValueChange={v => setSortDir(v as DocSortDir)}>
+              <SelectTrigger className="h-8 w-[100px] text-xs bg-neutral-950 border-neutral-800">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="asc">Ascending</SelectItem>
+                <SelectItem value="desc">Descending</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {selectionMode ? (
+          <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 py-2 px-3 rounded-lg border border-neutral-800 bg-neutral-950/95 backdrop-blur supports-[backdrop-filter]:bg-neutral-950/80">
+            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={selectAllInView}>
+              Select all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={clearFileSelection}
+              disabled={fileSelection.size === 0}
+            >
+              Deselect
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={fileSelection.size === 0}
+              onClick={() => {
+                setBulkMoveDest('__root__')
+                setBulkMoveOpen(true)
+              }}
+            >
+              <FolderInput className="h-3.5 w-3.5 mr-1" />
+              Move to…{fileSelection.size > 0 ? ` (${fileSelection.size})` : ''}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-8 text-xs"
+              disabled={fileSelection.size === 0}
+              onClick={() => {
+                setBulkDeleteSummary(null)
+                setBulkDeleteOpen(true)
+              }}
+            >
+              Delete{fileSelection.size > 0 ? ` (${fileSelection.size})` : ''}
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs ml-auto" onClick={exitSelectionMode}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          sortedFiles.length > 0 && (
+            <div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-neutral-500 hover:text-neutral-200"
+                onClick={() => setSelectionMode(true)}
+              >
+                Select files
+              </Button>
+            </div>
+          )
+        )}
+      </div>
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-500">
-          {totalItemsHere} item{totalItemsHere !== 1 ? 's' : ''} in this folder
-          {filterFolderId === null && folders.length > 0 && (
+          {totalItemsHere} item{totalItemsHere !== 1 ? 's' : ''}
+          {effectiveSearchAll ? ' found' : ' in this folder'}
+          {filterFolderId === null && folders.length > 0 && !effectiveSearchAll && (
             <span className="text-neutral-600"> · {folders.length} folder{folders.length !== 1 ? 's' : ''} total</span>
           )}
         </p>
@@ -400,9 +669,13 @@ export default function Files() {
       ) : totalItemsHere === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-neutral-700 rounded-lg">
           <FilesIcon className="h-8 w-8 text-neutral-600 mx-auto mb-3" />
-          <p className="font-medium text-neutral-400 text-sm mb-1">This folder is empty</p>
+          <p className="font-medium text-neutral-400 text-sm mb-1">
+            {debouncedSearch.trim() ? 'No matching files' : 'This folder is empty'}
+          </p>
           <p className="text-xs text-neutral-500 mb-4">
-            Upload a file, create a folder, or generate from a template.
+            {debouncedSearch.trim()
+              ? 'Try different keywords or clear the search.'
+              : 'Upload a file, create a folder, or generate from a template.'}
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={() => uploadInputRef.current?.click()}>
@@ -420,86 +693,162 @@ export default function Files() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {childFolders.map(sub => {
-            const subCount = folders.filter(f => f.parent_id === sub.id).length
-            const fileCount = folderFileCounts.byFolderId[sub.id] ?? 0
-            return (
-              <div
-                key={sub.id}
-                className={cn(
-                  'group relative rounded-lg border border-neutral-800 bg-neutral-900/80 p-3',
-                  'hover:border-neutral-600 hover:bg-neutral-900 transition-colors min-w-0 flex flex-col',
-                )}
-              >
-                <button
-                  type="button"
-                  className="flex flex-col items-stretch text-left min-w-0 flex-1"
-                  onClick={() => setFolderInUrl(sub.id)}
+          {showChildFolders &&
+            childFolders.map(sub => {
+              const subCount = folders.filter(f => f.parent_id === sub.id).length
+              const fileCount = folderFileCounts.byFolderId[sub.id] ?? 0
+              const accent = sub.accent
+              return (
+                <div
+                  key={sub.id}
+                  className={cn(
+                    'group relative rounded-lg border bg-neutral-900/80 p-3',
+                    FOLDER_ACCENT_FOLDER_BORDER[accent],
+                    'hover:border-neutral-600 hover:bg-neutral-900 transition-colors min-w-0 flex flex-col',
+                    dragOverFolderId === sub.id && FOLDER_ACCENT_DROP_RING[accent],
+                  )}
+                  onDragOver={e => {
+                    const types = Array.from(e.dataTransfer.types)
+                    if (!types.includes(FILE_DRAG_MIME) && !types.includes('text/plain')) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    setDragOverFolderId(sub.id)
+                  }}
+                  onDragLeave={e => {
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                    setDragOverFolderId(null)
+                  }}
+                  onDrop={e => {
+                    const ids = parseDraggedFileIds(e)
+                    if (!ids?.length) {
+                      setDragOverFolderId(null)
+                      return
+                    }
+                    e.preventDefault()
+                    setDragOverFolderId(null)
+                    void moveFiles(ids, sub.id)
+                  }}
                 >
-                  <Folder className="h-8 w-8 text-amber-500/90 mb-2 shrink-0" strokeWidth={1.5} />
-                  <span className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug">{sub.name}</span>
-                  <span className="text-[11px] text-neutral-500 mt-1 tabular-nums">
-                    {subCount} folder{subCount !== 1 ? 's' : ''}, {fileCount} file{fileCount !== 1 ? 's' : ''}
-                  </span>
-                </button>
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Folder ${sub.name} actions`}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setRenameFolderRow(sub)
-                          setRenameValue(sub.name)
-                          setRenameOpen(true)
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5 mr-2" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setMoveFolderRow(sub)
-                          setMoveFolderDest('__root__')
-                          setMoveFolderOpen(true)
-                        }}
-                      >
-                        <FolderInput className="h-3.5 w-3.5 mr-2" />
-                        Move to…
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-400 focus:text-red-400"
-                        onClick={() => setConfirmDeleteFolder(sub)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <button
+                    type="button"
+                    className="flex flex-col items-stretch text-left min-w-0 flex-1"
+                    onClick={() => setFolderInUrl(sub.id)}
+                  >
+                    <Folder
+                      className={cn('h-8 w-8 mb-2 shrink-0', FOLDER_ACCENT_FOLDER_ICON[accent])}
+                      strokeWidth={1.5}
+                    />
+                    <span className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug">{sub.name}</span>
+                    <span className="text-[11px] text-neutral-500 mt-1 tabular-nums">
+                      {subCount} folder{subCount !== 1 ? 's' : ''}, {fileCount} file{fileCount !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Folder ${sub.name} actions`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setRenameFolderRow(sub)
+                            setRenameValue(sub.name)
+                            setRenameOpen(true)
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-2" />
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setAccentFolder(sub)}>
+                          <span className="h-3.5 w-3.5 mr-2 inline-block rounded-sm border border-neutral-600 bg-neutral-800" />
+                          Folder color…
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setMoveFolderRow(sub)
+                            setMoveFolderDest('__root__')
+                            setMoveFolderOpen(true)
+                          }}
+                        >
+                          <FolderInput className="h-3.5 w-3.5 mr-2" />
+                          Move to…
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-400 focus:text-red-400"
+                          onClick={() => setConfirmDeleteFolder(sub)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
 
-          {files.map(file => {
+          {sortedFiles.map(file => {
             const fmt = fileKind(file)
             const canon = canonicalDealsByFileId.get(file.id)
             const { open: openTasks, done: doneTasks } = taskLinkSummary(file.id)
+            const selected = fileSelection.has(file.id)
+            const dragIds =
+              fileSelection.size > 0 && fileSelection.has(file.id)
+                ? Array.from(fileSelection)
+                : [file.id]
+            const inPathLabel = effectiveSearchAll
+              ? folderDisplayPath(folders, file.folder_id ?? null)
+              : null
             return (
               <div
                 key={file.id}
                 className={cn(
                   'group relative rounded-lg border border-neutral-800 bg-neutral-900/80 p-3',
                   'hover:border-neutral-600 hover:bg-neutral-900 transition-colors min-w-0 flex flex-col',
+                  selected && selectionMode && 'ring-1 ring-neutral-400 border-neutral-500',
                 )}
               >
+                {selectionMode && (
+                  <button
+                    type="button"
+                    className="absolute top-2 left-2 z-[1] rounded p-0.5 text-neutral-400 hover:text-neutral-100"
+                    aria-label={selected ? 'Deselect file' : 'Select file'}
+                    onClick={e => {
+                      e.stopPropagation()
+                      toggleFileSelected(file.id)
+                    }}
+                  >
+                    {selected ? <Check className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="flex flex-col items-stretch text-left min-w-0 flex-1"
-                  onClick={() => setPreview(file)}
+                  draggable
+                  onDragStart={e => {
+                    e.stopPropagation()
+                    const payload = JSON.stringify(dragIds)
+                    e.dataTransfer.setData(FILE_DRAG_MIME, payload)
+                    e.dataTransfer.setData('text/plain', payload)
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  className={cn(
+                    'absolute top-2 left-2 z-[1] rounded p-0.5 text-neutral-500 hover:text-neutral-200 cursor-grab active:cursor-grabbing',
+                    selectionMode && 'left-8',
+                  )}
+                  aria-label="Drag onto a folder to move"
+                  title="Drag onto a folder"
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="flex flex-col items-stretch text-left min-w-0 flex-1 pt-5"
+                  onClick={() => {
+                    if (selectionMode) toggleFileSelected(file.id)
+                    else setPreview(file)
+                  }}
                 >
                   <div className="flex items-start justify-between gap-1 mb-2">
                     <FileText className="h-8 w-8 text-neutral-400 shrink-0" strokeWidth={1.5} />
@@ -513,6 +862,11 @@ export default function Files() {
                   <span className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug" title={file.name}>
                     {file.name}
                   </span>
+                  {inPathLabel && (
+                    <span className="text-[10px] text-neutral-500 mt-0.5 line-clamp-2" title={inPathLabel}>
+                      In: {inPathLabel}
+                    </span>
+                  )}
                   <span className="text-[11px] text-neutral-500 mt-1">
                     {new Date(file.created_at).toLocaleDateString()}
                   </span>
@@ -740,6 +1094,144 @@ export default function Files() {
               }}
             >
               {moveFolderSaving ? 'Moving…' : 'Move'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkMoveOpen} onOpenChange={setBulkMoveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move {fileSelection.size} file{fileSelection.size !== 1 ? 's' : ''}</DialogTitle>
+          </DialogHeader>
+          <Select value={bulkMoveDest} onValueChange={setBulkMoveDest}>
+            <SelectTrigger className="bg-neutral-950 border-neutral-800">
+              <SelectValue placeholder="Destination" />
+            </SelectTrigger>
+            <SelectContent>
+              {fileMoveTargets.map(t => (
+                <SelectItem key={t.id ?? '__root__'} value={t.id ?? '__root__'}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBulkMoveOpen(false)}>Cancel</Button>
+            <Button
+              disabled={bulkMoveSaving || fileSelection.size === 0}
+              onClick={async () => {
+                setBulkMoveSaving(true)
+                const dest = bulkMoveDest === '__root__' ? null : bulkMoveDest
+                const r = await moveFiles(Array.from(fileSelection), dest)
+                setBulkMoveSaving(false)
+                if (r.error) return
+                setBulkMoveOpen(false)
+                clearFileSelection()
+              }}
+            >
+              {bulkMoveSaving ? 'Moving…' : 'Move'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={o => {
+          setBulkDeleteOpen(o)
+          if (!o) setBulkDeleteSummary(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {fileSelection.size} file{fileSelection.size !== 1 ? 's' : ''}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-neutral-400">
+            Selected files will be permanently removed. Files linked to email template attachments are skipped automatically.
+          </p>
+          {bulkDeleteSummary && (
+            <p className="text-xs text-amber-400/95 whitespace-pre-wrap">{bulkDeleteSummary}</p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setBulkDeleteOpen(false); setBulkDeleteSummary(null) }}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={bulkDeleteSaving || fileSelection.size === 0}
+              onClick={async () => {
+                setBulkDeleteSaving(true)
+                setBulkDeleteSummary(null)
+                const res = await deleteFiles(Array.from(fileSelection))
+                setBulkDeleteSaving(false)
+                if (res.error) {
+                  setBulkDeleteSummary(res.error.message)
+                  return
+                }
+                const parts: string[] = []
+                if (res.skippedTemplate > 0) {
+                  parts.push(
+                    `${res.skippedTemplate} file${res.skippedTemplate !== 1 ? 's were' : ' was'} skipped (linked to an email template).`,
+                  )
+                }
+                if (res.errors.length > 0) {
+                  parts.push(
+                    `Some files could not be deleted:\n${res.errors.slice(0, 5).join('\n')}${res.errors.length > 5 ? '\n…' : ''}`,
+                  )
+                }
+                if (res.deleted > 0) parts.push(`Deleted ${res.deleted} file${res.deleted !== 1 ? 's' : ''}.`)
+                const msg = parts.filter(Boolean).join('\n\n')
+                if (res.errors.length > 0) {
+                  if (msg) setBulkDeleteSummary(msg)
+                  return
+                }
+                setBulkDeleteOpen(false)
+                clearFileSelection()
+                if (msg) {
+                  setClipboardBanner(msg)
+                  window.setTimeout(() => setClipboardBanner(null), 8000)
+                }
+              }}
+            >
+              {bulkDeleteSaving ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!accentFolder} onOpenChange={o => { if (!o) setAccentFolder(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Folder color{accentFolder ? ` · ${accentFolder.name}` : ''}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-neutral-500 mb-2">Choose an accent for this folder tile.</p>
+          <div className="grid grid-cols-4 gap-2">
+            {FOLDER_ACCENTS.map(ac => (
+              <button
+                key={ac}
+                type="button"
+                disabled={accentSavingKey !== null}
+                className={cn(
+                  'h-10 rounded-md border-2 bg-neutral-900/80 transition-opacity flex items-center justify-center px-1 text-[10px] text-neutral-300',
+                  FOLDER_ACCENT_FOLDER_BORDER[ac],
+                  accentFolder?.accent === ac && 'ring-2 ring-offset-2 ring-offset-neutral-950 ring-neutral-200',
+                )}
+                title={FOLDER_ACCENT_LABELS[ac]}
+                onClick={async () => {
+                  if (!accentFolder) return
+                  setAccentSavingKey(ac)
+                  const r = await updateFolderAccent(accentFolder.id, ac)
+                  setAccentSavingKey(null)
+                  if (r.error) return
+                  setAccentFolder(null)
+                }}
+              >
+                {FOLDER_ACCENT_LABELS[ac]}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccentFolder(null)} type="button">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

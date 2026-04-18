@@ -486,6 +486,7 @@ export interface Database {
           name: string
           parent_id: string | null
           created_at: string
+          accent: string
         }
         Insert: {
           id?: string
@@ -493,6 +494,7 @@ export interface Database {
           name: string
           parent_id?: string | null
           created_at?: string
+          accent?: string
         }
         Update: {
           id?: string
@@ -500,6 +502,7 @@ export interface Database {
           name?: string
           parent_id?: string | null
           created_at?: string
+          accent?: string
         }
         Relationships: [
           {

@@ -3,7 +3,14 @@ import { supabase } from '@/lib/supabase'
 import { makeAgreementPdfSlug } from '@/lib/agreement/sanitize'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { wouldCreateFolderCycle } from '@/lib/files/folderTree'
-import type { DocumentFolder, GeneratedFile, GeneratedFileOutputFormat, GeneratedFileSource } from '@/types'
+import type {
+  DocumentFolder,
+  FolderAccent,
+  GeneratedFile,
+  GeneratedFileOutputFormat,
+  GeneratedFileSource,
+} from '@/types'
+import { isFolderAccent } from '@/types'
 
 const FILE_SELECT = `
   *,
@@ -20,6 +27,15 @@ export type UseFilesOptions = {
    * When omitted, list all files (e.g. Email templates, Agreement picker).
    */
   filterFolderId?: string | null
+  /**
+   * Scoped Documents only: optional `ilike` on `name`. Ignored when `filterFolderId` is omitted.
+   * `%`, `_`, and `\` are stripped so they are not treated as wildcards.
+   */
+  searchQuery?: string
+  /**
+   * Scoped + non-empty `searchQuery`: when true, search all folders (limit 200, newest first).
+   */
+  searchAll?: boolean
 }
 
 export type AddTextFileInput = {
@@ -78,6 +94,47 @@ function safeUploadObjectName(original: string, fileId: string): string {
   return `${fileId}_${cleaned.slice(0, 100)}`
 }
 
+function normalizeDocumentFolder(row: Record<string, unknown>): DocumentFolder {
+  const accentRaw = row.accent as string | undefined
+  return {
+    ...(row as unknown as DocumentFolder),
+    accent: isFolderAccent(accentRaw) ? accentRaw : 'default',
+  }
+}
+
+/** Strip LIKE metacharacters so user input cannot widen the match. */
+function sanitizeFilenameSearchFragment(raw: string): string {
+  return raw.replace(/[%_\\]/g, '').trim()
+}
+
+async function deleteGeneratedFileStorageAndRow(id: string): Promise<{ error: Error | null }> {
+  const { data: row, error: selErr } = await supabase
+    .from('generated_files')
+    .select('pdf_storage_path,upload_storage_path,file_source')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (selErr) return { error: selErr }
+
+  const rec = row as {
+    pdf_storage_path?: string | null
+    upload_storage_path?: string | null
+    file_source?: string | null
+  } | null
+
+  if (rec?.upload_storage_path) {
+    const { error: stErr } = await supabase.storage.from('email-assets').remove([rec.upload_storage_path])
+    if (stErr) return { error: stErr }
+  } else if (rec?.pdf_storage_path) {
+    const { error: stErr } = await supabase.storage.from('agreement-pdfs').remove([rec.pdf_storage_path])
+    if (stErr) return { error: stErr }
+  }
+
+  const { error } = await supabase.from('generated_files').delete().eq('id', id)
+  if (error) return { error }
+  return { error: null }
+}
+
 function aggregateFolderCounts(rows: { folder_id: string | null }[]): {
   root: number
   byFolderId: Record<string, number>
@@ -94,6 +151,10 @@ function aggregateFolderCounts(rows: { folder_id: string | null }[]): {
 export function useFiles(options: UseFilesOptions = {}) {
   const filterFolderId = options.filterFolderId
   const scoped = filterFolderId !== undefined
+  const searchQueryRaw = options.searchQuery ?? ''
+  const searchAllOpt = options.searchAll ?? false
+  const searchTrimmed = searchQueryRaw.trim()
+  const effectiveSearchAll = scoped && searchAllOpt && searchTrimmed.length > 0
 
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [folders, setFolders] = useState<DocumentFolder[]>([])
@@ -114,7 +175,7 @@ export function useFiles(options: UseFilesOptions = {}) {
         .select('*')
         .order('name')
       if (folderErr) setError(folderErr.message)
-      setFolders((folderRows ?? []) as DocumentFolder[])
+      setFolders(((folderRows ?? []) as Record<string, unknown>[]).map(normalizeDocumentFolder))
 
       const { data: countRows, error: countErr } = await supabase.from('generated_files').select('folder_id')
       if (countErr && !isMissingColumnError(countErr)) setError(countErr.message)
@@ -124,10 +185,31 @@ export function useFiles(options: UseFilesOptions = {}) {
       setFolderFileCounts({ root: 0, byFolderId: {} })
     }
 
-    let q = supabase.from('generated_files').select(FILE_SELECT).order('created_at', { ascending: false })
+    let q = supabase.from('generated_files').select(FILE_SELECT)
+
     if (scoped) {
-      if (filterFolderId === null) q = q.is('folder_id', null)
-      else q = q.eq('folder_id', filterFolderId)
+      const safeSearch = searchTrimmed ? sanitizeFilenameSearchFragment(searchTrimmed) : ''
+      if (searchTrimmed && !safeSearch) {
+        setFiles([])
+        setLoading(false)
+        return
+      }
+
+      if (searchTrimmed) {
+        q = q.ilike('name', `%${safeSearch}%`)
+      }
+
+      if (!searchTrimmed || !effectiveSearchAll) {
+        if (filterFolderId === null) q = q.is('folder_id', null)
+        else q = q.eq('folder_id', filterFolderId)
+      }
+
+      q = q.order('created_at', { ascending: false })
+      if (searchTrimmed && effectiveSearchAll) {
+        q = q.limit(200)
+      }
+    } else {
+      q = q.order('created_at', { ascending: false })
     }
 
     const { data, error: fileErr } = await q
@@ -135,7 +217,7 @@ export function useFiles(options: UseFilesOptions = {}) {
     else setFiles((data ?? []).map(r => normalizeGeneratedRow(r as Record<string, unknown>, null)))
 
     setLoading(false)
-  }, [scoped, filterFolderId])
+  }, [scoped, filterFolderId, searchTrimmed, effectiveSearchAll])
 
   useEffect(() => {
     void refetch()
@@ -387,7 +469,7 @@ export function useFiles(options: UseFilesOptions = {}) {
       return { error }
     }
     void refetch()
-    return { data: data as DocumentFolder }
+    return { data: normalizeDocumentFolder(data as Record<string, unknown>) }
   }
 
   const renameFolder = async (id: string, name: string) => {
@@ -429,6 +511,20 @@ export function useFiles(options: UseFilesOptions = {}) {
     return {}
   }
 
+  const moveFiles = async (fileIds: string[], targetFolderId: string | null) => {
+    if (!scoped) {
+      return { error: new Error('Bulk move is only available on the Documents page.') }
+    }
+    if (fileIds.length === 0) return {}
+    const { error } = await supabase
+      .from('generated_files')
+      .update({ folder_id: targetFolderId })
+      .in('id', fileIds)
+    if (error) return { error }
+    void refetch()
+    return {}
+  }
+
   const deleteFile = async (id: string) => {
     const { count, error: cntErr } = await supabase
       .from('custom_email_templates')
@@ -442,29 +538,58 @@ export function useFiles(options: UseFilesOptions = {}) {
       }
     }
 
-    const { data: row, error: selErr } = await supabase
-      .from('generated_files')
-      .select('pdf_storage_path,upload_storage_path,file_source')
-      .eq('id', id)
-      .maybeSingle()
+    const del = await deleteGeneratedFileStorageAndRow(id)
+    if (del.error) return { error: del.error }
+    void refetch()
+    return {}
+  }
 
-    if (selErr) return { error: selErr }
+  const deleteFiles = async (
+    fileIds: string[],
+  ): Promise<{ deleted: number; skippedTemplate: number; errors: string[]; error: Error | null }> => {
+    if (!scoped) {
+      return {
+        deleted: 0,
+        skippedTemplate: 0,
+        errors: [],
+        error: new Error('Bulk delete is only available on the Documents page.'),
+      }
+    }
+    if (fileIds.length === 0) return { deleted: 0, skippedTemplate: 0, errors: [], error: null }
 
-    const rec = row as {
-      pdf_storage_path?: string | null
-      upload_storage_path?: string | null
-      file_source?: string | null
-    } | null
+    const { data: tmplRows, error: tmplErr } = await supabase
+      .from('custom_email_templates')
+      .select('attachment_generated_file_id')
+      .in('attachment_generated_file_id', fileIds)
 
-    if (rec?.upload_storage_path) {
-      const { error: stErr } = await supabase.storage.from('email-assets').remove([rec.upload_storage_path])
-      if (stErr) return { error: stErr }
-    } else if (rec?.pdf_storage_path) {
-      const { error: stErr } = await supabase.storage.from('agreement-pdfs').remove([rec.pdf_storage_path])
-      if (stErr) return { error: stErr }
+    if (tmplErr) {
+      return { deleted: 0, skippedTemplate: 0, errors: [], error: tmplErr }
     }
 
-    const { error } = await supabase.from('generated_files').delete().eq('id', id)
+    const blocked = new Set<string>()
+    for (const row of tmplRows ?? []) {
+      const fid = (row as { attachment_generated_file_id: string | null }).attachment_generated_file_id
+      if (fid) blocked.add(fid)
+    }
+
+    const toDelete = fileIds.filter(id => !blocked.has(id))
+    const skippedTemplate = fileIds.length - toDelete.length
+    const errors: string[] = []
+    let deleted = 0
+    for (const id of toDelete) {
+      const r = await deleteGeneratedFileStorageAndRow(id)
+      if (r.error) errors.push(r.error.message)
+      else deleted++
+    }
+    void refetch()
+    return { deleted, skippedTemplate, errors, error: null }
+  }
+
+  const updateFolderAccent = async (id: string, accent: FolderAccent) => {
+    if (!scoped) {
+      return { error: new Error('Folder color is only available on the Documents page.') }
+    }
+    const { error } = await supabase.from('document_folders').update({ accent }).eq('id', id)
     if (error) return { error }
     void refetch()
     return {}
@@ -486,5 +611,8 @@ export function useFiles(options: UseFilesOptions = {}) {
     deleteFolder,
     moveFolder,
     moveFile,
+    moveFiles,
+    deleteFiles,
+    updateFolderAccent,
   }
 }

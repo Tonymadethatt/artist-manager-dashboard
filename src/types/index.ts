@@ -479,6 +479,24 @@ export type GeneratedFileOutputFormat = 'text' | 'pdf'
 
 export type GeneratedFileSource = 'generated' | 'upload'
 
+/** Preset folder tile accent (maps to Tailwind in UI; DB CHECK matches). */
+export const FOLDER_ACCENTS = [
+  'default',
+  'slate',
+  'amber',
+  'emerald',
+  'sky',
+  'rose',
+  'violet',
+  'orange',
+] as const
+
+export type FolderAccent = (typeof FOLDER_ACCENTS)[number]
+
+export function isFolderAccent(s: string | undefined | null): s is FolderAccent {
+  return !!s && (FOLDER_ACCENTS as readonly string[]).includes(s)
+}
+
 /** User-created folder on the Documents page (nullable parent = root). */
 export interface DocumentFolder {
   id: string
@@ -486,6 +504,7 @@ export interface DocumentFolder {
   name: string
   parent_id: string | null
   created_at: string
+  accent: FolderAccent
 }
 
 export interface GeneratedFile {

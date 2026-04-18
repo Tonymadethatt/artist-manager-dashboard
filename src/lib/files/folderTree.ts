@@ -71,6 +71,15 @@ export function folderBreadcrumbItems(
   return chain
 }
 
+/** Single-line path for search results (e.g. "Documents / A / B"). */
+export function folderDisplayPath(
+  folders: { id: string; name: string; parent_id: string | null }[],
+  folderId: string | null,
+): string {
+  const items = folderBreadcrumbItems(folders, folderId)
+  return items.map(i => i.name).join(' / ')
+}
+
 export function flatFolderPickList(
   folders: { id: string; name: string; parent_id: string | null }[],
   omitIds?: Set<string>,
