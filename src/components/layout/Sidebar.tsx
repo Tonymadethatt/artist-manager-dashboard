@@ -60,6 +60,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
     items: [
       { to: '/templates', label: 'Documents', icon: FileText,   end: false, badgeKey: null },
       { to: '/files',     label: 'Files',     icon: FolderOpen, end: false, badgeKey: null },
+      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
@@ -69,7 +70,6 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
       { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
       { to: '/forms/intakes', label: 'Intakes', icon: Mic2, end: false, badgeKey: null },
       { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null },
-      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
