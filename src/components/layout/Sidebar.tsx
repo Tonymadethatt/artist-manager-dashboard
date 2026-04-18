@@ -16,9 +16,9 @@ import {
   X,
   LayoutTemplate,
   ClipboardList,
-  Eye,
   Calendar,
-  Mic2,
+  LayoutGrid,
+  BookOpenCheck,
   PhoneForwarded,
   ListChecks,
   ChevronDown,
@@ -39,9 +39,19 @@ type NavItem = {
   icon: LucideIcon
   end?: boolean
   badgeKey: string | null
+  /** Visual grouping under a subheading (e.g. Forms → Leads). */
+  indent?: boolean
 }
 
-const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
+type NavSubheading = { subheading: string }
+
+type NavRow = NavItem | NavSubheading
+
+function isNavSubheading(row: NavRow): row is NavSubheading {
+  return 'subheading' in row
+}
+
+const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
   {
     id: 'workspace',
     label: 'Workspace',
@@ -68,9 +78,10 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
     id: 'forms',
     label: 'Forms',
     items: [
-      { to: '/forms/preview', label: 'Preview', icon: Eye, end: false, badgeKey: null },
-      { to: '/forms/intakes', label: 'Intakes', icon: Mic2, end: false, badgeKey: null },
-      { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null },
+      { to: '/forms/preview', label: 'General Forms', icon: LayoutGrid, end: false, badgeKey: null },
+      { subheading: 'Leads' },
+      { to: '/forms/intakes', label: 'Booking', icon: BookOpenCheck, end: false, badgeKey: null, indent: true },
+      { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null, indent: true },
     ],
   },
   {
@@ -289,10 +300,23 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               </button>
               <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
                 <div className="flex flex-col gap-px pb-px">
-                  {group.items.map(({ to, label, icon: Icon, end, badgeKey }) => {
+                  {group.items.map(row => {
+                    if (isNavSubheading(row)) {
+                      return (
+                        <div
+                          key={`subheading-${row.subheading}`}
+                          className="px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--sidebar-muted))]"
+                          role="presentation"
+                        >
+                          {row.subheading}
+                        </div>
+                      )
+                    }
+
+                    const { to, label, icon: Icon, end, badgeKey, indent } = row
                     const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
                     return (
-                      <div key={to}>
+                      <div key={to} className={indent ? 'pl-2' : undefined}>
                         <NavLink
                           to={to}
                           end={end}

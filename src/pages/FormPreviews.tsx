@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Eye, Loader2, Monitor, Phone, type LucideIcon } from 'lucide-react'
+import { ClipboardList, Eye, Loader2, Monitor, type LucideIcon } from 'lucide-react'
 import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
 import { brandingFromArtistProfileRow } from '@/lib/publicFormBranding'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { cn } from '@/lib/utils'
-import { CallIntakeScriptChecklist } from '@/lib/intake/CallIntakeScriptChecklist'
 
 const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   venueName: 'Skyline Bar',
@@ -13,7 +12,7 @@ const MOCK_SHOW_REPORT_CONTEXT: ShowReportFormContext = {
   dealGrossAmount: 1200,
 }
 
-type PreviewKind = 'show-report' | 'call-intake-script'
+type PreviewKind = 'show-report'
 
 const PREVIEWS: { id: PreviewKind; label: string; description: string; icon: LucideIcon }[] = [
   {
@@ -21,12 +20,6 @@ const PREVIEWS: { id: PreviewKind; label: string; description: string; icon: Luc
     label: 'Show report',
     description: 'Artist-facing post-show form',
     icon: ClipboardList,
-  },
-  {
-    id: 'call-intake-script',
-    label: 'Call intake (preview)',
-    description: 'Internal call script checklist',
-    icon: Phone,
   },
 ]
 
@@ -56,10 +49,10 @@ export default function FormPreviews() {
         >
           <div className="px-3 py-2 border-b border-neutral-800/80">
             <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
-              Preview as
+              General forms
             </p>
           </div>
-          <nav className="p-2 space-y-0.5" aria-label="Form previews">
+          <nav className="p-2 space-y-0.5" aria-label="General forms">
             {PREVIEWS.map(({ id, label, description, icon: Icon }) => {
               const isOn = active === id
               return (
@@ -120,20 +113,6 @@ export default function FormPreviews() {
             </>
           )}
 
-          {active === 'call-intake-script' && (
-            <>
-              <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1 shrink-0">
-                <Phone className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
-                <span className="text-xs font-medium text-neutral-400">Internal — call script checklist</span>
-                <span className="text-[10px] text-neutral-600">Checklist only · nothing saved</span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto bg-neutral-950">
-                <div className="w-full min-w-0 px-4 py-4">
-                  <CallIntakeScriptChecklist embedded />
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>

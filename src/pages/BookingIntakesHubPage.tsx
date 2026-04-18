@@ -115,7 +115,7 @@ export default function BookingIntakesHubPage() {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold text-neutral-100 tracking-tight">Call intakes</h1>
+          <h1 className="text-sm font-semibold text-neutral-100 tracking-tight">Booking</h1>
           <p className="text-[11px] text-neutral-500 truncate">Drafts, live captures, and post-call wrap-ups</p>
         </div>
         <Button
