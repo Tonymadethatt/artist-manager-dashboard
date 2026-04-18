@@ -99,6 +99,7 @@ export interface Database {
           call_data: unknown
           notes: string | null
           follow_up_date: string | null
+          follow_up_task_id: string | null
           next_actions: unknown
           created_at: string
           updated_at: string
@@ -122,6 +123,7 @@ export interface Database {
           call_data?: unknown
           notes?: string | null
           follow_up_date?: string | null
+          follow_up_task_id?: string | null
           next_actions?: unknown
           created_at?: string
           updated_at?: string
@@ -145,6 +147,7 @@ export interface Database {
           call_data?: unknown
           notes?: string | null
           follow_up_date?: string | null
+          follow_up_task_id?: string | null
           next_actions?: unknown
           created_at?: string
           updated_at?: string
@@ -1022,6 +1025,7 @@ export interface Database {
           recurrence: TaskRecurrence
           venue_id: string | null
           deal_id: string | null
+          cold_call_id: string | null
           email_type: string | null
           generated_file_id: string | null
           created_at: string
@@ -1038,6 +1042,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           venue_id?: string | null
           deal_id?: string | null
+          cold_call_id?: string | null
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1054,6 +1059,7 @@ export interface Database {
           recurrence?: TaskRecurrence
           venue_id?: string | null
           deal_id?: string | null
+          cold_call_id?: string | null
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1075,6 +1081,12 @@ export interface Database {
             foreignKeyName: 'tasks_generated_file_id_fkey'
             columns: ['generated_file_id']
             referencedRelation: 'generated_files'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_cold_call_id_fkey'
+            columns: ['cold_call_id']
+            referencedRelation: 'cold_calls'
             referencedColumns: ['id']
           },
         ]

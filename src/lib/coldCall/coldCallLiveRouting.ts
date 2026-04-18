@@ -1,20 +1,26 @@
 import type { ColdCallDataV1, ColdCallLiveCardId } from './coldCallPayload'
+import { coldCallShowBudgetCard } from './coldCallTemperatureScore'
 
 function withHistory(d: ColdCallDataV1, next: ColdCallLiveCardId): Partial<ColdCallDataV1> {
   const hist = d.live_history.includes(next) ? d.live_history : [...d.live_history, next]
-  return { live_card: next, live_history: hist }
+  return { live_card: next, view_card: next, last_active_card: next, live_history: hist }
 }
 
 /** After operator completes current card (all required fields set), move forward. */
 export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> | 'post' {
-  const temp = d.operator_temperature
-  const hotEnough = temp === 'hot' || temp === 'converting'
+  const showBudget = coldCallShowBudgetCard(d)
 
   switch (d.live_card) {
     case 'p1': {
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {
-        if (!d.confirmed_name) return {}
+        const hasTarget = !!d.target_name.trim()
+        if (hasTarget) {
+          if (!d.confirmed_name) return {}
+        } else {
+          if (!d.cold_no_target_name_status) return {}
+          if (!d.target_role) return {}
+        }
         return withHistory(d, 'p3')
       }
       if (d.who_answered === 'gatekeeper') return withHistory(d, 'p2a')
@@ -24,6 +30,7 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p2a': {
       if (!d.gatekeeper_result) return {}
+      if (!d.gatekeeper_got_name || !d.gatekeeper_staff_role) return {}
       if (d.gatekeeper_result === 'gave_name') return withHistory(d, 'p2a_detail')
       if (d.gatekeeper_result === 'transferred')
         return { ...withHistory(d, 'p3'), transferred_note: true }
@@ -71,7 +78,7 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       return withHistory(d, 'p4c')
     case 'p4c': {
       if (!d.booking_process || !d.decision_maker_same) return {}
-      if (hotEnough) return withHistory(d, 'p4d')
+      if (showBudget) return withHistory(d, 'p4d')
       return withHistory(d, 'p4e')
     }
     case 'p4d':
@@ -86,9 +93,15 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       if (!d.call_ended_naturally || !d.call_duration_feel) return {}
       return 'post'
     }
-    case 'p6_vm':
-    case 'p6_na':
+    case 'p6_vm': {
+      if (!d.voicemail_left || !d.voicemail_followup_timing) return {}
       return 'post'
+    }
+    case 'p6_na': {
+      if (!d.no_answer_retry_timing) return {}
+      if (!d.no_answer_notes_flag) return {}
+      return 'post'
+    }
     default:
       return {}
   }

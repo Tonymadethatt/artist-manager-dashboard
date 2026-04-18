@@ -136,6 +136,7 @@ export const DURATION_OPTIONS: { id: ColdCallDurationFeel; label: string }[] = [
 
 export const CALL_PURPOSE_TOGGLE: { id: Exclude<ColdCallPurpose, ''>; label: string }[] = [
   { id: 'residency', label: 'Residency / recurring' },
+  { id: 'upcoming_event', label: 'Upcoming event' },
   { id: 'one_time', label: 'One-time booking' },
   { id: 'availability', label: 'General availability' },
   { id: 'follow_up', label: 'Follow-up call' },

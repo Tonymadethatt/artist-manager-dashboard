@@ -19,13 +19,14 @@ export const COLD_CALL_TEMPERATURE_META: Record<Exclude<ColdCallTemperature, ''>
     converting: { emoji: '💰', label: 'Converting' },
   }
 
-export type ColdCallPurpose = '' | 'residency' | 'one_time' | 'availability' | 'follow_up'
+export type ColdCallPurpose = '' | 'residency' | 'upcoming_event' | 'one_time' | 'availability' | 'follow_up'
 
 export const COLD_CALL_PURPOSE_LABELS: Record<Exclude<ColdCallPurpose, ''>, string> = {
-  residency: 'Residency / recurring slot',
+  residency: 'Residency / recurring',
+  upcoming_event: 'Upcoming event',
   one_time: 'One-time booking',
-  availability: 'General availability check',
-  follow_up: 'Follow-up from previous call',
+  availability: 'General availability',
+  follow_up: 'Follow-up',
 }
 
 export type ColdCallTargetRole =
@@ -71,6 +72,61 @@ export const COLD_CALL_HOW_FOUND_LABELS: Record<Exclude<ColdCallHowFound, ''>, s
 export type ColdCallWhoAnswered = '' | 'right_person' | 'gatekeeper' | 'voicemail' | 'no_answer'
 
 export type ColdCallGatekeeperResult = '' | 'gave_name' | 'transferred' | 'message' | 'shut_down'
+
+export type ColdCallGatekeeperStaffRole =
+  | ''
+  | 'receptionist'
+  | 'bartender'
+  | 'security'
+  | 'staff'
+  | 'not_sure'
+
+export const COLD_CALL_GATEKEEPER_STAFF_LABELS: Record<Exclude<ColdCallGatekeeperStaffRole, ''>, string> = {
+  receptionist: 'Receptionist',
+  bartender: 'Bartender',
+  security: 'Security',
+  staff: 'Staff',
+  not_sure: 'Not sure',
+}
+
+export type ColdCallVoicemailLeft = '' | 'left' | 'skipped'
+
+export type ColdCallVoicemailFollowup = '' | 'tomorrow' | 'few_days' | 'next_week' | 'dont_retry'
+
+export type ColdCallNoAnswerRetry = '' | 'later_today' | 'tomorrow' | 'next_week' | 'remove'
+
+export type ColdCallNoTargetNameStatus = '' | 'deferred' | 'not_yet'
+
+/** Pre-call pitch fill-in chip ids → clause text (spec Tier 4). */
+export const COLD_CALL_PITCH_REASON_CHIPS: Record<
+  string,
+  { label: string; clause: (ctx: { venue: string; city: string }) => string }
+> = {
+  latin_crowd: {
+    label: 'Latin crowd',
+    clause: () => 'your crowd is into the Latin scene and that’s his specialty',
+  },
+  events_match: {
+    label: 'Their events match',
+    clause: () => 'the events you run are right in line with what he does',
+  },
+  location_fit: {
+    label: 'Location fit',
+    clause: ({ city }) => `you’re in a great spot for his audience in ${city || 'the area'}`,
+  },
+  socials: {
+    label: 'Saw their socials',
+    clause: () => 'I saw what you guys are doing on Instagram and the vibe matches perfectly',
+  },
+  referral: {
+    label: 'Referral',
+    clause: () => 'someone in the industry recommended I reach out',
+  },
+  need_djs: {
+    label: 'They need DJs',
+    clause: () => 'it looks like you’re actively booking DJs and I think he’d stand out',
+  },
+}
 
 export type ColdCallInitialReaction =
   | ''
@@ -229,7 +285,20 @@ export interface ColdCallDataV1 {
   live_card: ColdCallLiveCardId
   /** Sidebar waypoint history (card ids visited in live mode). */
   live_history: ColdCallLiveCardId[]
+  /** Live navigation: card shown (jump-and-return). Defaults to live_card when unset in legacy rows. */
+  view_card: ColdCallLiveCardId
+  /** Bookmark: furthest forward position; updated only when advancing with Continue from current path. */
+  last_active_card: ColdCallLiveCardId
   operator_temperature: ColdCallTemperature
+  /** Cached auto score (recomputed on patch in UI). */
+  temperature_score: number
+  /** When true, operator_temperature is manual; auto-scoring does not overwrite. */
+  temperature_manual_lock: boolean
+  /** When true, outcome Select is manual vs auto-detected. */
+  outcome_manual_lock: boolean
+
+  pre_call_research_open: boolean
+  pre_call_contact_open: boolean
 
   venue_source: 'new' | 'existing'
   existing_venue_id: string | null
@@ -249,7 +318,10 @@ export interface ColdCallDataV1 {
   how_found: ColdCallHowFound
 
   call_purpose: ColdCallPurpose
+  /** Legacy free-text pitch; superseded by chip + custom when set. */
   pitch_angle: string
+  pitch_reason_chip: string
+  pitch_reason_custom: string
   previous_call_id: string | null
 
   outreach_track: 'pipeline'
@@ -258,9 +330,19 @@ export interface ColdCallDataV1 {
 
   who_answered: ColdCallWhoAnswered
   confirmed_name: '' | 'match_target' | 'different' | 'none'
+  /** When no pre-call target name + right person on line (spec). */
+  cold_no_target_name_status: ColdCallNoTargetNameStatus
   different_name_note: string
 
   gatekeeper_result: ColdCallGatekeeperResult
+  gatekeeper_got_name: '' | 'yes_later' | 'no'
+  gatekeeper_staff_role: ColdCallGatekeeperStaffRole
+
+  voicemail_left: ColdCallVoicemailLeft
+  voicemail_followup_timing: ColdCallVoicemailFollowup
+
+  no_answer_retry_timing: ColdCallNoAnswerRetry
+  no_answer_notes_flag: '' | 'note' | 'none'
   decision_maker_name: string
   decision_maker_role: ColdCallTargetRole
   best_time: '' | 'morning' | 'afternoon' | 'evening' | 'specific_later' | 'unsaid'
@@ -313,7 +395,15 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     session_mode: 'pre_call',
     live_card: 'p1',
     live_history: [],
+    view_card: 'p1',
+    last_active_card: 'p1',
     operator_temperature: '',
+    temperature_score: 0,
+    temperature_manual_lock: false,
+    outcome_manual_lock: false,
+
+    pre_call_research_open: false,
+    pre_call_contact_open: false,
 
     venue_source: 'new',
     existing_venue_id: null,
@@ -334,6 +424,8 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
 
     call_purpose: '',
     pitch_angle: '',
+    pitch_reason_chip: '',
+    pitch_reason_custom: '',
     previous_call_id: null,
 
     outreach_track: 'pipeline',
@@ -342,9 +434,18 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
 
     who_answered: '',
     confirmed_name: '',
+    cold_no_target_name_status: '',
     different_name_note: '',
 
     gatekeeper_result: '',
+    gatekeeper_got_name: '',
+    gatekeeper_staff_role: '',
+
+    voicemail_left: '',
+    voicemail_followup_timing: '',
+
+    no_answer_retry_timing: '',
+    no_answer_notes_flag: '',
     decision_maker_name: '',
     decision_maker_role: '',
     best_time: '',
@@ -419,6 +520,20 @@ function asNextActions(v: unknown): ColdCallNextActionKey[] {
   return v.filter((x): x is ColdCallNextActionKey => allowed.includes(x as ColdCallNextActionKey))
 }
 
+const COLD_CALL_PURPOSE_WHITELIST: ColdCallPurpose[] = [
+  '',
+  'residency',
+  'upcoming_event',
+  'one_time',
+  'availability',
+  'follow_up',
+]
+
+function asColdCallPurpose(v: unknown, fb: ColdCallPurpose): ColdCallPurpose {
+  const s = asStr(v, fb)
+  return COLD_CALL_PURPOSE_WHITELIST.includes(s as ColdCallPurpose) ? (s as ColdCallPurpose) : fb
+}
+
 export function parseColdCallData(raw: unknown): ColdCallDataV1 {
   const base = emptyColdCallDataV1()
   if (!raw || typeof raw !== 'object') return base
@@ -427,15 +542,28 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
   if (v !== COLD_CALL_DATA_VERSION && v !== undefined && v !== null) {
     /* migrate later */
   }
+  const liveCard = (asStr(o.live_card, base.live_card) as ColdCallLiveCardId) || base.live_card
+  const viewCardRaw = asStr(o.view_card, '') as ColdCallLiveCardId
+  const lastActiveRaw = asStr(o.last_active_card, '') as ColdCallLiveCardId
   return {
     ...base,
     session_mode:
       o.session_mode === 'live_call' || o.session_mode === 'post_call' || o.session_mode === 'pre_call'
         ? o.session_mode
         : base.session_mode,
-    live_card: (asStr(o.live_card, base.live_card) as ColdCallLiveCardId) || base.live_card,
+    live_card: liveCard,
     live_history: asStrArr(o.live_history) as ColdCallLiveCardId[],
+    view_card: viewCardRaw || liveCard,
+    last_active_card: lastActiveRaw || liveCard,
     operator_temperature: asStr(o.operator_temperature, '') as ColdCallTemperature,
+    temperature_score:
+      typeof o.temperature_score === 'number' && Number.isFinite(o.temperature_score)
+        ? o.temperature_score
+        : base.temperature_score,
+    temperature_manual_lock: asBool(o.temperature_manual_lock),
+    outcome_manual_lock: asBool(o.outcome_manual_lock),
+    pre_call_research_open: asBool(o.pre_call_research_open),
+    pre_call_contact_open: asBool(o.pre_call_contact_open),
 
     venue_source: o.venue_source === 'existing' ? 'existing' : 'new',
     existing_venue_id: typeof o.existing_venue_id === 'string' ? o.existing_venue_id : null,
@@ -454,8 +582,10 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     target_email: asStr(o.target_email),
     how_found: asStr(o.how_found, '') as ColdCallHowFound,
 
-    call_purpose: asStr(o.call_purpose, '') as ColdCallPurpose,
+    call_purpose: asColdCallPurpose(o.call_purpose, base.call_purpose),
     pitch_angle: asStr(o.pitch_angle),
+    pitch_reason_chip: asStr(o.pitch_reason_chip),
+    pitch_reason_custom: asStr(o.pitch_reason_custom),
     previous_call_id: typeof o.previous_call_id === 'string' ? o.previous_call_id : null,
 
     outreach_track: 'pipeline',
@@ -464,9 +594,39 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
 
     who_answered: asStr(o.who_answered, '') as ColdCallWhoAnswered,
     confirmed_name: asStr(o.confirmed_name, '') as ColdCallDataV1['confirmed_name'],
+    cold_no_target_name_status: ((): ColdCallDataV1['cold_no_target_name_status'] => {
+      const s = asStr(o.cold_no_target_name_status, '')
+      return s === 'deferred' || s === 'not_yet' ? s : ''
+    })(),
     different_name_note: asStr(o.different_name_note),
 
     gatekeeper_result: asStr(o.gatekeeper_result, '') as ColdCallGatekeeperResult,
+    gatekeeper_got_name: ((): ColdCallDataV1['gatekeeper_got_name'] => {
+      const s = asStr(o.gatekeeper_got_name, '')
+      return s === 'yes_later' || s === 'no' ? s : ''
+    })(),
+    gatekeeper_staff_role: ((): ColdCallDataV1['gatekeeper_staff_role'] => {
+      const s = asStr(o.gatekeeper_staff_role, '')
+      return s in COLD_CALL_GATEKEEPER_STAFF_LABELS ? (s as ColdCallGatekeeperStaffRole) : ''
+    })(),
+
+    voicemail_left: ((): ColdCallDataV1['voicemail_left'] => {
+      const s = asStr(o.voicemail_left, '')
+      return s === 'left' || s === 'skipped' ? s : ''
+    })(),
+    voicemail_followup_timing: ((): ColdCallDataV1['voicemail_followup_timing'] => {
+      const s = asStr(o.voicemail_followup_timing, '')
+      return s === 'tomorrow' || s === 'few_days' || s === 'next_week' || s === 'dont_retry' ? s : ''
+    })(),
+
+    no_answer_retry_timing: ((): ColdCallDataV1['no_answer_retry_timing'] => {
+      const s = asStr(o.no_answer_retry_timing, '')
+      return s === 'later_today' || s === 'tomorrow' || s === 'next_week' || s === 'remove' ? s : ''
+    })(),
+    no_answer_notes_flag: ((): ColdCallDataV1['no_answer_notes_flag'] => {
+      const s = asStr(o.no_answer_notes_flag, '')
+      return s === 'note' || s === 'none' ? s : ''
+    })(),
     decision_maker_name: asStr(o.decision_maker_name),
     decision_maker_role: asStr(o.decision_maker_role, '') as ColdCallTargetRole,
     best_time: asStr(o.best_time, '') as ColdCallDataV1['best_time'],

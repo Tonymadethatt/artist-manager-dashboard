@@ -14,6 +14,7 @@ import {
 } from '@/lib/coldCall/coldCallLiveRouting'
 import { buildIntakeBundleFromColdCall } from '@/lib/coldCall/mapColdCallToBookingIntake'
 import {
+  COLD_CALL_GATEKEEPER_STAFF_LABELS,
   COLD_CALL_HOW_FOUND_LABELS,
   COLD_CALL_NEXT_ACTION_LABELS,
   COLD_CALL_OUTCOME_LABELS,
@@ -310,6 +311,8 @@ export default function ColdCallFormPage() {
     patch({
       session_mode: 'live_call',
       live_card: 'p1',
+      view_card: 'p1',
+      last_active_card: 'p1',
       live_history: ['p1'],
     })
   }
@@ -487,22 +490,59 @@ export default function ColdCallFormPage() {
                   />
                 </div>
                 {data.who_answered === 'right_person' ? (
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Name check</Label>
-                    <SelectChipRow
-                      value={data.confirmed_name}
-                      onChange={v => patch({ confirmed_name: v })}
-                      options={CONFIRMED_NAME_OPTIONS}
-                    />
-                    {data.confirmed_name === 'different' ? (
-                      <Input
-                        className="h-10 border-neutral-800 bg-neutral-950/80"
-                        value={data.different_name_note}
-                        onChange={e => patch({ different_name_note: e.target.value })}
-                        placeholder="Their name"
+                  data.target_name.trim() ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Name check</Label>
+                      <SelectChipRow
+                        value={data.confirmed_name}
+                        onChange={v => patch({ confirmed_name: v })}
+                        options={CONFIRMED_NAME_OPTIONS}
                       />
-                    ) : null}
-                  </div>
+                      {data.confirmed_name === 'different' ? (
+                        <Input
+                          className="h-10 border-neutral-800 bg-neutral-950/80"
+                          value={data.different_name_note}
+                          onChange={e => patch({ different_name_note: e.target.value })}
+                          placeholder="Their name"
+                        />
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-neutral-400 text-xs">Name on the line</Label>
+                        <SelectChipRow
+                          value={data.cold_no_target_name_status}
+                          onChange={v => patch({ cold_no_target_name_status: v })}
+                          options={[
+                            { id: 'deferred', label: 'Will capture later' },
+                            { id: 'not_yet', label: 'Hasn’t said yet' },
+                          ]}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-neutral-400 text-xs">Their role</Label>
+                        <Select
+                          value={data.target_role || '__none__'}
+                          onValueChange={v => patch({ target_role: v === '__none__' ? '' : (v as ColdCallDataV1['target_role']) })}
+                        >
+                          <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80">
+                            <SelectValue placeholder="Role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">—</SelectItem>
+                            {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(
+                              k => (
+                                <SelectItem key={k} value={k}>
+                                  {COLD_CALL_TARGET_ROLE_LABELS[k]}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )
                 ) : null}
               </div>
             }
@@ -525,6 +565,27 @@ export default function ColdCallFormPage() {
                   }}
                   options={GATEKEEPER_RESULT_OPTIONS}
                 />
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Name or callback — captured?</Label>
+                  <SelectChipRow
+                    value={data.gatekeeper_got_name}
+                    onChange={v => patch({ gatekeeper_got_name: v })}
+                    options={[
+                      { id: 'yes_later', label: 'Yes — fill in later' },
+                      { id: 'no', label: 'No' },
+                    ]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Their role (who you spoke with)</Label>
+                  <SelectChipRow
+                    value={data.gatekeeper_staff_role}
+                    onChange={v => patch({ gatekeeper_staff_role: v })}
+                    options={(Object.keys(COLD_CALL_GATEKEEPER_STAFF_LABELS) as (keyof typeof COLD_CALL_GATEKEEPER_STAFF_LABELS)[]).map(
+                      k => ({ id: k, label: COLD_CALL_GATEKEEPER_STAFF_LABELS[k] }),
+                    )}
+                  />
+                </div>
               </div>
             }
           />
@@ -828,15 +889,78 @@ export default function ColdCallFormPage() {
           />
         )
       case 'p6_vm':
+        return (
+          <IntakeLiveScriptCaptureStack
+            stepTitle={liveCardStepTitle(card)}
+            script={script}
+            capture={
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Voicemail</Label>
+                  <SelectChipRow
+                    value={data.voicemail_left}
+                    onChange={v => patch({ voicemail_left: v })}
+                    options={[
+                      { id: 'left', label: 'Left voicemail' },
+                      { id: 'skipped', label: 'Skipped' },
+                    ]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">When to follow up</Label>
+                  <SelectChipRow
+                    value={data.voicemail_followup_timing}
+                    onChange={v => patch({ voicemail_followup_timing: v })}
+                    options={[
+                      { id: 'tomorrow', label: 'Tomorrow' },
+                      { id: 'few_days', label: 'In a few days' },
+                      { id: 'next_week', label: 'Next week' },
+                      { id: 'dont_retry', label: 'Don’t retry' },
+                    ]}
+                  />
+                </div>
+                <Button type="button" className="w-full" onClick={() => handleLiveContinue()}>
+                  Continue to post-call
+                </Button>
+              </div>
+            }
+          />
+        )
       case 'p6_na':
         return (
           <IntakeLiveScriptCaptureStack
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
-              <Button type="button" className="w-full" onClick={() => patch({ session_mode: 'post_call', final_temperature: data.operator_temperature })}>
-                Continue to post-call
-              </Button>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Try again</Label>
+                  <SelectChipRow
+                    value={data.no_answer_retry_timing}
+                    onChange={v => patch({ no_answer_retry_timing: v })}
+                    options={[
+                      { id: 'later_today', label: 'Later today' },
+                      { id: 'tomorrow', label: 'Tomorrow' },
+                      { id: 'next_week', label: 'Next week' },
+                      { id: 'remove', label: 'Drop this lead' },
+                    ]}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Notes</Label>
+                  <SelectChipRow
+                    value={data.no_answer_notes_flag}
+                    onChange={v => patch({ no_answer_notes_flag: v })}
+                    options={[
+                      { id: 'note', label: 'Add note after' },
+                      { id: 'none', label: 'Nothing to add' },
+                    ]}
+                  />
+                </div>
+                <Button type="button" className="w-full" onClick={() => handleLiveContinue()}>
+                  Continue to post-call
+                </Button>
+              </div>
             }
           />
         )
