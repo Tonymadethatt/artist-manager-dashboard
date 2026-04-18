@@ -51,6 +51,7 @@ export type ColdCallScriptCtx = {
   artistName: string
   managerFirst: string
   managerPhone: string
+  /** Tagline / bio-style line — not spoken in scripts; optional operator reference elsewhere. */
   credentialsLine: string
 }
 
@@ -75,7 +76,7 @@ function pitchBecauseClause(d: ColdCallDataV1): string {
   if (d.pitch_reason_custom.trim()) return d.pitch_reason_custom.trim()
   if (d.pitch_reason_chip && COLD_CALL_PITCH_REASON_CHIPS[d.pitch_reason_chip]) {
     return COLD_CALL_PITCH_REASON_CHIPS[d.pitch_reason_chip].clause({
-      venue: d.venue_name.trim() || 'your venue',
+      venue: d.venue_name.trim() || 'your spot',
       city: d.city.trim() || 'the area',
     })
   }
@@ -83,165 +84,240 @@ function pitchBecauseClause(d: ColdCallDataV1): string {
   return ''
 }
 
-/** Short, skimmable lines (spec Problem 7). */
-export function scriptBeatsForCard(card: ColdCallLiveCardId, d: ColdCallDataV1, ctx: ColdCallScriptCtx): string[] {
-  const vn = d.venue_name.trim() || 'your venue'
-  const city = d.city.trim() || 'the area'
+export type ColdCallScriptBeat = { text: string; situational?: boolean }
+
+/** Script lines for the live cold-call cards; `situational` beats are follow-ups after they answer the opening question. */
+export function coldCallLiveScriptBeats(
+  card: ColdCallLiveCardId,
+  d: ColdCallDataV1,
+  ctx: ColdCallScriptCtx,
+): ColdCallScriptBeat[] {
+  const vn = d.venue_name.trim() || 'your spot'
+  const cityRaw = d.city.trim()
   const n = nameOrHey(d)
   const events = d.known_events.trim()
   const phone = ctx.managerPhone.trim() || 'the number I’m calling from'
   const because = pitchBecauseClause(d)
-  const { artistName, managerFirst, credentialsLine } = ctx
+  const { artistName, managerFirst } = ctx
 
   switch (card) {
     case 'p1': {
       if (d.call_purpose === 'follow_up' && n) {
         return [
-          `Hey${n ? `, ${n}` : ''}?`,
-          `This is ${managerFirst} — I called a little while back about ${artistName}.`,
-          `You told me to follow up around this time.`,
+          { text: `Hey ${n}, it’s ${managerFirst} — we spoke a little while back about ${artistName}.` },
+          { text: `You mentioned to follow up around now, so I wanted to check in.` },
         ]
       }
       if (n) {
-        return [`Hey — I’m looking for ${n}.`, `Is this them?`]
+        return [{ text: `Hey, is this ${n}?` }]
       }
-      return [
-        `Hey — I’m trying to reach whoever handles entertainment or DJ bookings at ${vn}.`,
-        `Who would that be?`,
-      ]
+      return [{ text: `Hey, how’s it going — who am I speaking with?` }]
     }
     case 'p2a':
       return [
-        `No worries — I’m ${managerFirst}, I manage ${artistName}.`,
-        `We work with a lot of spots in the ${city} area.`,
-        `I wanted to connect with whoever handles your entertainment or DJ bookings.`,
-        `Could you point me in the right direction?`,
+        { text: `No worries — I’m ${managerFirst}, I work with ${artistName}.` },
+        {
+          text: `We work with a few spots${cityRaw ? ` out in ${cityRaw}` : ''} and I wanted to reach whoever handles your DJ bookings or entertainment.`,
+        },
+        { text: `Any chance you could point me to the right person?` },
       ]
     case 'p2a_detail':
-      return [`Perfect — I appreciate that.`, `I’ll reach out to them directly.`, `Thanks for your help.`]
+      return [
+        { text: `Perfect, that’s super helpful.` },
+        { text: `I’ll reach out to them.` },
+        { text: `Thanks for your time.` },
+      ]
     case 'p2_msg':
       return [
-        `Could you let them know ${managerFirst} from ${artistName}’s team called?`,
-        `If they want to reach back, my number is ${phone}.`,
-        `Appreciate it.`,
+        { text: `Could you let them know ${managerFirst} called about ${artistName}?` },
+        { text: `My number is ${phone} if they want to reach back.` },
+        { text: `I appreciate it.` },
       ]
     case 'p3': {
-      const lines: string[] = []
-      if (n) lines.push(`${n}, I appreciate you taking the call.`)
-      else lines.push(`I appreciate you taking the call.`)
-      lines.push(`I’m ${managerFirst} — I manage ${artistName}.`)
-      lines.push(credentialsLine.endsWith('.') ? credentialsLine : `${credentialsLine}.`)
+      const lines: ColdCallScriptBeat[] = []
+      if (n) lines.push({ text: `${n}, thanks for taking the call.` })
+      else lines.push({ text: `Thanks for taking the call.` })
+      lines.push({ text: `I’m ${managerFirst} — I work with a DJ out here named ${artistName}.` })
       if (because) {
-        lines.push(`I came across ${vn} — I think ${artistName} would be a great fit because ${because}.`)
+        lines.push({
+          text: `I came across ${vn} and honestly thought it’d be a solid match — ${because}.`,
+        })
       } else {
-        lines.push(`I came across ${vn} — I think ${artistName} would be a great fit for what you’re doing.`)
+        lines.push({
+          text: `I came across ${vn} and thought there might be a fit with what you guys are doing.`,
+        })
       }
-      lines.push(`Do you ever bring in guest DJs or try someone new on a night?`)
-      if (events) lines.push(`I saw you run ${events} — that lines up with what he does.`)
+      lines.push({ text: `Do you ever bring in outside DJs?` })
+      if (events) {
+        lines.push({
+          text: `I noticed you run ${events} — that’s right up his alley.`,
+          situational: true,
+        })
+      }
       return lines
     }
     case 'p3b':
       return [
-        `Totally makes sense — most venues have a core rotation.`,
-        `Do you ever bring in a guest DJ for special nights or when someone can’t make it?`,
-        `That’s usually where someone like ${artistName} fits — elevates the room without stepping on toes.`,
+        { text: `That makes total sense — most spots have their regulars.` },
+        {
+          text: `Do you ever bring someone in for a special night, or if one of your guys can’t make it?`,
+        },
+        {
+          text: `That’s usually where someone like ${artistName} fits in — he comes in, brings energy, doesn’t step on anyone’s toes.`,
+        },
       ]
     case 'p3c': {
-      const closeName = n ? `${n}, ` : ''
+      if (n) {
+        return [
+          { text: `No worries at all, ${n}.` },
+          { text: `I’d love to just stay on your radar for when the timing works out.` },
+          { text: `Cool if I send over ${artistName}’s info so you have it?` },
+        ]
+      }
       return [
-        `No worries at all — ${closeName}I’d love to stay on your radar for when timing’s right.`,
-        `Cool if I send ${artistName}’s info so you have it on file?`,
+        { text: `No worries at all.` },
+        { text: `I’d love to stay on your radar for when the timing works out.` },
+        { text: `Cool if I send over ${artistName}’s info?` },
       ]
     }
     case 'p4a':
-      return [`That’s great to hear.`, `What nights do you typically run events or bring in DJs?`]
+      return [{ text: `Good to know.` }, { text: `What nights do you usually have events or bring DJs in?` }]
     case 'p4b':
-      return [`What kind of music does the crowd lean toward on those nights?`, `What’s the vibe?`]
+      return [{ text: `What kind of music does your crowd go for?` }]
     case 'p4c':
       return [
-        `How does booking usually work here?`,
-        `Do you handle that directly, or is there someone else I should talk to?`,
+        {
+          text: `And how does booking usually work on your end — do you handle that, or is there someone else I should talk to?`,
+        },
       ]
     case 'p4d':
       return [
-        `Just so I can put something sensible together —`,
-        `what do you typically budget for a DJ on those nights?`,
+        {
+          text: `Just so I can put something together that makes sense for you — what do you usually budget for a DJ?`,
+        },
       ]
     case 'p4e':
-      return [`Roughly how big is the room — capacity-wise?`]
+      return [{ text: `And roughly how big is the space?` }]
     case 'p5': {
       const night = d.event_nights[0] ?? 'your event nights'
-      if (d.call_purpose === 'upcoming_event') {
+      if (d.call_purpose === 'residency') {
+        if (n) {
+          return [
+            {
+              text: `Here’s what I’m thinking, ${n} — ${artistName} would be a solid fit for your ${night} nights.`,
+            },
+            { text: `What would it take to get him on for a trial night?` },
+          ]
+        }
         return [
-          `I think ${artistName} would be strong for an event you’ve got coming up.`,
-          `What does it look like to get him on the lineup?`,
+          { text: `I think ${artistName} would be a solid fit for your ${night} nights.` },
+          { text: `What would it take to get him on for a trial night?` },
         ]
       }
-      if (d.call_purpose === 'one_time') {
-        return [`I think ${artistName} would crush it for a night you’ve got coming up.`, `What does getting him on the lineup look like?`]
-      }
-      if (d.call_purpose === 'residency') {
+      if (d.call_purpose === 'upcoming_event' || d.call_purpose === 'one_time') {
         return [
-          `Here’s what I’m thinking${n ? `, ${n}` : ''} — ${artistName} would be a strong fit for your ${night} nights.`,
-          `What would a trial night look like so you can see what he brings?`,
+          { text: `I think ${artistName} would be strong for a night you’ve got coming up.` },
+          { text: `What does it look like to get him on?` },
         ]
       }
       return [
-        `Would you be open to ${artistName} coming through for a night — even as a trial?`,
-        `No long-term lock-in — just one night to prove value.`,
+        {
+          text: `Would you be open to ${artistName} coming through for a night — just a trial, no commitment?`,
+        },
+        { text: `One night to see what he brings.` },
       ]
     }
     case 'p6': {
       const t = d.operator_temperature || d.final_temperature
-      if (t === 'dead') return [`I appreciate your time.`, `If anything changes, feel free to reach out.`, `Have a good one.`]
-      if (t === 'cold')
-        return [`No worries at all.`, `I’ll follow up down the road if timing gets better.`, `Thanks for your time${n ? `, ${n}` : ''}.`]
-      if (t === 'warm')
+      if (t === 'dead')
         return [
-          `I’ll send ${artistName}’s info now so you’ve got it.`,
-          `I’ll follow up soon to see where things stand.`,
-          `Appreciate your time${n ? `, ${n}` : ''}.`,
+          { text: `I appreciate your time.` },
+          { text: `If anything changes down the road, feel free to reach out.` },
         ]
-      if (t === 'hot')
+      if (t === 'cold') {
+        if (n) {
+          return [
+            { text: `No worries at all.` },
+            { text: `I’ll check back in down the road, ${n}.` },
+            { text: `Thanks for your time.` },
+          ]
+        }
         return [
-          `I’ll put something together this week — dates, rates, the works.`,
-          `I’ll follow up to lock it in.`,
-          `Appreciate you${n ? `, ${n}` : ''}.`,
+          { text: `No worries at all.` },
+          { text: `I’ll check back in down the road.` },
+          { text: `Thanks for your time.` },
         ]
+      }
+      if (t === 'warm') {
+        if (n) {
+          return [
+            { text: `I’ll send ${artistName}’s info over right now so you’ve got it.` },
+            { text: `I’ll follow up soon to see where things land.` },
+            { text: `${n}, I appreciate the time.` },
+          ]
+        }
+        return [
+          { text: `I’ll send ${artistName}’s info over right now so you’ve got it.` },
+          { text: `I’ll follow up soon to see where things land.` },
+          { text: `Thanks for the time.` },
+        ]
+      }
+      if (t === 'hot') {
+        if (n) {
+          return [
+            { text: `I’ll put something together for you this week — dates, rates, everything.` },
+            { text: `I’ll follow up in a couple days to get it locked in.` },
+            { text: `${n}, this is gonna be solid — I appreciate you.` },
+          ]
+        }
+        return [
+          { text: `I’ll put something together this week — dates, rates, everything.` },
+          { text: `I’ll follow up in a couple days to get it locked.` },
+          { text: `Appreciate you.` },
+        ]
+      }
       if (t === 'converting')
         return [
-          `Let’s do it.`,
-          `If you’ve got a few minutes, I can walk you through details and get the date locked.`,
+          { text: `Let’s make it happen.` },
+          {
+            text: `I can actually get everything set up right now if you’ve got a few more minutes.`,
+          },
         ]
-      return [`Thanks again for the time — I’ll follow up with next steps.`]
+      return [{ text: `Thanks for the time — I’ll follow up with next steps.` }]
     }
     case 'p6_vm': {
       if (n) {
         return [
-          `Hey ${n} — this is ${managerFirst}, I manage ${artistName}.`,
-          `${credentialsLine.endsWith('.') ? credentialsLine.slice(0, -1) : credentialsLine}, and I came across ${vn}.`,
-          `I think he’d be a great fit for what you’re doing.`,
-          `Would love to connect quick — my number is ${phone}.`,
-          `Again, ${managerFirst} with ${artistName} — talk soon.`,
+          { text: `Hey ${n}, it’s ${managerFirst} — I work with a DJ named ${artistName}.` },
+          { text: `I came across ${vn} and think he’d be a great fit for what you guys are doing.` },
+          { text: `Would love to connect real quick when you get a chance.` },
+          { text: `My number is ${phone}.` },
+          { text: `Again, it’s ${managerFirst} — talk soon.` },
         ]
       }
       return [
-        `Hey — this is ${managerFirst}, I manage ${artistName}.`,
-        `${credentialsLine.endsWith('.') ? credentialsLine.slice(0, -1) : credentialsLine}.`,
-        `I’m reaching out to ${vn} because I think he’d be a strong addition to your lineup.`,
-        `If whoever handles entertainment could call me at ${phone}, I’d appreciate it.`,
-        `${managerFirst} with ${artistName}. Thanks.`,
+        { text: `Hey, this is ${managerFirst} — I work with a DJ named ${artistName}.` },
+        { text: `I’m reaching out to ${vn} because I think he’d be a solid addition to your lineup.` },
+        { text: `If whoever handles entertainment can give me a call at ${phone}, I’d appreciate it.` },
+        { text: `That’s ${managerFirst} with ${artistName}. Thanks.` },
       ]
     }
     case 'p6_na':
-      return [`No answer.`, `Try again later or follow up another way when it makes sense.`]
+      return [{ text: `No answer — try again when it makes sense.` }]
     default:
       return []
   }
 }
 
+/** @deprecated Prefer `coldCallLiveScriptBeats` when you need situational styling. */
+export function scriptBeatsForCard(card: ColdCallLiveCardId, d: ColdCallDataV1, ctx: ColdCallScriptCtx): string[] {
+  return coldCallLiveScriptBeats(card, d, ctx).map(b => b.text)
+}
+
 /** Backwards-compatible single string. */
 export function scriptForCard(card: ColdCallLiveCardId, d: ColdCallDataV1, managerPhone: string): string {
   const ctx = coldCallScriptContext(null)
-  return scriptBeatsForCard(card, d, { ...ctx, managerPhone: managerPhone.trim() || ctx.managerPhone }).join(' ')
+  return coldCallLiveScriptBeats(card, d, { ...ctx, managerPhone: managerPhone.trim() || ctx.managerPhone })
+    .map(b => b.text)
+    .join(' ')
 }

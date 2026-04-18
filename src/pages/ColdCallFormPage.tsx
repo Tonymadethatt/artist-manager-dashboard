@@ -73,7 +73,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { coldCallScriptContext, liveCardStepTitle, scriptBeatsForCard } from '@/pages/cold-call/liveCardCopy'
+import { coldCallLiveScriptBeats, coldCallScriptContext, liveCardStepTitle } from '@/pages/cold-call/liveCardCopy'
 import {
   ASK_RESPONSE_OPTIONS,
   BEST_TIME_OPTIONS,
@@ -713,11 +713,29 @@ export default function ColdCallFormPage() {
 
   const liveCapture = (() => {
     const card = dc
-    const beats = scriptBeatsForCard(card, data, scriptCtx)
+    const beats = coldCallLiveScriptBeats(card, data, scriptCtx)
     const script = (
       <div className="space-y-0">
-        {beats.map((line, i) => (
-          <p key={i}>{line}</p>
+        {beats.map((b, i) => (
+          <p
+            key={i}
+            className={
+              b.situational
+                ? 'mt-3 border-t border-white/[0.06] pt-3 text-sm italic text-yellow-100/75'
+                : undefined
+            }
+          >
+            {b.situational ? (
+              <>
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 not-italic">
+                  After they answer — if it fits
+                </span>
+                <span className="mt-1 block font-medium not-italic leading-relaxed text-yellow-100/90">{b.text}</span>
+              </>
+            ) : (
+              b.text
+            )}
+          </p>
         ))}
       </div>
     )
@@ -985,6 +1003,7 @@ export default function ColdCallFormPage() {
       case 'p4b': {
         const ids = MUSIC_VIBE_PRESETS.map(p => p.id)
         const labels = Object.fromEntries(MUSIC_VIBE_PRESETS.map(p => [p.id, p.label])) as Record<string, string>
+        const talkingPoints = profile?.tagline?.trim()
         return (
           <IntakeLiveScriptCaptureStack
             scriptSize="compact"
@@ -993,6 +1012,14 @@ export default function ColdCallFormPage() {
             capture={
               <div className="space-y-2">
                 <IntakeCompactChipRow label="Vibe" selected={data.venue_vibes} ids={ids} labels={labels} onChange={v => patch({ venue_vibes: v })} />
+                {talkingPoints ? (
+                  <details className="rounded-lg border border-white/[0.08] bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
+                    <summary className="cursor-pointer select-none text-[11px] font-medium text-neutral-300">
+                      If they ask who he is
+                    </summary>
+                    <p className="mt-2 leading-relaxed text-neutral-400">{talkingPoints}</p>
+                  </details>
+                ) : null}
               </div>
             }
           />
