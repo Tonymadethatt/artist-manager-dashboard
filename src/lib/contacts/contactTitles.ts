@@ -6,7 +6,10 @@ import type { Contact } from '../../types'
 
 type Mismatch = Exclude<Phase1ContactMismatchContextV3, ''>
 
-/** Single source of truth: key, UI group, label, best intake “who is this?” bucket. */
+/**
+ * Single source of truth for every {@link ContactTitleSelect} and `contacts.title_key` value in the app.
+ * Edit this array only — groups/labels/mismatch buckets derive from it.
+ */
 const CONTACT_TITLE_ROWS = [
   // Venue & nightlife
   { key: 'venue_general_manager', group: 'Venue & nightlife', label: 'General manager (venue)', m: 'venue_manager' },
@@ -38,6 +41,7 @@ const CONTACT_TITLE_ROWS = [
   { key: 'public_relations', group: 'Brand & marketing', label: 'Public relations', m: 'marketing_pr' },
   { key: 'creative_director', group: 'Brand & marketing', label: 'Creative director', m: 'marketing_pr' },
   // Business & representation
+  { key: 'ceo', group: 'Business & representation', label: 'CEO', m: 'owner' },
   { key: 'co_owner', group: 'Business & representation', label: 'Co-owner / partner', m: 'owner' },
   { key: 'managing_partner', group: 'Business & representation', label: 'Managing partner', m: 'owner' },
   { key: 'agency_rep', group: 'Business & representation', label: 'Agency / rep', m: 'agency_rep' },
@@ -169,6 +173,7 @@ export function mapContactRoleTextToMismatchContext(
   if (!r) return 'other_party'
   if (/(billing|\bap\b|a\/p|accounts? payable)/i.test(r)) return 'billing'
   if (/(production|technical|\ba1\b|audio)/i.test(r)) return 'production'
+  if (/(^|\b)ceo\b|chief executive|c\/e\/o/i.test(r)) return 'owner'
   if (/(owner|principal|partner)/i.test(r)) return 'owner'
   if (/(assistant|coordinator|admin)/i.test(r)) return 'assistant'
   if (/(buyer|booker|talent)/i.test(r)) return 'talent_buyer'
