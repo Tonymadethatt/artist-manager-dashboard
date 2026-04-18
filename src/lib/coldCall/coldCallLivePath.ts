@@ -72,11 +72,11 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
     case 'p1': {
       need('who_answered', !!d.who_answered, 'Pick who picked up.')
       if (d.who_answered === 'right_person') {
+        need('target_title_key', !!d.target_title_key, 'Pick their title.')
         if (d.target_name.trim()) {
           need('confirmed_name', !!d.confirmed_name, 'Confirm the name.')
         } else {
           need('cold_no_target_name_status', !!d.cold_no_target_name_status, 'Pick one.')
-          need('target_role', !!d.target_role, 'Pick their role.')
         }
       }
       break

@@ -1,6 +1,15 @@
 /** Cold call form JSON (`cold_calls.call_data`). Desktop-only; mirrors booking intake autosave pattern. */
 
+import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
+
 export const COLD_CALL_DATA_VERSION = 1 as const
+
+const CONTACT_TITLE_KEY_SET = new Set<string>(Object.keys(CONTACT_TITLE_LABELS))
+
+function asContactTitleKeyField(v: unknown): ContactTitleKey | '' {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s && CONTACT_TITLE_KEY_SET.has(s) ? (s as ContactTitleKey) : ''
+}
 
 /** Pre-filled on new cold calls; `state_region` must match `US_STATE_OPTIONS[].value` (e.g. CA for California). */
 export const DEFAULT_COLD_CALL_CITY = 'Los Angeles'
@@ -45,6 +54,34 @@ export const COLD_CALL_TARGET_ROLE_LABELS: Record<Exclude<ColdCallTargetRole, ''
   general_manager: 'General Manager',
   events_coordinator: 'Events Coordinator',
   not_sure: 'Not sure',
+}
+
+/** Migrate rows that used legacy `target_role` / `decision_maker_role` chip ids. */
+function legacyColdCallRoleToTitle(roleRaw: unknown): ContactTitleKey | '' {
+  const r = typeof roleRaw === 'string' ? roleRaw.trim() : ''
+  if (!r) return ''
+  const map: Partial<Record<Exclude<ColdCallTargetRole, ''>, ContactTitleKey>> = {
+    owner: 'promoter_owner',
+    talent_buyer: 'talent_buyer',
+    promoter: 'promoter_owner',
+    general_manager: 'venue_general_manager',
+    events_coordinator: 'day_of_coordinator',
+    not_sure: 'other',
+  }
+  if (r in map) return map[r as Exclude<ColdCallTargetRole, ''>] ?? ''
+  return ''
+}
+
+function parseTargetTitleKey(o: Record<string, unknown>): ContactTitleKey | '' {
+  const direct = asContactTitleKeyField(o.target_title_key)
+  if (direct) return direct
+  return legacyColdCallRoleToTitle(o.target_role)
+}
+
+function parseDecisionMakerTitleKey(o: Record<string, unknown>): ContactTitleKey | '' {
+  const direct = asContactTitleKeyField(o.decision_maker_title_key)
+  if (direct) return direct
+  return legacyColdCallRoleToTitle(o.decision_maker_role)
 }
 
 export type ColdCallHowFound =
@@ -312,7 +349,8 @@ export interface ColdCallDataV1 {
   website: string
 
   target_name: string
-  target_role: ColdCallTargetRole
+  /** Catalog contact title (same keys as outreach / intake contacts). */
+  target_title_key: ContactTitleKey | ''
   target_phone: string
   target_email: string
   how_found: ColdCallHowFound
@@ -344,7 +382,7 @@ export interface ColdCallDataV1 {
   no_answer_retry_timing: ColdCallNoAnswerRetry
   no_answer_notes_flag: '' | 'note' | 'none'
   decision_maker_name: string
-  decision_maker_role: ColdCallTargetRole
+  decision_maker_title_key: ContactTitleKey | ''
   best_time: '' | 'morning' | 'afternoon' | 'evening' | 'specific_later' | 'unsaid'
   direct_line_flag: '' | 'yes_later' | 'no'
   message_left_with: '' | 'got_name_later' | 'no_name'
@@ -417,7 +455,7 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     website: '',
 
     target_name: '',
-    target_role: '',
+    target_title_key: '',
     target_phone: '',
     target_email: '',
     how_found: '',
@@ -447,7 +485,7 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     no_answer_retry_timing: '',
     no_answer_notes_flag: '',
     decision_maker_name: '',
-    decision_maker_role: '',
+    decision_maker_title_key: '',
     best_time: '',
     direct_line_flag: '',
     message_left_with: '',
@@ -577,7 +615,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     website: asStr(o.website),
 
     target_name: asStr(o.target_name),
-    target_role: asStr(o.target_role, '') as ColdCallTargetRole,
+    target_title_key: parseTargetTitleKey(o),
     target_phone: asStr(o.target_phone),
     target_email: asStr(o.target_email),
     how_found: asStr(o.how_found, '') as ColdCallHowFound,
@@ -628,7 +666,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
       return s === 'note' || s === 'none' ? s : ''
     })(),
     decision_maker_name: asStr(o.decision_maker_name),
-    decision_maker_role: asStr(o.decision_maker_role, '') as ColdCallTargetRole,
+    decision_maker_title_key: parseDecisionMakerTitleKey(o),
     best_time: asStr(o.best_time, '') as ColdCallDataV1['best_time'],
     direct_line_flag: asStr(o.direct_line_flag, '') as ColdCallDataV1['direct_line_flag'],
     message_left_with: asStr(o.message_left_with, '') as ColdCallDataV1['message_left_with'],

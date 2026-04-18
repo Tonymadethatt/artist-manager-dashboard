@@ -44,7 +44,6 @@ import {
   COLD_CALL_OUTCOME_LABELS,
   COLD_CALL_PITCH_REASON_CHIPS,
   COLD_CALL_REJECTION_LABELS,
-  COLD_CALL_TARGET_ROLE_LABELS,
   COLD_CALL_TEMPERATURE_META,
   COLD_CALL_WEEKDAY_LABELS,
   defaultColdCallTitle,
@@ -52,6 +51,9 @@ import {
   type ColdCallNextActionKey,
   type ColdCallTemperature,
 } from '@/lib/coldCall/coldCallPayload'
+import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
+import { CONTACT_TITLE_LABELS } from '@/lib/contacts/contactTitles'
+import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
 import { MUSIC_VIBE_PRESETS, US_STATE_OPTIONS } from '@/lib/intake/intakePayloadV3'
 import type { Contact, Venue, VenueType } from '@/types'
 import { VENUE_TYPE_LABELS } from '@/types'
@@ -386,18 +388,24 @@ export default function ColdCallFormPage() {
       const { data: rows } = await supabase.from('contacts').select('*').eq('venue_id', venue.id).order('created_at')
       const list = (rows ?? []) as Contact[]
       const primary = list[0]
-      cold.updateCallData(selectedId, d => ({
-        ...d,
-        venue_source: 'existing',
-        existing_venue_id: venue.id,
-        venue_name: venue.name,
-        city: venue.city ?? '',
-        state_region: venue.region ?? '',
-        venue_type: venue.venue_type ?? '',
-        target_phone: primary?.phone ?? d.target_phone,
-        target_email: primary?.email ?? d.target_email,
-        target_name: primary?.name ?? d.target_name,
-      }))
+      cold.updateCallData(selectedId, d => {
+        const pk = primary?.title_key?.trim()
+        const nextTitle: ContactTitleKey | '' =
+          pk && pk in CONTACT_TITLE_LABELS ? (pk as ContactTitleKey) : d.target_title_key
+        return {
+          ...d,
+          venue_source: 'existing',
+          existing_venue_id: venue.id,
+          venue_name: venue.name,
+          city: venue.city ?? '',
+          state_region: venue.region ?? '',
+          venue_type: venue.venue_type ?? '',
+          target_phone: primary?.phone ?? d.target_phone,
+          target_email: primary?.email ?? d.target_email,
+          target_name: primary?.name ?? d.target_name,
+          target_title_key: nextTitle,
+        }
+      })
     },
     [selectedId, cold],
   )
@@ -618,8 +626,8 @@ export default function ColdCallFormPage() {
           user_id: auth.user.id,
           venue_id: venueId,
           name,
-          title_key: null,
-          role: data.target_role ? COLD_CALL_TARGET_ROLE_LABELS[data.target_role] : null,
+          title_key: data.target_title_key.trim() || null,
+          role: null,
           email: data.target_email.trim() || null,
           phone: data.target_phone.trim() || null,
           company: null,
@@ -735,27 +743,39 @@ export default function ColdCallFormPage() {
                   {liveFieldIssues.who_answered ? <p className="text-[11px] text-red-400">{liveFieldIssues.who_answered}</p> : null}
                 </div>
                 {data.who_answered === 'right_person' ? (
-                  data.target_name.trim() ? (
+                  <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Name check</Label>
-                      <SelectChipRow
-                        value={data.confirmed_name}
-                        onChange={v => patch({ confirmed_name: v })}
-                        options={CONFIRMED_NAME_OPTIONS}
+                      <Label className="text-neutral-400 text-xs">Name on the line</Label>
+                      <Input
+                        className="h-10 border-neutral-800 bg-neutral-950/80"
+                        value={data.target_name}
+                        onChange={e => patch({ target_name: e.target.value })}
+                        placeholder="Type their name if they gave it"
                       />
-                      {data.confirmed_name === 'different' ? (
-                        <Input
-                          className="h-10 border-neutral-800 bg-neutral-950/80"
-                          value={data.different_name_note}
-                          onChange={e => patch({ different_name_note: e.target.value })}
-                          placeholder="Their name"
-                        />
-                      ) : null}
+                      <p className="text-[11px] text-neutral-500">
+                        If they didn’t introduce themselves yet, leave blank and pick a status below.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
+                    {data.target_name.trim() ? (
                       <div className="space-y-1.5">
-                        <Label className="text-neutral-400 text-xs">Name on the line</Label>
+                        <Label className="text-neutral-400 text-xs">Name check</Label>
+                        <SelectChipRow
+                          value={data.confirmed_name}
+                          onChange={v => patch({ confirmed_name: v })}
+                          options={CONFIRMED_NAME_OPTIONS}
+                        />
+                        {data.confirmed_name === 'different' ? (
+                          <Input
+                            className="h-10 border-neutral-800 bg-neutral-950/80"
+                            value={data.different_name_note}
+                            onChange={e => patch({ different_name_note: e.target.value })}
+                            placeholder="Their name"
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label className="text-neutral-400 text-xs">No name yet?</Label>
                         <SelectChipRow
                           value={data.cold_no_target_name_status}
                           onChange={v => patch({ cold_no_target_name_status: v })}
@@ -765,29 +785,18 @@ export default function ColdCallFormPage() {
                           ]}
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-neutral-400 text-xs">Their role</Label>
-                        <Select
-                          value={data.target_role || '__none__'}
-                          onValueChange={v => patch({ target_role: v === '__none__' ? '' : (v as ColdCallDataV1['target_role']) })}
-                        >
-                          <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80">
-                            <SelectValue placeholder="Role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">—</SelectItem>
-                            {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(
-                              k => (
-                                <SelectItem key={k} value={k}>
-                                  {COLD_CALL_TARGET_ROLE_LABELS[k]}
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Their title</Label>
+                      <ContactTitleSelect
+                        allowEmpty
+                        value={data.target_title_key}
+                        onValueChange={key => patch({ target_title_key: key })}
+                        placeholder="Select title"
+                        triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
+                      />
                     </div>
-                  )
+                  </div>
                 ) : null}
               </div>
             }
@@ -849,25 +858,14 @@ export default function ColdCallFormPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Role</Label>
-                  <Select
-                    value={data.decision_maker_role || '__none__'}
-                    onValueChange={v => patch({ decision_maker_role: v === '__none__' ? '' : (v as ColdCallDataV1['decision_maker_role']) })}
-                  >
-                    <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(
-                        k => (
-                          <SelectItem key={k} value={k}>
-                            {COLD_CALL_TARGET_ROLE_LABELS[k]}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-neutral-400 text-xs">Their title</Label>
+                  <ContactTitleSelect
+                    allowEmpty
+                    value={data.decision_maker_title_key}
+                    onValueChange={key => patch({ decision_maker_title_key: key })}
+                    placeholder="Select title"
+                    triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Best time</Label>
@@ -1527,23 +1525,14 @@ export default function ColdCallFormPage() {
                     <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.target_name} onChange={e => patch({ target_name: e.target.value })} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Role</Label>
-                    <Select
-                      value={data.target_role || '__none__'}
-                      onValueChange={v => patch({ target_role: v === '__none__' ? '' : (v as ColdCallDataV1['target_role']) })}
-                    >
-                      <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">—</SelectItem>
-                        {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(k => (
-                          <SelectItem key={k} value={k}>
-                            {COLD_CALL_TARGET_ROLE_LABELS[k]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-neutral-400 text-xs">Title</Label>
+                    <ContactTitleSelect
+                      allowEmpty
+                      value={data.target_title_key}
+                      onValueChange={key => patch({ target_title_key: key })}
+                      placeholder="Select title"
+                      triggerClassName="h-11 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-neutral-400 text-xs">Email</Label>

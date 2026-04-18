@@ -10,22 +10,21 @@ import {
   type Phase2EventScheduleV3,
 } from '@/lib/intake/intakePayloadV3'
 import type { Venue, VenueType } from '@/types'
+import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
 import {
   COLD_CALL_GATEKEEPER_STAFF_LABELS,
   COLD_CALL_WEEKDAY_LABELS,
   type ColdCallCapacityBucket,
   type ColdCallDataV1,
   type ColdCallPurpose,
-  type ColdCallTargetRole,
-  COLD_CALL_TARGET_ROLE_LABELS,
 } from './coldCallPayload'
 import { BUDGET_RANGE_OPTIONS } from '@/pages/cold-call/liveFieldOptions'
 
 export type ColdCallIntakeConversionContext = 'mid_call' | 'post_call'
 
-function targetRoleLabel(role: ColdCallTargetRole): string {
-  if (!role) return ''
-  return COLD_CALL_TARGET_ROLE_LABELS[role as Exclude<ColdCallTargetRole, ''>] ?? role
+function titleLabel(key: ContactTitleKey | ''): string {
+  if (!key) return ''
+  return CONTACT_TITLE_LABELS[key] ?? ''
 }
 
 function mapColdCapacityToIntake(bucket: ColdCallCapacityBucket): CapacityRangeV3 {
@@ -144,9 +143,10 @@ function primaryIntakeContactName(d: ColdCallDataV1): string {
 
 function primaryIntakeContactRole(d: ColdCallDataV1): string {
   if (d.decision_maker_name.trim()) {
-    return targetRoleLabel(d.decision_maker_role || d.target_role)
+    const k = d.decision_maker_title_key || d.target_title_key
+    return titleLabel(k)
   }
-  return targetRoleLabel(d.target_role)
+  return titleLabel(d.target_title_key)
 }
 
 export function buildGatekeeperSecondContact(d: ColdCallDataV1): {

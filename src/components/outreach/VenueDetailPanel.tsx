@@ -763,7 +763,7 @@ function ContactForm({
             }
             onValueChange={key => {
               setSaveError(null)
-              setForm(f => ({ ...f, title_key: key }))
+              setForm(f => ({ ...f, title_key: key ? key : null }))
             }}
           />
           {initial && isContactTitleLegacy(initial) && initial.role ? (

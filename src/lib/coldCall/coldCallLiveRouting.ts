@@ -15,12 +15,12 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     case 'p1': {
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {
+        if (!d.target_title_key) return {}
         const hasTarget = !!d.target_name.trim()
         if (hasTarget) {
           if (!d.confirmed_name) return {}
         } else {
           if (!d.cold_no_target_name_status) return {}
-          if (!d.target_role) return {}
         }
         return withHistory(d, 'p3')
       }
