@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { useResendSendUsage } from '@/hooks/useResendSendUsage'
 
 type NavGroupId = 'workspace' | 'content' | 'forms' | 'email'
 
@@ -146,6 +147,12 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const onPipelinePath = location.pathname.startsWith('/pipeline')
   const { counts } = useNavBadges()
   const { profile, updateProfile } = useArtistProfile()
+  const {
+    sendUsage: emailSendUsage,
+    sendUsageLoadFailed: emailUsageFailed,
+    displayCaps: emailDisplayCaps,
+    usageHot: emailUsageHot,
+  } = useResendSendUsage({ pollMs: 30_000 })
   const [testModeBusy, setTestModeBusy] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(loadExpandedGroupsFromStorage)
 
@@ -249,12 +256,36 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                 />
                 <span
                   className={cn(
-                    'truncate min-w-0 bg-clip-text text-transparent',
+                    'truncate min-w-0 flex-1 bg-clip-text text-transparent',
                     CATEGORY_TITLE_STYLE[group.id].label
                   )}
                 >
                   {group.label}
                 </span>
+                {group.id === 'email' && (
+                  <span
+                    className={cn(
+                      'shrink-0 text-[9px] font-semibold tabular-nums tracking-normal normal-case',
+                      emailSendUsage == null && !emailUsageFailed && 'text-[hsl(var(--sidebar-muted))]',
+                      emailUsageFailed && 'text-[hsl(var(--sidebar-muted))]',
+                      emailSendUsage &&
+                        (emailUsageHot.dailyHot
+                          ? 'text-red-400'
+                          : 'text-emerald-200/95'),
+                    )}
+                    title={
+                      emailSendUsage
+                        ? `${emailSendUsage.today.toLocaleString('en-US')} of ${emailDisplayCaps.daily.toLocaleString('en-US')} Resend sends today (Pacific); matches Email Queue meter`
+                        : undefined
+                    }
+                  >
+                    {emailSendUsage
+                      ? `${emailSendUsage.today}/${emailDisplayCaps.daily}`
+                      : emailUsageFailed
+                        ? '—'
+                        : '…'}
+                  </span>
+                )}
               </button>
               <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
                 <div className="flex flex-col gap-px pb-px">

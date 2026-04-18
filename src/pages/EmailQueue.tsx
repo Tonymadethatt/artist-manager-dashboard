@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { MailOpen, Send, X, Clock, CheckCircle, XCircle, RefreshCw, Eye, HelpCircle } from 'lucide-react'
 import { useVenueEmails } from '@/hooks/useVenueEmails'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { useResendSendUsage } from '@/hooks/useResendSendUsage'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -71,13 +72,6 @@ import {
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
-import {
-  fetchVenueEmailSentCountsForUser,
-  resendPlanCaps,
-  usageNearLimitFlags,
-  type VenueEmailSendUsageResult,
-} from '@/lib/email/emailQueueSendUsage'
-
 function fmtDate(iso: string) {
   return stripOnTheHourMinutes12h(new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
@@ -407,36 +401,13 @@ export default function EmailQueue() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewSubject, setPreviewSubject] = useState<string>('')
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [sendUsage, setSendUsage] = useState<VenueEmailSendUsageResult | null>(null)
-  const [sendUsageLoadFailed, setSendUsageLoadFailed] = useState(false)
-  const displayCaps = useMemo(
-    () => sendUsage?.caps ?? resendPlanCaps(),
-    [sendUsage],
-  )
-
-  const loadSendUsage = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const c = await fetchVenueEmailSentCountsForUser(user.id)
-    if (c) {
-      setSendUsage(c)
-      setSendUsageLoadFailed(false)
-    } else {
-      setSendUsageLoadFailed(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    const t = window.setTimeout(() => void loadSendUsage(), 400)
-    return () => window.clearTimeout(t)
-  }, [
-    emails,
-    loadSendUsage,
-    profile?.email_usage_day_offset,
-    profile?.email_usage_month_offset,
-    profile?.resend_daily_email_cap,
-    profile?.resend_monthly_email_cap,
-  ])
+  const {
+    sendUsage,
+    sendUsageLoadFailed,
+    displayCaps,
+    usageHot,
+    reloadSendUsage,
+  } = useResendSendUsage({ reloadTriggers: [emails] })
 
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
@@ -450,19 +421,6 @@ export default function EmailQueue() {
   const displayedPending =
     queueSubTab === 'scheduled' ? pendingScheduled : pendingImmediate
 
-  const usageHot = useMemo(
-    () =>
-      sendUsage
-        ? usageNearLimitFlags({
-            sentToday: sendUsage.today,
-            sentMonth: sendUsage.month,
-            dailyCap: displayCaps.daily,
-            monthlyCap: displayCaps.monthly,
-          })
-        : { dailyHot: false, monthlyHot: false },
-    [sendUsage, displayCaps.daily, displayCaps.monthly],
-  )
-
   const hasUsageBaselines =
     (sendUsage?.offsetsApplied.day ?? 0) > 0 || (sendUsage?.offsetsApplied.month ?? 0) > 0
 
@@ -470,10 +428,10 @@ export default function EmailQueue() {
     if (activeTab !== 'queue') return
     const id = window.setInterval(() => {
       void refetch({ silent: true })
-      void loadSendUsage()
+      void reloadSendUsage()
     }, 30_000)
     return () => window.clearInterval(id)
-  }, [activeTab, refetch, loadSendUsage])
+  }, [activeTab, refetch, reloadSendUsage])
 
   useEffect(() => {
     if (activeTab !== 'history') return
@@ -502,7 +460,7 @@ export default function EmailQueue() {
   const handleRefresh = async () => {
     setRefreshing(true)
     await refetch()
-    await loadSendUsage()
+    await reloadSendUsage()
     setRefreshing(false)
   }
 
