@@ -67,8 +67,7 @@ import {
   pacificWallToUtcIso,
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
-  formatPacificTimeRangeReadable,
-  formatPacificDateLongFromYmd,
+  whenLineCompactFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import {
@@ -650,6 +649,18 @@ const EMPTY_FORM = {
 
 function fmtMoney(n: number) {
   return formatUsdDisplayCeil(n)
+}
+
+/** Venue + compact Pacific schedule for the deals table (narrow Deal column). */
+function earningsDealTableFootText(deal: Deal): string | null {
+  const whenCompact = whenLineCompactFromDeal({
+    event_start_at: deal.event_start_at,
+    event_end_at: deal.event_end_at,
+    event_date: deal.event_date,
+  })
+  const parts = [deal.venue?.name?.trim(), whenCompact].filter(Boolean)
+  const line = parts.join(' · ')
+  return line || null
 }
 
 function balanceLegTargetAmount(deal: Deal): number {
@@ -1664,12 +1675,18 @@ export default function Earnings() {
         </div>
       ) : (
         <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-950">
-                <th className="text-left px-4 py-2.5 font-medium text-neutral-500 text-xs">Deal</th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Tier</th>
-                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Gross</th>
+                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs w-[11rem] sm:w-[13rem] md:w-[15rem]">
+                  Deal
+                </th>
+                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell w-[8.5rem] sm:w-[9.5rem]">
+                  Tier
+                </th>
+                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs w-[4.75rem] sm:w-[5.25rem]">
+                  Gross
+                </th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Owed</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">My cut</th>
                 <th className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell w-[140px]">
@@ -1680,7 +1697,9 @@ export default function Earnings() {
               </tr>
             </thead>
             <tbody>
-              {deals.slice((dealsPage - 1) * PAGE_SIZE, dealsPage * PAGE_SIZE).map(deal => (
+              {deals.slice((dealsPage - 1) * PAGE_SIZE, dealsPage * PAGE_SIZE).map(deal => {
+                const dealFootText = earningsDealTableFootText(deal)
+                return (
                 <tr
                   key={deal.id}
                   id={`earnings-deal-${deal.id}`}
@@ -1689,8 +1708,8 @@ export default function Earnings() {
                     deal.event_cancelled_at && 'opacity-[0.88]',
                   )}
                 >
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-neutral-100 leading-tight flex items-center gap-2 flex-wrap">
+                  <td className="px-3 py-3 align-top min-w-0">
+                    <div className="font-medium text-neutral-100 leading-tight flex items-center gap-1.5 min-w-0">
                       {isDealFinanciallySettled(deal) && (
                         <span
                           className="inline-flex shrink-0 text-emerald-500"
@@ -1700,38 +1719,23 @@ export default function Earnings() {
                           <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
                         </span>
                       )}
-                      {deal.description}
+                      <span className="min-w-0 truncate" title={deal.description}>
+                        {deal.description}
+                      </span>
                       {deal.event_cancelled_at && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400/95 bg-red-950/50 border border-red-900/50 px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400/95 bg-red-950/50 border border-red-900/50 px-1.5 py-0.5 rounded shrink-0">
                           Off calendar
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-neutral-500 leading-snug">
-                      {(deal.venue || deal.event_start_at || deal.event_date) && (
-                        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
-                          {deal.venue && (
-                            <span className="text-neutral-400">{deal.venue.name}</span>
-                          )}
-                          {deal.venue && (deal.event_start_at || deal.event_date) ? (
-                            <span className="text-neutral-700 select-none" aria-hidden>
-                              ·
-                            </span>
-                          ) : null}
-                          {(deal.event_start_at && deal.event_end_at) ? (
-                            <span className="text-neutral-500 tabular-nums">
-                              {formatPacificTimeRangeReadable(deal.event_start_at, deal.event_end_at)}
-                            </span>
-                          ) : deal.event_date ? (
-                            <span className="text-neutral-500 tabular-nums">
-                              {/^\d{4}-\d{2}-\d{2}$/.test(deal.event_date.trim())
-                                ? formatPacificDateLongFromYmd(deal.event_date.trim())
-                                : deal.event_date}
-                            </span>
-                          ) : null}
-                        </p>
-                      )}
-                    </div>
+                    {dealFootText && (
+                      <div
+                        className="mt-1 text-[11px] text-neutral-500 leading-snug truncate"
+                        title={dealFootText}
+                      >
+                        <span className="tabular-nums">{dealFootText}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {/* Commission flagged indicator */}
                       {perfReports.some(r => r.deal_id === deal.id && r.commission_flagged) && (
@@ -1760,14 +1764,18 @@ export default function Earnings() {
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-3 hidden sm:table-cell">
-                    <Badge variant={TIER_BADGE_VARIANT[deal.commission_tier]}>
-                      {COMMISSION_TIER_LABELS[deal.commission_tier]}
-                    </Badge>
+                  <td className="px-3 py-3 hidden sm:table-cell align-top whitespace-nowrap">
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge variant={TIER_BADGE_VARIANT[deal.commission_tier]} className="max-w-full truncate">
+                        {COMMISSION_TIER_LABELS[deal.commission_tier]}
+                      </Badge>
+                      <span className="text-xs text-neutral-500 tabular-nums">
+                        {Math.round(deal.commission_rate * 100)}%
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                     <span className="text-neutral-200 font-medium tabular-nums">{fmtMoney(deal.gross_amount)}</span>
-                    <div className="text-xs text-neutral-600 tabular-nums">{Math.round(deal.commission_rate * 100)}%</div>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <span
@@ -1866,7 +1874,8 @@ export default function Earnings() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
             {deals.length > 1 && (
               <tfoot>
