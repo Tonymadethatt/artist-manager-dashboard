@@ -8,6 +8,8 @@ import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useVenues } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
+import { useArtistProfile } from '@/hooks/useArtistProfile'
+import { usePricingCatalog } from '@/hooks/usePricingCatalog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +29,10 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { validateTaskEmailType } from '@/lib/tasks/validateTaskEmailType'
 import { parseDealGrossReconciliationNotes } from '@/lib/dealGrossReconciliationTask'
+import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
+import { catalogHasMinimumForDealLogging } from '@/lib/pricing/computeDealPrice'
+import { reconcileDealPricingSnapshotToGross } from '@/lib/pricing/reconcileDealPricingSnapshotToGross'
+import { isDealPricingSnapshot } from '@/types'
 
 const PRIORITY_BADGE: Record<TaskPriority, 'destructive' | 'warning' | 'secondary'> = {
   high: 'destructive',
@@ -87,6 +93,8 @@ export default function Tasks() {
     refetch: refetchTasks,
   } = useTasks()
   const { venues } = useVenues()
+  const { profile } = useArtistProfile()
+  const pricingCatalog = usePricingCatalog()
   const { deals, updateDeal, refetch: refetchDeals } = useDeals()
   const [reconApplyingId, setReconApplyingId] = useState<string | null>(null)
   const { rows: customEmailRows } = useCustomEmailTemplates()
@@ -96,9 +104,37 @@ export default function Tasks() {
     const payload = parseDealGrossReconciliationNotes(task.notes)
     if (!payload || !task.deal_id || task.completed) return
     setReconApplyingId(task.id)
-    const { error } = await updateDeal(task.deal_id, { gross_amount: payload.reported_fee_total })
+    const before = deals.find(d => d.id === task.deal_id) ?? null
+    const newGross = payload.reported_fee_total
+    let pricing_snapshot: unknown | undefined
+    let deposit_due_amount: number | null | undefined
+    if (
+      before &&
+      catalogHasMinimumForDealLogging(pricingCatalog.doc) &&
+      before.pricing_snapshot &&
+      isDealPricingSnapshot(before.pricing_snapshot)
+    ) {
+      const nextSnap = reconcileDealPricingSnapshotToGross(before, newGross, pricingCatalog.doc)
+      if (nextSnap) {
+        pricing_snapshot = nextSnap
+        deposit_due_amount = nextSnap.depositDue
+      }
+    }
+    const { error, data: after } = await updateDeal(task.deal_id, {
+      gross_amount: newGross,
+      ...(pricing_snapshot != null ? { pricing_snapshot, deposit_due_amount: deposit_due_amount ?? null } : {}),
+    })
     setReconApplyingId(null)
-    if (error) return
+    if (error || !after) return
+    const vBefore = before?.venue_id ? venues.find(v => v.id === before.venue_id) ?? before.venue : null
+    const vAfter = after.venue_id ? venues.find(v => v.id === after.venue_id) ?? after.venue : null
+    await afterDealUpdated({
+      beforeDeal: before,
+      afterDeal: after,
+      venueBefore: vBefore ?? null,
+      venueAfter: vAfter ?? null,
+      artistEmail: profile?.artist_email,
+    })
     await refetchDeals()
     await refetchTasks()
   }

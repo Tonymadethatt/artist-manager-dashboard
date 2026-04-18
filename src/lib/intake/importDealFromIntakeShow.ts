@@ -2,10 +2,14 @@ import type { CommissionTier, Contact, Deal, DealPricingFinalSource, Venue } fro
 import type { PricingCatalogDoc } from '@/types'
 import { buildPromiseLinesDocV2FromUi, defaultArtistPromisePresets, SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
 import { catalogHasMinimumForDealLogging, computeDealPrice } from '@/lib/pricing/computeDealPrice'
+import {
+  normalizeDealPricingSnapshot,
+  resolveDepositPercentForDeal,
+} from '@/lib/pricing/normalizeDealPricingSnapshot'
 import { mapShowBundleToEarningsImport, type DealFormImportShape } from '@/lib/intake/mapIntakeToDealForm'
 import { overlappingDealIds } from '@/lib/calendar/dealTimeOverlap'
 import { pacificWallToUtcIso, addCalendarDaysPacific } from '@/lib/calendar/pacificWallTime'
-import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
+import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import { refreshVenueAndPromoteForCalendarDeal } from '@/lib/calendar/promoteVenueForCalendarDeal'
 import { parseShowDataV3, type BookingIntakeVenueDataV3 } from '@/lib/intake/intakePayloadV3'
 import { resolveIntakeOnsiteContactId } from '@/lib/intake/syncIntakeVenueContacts'
@@ -77,6 +81,7 @@ export type ImportIntakeDealAddDeal = (deal: {
   pricing_snapshot?: unknown | null
   deposit_due_amount?: number | null
   deposit_paid_amount?: number
+  balance_paid_amount?: number
   notes: string | null
   performance_genre?: string | null
   performance_start_at?: string | null
@@ -207,11 +212,18 @@ export async function importDealFromIntakeShow(params: {
   const onsiteContactId = resolveIntakeOnsiteContactId(venueData, venueContacts ?? [])
   const finalSource: DealPricingFinalSource =
     pricingComputed.gross === roundedFormGross ? 'calculated' : 'manual'
-  const pricingSnapshotPayload = {
-    ...pricingComputed.snapshot,
+  const sd = isIntakeShowV3(rawShowData) ? parseShowDataV3(rawShowData, 0) : null
+  const depPct = resolveDepositPercentForDeal({
+    intakeDepositPercent: sd?.deposit_percent ?? null,
+    previousSnapshot: null,
+    catalogDefaultDepositPercent: catalog.policies.defaultDepositPercent,
+  })
+  const pricingSnapshotPayload = normalizeDealPricingSnapshot({
+    contractGross: gross,
     finalSource,
-    computedAt: new Date().toISOString(),
-  }
+    calculatorSnapshot: pricingComputed.snapshot,
+    depositPercent: depPct,
+  })
 
   const r = await addDeal({
     description: form.description.trim(),
@@ -232,6 +244,7 @@ export async function importDealFromIntakeShow(params: {
     pricing_snapshot: pricingSnapshotPayload,
     deposit_due_amount: pricingSnapshotPayload.depositDue ?? null,
     deposit_paid_amount: depositPaidSafe,
+    balance_paid_amount: 0,
     notes: form.notes || null,
   })
 
@@ -257,7 +270,7 @@ export async function importDealFromIntakeShow(params: {
   const vAfter = venueAfter ?? ((saved.venue ?? linkedVenue) as Venue | null)
   await refetchVenues()
 
-  await syncDealCalendarSideEffects({
+  await afterDealUpdated({
     beforeDeal: null,
     afterDeal: saved,
     venueBefore: null,

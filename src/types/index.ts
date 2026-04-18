@@ -380,6 +380,8 @@ export interface DealPricingSnapshot {
   discountIds: string[]
   lastCalculatedTotal: number | null
   computedAt: string
+  /** Deposit % used for `depositDue` (intake Phase 5 or catalog default or prior save). */
+  depositPercentApplied?: number
 }
 
 export function isDealPricingSnapshot(x: unknown): x is DealPricingSnapshot {
@@ -675,6 +677,8 @@ export interface Deal {
   pricing_snapshot?: unknown | null
   deposit_due_amount?: number | null
   deposit_paid_amount?: number
+  /** Payments toward contract remainder (after deposit leg). */
+  balance_paid_amount?: number
   notes: string | null
   created_at: string
   updated_at: string

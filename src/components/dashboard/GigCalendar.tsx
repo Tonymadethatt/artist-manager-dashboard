@@ -15,6 +15,7 @@ import {
 import { queueManualGigDaySummary } from '@/lib/calendar/queueManualGigDaySummary'
 import { queueManualGigReminderForDeal } from '@/lib/calendar/queueManualGigReminderForDeal'
 import { formatGoogleCalendarDescription } from '@/lib/calendar/formatGoogleCalendarDescription'
+import { dealRemainingClientBalance, dealTotalPaidTowardGross } from '@/lib/deals/dealPaymentTotals'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -900,7 +901,25 @@ export function GigCalendar({
                   </div>
                 )}
                 <div className={row}>
-                  <span className={rowLabel}>Artist paid</span>
+                  <span className={rowLabel}>Paid in (deposit + balance)</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>
+                    {dealTotalPaidTowardGross(selectedDeal).toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                    })}
+                  </span>
+                </div>
+                <div className={row}>
+                  <span className={rowLabel}>Still due</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>
+                    {dealRemainingClientBalance(selectedDeal).toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                    })}
+                  </span>
+                </div>
+                <div className={row}>
+                  <span className={rowLabel}>Fully settled</span>
                   <span className={rowValue}>{selectedDeal.artist_paid ? 'Yes' : 'No'}</span>
                 </div>
                 <div className={row}>

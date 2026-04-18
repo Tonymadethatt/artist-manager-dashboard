@@ -119,7 +119,7 @@ function ReportDetail({ report }: { report: PerformanceReport }) {
     { label: 'Deal recap', value: promiseResultsSummary(report) ?? '-' },
     { label: 'Rating', value: report.event_rating ? `${report.event_rating}/5` : '-' },
     { label: 'Attendance', value: report.attendance != null ? String(report.attendance) : '-' },
-    { label: 'Artist paid', value: report.artist_paid_status ?? '-' },
+    { label: 'Artist paid (report)', value: report.artist_paid_status ?? '-' },
     { label: 'Gig fee (reported)', value: report.fee_total != null ? `$${report.fee_total}` : '-' },
     { label: 'Amount received', value: report.amount_received != null ? `$${report.amount_received}` : '-' },
     { label: 'Disputed owed (claim)', value: report.payment_dispute_claimed_amount != null ? `$${report.payment_dispute_claimed_amount}` : '-' },

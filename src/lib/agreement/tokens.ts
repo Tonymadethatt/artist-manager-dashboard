@@ -1,4 +1,9 @@
 import type { ArtistProfile, Contact, Deal, PricingCatalogDoc, TemplateSection, Venue } from '../../types'
+import {
+  dealDepositSatisfied,
+  dealRemainingClientBalance,
+  dealTotalPaidTowardGross,
+} from '@/lib/deals/dealPaymentTotals'
 import { isDealPricingSnapshot } from '../../types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
 import {
@@ -136,6 +141,9 @@ export function pricingSnapshotAgreementFields(deal: Deal): Record<string, strin
   lines.push(`Quote total: ${usdWhole.format(s.total)}`)
   if (s.taxAmount) lines.push(`Tax: ${usdWhole.format(s.taxAmount)}`)
   if (s.depositDue) lines.push(`Deposit: ${usdWhole.format(s.depositDue)}`)
+  if (s.depositPercentApplied != null && Number.isFinite(s.depositPercentApplied)) {
+    lines.push(`Deposit policy: ${Math.round(s.depositPercentApplied)}% of contract total`)
+  }
   lines.push(`Basis: ${s.finalSource === 'manual' ? 'manual gross on deal' : 'calculator'}`)
   return {
     pricing_summary_text: lines.join('\n'),
@@ -248,15 +256,38 @@ export function buildAgreementPrefill(
     }
     if (setDurHours) out.set_duration_hours = setDurHours
 
-    const paid = Number(deal.deposit_paid_amount ?? 0)
-    const grossN = Number(deal.gross_amount ?? 0)
-    const balanceDue = Math.max(0, Math.round((grossN - paid) * 100) / 100)
+    const depPaid = Number(deal.deposit_paid_amount ?? 0)
+    const balPaid = Number(deal.balance_paid_amount ?? 0)
+    const totalPaid = dealTotalPaidTowardGross(deal)
+    const balanceDue = dealRemainingClientBalance(deal)
     const balanceFmt = usd.format(balanceDue)
     out.balance_amount = balanceFmt
     out.balance_amount_display = balanceFmt
     out.balance_amount_numeric = String(balanceDue)
     out.remaining_balance = balanceFmt
     out.remaining_balance_display = balanceFmt
+    out.deposit_paid_display = usdWhole.format(depPaid)
+    out.balance_paid_display = usdWhole.format(balPaid)
+    out.total_paid_display = usdWhole.format(totalPaid)
+    const depDueSnap =
+      deal.pricing_snapshot && isDealPricingSnapshot(deal.pricing_snapshot)
+        ? deal.pricing_snapshot.depositDue
+        : deal.deposit_due_amount ?? 0
+    const depDueN = Number(depDueSnap) || 0
+    out.deposit_due_display = usdWhole.format(depDueN)
+    out.deposit_satisfied_plain = dealDepositSatisfied(deal) ? 'yes' : 'no'
+    out.fully_settled_plain = deal.artist_paid ? 'yes' : 'no'
+    if (deal.artist_paid) {
+      out.payment_status_plain = 'Fully settled'
+    } else if (balanceDue <= 0.01 && totalPaid > 0) {
+      out.payment_status_plain = 'Recorded payments match contract; confirm “Done” in Earnings if complete'
+    } else if (dealDepositSatisfied(deal) && depDueN > 0) {
+      out.payment_status_plain = 'Deposit received; balance still due'
+    } else if (totalPaid > 0) {
+      out.payment_status_plain = 'Partial payment recorded'
+    } else {
+      out.payment_status_plain = 'No payments recorded'
+    }
 
     out.gross_amount = String(deal.gross_amount)
     out.gross_amount_display = usd.format(deal.gross_amount)

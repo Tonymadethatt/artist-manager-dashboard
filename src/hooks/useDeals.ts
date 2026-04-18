@@ -41,6 +41,7 @@ export function useDeals() {
     pricing_snapshot?: unknown | null
     deposit_due_amount?: number | null
     deposit_paid_amount?: number
+    balance_paid_amount?: number
     notes: string | null
     performance_genre?: string | null
     performance_start_at?: string | null
@@ -73,6 +74,7 @@ export function useDeals() {
         pricing_snapshot: deal.pricing_snapshot ?? null,
         deposit_due_amount: deal.deposit_due_amount ?? null,
         deposit_paid_amount: deal.deposit_paid_amount ?? 0,
+        balance_paid_amount: deal.balance_paid_amount ?? 0,
         notes: deal.notes,
         performance_genre: deal.performance_genre ?? null,
         performance_start_at: deal.performance_start_at ?? null,

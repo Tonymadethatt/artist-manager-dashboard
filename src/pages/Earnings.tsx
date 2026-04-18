@@ -68,7 +68,12 @@ import {
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
 } from '@/lib/calendar/pacificWallTime'
-import { syncDealCalendarSideEffects } from '@/lib/calendar/queueGigCalendarEmails'
+import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
+import { depositDueFromDeal, dealDepositSatisfied } from '@/lib/deals/dealPaymentTotals'
+import {
+  normalizeDealPricingSnapshot,
+  resolveDepositPercentForDealFromCatalog,
+} from '@/lib/pricing/normalizeDealPricingSnapshot'
 import { getArtistGigEmailBlockers } from '@/lib/calendar/artistGigEmailEligibility'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { refreshVenueAndPromoteForCalendarDeal } from '@/lib/calendar/promoteVenueForCalendarDeal'
@@ -627,6 +632,7 @@ const EMPTY_FORM = {
   agreement_url: '',
   agreement_generated_file_id: '',
   deposit_paid_amount: '',
+  balance_paid_amount: '',
   notes: '',
   performance_genre: '',
   performance_start_time: '',
@@ -637,6 +643,12 @@ const EMPTY_FORM = {
 
 function fmtMoney(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+}
+
+function balanceLegTargetAmount(deal: Deal): number {
+  const g = Number(deal.gross_amount)
+  const dep = Number(deal.deposit_paid_amount ?? 0)
+  return Math.max(0, Math.round((g - dep) * 100) / 100)
 }
 
 function PayToggle({
@@ -800,7 +812,7 @@ export default function Earnings() {
     if (saved) {
       const vAfter = saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue
       const vBefore = d0.venue_id ? venues.find(v => v.id === d0.venue_id) ?? d0.venue : d0.venue
-      await syncDealCalendarSideEffects({
+      await afterDealUpdated({
         beforeDeal: d0,
         afterDeal: saved,
         venueBefore: vBefore ?? null,
@@ -958,6 +970,10 @@ export default function Earnings() {
       deposit_paid_amount:
         deal.deposit_paid_amount != null && Number.isFinite(Number(deal.deposit_paid_amount))
           ? String(deal.deposit_paid_amount)
+          : '',
+      balance_paid_amount:
+        deal.balance_paid_amount != null && Number.isFinite(Number(deal.balance_paid_amount))
+          ? String(deal.balance_paid_amount)
           : '',
       notes: deal.notes ?? '',
       performance_genre: deal.performance_genre ?? '',
@@ -1136,17 +1152,24 @@ export default function Earnings() {
 
     const depPaidRaw = parseFloat(form.deposit_paid_amount)
     const depositPaidSafe = !isNaN(depPaidRaw) && depPaidRaw >= 0 ? depPaidRaw : 0
+    const balPaidRaw = parseFloat(form.balance_paid_amount)
+    const balancePaidSafe = !isNaN(balPaidRaw) && balPaidRaw >= 0 ? balPaidRaw : 0
 
     let pricingSnapshotPayload: import('@/types').DealPricingSnapshot | null = null
     if (pricingComputed && canLogDeal) {
       const roundedFormGross = Math.round(gross)
       const finalSource: DealPricingFinalSource =
         pricingComputed.gross === roundedFormGross ? 'calculated' : 'manual'
-      pricingSnapshotPayload = {
-        ...pricingComputed.snapshot,
+      const depPct = resolveDepositPercentForDealFromCatalog(
+        { pricing_snapshot: editDeal?.pricing_snapshot ?? null },
+        pricingCatalog.doc,
+      )
+      pricingSnapshotPayload = normalizeDealPricingSnapshot({
+        contractGross: gross,
         finalSource,
-        computedAt: new Date().toISOString(),
-      }
+        calculatorSnapshot: pricingComputed.snapshot,
+        depositPercent: depPct,
+      })
     } else if (editDeal?.pricing_snapshot && isDealPricingSnapshot(editDeal.pricing_snapshot)) {
       pricingSnapshotPayload = editDeal.pricing_snapshot
     }
@@ -1170,6 +1193,7 @@ export default function Earnings() {
       pricing_snapshot: pricingSnapshotPayload,
       deposit_due_amount: pricingSnapshotPayload?.depositDue ?? editDeal?.deposit_due_amount ?? null,
       deposit_paid_amount: depositPaidSafe,
+      balance_paid_amount: balancePaidSafe,
       notes: form.notes || null,
     }
     let saved: Deal | null = null
@@ -1209,7 +1233,7 @@ export default function Earnings() {
       const vAfter =
         vPromoted
         ?? (saved.venue_id ? venues.find(v => v.id === saved.venue_id) ?? saved.venue : saved.venue)
-      await syncDealCalendarSideEffects({
+      await afterDealUpdated({
         beforeDeal: editDeal,
         afterDeal: saved,
         venueBefore: vBefore,
@@ -1250,10 +1274,46 @@ export default function Earnings() {
     if (!editDeal) setDealsPage(1)
   }
 
+  const handleToggleDeposit = async (deal: Deal) => {
+    const due = depositDueFromDeal(deal)
+    if (due <= 0) return
+    setToggling(`dep-${deal.id}`)
+    const satisfied = dealDepositSatisfied(deal)
+    await updateDeal(deal.id, { deposit_paid_amount: satisfied ? 0 : due })
+    setToggling(null)
+    await refetch()
+  }
+
+  const handleToggleBalance = async (deal: Deal) => {
+    const bal = Number(deal.balance_paid_amount ?? 0)
+    const targetBal = balanceLegTargetAmount(deal)
+    if (targetBal <= 0.01) return
+    setToggling(`bal-${deal.id}`)
+    const satisfied = bal + 1e-6 >= targetBal
+    await updateDeal(deal.id, { balance_paid_amount: satisfied ? 0 : targetBal })
+    setToggling(null)
+    await refetch()
+  }
+
   const handleToggleArtist = async (deal: Deal) => {
     setToggling(`artist-${deal.id}`)
-    await toggleArtistPaid(deal.id, !deal.artist_paid)
+    const next = !deal.artist_paid
+    if (next) {
+      const g = Number(deal.gross_amount)
+      const due = depositDueFromDeal(deal)
+      const depPaid = Math.max(Number(deal.deposit_paid_amount ?? 0), due)
+      const balPaid = Math.max(0, Math.round((g - depPaid) * 100) / 100)
+      await updateDeal(deal.id, {
+        artist_paid: true,
+        artist_paid_date: new Date().toISOString().split('T')[0],
+        deposit_paid_amount: depPaid,
+        balance_paid_amount: balPaid,
+      })
+    } else {
+      await toggleArtistPaid(deal.id, false)
+    }
     setToggling(null)
+    await refetch()
   }
 
   const handleToggleManager = async (deal: Deal) => {
@@ -1461,7 +1521,10 @@ export default function Earnings() {
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Tier</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Gross</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">My cut</th>
-                <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">Artist paid</th>
+                <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">
+                  <span className="block">Payments</span>
+                  <span className="block text-[9px] font-normal text-neutral-600 normal-case">Dep · Bal · Done</span>
+                </th>
                 <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">I got paid</th>
                 <th className="px-3 py-2.5 w-16" />
               </tr>
@@ -1543,9 +1606,30 @@ export default function Earnings() {
                     </span>
                   </td>
                   <td className="px-3 py-3 text-center hidden md:table-cell">
-                    <div className="flex justify-center">
+                    <div className="flex justify-center gap-1 flex-wrap max-w-[200px] mx-auto">
                       <PayToggle
-                        label="Artist"
+                        label="Dep"
+                        paid={dealDepositSatisfied(deal) && depositDueFromDeal(deal) > 0}
+                        date={null}
+                        onToggle={() => handleToggleDeposit(deal)}
+                        disabled={
+                          toggling === `dep-${deal.id}` ||
+                          depositDueFromDeal(deal) <= 0
+                        }
+                      />
+                      <PayToggle
+                        label="Bal"
+                        paid={(() => {
+                          const targetBal = balanceLegTargetAmount(deal)
+                          const bal = Number(deal.balance_paid_amount ?? 0)
+                          return targetBal > 0.01 && bal + 1e-6 >= targetBal
+                        })()}
+                        date={null}
+                        onToggle={() => handleToggleBalance(deal)}
+                        disabled={toggling === `bal-${deal.id}` || balanceLegTargetAmount(deal) <= 0.01}
+                      />
+                      <PayToggle
+                        label="Done"
                         paid={deal.artist_paid}
                         date={deal.artist_paid_date}
                         onToggle={() => handleToggleArtist(deal)}
@@ -2052,6 +2136,20 @@ export default function Earnings() {
                     step="1"
                     value={form.deposit_paid_amount}
                     onChange={e => setField('deposit_paid_amount', e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Balance paid ($)</Label>
+                  <p className="text-[10px] text-neutral-600 leading-snug">
+                    Remainder after deposit (full contract = deposit leg + balance leg).
+                  </p>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.balance_paid_amount}
+                    onChange={e => setField('balance_paid_amount', e.target.value)}
                     placeholder="0"
                   />
                 </div>

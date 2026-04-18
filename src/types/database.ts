@@ -374,6 +374,7 @@ export interface Database {
           pricing_snapshot: unknown | null
           deposit_due_amount: number | null
           deposit_paid_amount: number
+          balance_paid_amount: number
           notes: string | null
           created_at: string
           updated_at: string
@@ -411,6 +412,7 @@ export interface Database {
           pricing_snapshot?: unknown | null
           deposit_due_amount?: number | null
           deposit_paid_amount?: number
+          balance_paid_amount?: number
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -448,6 +450,7 @@ export interface Database {
           pricing_snapshot?: unknown | null
           deposit_due_amount?: number | null
           deposit_paid_amount?: number
+          balance_paid_amount?: number
           notes?: string | null
           created_at?: string
           updated_at?: string

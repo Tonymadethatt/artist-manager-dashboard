@@ -40,6 +40,7 @@ import {
 import { appendEmailCaptureTokenNote } from '@/lib/emailCapture/tokenNotes'
 import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
+import { dealRemainingClientBalance } from '@/lib/deals/dealPaymentTotals'
 
 const CUSTOM_CAPTURE_KIND_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
   { value: 'first_outreach',              label: EMAIL_CAPTURE_KIND_LABELS.first_outreach },
@@ -88,8 +89,10 @@ function getDefaultType(deal?: Deal | null): VenueEmailType {
   if (!deal) return 'follow_up'
   if (deal.agreement_url?.trim() || deal.agreement_generated_file_id) return 'agreement_ready'
   const today = new Date().toISOString().split('T')[0]
-  if (deal.payment_due_date && deal.payment_due_date < today && !deal.artist_paid) return 'payment_reminder'
-  if (deal.artist_paid) return 'payment_receipt'
+  const outstanding = dealRemainingClientBalance(deal)
+  const financiallyCleared = deal.artist_paid || outstanding <= 0.01
+  if (deal.payment_due_date && deal.payment_due_date < today && !financiallyCleared) return 'payment_reminder'
+  if (financiallyCleared) return 'payment_receipt'
   return 'booking_confirmation'
 }
 
