@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, Loader2, PhoneForwarded, Save } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight, Loader2, PhoneForwarded, Save } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useColdCalls } from '@/hooks/useColdCalls'
 import { useVenues } from '@/hooks/useVenues'
@@ -8,24 +8,34 @@ import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useBookingIntakes } from '@/hooks/useBookingIntakes'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { advanceFromLiveCard } from '@/lib/coldCall/coldCallLiveRouting'
 import {
-  advanceFromLiveCard,
-  applyAskResponseTemperatureHint,
-} from '@/lib/coldCall/coldCallLiveRouting'
+  bookmarkCard,
+  coldCallPhaseSkipped,
+  coldCallWaypointAnchor,
+  displayCard,
+  liveCardAdvanceBlockersAtBookmark,
+  waypointIndex,
+} from '@/lib/coldCall/coldCallLivePath'
+import { coldCallEnsureFollowUpTask, suggestColdCallFollowUpDate } from '@/lib/coldCall/coldCallFollowUp'
+import { computeColdCallOutcomeAuto } from '@/lib/coldCall/coldCallOutcomeAuto'
+import {
+  coldCallLiveAutoTemperature,
+  computeColdCallTemperatureScore,
+} from '@/lib/coldCall/coldCallTemperatureScore'
 import { buildIntakeBundleFromColdCall } from '@/lib/coldCall/mapColdCallToBookingIntake'
 import {
   COLD_CALL_GATEKEEPER_STAFF_LABELS,
   COLD_CALL_HOW_FOUND_LABELS,
   COLD_CALL_NEXT_ACTION_LABELS,
   COLD_CALL_OUTCOME_LABELS,
+  COLD_CALL_PITCH_REASON_CHIPS,
   COLD_CALL_REJECTION_LABELS,
   COLD_CALL_TARGET_ROLE_LABELS,
   COLD_CALL_TEMPERATURE_META,
   COLD_CALL_WEEKDAY_LABELS,
   defaultColdCallTitle,
-  genreMatchHint,
   type ColdCallDataV1,
-  type ColdCallLiveCardId,
   type ColdCallNextActionKey,
   type ColdCallTemperature,
 } from '@/lib/coldCall/coldCallPayload'
@@ -48,7 +58,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { liveCardStepTitle, scriptForCard } from '@/pages/cold-call/liveCardCopy'
+import { coldCallScriptContext, liveCardStepTitle, scriptBeatsForCard } from '@/pages/cold-call/liveCardCopy'
 import {
   ASK_RESPONSE_OPTIONS,
   BEST_TIME_OPTIONS,
@@ -80,14 +90,7 @@ const LIVE_WAYPOINTS = [
   { id: 'close', label: 'Close' },
 ] as const
 
-function waypointIndex(card: ColdCallLiveCardId): number {
-  if (card === 'p1') return 0
-  if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 1
-  if (card === 'p3' || card === 'p3b' || card === 'p3c') return 2
-  if (card === 'p4a' || card === 'p4b' || card === 'p4c' || card === 'p4d' || card === 'p4e') return 3
-  if (card === 'p5') return 4
-  return 5
-}
+const PRECALL_VENUE_TYPES: VenueType[] = ['bar', 'club', 'lounge', 'festival', 'theater', 'other']
 
 function tempAccentClass(t: ColdCallTemperature): string {
   switch (t) {
@@ -205,6 +208,89 @@ function TemperatureMenu({
   )
 }
 
+function LiveTemperatureBar({
+  value,
+  score,
+  manualLock,
+  onPick,
+  onResetAuto,
+}: {
+  value: ColdCallTemperature
+  score: number
+  manualLock: boolean
+  onPick: (v: ColdCallTemperature) => void
+  onResetAuto: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+  const label =
+    value && COLD_CALL_TEMPERATURE_META[value as Exclude<ColdCallTemperature, ''>]
+      ? `${COLD_CALL_TEMPERATURE_META[value as Exclude<ColdCallTemperature, ''>].emoji} ${COLD_CALL_TEMPERATURE_META[value as Exclude<ColdCallTemperature, ''>].label}`
+      : 'Temperature'
+  return (
+    <div className="relative flex items-center gap-2" ref={ref}>
+      <div className="flex flex-col items-end gap-0">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn('h-9 gap-1 border-neutral-700', tempAccentClass(value))}
+          onClick={() => setOpen(!open)}
+        >
+          {label}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+        <span className="text-[10px] text-neutral-500 tabular-nums">Score {score}</span>
+      </div>
+      {manualLock ? (
+        <>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-100/90 shrink-0">Manual</span>
+          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-neutral-400 shrink-0" onClick={onResetAuto}>
+            Reset auto
+          </Button>
+        </>
+      ) : null}
+      {open ? (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[11rem] rounded-lg border border-white/[0.12] bg-neutral-900 py-1 shadow-xl">
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs text-neutral-400 hover:bg-neutral-800"
+            onClick={() => {
+              onPick('')
+              setOpen(false)
+            }}
+          >
+            Clear
+          </button>
+          {(Object.keys(COLD_CALL_TEMPERATURE_META) as Exclude<ColdCallTemperature, ''>[]).map(k => {
+            const m = COLD_CALL_TEMPERATURE_META[k]
+            return (
+              <button
+                key={k}
+                type="button"
+                className="w-full px-3 py-2 text-left text-sm text-neutral-100 hover:bg-neutral-800"
+                onClick={() => {
+                  onPick(k)
+                  setOpen(false)
+                }}
+              >
+                {m.emoji} {m.label}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function ColdCallFormPage() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
@@ -221,6 +307,9 @@ export default function ColdCallFormPage() {
   const [convertBusy, setConvertBusy] = useState(false)
   const [importBusy, setImportBusy] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
+  const [liveFieldIssues, setLiveFieldIssues] = useState<Record<string, string>>({})
+  const [precallFieldIssues, setPrecallFieldIssues] = useState<Record<string, string>>({})
+  const [continueShake, setContinueShake] = useState(0)
 
   useEffect(() => {
     if (callIdParam) setSelectedId(callIdParam)
@@ -238,15 +327,35 @@ export default function ColdCallFormPage() {
   const patch = useCallback(
     (p: Partial<ColdCallDataV1>) => {
       if (!selectedId) return
-      cold.updateCallData(selectedId, d => ({ ...d, ...p }))
+      cold.updateCallData(selectedId, d => {
+        const next: ColdCallDataV1 = { ...d, ...p }
+        const opExplicit = Object.prototype.hasOwnProperty.call(p, 'operator_temperature')
+        if (next.session_mode === 'live_call' && !next.temperature_manual_lock && !opExplicit) {
+          return {
+            ...next,
+            temperature_score: computeColdCallTemperatureScore(next),
+            operator_temperature: coldCallLiveAutoTemperature(next),
+          }
+        }
+        if (next.session_mode === 'live_call') {
+          return { ...next, temperature_score: computeColdCallTemperatureScore(next) }
+        }
+        return next
+      })
     },
     [selectedId, cold],
   )
 
+  useEffect(() => {
+    if (!selectedId || !data || data.session_mode !== 'post_call' || data.outcome_manual_lock) return
+    const auto = computeColdCallOutcomeAuto(data)
+    if (auto !== data.outcome) patch({ outcome: auto })
+  }, [selectedId, data, patch])
+
   /** p4c: "This person decides" implies you're talking to the booker — keep routing fields consistent with saved rows that predate branching. */
   useEffect(() => {
     if (!selectedId || !data) return
-    if (data.session_mode !== 'live_call' || data.live_card !== 'p4c') return
+    if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4c') return
     if (data.booking_process === 'this_person' && data.decision_maker_same !== 'yes') {
       patch({ decision_maker_same: 'yes', other_decision_maker_flag: '' })
     }
@@ -299,10 +408,17 @@ export default function ColdCallFormPage() {
 
   const handleBeginCall = async () => {
     if (!selectedId || !data) return
-    if (!data.venue_name.trim() || !data.target_phone.trim()) {
-      setPrecallError('Add venue name and phone before you start the call.')
+    const issues: Record<string, string> = {}
+    if (!data.venue_name.trim()) issues.venue_name = 'Add venue name.'
+    if (!data.target_phone.trim()) issues.target_phone = 'Add the number you’re dialing.'
+    if (!data.call_purpose) issues.call_purpose = 'Pick why you’re calling.'
+    if (Object.keys(issues).length > 0) {
+      setPrecallFieldIssues(issues)
+      setPrecallError('Fill the essentials above to start.')
+      setContinueShake(s => s + 1)
       return
     }
+    setPrecallFieldIssues({})
     setPrecallError(null)
     await cold.flushImmediate(selectedId)
     await cold.patchRow(selectedId, { call_date: new Date().toISOString() })
@@ -317,24 +433,88 @@ export default function ColdCallFormPage() {
     })
   }
 
-  const handleLiveContinue = () => {
-    if (!data || !selectedId) return
-    const next = advanceFromLiveCard(data)
-    if (next === 'post') {
-      patch({
-        session_mode: 'post_call',
-        final_temperature: data.final_temperature || data.operator_temperature,
-        save_to_pipeline:
-          (data.final_temperature || data.operator_temperature) === 'dead' ? false : data.save_to_pipeline,
-      })
+  const handleLiveContinue = async () => {
+    if (!data || !selectedId || !selectedRow) return
+    const bm = bookmarkCard(data)
+    const view = displayCard(data)
+    if (view !== bm) {
+      const i = data.live_history.indexOf(view)
+      if (i < 0) {
+        setLiveFieldIssues({ jump: 'This step wasn’t on your path — snapped back to your bookmark.' })
+        patch({ view_card: bm })
+        setContinueShake(s => s + 1)
+        return
+      }
+      if (i < data.live_history.length - 1) {
+        setLiveFieldIssues({})
+        patch({ view_card: data.live_history[i + 1]! })
+        return
+      }
+    }
+
+    const blockers = liveCardAdvanceBlockersAtBookmark(data)
+    if (blockers.length > 0) {
+      const rec: Record<string, string> = {}
+      for (const b of blockers) rec[b.field] = b.message
+      setLiveFieldIssues(rec)
+      setContinueShake(s => s + 1)
       return
     }
-    if (Object.keys(next).length === 0) return
+    setLiveFieldIssues({})
+
+    const next = advanceFromLiveCard(data)
+    if (next === 'post') {
+      const ft = data.final_temperature || data.operator_temperature
+      const suggestedDate = suggestColdCallFollowUpDate(data)
+      const autoOutcome = data.outcome_manual_lock ? data.outcome : computeColdCallOutcomeAuto(data)
+      patch({
+        session_mode: 'post_call',
+        final_temperature: ft,
+        outcome: autoOutcome,
+        follow_up_date: data.follow_up_date.trim() || suggestedDate,
+        save_to_pipeline: ft === 'dead' ? false : data.save_to_pipeline,
+      })
+      await cold.flushImmediate(selectedId)
+      const taskRes = await coldCallEnsureFollowUpTask({
+        coldCallId: selectedId,
+        data: { ...data, session_mode: 'post_call', final_temperature: ft, outcome: autoOutcome },
+        rowVenueId: selectedRow.venue_id,
+        existingTaskId: selectedRow.follow_up_task_id,
+        callDateIso: selectedRow.call_date,
+      })
+      if (taskRes.taskId && !selectedRow.follow_up_task_id) {
+        await cold.patchRow(selectedId, { follow_up_task_id: taskRes.taskId })
+      }
+      return
+    }
+    if (Object.keys(next).length === 0) {
+      setContinueShake(s => s + 1)
+      return
+    }
     patch(next)
   }
 
+  const handleJumpWaypoint = (phaseIdx: number) => {
+    if (!data) return
+    const anchor = coldCallWaypointAnchor(phaseIdx, data)
+    patch({ view_card: anchor })
+  }
+
+  const handleJumpReturn = () => {
+    if (!data) return
+    patch({ view_card: bookmarkCard(data) })
+  }
+
+  const handleLiveBack = () => {
+    if (!data) return
+    const view = displayCard(data)
+    const i = data.live_history.indexOf(view)
+    if (i > 0) patch({ view_card: data.live_history[i - 1]! })
+    else patch({ view_card: view })
+  }
+
   const handleEndCallLive = () => {
-    handleLiveContinue()
+    void handleLiveContinue()
   }
 
   const handleConvert = async () => {
@@ -420,7 +600,7 @@ export default function ColdCallFormPage() {
     }
   }
 
-  const managerPhone = profile?.manager_phone ?? ''
+  const scriptCtx = coldCallScriptContext(profile ?? null)
 
   const prevCallsForVenue = useMemo(() => {
     if (!data?.existing_venue_id) return cold.calls.filter(c => c.id !== selectedId).slice(0, 12)
@@ -467,27 +647,58 @@ export default function ColdCallFormPage() {
     )
   }
 
-  const wIdx = data.session_mode === 'post_call' ? 6 : waypointIndex(data.live_card)
+  const dc = displayCard(data)
+  const bm = bookmarkCard(data)
+  const wIdx = data.session_mode === 'post_call' ? -1 : waypointIndex(dc)
+  const bookmarkIdx = data.session_mode === 'live_call' ? waypointIndex(bm) : -1
   const activeTemp = data.session_mode === 'post_call' ? data.final_temperature : data.operator_temperature
+  const showJumpReturn = data.session_mode === 'live_call' && dc !== bm
+
+  const liveSkipBanner = (() => {
+    if (data.session_mode !== 'live_call') return null
+    const card = dc
+    const phase = waypointIndex(card)
+    if (!coldCallPhaseSkipped(phase, data)) return null
+    if (data.live_history.includes(card)) return null
+    if (phase === 1 && data.who_answered === 'right_person') {
+      return 'You skipped gatekeeper — open only if something changed.'
+    }
+    if (data.who_answered === 'voicemail' || data.who_answered === 'no_answer') {
+      return 'This phase wasn’t on your voicemail/no-answer path — capture extra detail if needed.'
+    }
+    return 'This phase was skipped on your branch — you can still fill it in if the situation changed.'
+  })()
 
   const liveCapture = (() => {
-    const card = data.live_card
-    const script = <p>{scriptForCard(card, data, managerPhone)}</p>
+    const card = dc
+    const beats = scriptBeatsForCard(card, data, scriptCtx)
+    const script = (
+      <div className="space-y-0">
+        {beats.map((line, i) => (
+          <p key={i}>{line}</p>
+        ))}
+      </div>
+    )
     switch (card) {
       case 'p1':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
               <div className="space-y-3">
-                <div className="space-y-1.5">
+                <div className={cn('space-y-1.5', liveFieldIssues.who_answered ? 'rounded-md ring-1 ring-red-500/60 p-2 -m-0.5' : '')}>
                   <Label className="text-neutral-400 text-xs">Who picked up?</Label>
                   <SelectChipRow
                     value={data.who_answered}
-                    onChange={v => patch({ who_answered: v })}
+                    onChange={v => {
+                      setLiveFieldIssues({})
+                      patch({ who_answered: v })
+                    }}
                     options={WHO_ANSWERED_OPTIONS}
                   />
+                  {liveFieldIssues.who_answered ? <p className="text-[11px] text-red-400">{liveFieldIssues.who_answered}</p> : null}
                 </div>
                 {data.who_answered === 'right_person' ? (
                   data.target_name.trim() ? (
@@ -551,6 +762,7 @@ export default function ColdCallFormPage() {
       case 'p2a':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -558,11 +770,7 @@ export default function ColdCallFormPage() {
                 <Label className="text-neutral-400 text-xs">What happened?</Label>
                 <SelectChipRow
                   value={data.gatekeeper_result}
-                  onChange={v => {
-                    const patchP: Partial<ColdCallDataV1> = { gatekeeper_result: v }
-                    if (v === 'shut_down') patchP.operator_temperature = data.operator_temperature || 'dead'
-                    patch(patchP)
-                  }}
+                  onChange={v => patch({ gatekeeper_result: v })}
                   options={GATEKEEPER_RESULT_OPTIONS}
                 />
                 <div className="space-y-1.5">
@@ -593,6 +801,7 @@ export default function ColdCallFormPage() {
       case 'p2a_detail':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -648,6 +857,7 @@ export default function ColdCallFormPage() {
       case 'p2_msg':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -675,6 +885,7 @@ export default function ColdCallFormPage() {
       case 'p3':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -688,6 +899,7 @@ export default function ColdCallFormPage() {
       case 'p3b':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -698,6 +910,7 @@ export default function ColdCallFormPage() {
       case 'p3c':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -712,6 +925,7 @@ export default function ColdCallFormPage() {
         const dayLabels = Object.fromEntries([...COLD_CALL_WEEKDAY_LABELS].map(d => [d, d])) as Record<string, string>
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -739,17 +953,14 @@ export default function ColdCallFormPage() {
       case 'p4b': {
         const ids = MUSIC_VIBE_PRESETS.map(p => p.id)
         const labels = Object.fromEntries(MUSIC_VIBE_PRESETS.map(p => [p.id, p.label])) as Record<string, string>
-        const hint = genreMatchHint(data.venue_vibes)
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
               <div className="space-y-2">
                 <IntakeCompactChipRow label="Vibe" selected={data.venue_vibes} ids={ids} labels={labels} onChange={v => patch({ venue_vibes: v })} />
-                <p className="text-[11px] text-neutral-500">
-                  Fit hint: {hint === 'match' ? '✅ Strong overlap' : hint === 'caution' ? '⚠️ Verify fit' : '❌ Mismatch risk'}
-                </p>
               </div>
             }
           />
@@ -758,6 +969,7 @@ export default function ColdCallFormPage() {
       case 'p4c':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -806,6 +1018,7 @@ export default function ColdCallFormPage() {
       case 'p4d':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -822,6 +1035,7 @@ export default function ColdCallFormPage() {
       case 'p4e':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -845,26 +1059,18 @@ export default function ColdCallFormPage() {
       case 'p5':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
-              <SelectChipRow
-                value={data.ask_response}
-                onChange={v => {
-                  const hint = applyAskResponseTemperatureHint(v)
-                  patch({
-                    ask_response: v,
-                    ...(hint ? { operator_temperature: hint } : {}),
-                  })
-                }}
-                options={ASK_RESPONSE_OPTIONS}
-              />
+              <SelectChipRow value={data.ask_response} onChange={v => patch({ ask_response: v })} options={ASK_RESPONSE_OPTIONS} />
             }
           />
         )
       case 'p6':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -891,6 +1097,7 @@ export default function ColdCallFormPage() {
       case 'p6_vm':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -919,7 +1126,7 @@ export default function ColdCallFormPage() {
                     ]}
                   />
                 </div>
-                <Button type="button" className="w-full" onClick={() => handleLiveContinue()}>
+                <Button type="button" className="w-full" onClick={() => void handleLiveContinue()}>
                   Continue to post-call
                 </Button>
               </div>
@@ -929,6 +1136,7 @@ export default function ColdCallFormPage() {
       case 'p6_na':
         return (
           <IntakeLiveScriptCaptureStack
+            scriptSize="compact"
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
@@ -957,7 +1165,7 @@ export default function ColdCallFormPage() {
                     ]}
                   />
                 </div>
-                <Button type="button" className="w-full" onClick={() => handleLiveContinue()}>
+                <Button type="button" className="w-full" onClick={() => void handleLiveContinue()}>
                   Continue to post-call
                 </Button>
               </div>
@@ -1007,12 +1215,30 @@ export default function ColdCallFormPage() {
           placeholder="Call title"
         />
         <div className="flex items-center gap-2 shrink-0">
-          <TemperatureMenu
-            value={data.session_mode === 'post_call' ? data.final_temperature : data.operator_temperature}
-            onChange={v =>
-              data.session_mode === 'post_call' ? patch({ final_temperature: v }) : patch({ operator_temperature: v })
-            }
-          />
+          {data.session_mode === 'live_call' ? (
+            <LiveTemperatureBar
+              value={data.operator_temperature}
+              score={computeColdCallTemperatureScore(data)}
+              manualLock={data.temperature_manual_lock}
+              onPick={v => patch({ operator_temperature: v, temperature_manual_lock: true })}
+              onResetAuto={() => patch({ temperature_manual_lock: false })}
+            />
+          ) : data.session_mode === 'post_call' ? (
+            <TemperatureMenu
+              value={data.final_temperature}
+              onChange={v =>
+                patch({
+                  final_temperature: v,
+                  save_to_pipeline: v === 'dead' ? false : data.save_to_pipeline,
+                })
+              }
+            />
+          ) : null}
+          {cold.error ? (
+            <span className="text-[11px] text-amber-400 max-w-[120px] sm:max-w-[200px] truncate" title={cold.error}>
+              Save issue
+            </span>
+          ) : null}
           <span className="text-[11px] text-neutral-500 hidden sm:inline">Auto-saved</span>
           <Button type="button" variant="secondary" size="sm" className="h-9 gap-1" disabled={savingUi} onClick={() => void handleSave()}>
             {savingUi ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -1069,150 +1295,255 @@ export default function ColdCallFormPage() {
             </section>
 
             <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Who am I calling?</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Essentials</h2>
+              <p className="text-xs text-neutral-500">Minimum to dial — add research or a contact below if you have it.</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className={cn('space-y-1.5 sm:col-span-2', precallFieldIssues.venue_name && 'rounded-md ring-1 ring-red-500/50 p-2 -m-0.5')}>
                   <Label className="text-neutral-400 text-xs">Venue name *</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.venue_name} onChange={e => patch({ venue_name: e.target.value })} />
+                  <Input
+                    className="h-11 border-neutral-800 bg-neutral-950/80"
+                    value={data.venue_name}
+                    onChange={e => {
+                      setPrecallFieldIssues({})
+                      patch({ venue_name: e.target.value })
+                    }}
+                  />
+                  {precallFieldIssues.venue_name ? <p className="text-[11px] text-red-400">{precallFieldIssues.venue_name}</p> : null}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Venue type</Label>
-                  <Select
-                    value={data.venue_type || '__none__'}
-                    onValueChange={v => patch({ venue_type: v === '__none__' ? '' : v })}
-                  >
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {(Object.keys(VENUE_TYPE_LABELS) as VenueType[]).map(k => (
-                        <SelectItem key={k} value={k}>
-                          {VENUE_TYPE_LABELS[k]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className={cn('space-y-1.5 sm:col-span-2', precallFieldIssues.target_phone && 'rounded-md ring-1 ring-red-500/50 p-2 -m-0.5')}>
+                  <Label className="text-neutral-400 text-xs">Phone number to dial *</Label>
+                  <Input
+                    className="h-11 border-neutral-800 bg-neutral-950/80"
+                    type="tel"
+                    value={data.target_phone}
+                    onChange={e => {
+                      setPrecallFieldIssues({})
+                      patch({ target_phone: e.target.value })
+                    }}
+                  />
+                  {precallFieldIssues.target_phone ? <p className="text-[11px] text-red-400">{precallFieldIssues.target_phone}</p> : null}
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-neutral-400 text-xs">City</Label>
                   <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.city} onChange={e => patch({ city: e.target.value })} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">State</Label>
-                  <Select value={data.state_region || '__none__'} onValueChange={v => patch({ state_region: v === '__none__' ? '' : v })}>
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="State" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {US_STATE_OPTIONS.map(s => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-neutral-400 text-xs">Vibe / description</Label>
-                  <Textarea className="min-h-[52px] border-neutral-800 bg-neutral-950/80" value={data.venue_vibe} onChange={e => patch({ venue_vibe: e.target.value })} />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-neutral-400 text-xs">Known events</Label>
-                  <Textarea className="min-h-[52px] border-neutral-800 bg-neutral-950/80" value={data.known_events} onChange={e => patch({ known_events: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Instagram / social</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.social_handle} onChange={e => patch({ social_handle: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Website</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.website} onChange={e => patch({ website: e.target.value })} />
+                <div className={cn('space-y-1.5 sm:col-span-2', precallFieldIssues.call_purpose && 'rounded-md ring-1 ring-red-500/50 p-2 -m-0.5')}>
+                  <Label className="text-neutral-400 text-xs">Why am I calling? *</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CALL_PURPOSE_TOGGLE.map(o => {
+                      const on = data.call_purpose === o.id
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => {
+                            setPrecallFieldIssues({})
+                            patch({ call_purpose: on ? '' : o.id })
+                          }}
+                          className={cn(
+                            'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                            on
+                              ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                              : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {precallFieldIssues.call_purpose ? <p className="text-[11px] text-red-400">{precallFieldIssues.call_purpose}</p> : null}
                 </div>
               </div>
             </section>
 
-            <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Who am I trying to reach?</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Contact name</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.target_name} onChange={e => patch({ target_name: e.target.value })} />
+            <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-neutral-200 py-1"
+                onClick={() => patch({ pre_call_research_open: !data.pre_call_research_open })}
+              >
+                <span>Add research (helps personalize the script)</span>
+                <ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', data.pre_call_research_open ? 'rotate-90' : '')} />
+              </button>
+              {data.pre_call_research_open ? (
+                <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-white/[0.06]">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">Type of spot</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PRECALL_VENUE_TYPES.map(k => {
+                        const on = data.venue_type === k
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => patch({ venue_type: on ? '' : k })}
+                            className={cn(
+                              'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                              on
+                                ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                                : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                            )}
+                          >
+                            {VENUE_TYPE_LABELS[k]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">State</Label>
+                    <Select value={data.state_region || '__none__'} onValueChange={v => patch({ state_region: v === '__none__' ? '' : v })}>
+                      <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                        <SelectValue placeholder="State" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {US_STATE_OPTIONS.map(s => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">Size</Label>
+                    <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">What nights / events?</Label>
+                    <Input
+                      className="h-11 border-neutral-800 bg-neutral-950/80"
+                      placeholder="e.g. Latin Thursdays, hip-hop Saturdays"
+                      value={data.known_events}
+                      onChange={e => patch({ known_events: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Instagram</Label>
+                    <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.social_handle} onChange={e => patch({ social_handle: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Website</Label>
+                    <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.website} onChange={e => patch({ website: e.target.value })} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Role</Label>
-                  <Select
-                    value={data.target_role || '__none__'}
-                    onValueChange={v => patch({ target_role: v === '__none__' ? '' : (v as ColdCallDataV1['target_role']) })}
-                  >
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(k => (
-                        <SelectItem key={k} value={k}>
-                          {COLD_CALL_TARGET_ROLE_LABELS[k]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              ) : null}
+            </section>
+
+            <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-neutral-200 py-1"
+                onClick={() => patch({ pre_call_contact_open: !data.pre_call_contact_open })}
+              >
+                <span>I have a name or contact</span>
+                <ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform', data.pre_call_contact_open ? 'rotate-90' : '')} />
+              </button>
+              {data.pre_call_contact_open ? (
+                <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-white/[0.06]">
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Contact name</Label>
+                    <Input className="h-11 border-neutral-800 bg-neutral-950/80" value={data.target_name} onChange={e => patch({ target_name: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Role</Label>
+                    <Select
+                      value={data.target_role || '__none__'}
+                      onValueChange={v => patch({ target_role: v === '__none__' ? '' : (v as ColdCallDataV1['target_role']) })}
+                    >
+                      <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                        <SelectValue placeholder="Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {(Object.keys(COLD_CALL_TARGET_ROLE_LABELS) as (keyof typeof COLD_CALL_TARGET_ROLE_LABELS)[]).map(k => (
+                          <SelectItem key={k} value={k}>
+                            {COLD_CALL_TARGET_ROLE_LABELS[k]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">Email</Label>
+                    <Input className="h-11 border-neutral-800 bg-neutral-950/80" type="email" value={data.target_email} onChange={e => patch({ target_email: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-neutral-400 text-xs">How I found them</Label>
+                    <Select value={data.how_found || '__none__'} onValueChange={v => patch({ how_found: v === '__none__' ? '' : (v as ColdCallDataV1['how_found']) })}>
+                      <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                        <SelectValue placeholder="Source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {(Object.keys(COLD_CALL_HOW_FOUND_LABELS) as (keyof typeof COLD_CALL_HOW_FOUND_LABELS)[]).map(k => (
+                          <SelectItem key={k} value={k}>
+                            {COLD_CALL_HOW_FOUND_LABELS[k]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Phone *</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" type="tel" value={data.target_phone} onChange={e => patch({ target_phone: e.target.value })} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Email</Label>
-                  <Input className="h-11 border-neutral-800 bg-neutral-950/80" type="email" value={data.target_email} onChange={e => patch({ target_email: e.target.value })} />
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-neutral-400 text-xs">How I found them</Label>
-                  <Select value={data.how_found || '__none__'} onValueChange={v => patch({ how_found: v === '__none__' ? '' : (v as ColdCallDataV1['how_found']) })}>
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {(Object.keys(COLD_CALL_HOW_FOUND_LABELS) as (keyof typeof COLD_CALL_HOW_FOUND_LABELS)[]).map(k => (
-                        <SelectItem key={k} value={k}>
-                          {COLD_CALL_HOW_FOUND_LABELS[k]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              ) : null}
             </section>
 
             <section className="rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">My angle</h2>
-              <div className="space-y-2">
-                <Label className="text-neutral-400 text-xs">What am I pitching?</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {CALL_PURPOSE_TOGGLE.map(o => {
-                    const on = data.call_purpose === o.id
-                    return (
-                      <button
-                        key={o.id}
-                        type="button"
-                        onClick={() => patch({ call_purpose: on ? '' : o.id })}
-                        className={cn(
-                          'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                          on
-                            ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                            : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                        )}
-                      >
-                        {o.label}
-                      </button>
-                    )
-                  })}
-                </div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Pitch angle</h2>
+              <p className="text-sm text-neutral-400 leading-relaxed border border-white/[0.06] rounded-lg px-3 py-2 bg-neutral-950/40">
+                I think <span className="text-neutral-100 font-medium">{profile?.artist_name?.trim() || 'your artist'}</span> would be a great fit for{' '}
+                <span className="text-neutral-100 font-medium">{data.venue_name.trim() || 'this venue'}</span> because{' '}
+                <span className="text-yellow-100/85">(tap a chip or write your own — optional)</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(COLD_CALL_PITCH_REASON_CHIPS) as string[]).map(id => {
+                  const on = data.pitch_reason_chip === id
+                  return (
+                    <button
+                      key={String(id)}
+                      type="button"
+                      onClick={() =>
+                        patch({
+                          pitch_reason_chip: on ? '' : id,
+                          pitch_reason_custom: '',
+                        })
+                      }
+                      className={cn(
+                        'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                        on
+                          ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                          : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                      )}
+                    >
+                      {COLD_CALL_PITCH_REASON_CHIPS[id]!.label}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => patch({ pitch_reason_chip: data.pitch_reason_chip === 'custom' ? '' : 'custom' })}
+                  className={cn(
+                    'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
+                    data.pitch_reason_chip === 'custom'
+                      ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
+                      : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
+                  )}
+                >
+                  Custom
+                </button>
               </div>
+              {data.pitch_reason_chip === 'custom' ? (
+                <Input
+                  className="h-11 border-neutral-800 bg-neutral-950/80"
+                  placeholder="Your reason (one line)"
+                  value={data.pitch_reason_custom}
+                  onChange={e => patch({ pitch_reason_custom: e.target.value })}
+                />
+              ) : null}
               <div className="space-y-1.5">
-                <Label className="text-neutral-400 text-xs">Why we’re a fit</Label>
+                <Label className="text-neutral-400 text-xs">Legacy free-text (optional)</Label>
                 <Textarea className="min-h-[52px] border-neutral-800 bg-neutral-950/80" value={data.pitch_angle} onChange={e => patch({ pitch_angle: e.target.value })} />
               </div>
               {data.call_purpose === 'follow_up' ? (
@@ -1262,7 +1593,13 @@ export default function ColdCallFormPage() {
             </section>
 
             <div className="flex justify-center pt-4">
-              <Button type="button" size="lg" className="min-h-[52px] px-8 bg-red-600 hover:bg-red-700 text-white" onClick={() => void handleBeginCall()}>
+              <Button
+                key={`begin-${continueShake}`}
+                type="button"
+                size="lg"
+                className={cn('min-h-[52px] px-8 bg-red-600 hover:bg-red-700 text-white', continueShake ? 'continue-btn-shake' : undefined)}
+                onClick={() => void handleBeginCall()}
+              >
                 Begin call
               </Button>
             </div>
@@ -1274,38 +1611,72 @@ export default function ColdCallFormPage() {
             <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-2">Cold call</p>
             <nav className="flex md:flex-col flex-row gap-0.5 overflow-x-auto pb-1 md:pb-0">
               {LIVE_WAYPOINTS.map((w, idx) => {
-                const visited = idx < wIdx || (idx === wIdx && data.live_history.length > 0)
+                const skipped = coldCallPhaseSkipped(idx, data)
+                const onPath = idx <= bookmarkIdx
+                const activeView = idx === wIdx
                 return (
-                  <div
+                  <button
                     key={w.id}
+                    type="button"
+                    onClick={() => handleJumpWaypoint(idx)}
                     className={cn(
-                      'shrink-0 md:w-full rounded-lg px-3 py-2 text-sm border',
-                      idx === wIdx
+                      'shrink-0 md:w-full rounded-lg px-3 py-2 text-sm border text-left transition-colors',
+                      activeView
                         ? 'bg-neutral-100 text-neutral-950 font-semibold border-neutral-200'
-                        : 'text-neutral-500 border-transparent',
-                      visited && idx !== wIdx ? cn('border', tempAccentClass(activeTemp)) : '',
+                        : 'text-neutral-500 border-transparent hover:border-white/[0.08] hover:bg-neutral-900/50',
+                      onPath && !activeView ? cn('border', tempAccentClass(activeTemp)) : '',
+                      skipped ? 'opacity-60' : '',
                     )}
                   >
-                    <span className="font-mono text-xs w-4 inline-block mr-2">{idx + 1}</span>
+                    <span className="font-mono text-xs w-4 inline-block mr-1">{idx + 1}</span>
+                    {bookmarkIdx === idx && dc !== bm ? <span className="mr-1" title="Bookmark">📌</span> : null}
+                    {skipped ? <span className="mr-1 text-neutral-600">⊘</span> : null}
                     {w.label}
-                  </div>
+                  </button>
                 )
               })}
             </nav>
-            <div className="mt-3 px-2">
-              <TemperatureMenu value={data.operator_temperature} onChange={v => patch({ operator_temperature: v })} />
-            </div>
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
+            {showJumpReturn ? (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-2 w-full max-w-2xl flex justify-center pointer-events-none">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="pointer-events-auto shadow-lg border-neutral-600 bg-neutral-900/95"
+                  onClick={() => handleJumpReturn()}
+                >
+                  ↩ Return to {liveCardStepTitle(bm)}
+                </Button>
+              </div>
+            ) : null}
             <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-4 pb-24 sm:p-6 items-start">
               <div
-                key={data.live_card}
+                key={`${dc}-${bm}`}
                 className="w-full max-w-2xl shrink-0 rounded-xl border border-white/[0.08] bg-neutral-900/40 p-4 sm:p-5 space-y-4 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
               >
+                {liveSkipBanner ? (
+                  <p className="text-[11px] text-amber-200/90 border border-amber-900/50 rounded-lg px-3 py-2 bg-amber-950/30">{liveSkipBanner}</p>
+                ) : null}
+                {liveFieldIssues.jump ? <p className="text-[11px] text-red-400">{liveFieldIssues.jump}</p> : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" className="h-8 border-neutral-700 text-xs" onClick={() => handleLiveBack()}>
+                    ← Back
+                  </Button>
+                </div>
                 {liveCapture}
-                {data.live_card !== 'p6' && data.live_card !== 'p6_vm' && data.live_card !== 'p6_na' ? (
-                  <div className="pt-2 flex justify-end">
-                    <Button type="button" onClick={() => handleLiveContinue()}>
+                {dc !== 'p6' && dc !== 'p6_vm' && dc !== 'p6_na' ? (
+                  <div className="pt-2 flex flex-col items-end gap-2">
+                    {Object.keys(liveFieldIssues).filter(k => k !== 'jump').length ? (
+                      <p className="text-[11px] text-red-400 text-right w-full">{Object.values(liveFieldIssues).find(Boolean)}</p>
+                    ) : null}
+                    <Button
+                      key={`cont-${continueShake}`}
+                      type="button"
+                      className={cn(continueShake ? 'continue-btn-shake' : undefined)}
+                      onClick={() => void handleLiveContinue()}
+                    >
                       Continue
                     </Button>
                   </div>
@@ -1334,19 +1705,56 @@ export default function ColdCallFormPage() {
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-neutral-400 text-xs">Outcome</Label>
-                  <Select value={data.outcome || '__none__'} onValueChange={v => patch({ outcome: v === '__none__' ? '' : (v as ColdCallDataV1['outcome']) })}>
-                    <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {(Object.keys(COLD_CALL_OUTCOME_LABELS) as (keyof typeof COLD_CALL_OUTCOME_LABELS)[]).map(k => (
-                        <SelectItem key={k} value={k}>
-                          {COLD_CALL_OUTCOME_LABELS[k]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="inline-flex rounded-lg border border-white/[0.08] p-0.5 bg-neutral-900/50 gap-0.5 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => patch({ outcome_manual_lock: false, outcome: computeColdCallOutcomeAuto(data) })}
+                      className={cn(
+                        'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                        !data.outcome_manual_lock ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-200',
+                      )}
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => patch({ outcome_manual_lock: true })}
+                      className={cn(
+                        'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                        data.outcome_manual_lock ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-200',
+                      )}
+                    >
+                      Manual
+                    </button>
+                  </div>
+                  {!data.outcome_manual_lock ? (
+                    <div className="rounded-lg border border-white/[0.08] bg-neutral-950/50 px-3 py-2 space-y-1">
+                      <p className="text-sm text-neutral-100">
+                        {COLD_CALL_OUTCOME_LABELS[computeColdCallOutcomeAuto(data) as Exclude<ColdCallDataV1['outcome'], ''>]}
+                      </p>
+                      <p className="text-[11px] text-neutral-500">Detected from your answers — switch to Manual if you disagree.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] text-amber-200/90">Manual override</span>
+                      <Select
+                        value={data.outcome || '__none__'}
+                        onValueChange={v => patch({ outcome: v === '__none__' ? '' : (v as ColdCallDataV1['outcome']) })}
+                      >
+                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">—</SelectItem>
+                          {(Object.keys(COLD_CALL_OUTCOME_LABELS) as (keyof typeof COLD_CALL_OUTCOME_LABELS)[]).map(k => (
+                            <SelectItem key={k} value={k}>
+                              {COLD_CALL_OUTCOME_LABELS[k]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <IntakeCompactDual
@@ -1433,10 +1841,10 @@ export default function ColdCallFormPage() {
 
       <footer className="h-11 border-t border-neutral-800 flex items-center justify-between px-4 shrink-0 bg-neutral-950 text-[11px] text-neutral-500">
         <span>
-          {data.session_mode === 'pre_call' ? 'Pre-call' : data.session_mode === 'live_call' ? `Live · ${liveCardStepTitle(data.live_card)}` : 'Post-call'}
+          {data.session_mode === 'pre_call' ? 'Pre-call' : data.session_mode === 'live_call' ? `Live · ${liveCardStepTitle(dc)}` : 'Post-call'}
         </span>
         <span>
-          Phase {wIdx + 1} / {LIVE_WAYPOINTS.length}
+          {data.session_mode === 'post_call' ? 'Wrap-up' : data.session_mode === 'pre_call' ? '—' : `Phase ${wIdx + 1} / ${LIVE_WAYPOINTS.length}`}
         </span>
       </footer>
     </div>

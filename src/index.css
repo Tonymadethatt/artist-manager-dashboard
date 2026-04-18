@@ -69,6 +69,30 @@
   }
 }
 
+/* Cold call / intake: “can’t advance” nudge */
+@keyframes continue-btn-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+.continue-btn-shake {
+  animation: continue-btn-shake 0.15s ease-in-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .continue-btn-shake {
+    animation: none;
+  }
+}
+
 @layer base {
   * {
     border-color: hsl(var(--border));

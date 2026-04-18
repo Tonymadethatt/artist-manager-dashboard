@@ -86,6 +86,7 @@ export function useColdCalls() {
         await load()
         return
       }
+      setError(null)
       const { data: meta } = await supabase.from('cold_calls').select('updated_at').eq('id', id).maybeSingle()
       if (meta?.updated_at) {
         setCalls(prev => prev.map(c => (c.id === id ? { ...c, updated_at: meta.updated_at! } : c)))

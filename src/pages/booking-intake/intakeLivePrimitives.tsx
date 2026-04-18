@@ -24,17 +24,24 @@ export function IntakeLiveScriptCaptureStack({
   stepTitle,
   script,
   capture,
+  scriptSize = 'default',
 }: {
   stepTitle: string
   script: ReactNode
   capture: ReactNode
+  /** Cold call uses smaller type so beats fit without scrolling. */
+  scriptSize?: 'default' | 'compact'
 }) {
+  const scriptBoxClass =
+    scriptSize === 'compact'
+      ? 'rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3 py-3 sm:px-3.5 sm:py-3.5 text-base font-medium leading-relaxed text-yellow-100 [&_p]:m-0 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_p]:text-inherit'
+      : 'rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3.5 py-3.5 sm:px-4 sm:py-4 text-lg sm:text-xl font-medium leading-[1.65] text-yellow-100 [&_p]:m-0 [&_p]:text-inherit'
   return (
     <div className="space-y-0">
       <h2 className="text-lg font-semibold text-neutral-100 tracking-tight pb-1">{stepTitle}</h2>
       <section aria-label="Call script" className="space-y-2.5 pt-4 border-t border-white/[0.08]">
         <h3 className="text-[10px] uppercase tracking-wider text-neutral-500 font-semibold">Script</h3>
-        <div className="rounded-lg border border-white/[0.06] bg-neutral-950/55 px-3.5 py-3.5 sm:px-4 sm:py-4 text-lg sm:text-xl font-medium leading-[1.65] text-yellow-100 [&_p]:m-0 [&_p]:text-inherit">
+        <div className={scriptBoxClass}>
           {script}
         </div>
       </section>

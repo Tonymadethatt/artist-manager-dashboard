@@ -9,8 +9,9 @@ function withHistory(d: ColdCallDataV1, next: ColdCallLiveCardId): Partial<ColdC
 /** After operator completes current card (all required fields set), move forward. */
 export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> | 'post' {
   const showBudget = coldCallShowBudgetCard(d)
+  const card = d.view_card || d.live_card
 
-  switch (d.live_card) {
+  switch (card) {
     case 'p1': {
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {

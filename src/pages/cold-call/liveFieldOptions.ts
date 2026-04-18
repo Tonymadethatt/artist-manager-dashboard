@@ -26,9 +26,9 @@ export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] 
 ]
 
 export const CONFIRMED_NAME_OPTIONS: { id: 'match_target' | 'different' | 'none'; label: string }[] = [
-  { id: 'match_target', label: 'Yes — matches target' },
-  { id: 'different', label: 'Yes — different name' },
-  { id: 'none', label: 'No name yet' },
+  { id: 'match_target', label: 'Yes — it’s them' },
+  { id: 'different', label: 'No — different person' },
+  { id: 'none', label: 'No name from them yet' },
 ]
 
 export const GATEKEEPER_RESULT_OPTIONS: { id: ColdCallGatekeeperResult; label: string }[] = [

@@ -20,6 +20,9 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
     case 'right_person':
       s += 2
       break
+    case 'voicemail':
+      s += 1
+      break
     case 'gatekeeper':
       if (d.gatekeeper_result === 'gave_name') s += 1
       if (d.gatekeeper_result === 'transferred') s += 2
@@ -90,6 +93,12 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
   }
 
   return s
+}
+
+/** Live auto temperature from score; no-answer path stays unset until someone picks up. */
+export function coldCallLiveAutoTemperature(d: ColdCallDataV1): ColdCallDataV1['operator_temperature'] {
+  if (d.who_answered === 'no_answer') return ''
+  return coldCallTemperatureFromScore(computeColdCallTemperatureScore(d))
 }
 
 /** Qualify / budget branch: show budget card when score ≥ 7 (spec) — uses same scorer mid-call. */
