@@ -77,9 +77,13 @@ export function Shell() {
       <NavBadgeSectionSync pathname={location.pathname} />
       <div className="flex h-screen overflow-hidden bg-neutral-950">
         <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <Header onMenuClick={() => setMobileOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 px-4 pt-3 md:px-6 md:pt-5">
+            <div className="mx-auto w-full min-w-0 max-w-[min(100%,100rem)]">
+              <Header onMenuClick={() => setMobileOpen(true)} />
+            </div>
+          </div>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2 md:px-6 md:pb-6 md:pt-3">
             <div className="mx-auto w-full min-w-0 max-w-[min(100%,100rem)]">
               <Outlet />
             </div>
