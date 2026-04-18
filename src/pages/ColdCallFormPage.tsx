@@ -240,7 +240,7 @@ function LiveTemperatureBar({
       : 'Temperature'
   return (
     <div className="relative flex items-center gap-2" ref={ref}>
-      <div className="flex flex-col items-end gap-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         <Button
           type="button"
           variant="outline"
@@ -249,9 +249,14 @@ function LiveTemperatureBar({
           onClick={() => setOpen(!open)}
         >
           {label}
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+          <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
         </Button>
-        <span className="text-[10px] text-neutral-500 tabular-nums">Score {score}</span>
+        <span
+          className="text-[10px] text-neutral-500 tabular-nums leading-none whitespace-nowrap hidden sm:inline"
+          title={`Auto score ${score}`}
+        >
+          <span className="text-neutral-600">Score</span> {score > 0 ? `+${score}` : score}
+        </span>
       </div>
       {manualLock ? (
         <>
@@ -1199,12 +1204,13 @@ export default function ColdCallFormPage() {
 
   return (
     <div className="h-screen flex flex-col bg-neutral-950 text-neutral-100 overflow-hidden">
-      <header className="h-12 border-b border-neutral-800 flex items-center gap-3 px-3 shrink-0 bg-neutral-950 z-20">
-        <Button variant="ghost" size="sm" className="gap-1 text-neutral-400 shrink-0" asChild>
+      <header className="min-h-12 h-12 sm:h-14 border-b border-neutral-800 flex items-center gap-2 sm:gap-3 px-2 sm:px-4 shrink-0 bg-neutral-950 z-20">
+        <Button variant="ghost" size="sm" className="gap-1 text-neutral-400 shrink-0 h-9 w-9 p-0" asChild>
           <Link to="/forms/cold-calls" title="All cold calls">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
+
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <Select
             value={selectedId ?? ''}
@@ -1213,8 +1219,11 @@ export default function ColdCallFormPage() {
               setSearchParams({ callId: v }, { replace: true })
             }}
           >
-            <SelectTrigger className="h-9 max-w-[220px] border-neutral-800 bg-neutral-900/80 text-sm">
-              <SelectValue placeholder="Cold call" />
+            <SelectTrigger
+              className="h-9 w-[9.5rem] sm:w-[11rem] shrink-0 border-neutral-800 bg-neutral-900/80 text-sm [&>span]:truncate [&>span]:text-left"
+              title={selectedRow.title || 'Switch cold call'}
+            >
+              <SelectValue placeholder="Calls" />
             </SelectTrigger>
             <SelectContent>
               {cold.calls.map(c => (
@@ -1224,17 +1233,25 @@ export default function ColdCallFormPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 border-neutral-700" onClick={() => void handleNew()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 shrink-0 border-neutral-700 px-2.5 sm:px-3"
+            onClick={() => void handleNew()}
+          >
             New
           </Button>
+          <Input
+            className="h-9 min-w-0 flex-1 border-neutral-800 bg-neutral-900/80 text-sm"
+            value={selectedRow.title}
+            onChange={e => cold.updateTitle(selectedId!, e.target.value)}
+            placeholder="Call title"
+            aria-label="Call title"
+          />
         </div>
-        <Input
-          className="h-9 max-w-md border-neutral-800 bg-neutral-900/80 text-sm hidden md:block"
-          value={selectedRow.title}
-          onChange={e => cold.updateTitle(selectedId!, e.target.value)}
-          placeholder="Call title"
-        />
-        <div className="flex items-center gap-2 shrink-0">
+
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {data.session_mode === 'live_call' ? (
             <LiveTemperatureBar
               value={data.operator_temperature}
@@ -1244,27 +1261,41 @@ export default function ColdCallFormPage() {
               onResetAuto={() => patch({ temperature_manual_lock: false })}
             />
           ) : data.session_mode === 'post_call' ? (
-            <TemperatureMenu
-              value={data.final_temperature}
-              onChange={v =>
-                patch({
-                  final_temperature: v,
-                  save_to_pipeline: v === 'dead' ? false : data.save_to_pipeline,
-                })
-              }
-            />
+            <div className="flex items-center gap-1.5">
+              <TemperatureMenu
+                value={data.final_temperature}
+                onChange={v =>
+                  patch({
+                    final_temperature: v,
+                    save_to_pipeline: v === 'dead' ? false : data.save_to_pipeline,
+                  })
+                }
+              />
+              <span
+                className="text-[10px] text-neutral-500 tabular-nums leading-none whitespace-nowrap hidden sm:inline"
+                title={`Auto score ${computeColdCallTemperatureScore(data)}`}
+              >
+                <span className="text-neutral-600">Score</span>{' '}
+                {(() => {
+                  const s = computeColdCallTemperatureScore(data)
+                  return s > 0 ? `+${s}` : `${s}`
+                })()}
+              </span>
+            </div>
           ) : null}
           {cold.error ? (
-            <span className="text-[11px] text-amber-400 max-w-[120px] sm:max-w-[200px] truncate" title={cold.error}>
+            <span className="text-[11px] text-amber-400 max-w-[4.5rem] sm:max-w-[7rem] truncate" title={cold.error}>
               Save issue
             </span>
           ) : null}
-          <span className="text-[11px] text-neutral-500 hidden sm:inline">Auto-saved</span>
-          <Button type="button" variant="secondary" size="sm" className="h-9 gap-1" disabled={savingUi} onClick={() => void handleSave()}>
+          <span className="text-[10px] sm:text-[11px] text-neutral-500 hidden md:inline whitespace-nowrap">
+            Auto-saved
+          </span>
+          <Button type="button" variant="secondary" size="sm" className="h-9 gap-1.5 px-2.5 sm:px-3" disabled={savingUi} onClick={() => void handleSave()}>
             {savingUi ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save
+            <span className="hidden sm:inline">Save</span>
           </Button>
-          <Button type="button" variant="ghost" size="sm" className="h-9 text-neutral-400" onClick={() => void handleExit()}>
+          <Button type="button" variant="ghost" size="sm" className="h-9 px-2.5 sm:px-3 text-neutral-400" onClick={() => void handleExit()}>
             Exit
           </Button>
         </div>
