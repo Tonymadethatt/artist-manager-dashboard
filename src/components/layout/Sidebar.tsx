@@ -71,7 +71,6 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
     items: [
       { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
       { to: '/files',     label: 'Documents', icon: FolderOpen, end: false, badgeKey: null },
-      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
   {
@@ -79,6 +78,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
     label: 'Forms',
     items: [
       { to: '/forms/preview', label: 'General Forms', icon: LayoutGrid, end: false, badgeKey: null },
+      { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
       { subheading: 'Leads' },
       { to: '/forms/intakes', label: 'Booking', icon: BookOpenCheck, end: false, badgeKey: null, indent: true },
       { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null, indent: true },
