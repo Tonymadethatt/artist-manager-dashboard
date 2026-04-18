@@ -38,6 +38,7 @@ import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { hasPendingArtistEmail } from '@/lib/queueEmailsFromTemplate'
 import {
   SHOW_REPORT_PRESETS,
@@ -239,6 +240,8 @@ function RetainerTab(_: { hideSummary?: boolean }) {
         }),
       })
       if (res.ok) {
+        const sendBody = await res.json().catch(() => ({}))
+        const resendMessageId = parseResendMessageIdFromSendFunctionJson(sendBody)
         lastReminderSendAt.current = Date.now()
         setReminderStatus('success')
         setReminderMsg(`Reminder sent to ${profile.artist_email}`)
@@ -255,6 +258,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
             status: 'sent',
             source: 'earnings_manual',
             detail: `Outstanding ${totals.outstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+            ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
           })
         }
       } else {

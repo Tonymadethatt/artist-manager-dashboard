@@ -34,7 +34,11 @@ function pacificMonthRangeExclusiveFromToday(): { startIso: string; endExclusive
   return { startIso, endExclusiveIso }
 }
 
-/** Sent rows in `venue_emails` for the signed-in user (Pacific calendar day / month). */
+/**
+ * Sent rows in `venue_emails` for the signed-in user (Pacific calendar day / month).
+ * Counts only rows where Resend accepted the message (`resend_message_id` set), so the meter tracks
+ * provider-confirmed sends rather than queue rows merely marked sent.
+ */
 export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<{
   today: number
   month: number
@@ -51,6 +55,7 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('status', 'sent')
+      .not('resend_message_id', 'is', null)
       .gte('sent_at', dayStart)
       .lt('sent_at', dayEndEx),
     supabase
@@ -58,6 +63,7 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('status', 'sent')
+      .not('resend_message_id', 'is', null)
       .gte('sent_at', monthR.startIso)
       .lt('sent_at', monthR.endExclusiveIso),
   ])

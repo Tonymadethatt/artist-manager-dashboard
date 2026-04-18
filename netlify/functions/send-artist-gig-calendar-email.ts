@@ -5,6 +5,7 @@
 import type { Handler } from '@netlify/functions'
 import { shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type Profile = {
@@ -163,7 +164,15 @@ const handler: Handler = async (event) => {
         body: JSON.stringify({ message: (err as { message?: string }).message ?? 'Resend error' }),
       }
     }
-    return { statusCode: 200, body: JSON.stringify({ ok: true }) }
+    const resendPayload = await resendRes.json().catch(() => null)
+    const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        ok: true,
+        ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+      }),
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return { statusCode: 500, body: JSON.stringify({ message: msg }) }

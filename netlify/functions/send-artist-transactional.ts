@@ -6,6 +6,7 @@ import {
   type ArtistTransactionalKind,
 } from '../../src/lib/email/artistTransactionalEmailDocument'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 interface ArtistProfile {
@@ -149,9 +150,15 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const resendPayload = await resendRes.json().catch(() => null)
+  const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+
   return {
     statusCode: 200,
-    body: JSON.stringify({ message: 'Artist transactional email sent successfully' }),
+    body: JSON.stringify({
+      message: 'Artist transactional email sent successfully',
+      ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+    }),
   }
 }
 

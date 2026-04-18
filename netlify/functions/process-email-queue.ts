@@ -53,6 +53,7 @@ import {
   performanceWindowCompactFromDeal,
   whenLineCompactFromDeal,
 } from '../../src/lib/calendar/pacificWallTime'
+import { parseResendMessageIdFromSendFunctionResponse } from '../../src/lib/email/resendMessageId'
 import type { Deal, Venue } from '../../src/types'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
@@ -449,12 +450,14 @@ const handler: Handler = async (event) => {
           }),
         })
         if (sendRes.ok) {
+          const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
           await supabase
             .from('venue_emails')
             .update({
               status: 'sent',
               sent_at: new Date().toISOString(),
               notes: '[src:queue_cron] Performance form email',
+              ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
             })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'sent' })
@@ -580,9 +583,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             results.push({ id: email.id, result: 'sent' })
           } else {
@@ -665,9 +673,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             results.push({ id: email.id, result: 'sent' })
           } else {
@@ -749,9 +762,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             if (!deal.ics_invite_sent_at) {
               await supabase
@@ -826,9 +844,14 @@ const handler: Handler = async (event) => {
           }),
         })
         if (sendRes.ok) {
+          const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
           await supabase
             .from('venue_emails')
-            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+            })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'sent' })
         } else {
@@ -996,9 +1019,14 @@ const handler: Handler = async (event) => {
           body: JSON.stringify(artistBody),
         })
         if (sendRes.ok) {
+          const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
           await supabase
             .from('venue_emails')
-            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+            })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'sent' })
         } else {
@@ -1074,9 +1102,14 @@ const handler: Handler = async (event) => {
           }),
         })
         if (sendRes.ok) {
+          const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
           await supabase
             .from('venue_emails')
-            .update({ status: 'sent', sent_at: new Date().toISOString() })
+            .update({
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+            })
             .eq('id', email.id)
           results.push({ id: email.id, result: 'sent' })
         } else {
@@ -1150,9 +1183,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             results.push({ id: email.id, result: 'sent' })
           } else {
@@ -1192,9 +1230,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             results.push({ id: email.id, result: 'sent' })
           } else {
@@ -1223,9 +1266,14 @@ const handler: Handler = async (event) => {
             }),
           })
           if (sendRes.ok) {
+            const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
             await supabase
               .from('venue_emails')
-              .update({ status: 'sent', sent_at: new Date().toISOString() })
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+              })
               .eq('id', email.id)
             results.push({ id: email.id, result: 'sent' })
           } else {
@@ -1330,9 +1378,14 @@ const handler: Handler = async (event) => {
       })
 
       if (sendRes.ok) {
+        const resendMessageId = await parseResendMessageIdFromSendFunctionResponse(sendRes)
         await supabase
           .from('venue_emails')
-          .update({ status: 'sent', sent_at: new Date().toISOString() })
+          .update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+          })
           .eq('id', email.id)
         results.push({ id: email.id, result: 'sent' })
       } else {

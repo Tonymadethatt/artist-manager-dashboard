@@ -700,6 +700,8 @@ export interface VenueEmail {
   subject: string
   status: VenueEmailStatus
   sent_at: string | null
+  /** Set when Resend API accepted the send (usage meter counts only these). */
+  resend_message_id?: string | null
   /** When set, row is not eligible to send until this time (24h reminders, etc.). */
   scheduled_send_at: string | null
   /** Set while process-email-queue holds an exclusive send lock (status=sending). */

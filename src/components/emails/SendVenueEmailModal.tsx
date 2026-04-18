@@ -28,6 +28,7 @@ import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUr
 import type { Deal, GeneratedFile, Venue, VenueEmailType } from '@/types'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import {
   venueEmailTypeToCaptureKind,
@@ -365,6 +366,9 @@ export function SendVenueEmailModal({
         throw new Error(err.message ?? 'Send failed')
       }
 
+      const sendBody = await res.json().catch(() => ({}))
+      const resendMessageId = parseResendMessageIdFromSendFunctionJson(sendBody)
+
       const logSubject = customRow
         ? `${customRow.name} · ${venue?.name ?? 'venue'}`
         : subjectMap[emailType as VenueEmailType]
@@ -382,6 +386,7 @@ export function SendVenueEmailModal({
         status: 'sent',
         source: 'modal_immediate',
         notes: noteCapture,
+        ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
       })
       if (mintedTokenUuid && logRes.id && !logRes.error) {
         await supabase

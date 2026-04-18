@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { PerformanceReport, ArtistProfile } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 
 export function usePerformanceReports() {
   const [reports, setReports] = useState<PerformanceReport[]>([])
@@ -99,6 +100,8 @@ export function usePerformanceReports() {
         // Return the report and formUrl even if email fails — manager can copy link manually
         return { report, formUrl, error: 'Report created but email failed to send. Use copy link.' }
       }
+      const sendBody = await res.json().catch(() => ({}))
+      const resendMessageId = parseResendMessageIdFromSendFunctionJson(sendBody)
       const label = ARTIST_EMAIL_TYPE_LABELS.performance_report_request
       const subj = (perfTmpl?.custom_subject as string | null)?.trim() || `${label} · ${venueName}`
       await recordOutboundEmail(supabase, {
@@ -111,6 +114,7 @@ export function usePerformanceReports() {
         status: 'sent',
         source: 'performance_form',
         detail: venueName,
+        ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
       })
     } catch (e) {
       console.error('[usePerformanceReports] Email send error:', e)
@@ -264,6 +268,8 @@ export function usePerformanceReports() {
         console.error('[usePerformanceReports] Resend email failed:', err)
         return { formUrl, error: 'Token reset but email failed. Use copy link.' }
       }
+      const sendBody = await res.json().catch(() => ({}))
+      const resendMessageId = parseResendMessageIdFromSendFunctionJson(sendBody)
       const label = ARTIST_EMAIL_TYPE_LABELS.performance_report_request
       const subj = (perfTmpl?.custom_subject as string | null)?.trim() || `${label} · ${venueName}`
       await recordOutboundEmail(supabase, {
@@ -276,6 +282,7 @@ export function usePerformanceReports() {
         status: 'sent',
         source: 'performance_form',
         detail: `${venueName} (resend)`,
+        ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
       })
     } catch (e) {
       console.error('[usePerformanceReports] Resend error:', e)

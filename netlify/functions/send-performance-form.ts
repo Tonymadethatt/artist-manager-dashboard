@@ -10,6 +10,7 @@ import {
 } from '../../src/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 interface RequestBody {
@@ -213,10 +214,17 @@ const handler: Handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ message: 'Failed to send email', detail: err }) }
   }
 
+  const resendPayload = await resendRes.json().catch(() => null)
+  const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ success: true, formUrl }),
+    body: JSON.stringify({
+      success: true,
+      formUrl,
+      ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+    }),
   }
 }
 

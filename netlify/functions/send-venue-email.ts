@@ -11,6 +11,7 @@ import {
   resolveArtistFacingResend,
   resolveVenueFacingResend,
 } from '../../src/lib/email/emailTestModeServer'
+import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 type VenueEmailType =
@@ -376,12 +377,16 @@ const handler: Handler = async (event) => {
       }
     }
 
+    const resendPayload = await resendRes.json().catch(() => null)
+    const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Email sent successfully',
         ...(custom_artist_template ? { subject } : {}),
+        ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
       }),
     }
   } catch (sendErr) {

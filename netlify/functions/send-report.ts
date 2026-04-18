@@ -13,6 +13,7 @@ import {
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
+import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
 
 function escapeHtmlEnt(s: string): string {
@@ -366,9 +367,15 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const resendPayload = await resendRes.json().catch(() => null)
+  const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+
   return {
     statusCode: 200,
-    body: JSON.stringify({ message: 'Report sent successfully' }),
+    body: JSON.stringify({
+      message: 'Report sent successfully',
+      ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+    }),
   }
 }
 

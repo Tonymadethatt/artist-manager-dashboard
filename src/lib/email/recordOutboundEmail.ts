@@ -33,6 +33,7 @@ export async function recordOutboundEmail(
     source: OutboundEmailSource
     detail?: string | null
     notes?: string | null
+    resend_message_id?: string | null
   },
 ): Promise<{ error: Error | null; id?: string }> {
   const sentAt = params.status === 'sent' ? new Date().toISOString() : null
@@ -40,6 +41,7 @@ export async function recordOutboundEmail(
   const notes = params.notes != null && params.notes.trim()
     ? `${notesBase}\n${params.notes.trim()}`
     : notesBase
+  const rid = params.resend_message_id?.trim() || null
   const { data, error } = await client.from('venue_emails').insert({
     user_id: params.user_id,
     venue_id: params.venue_id ?? null,
@@ -50,6 +52,7 @@ export async function recordOutboundEmail(
     subject: params.subject,
     status: params.status,
     sent_at: sentAt,
+    ...(rid ? { resend_message_id: rid } : {}),
     notes,
   }).select('id').single()
   return { error: error ? new Error(error.message) : null, id: data?.id as string | undefined }

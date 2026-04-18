@@ -738,6 +738,7 @@ export interface Database {
           subject: string
           status: VenueEmailStatus
           sent_at: string | null
+          resend_message_id: string | null
           notes: string | null
           scheduled_send_at: string | null
           processing_started_at: string | null
@@ -754,6 +755,7 @@ export interface Database {
           subject: string
           status?: VenueEmailStatus
           sent_at?: string | null
+          resend_message_id?: string | null
           notes?: string | null
           scheduled_send_at?: string | null
           processing_started_at?: string | null
@@ -770,6 +772,7 @@ export interface Database {
           subject?: string
           status?: VenueEmailStatus
           sent_at?: string | null
+          resend_message_id?: string | null
           notes?: string | null
           scheduled_send_at?: string | null
           processing_started_at?: string | null

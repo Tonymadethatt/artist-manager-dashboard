@@ -53,6 +53,7 @@ import {
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
+import { parseResendMessageIdFromSendFunctionResponse } from '@/lib/email/resendMessageId'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
@@ -997,6 +998,7 @@ export default function EmailQueue() {
       }
 
       if (isQueuedBuiltinArtistEmailType(email.email_type)) {
+        let resendMessageId: string | null = null
         const inputs = await fetchReportInputsForUser(supabase, user.id)
         const profileForArtistSend = {
           artist_name: profile.artist_name,
@@ -1050,6 +1052,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+          resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
         } else if (email.email_type === 'retainer_reminder') {
           const { unpaidFees, totalOutstanding } = buildRetainerReminderPayload(inputs.fees)
           if (unpaidFees.length === 0) {
@@ -1075,6 +1078,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+          resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
         } else if (email.email_type === 'retainer_received') {
           const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)
           const { data: tmpl } = await supabase
@@ -1097,6 +1101,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+          resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
         } else if (email.email_type === 'performance_report_received') {
           const txn = parseArtistTxnQueueNotes(email.notes)
           if (!txn || txn.kind !== 'performance_report_received') {
@@ -1123,6 +1128,7 @@ export default function EmailQueue() {
             }),
           })
           if (!res.ok) throw new Error(await parseErr(res))
+          resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
         } else if (
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
@@ -1211,6 +1217,7 @@ export default function EmailQueue() {
               }),
             })
             if (!res.ok) throw new Error(await parseErr(res))
+            resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
           } else if (email.email_type === 'gig_day_summary_manual' && gigN?.kind === 'gig_day_summary_manual') {
             const ymdS = gigN.ymd
             const venuesS = inputs.venues as Venue[]
@@ -1269,6 +1276,7 @@ export default function EmailQueue() {
               }),
             })
             if (!res.ok) throw new Error(await parseErr(res))
+            resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
           } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_reminder_manual' || gigN?.kind === 'gig_booked_ics') {
             const { data: dealRow } = await supabase
               .from('deals')
@@ -1319,6 +1327,7 @@ export default function EmailQueue() {
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))
+              resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
             } else {
               const { data: catRow } = await supabase
                 .from('user_pricing_catalog')
@@ -1351,6 +1360,7 @@ export default function EmailQueue() {
                 }),
               })
               if (!res.ok) throw new Error(await parseErr(res))
+              resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
               if (!deal.ics_invite_sent_at) {
                 await supabase
                   .from('deals')
@@ -1365,7 +1375,9 @@ export default function EmailQueue() {
           throw new Error('Unsupported built-in artist email type.')
         }
 
-        await updateEmailStatus(email.id, 'sent')
+        await updateEmailStatus(email.id, 'sent', {
+          ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
+        })
         return
       }
 
@@ -1412,8 +1424,10 @@ export default function EmailQueue() {
           }
           throw new Error(msg)
         }
+        const perfResendId = await parseResendMessageIdFromSendFunctionResponse(res)
         await updateEmailStatus(email.id, 'sent', {
           notes: formatOutboundEmailNotes('email_queue_send_now', 'Performance form email'),
+          ...(perfResendId ? { resend_message_id: perfResendId } : {}),
         })
         return
       }
@@ -1592,7 +1606,10 @@ export default function EmailQueue() {
         throw new Error(msg)
       }
 
-      await updateEmailStatus(email.id, 'sent')
+      const venueResendId = await parseResendMessageIdFromSendFunctionResponse(res)
+      await updateEmailStatus(email.id, 'sent', {
+        ...(venueResendId ? { resend_message_id: venueResendId } : {}),
+      })
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Failed to send email')
     } finally {
@@ -1668,12 +1685,15 @@ export default function EmailQueue() {
                       sideOffset={6}
                       className="max-w-[min(18rem,calc(100vw-2rem))] border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-[11px] font-normal leading-relaxed text-neutral-400 shadow-xl"
                     >
-                      <p className="text-neutral-200 font-medium mb-1">Sent today (Pacific)</p>
+                      <p className="text-neutral-200 font-medium mb-1">Resend sends today (Pacific)</p>
                       <p>
-                        Rows in this app marked <span className="text-neutral-300">sent</span> with today’s date in Los
-                        Angeles, compared to your daily cap (default <span className="text-neutral-300">300</span> —
-                        set <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> to match Resend).
-                        Turns <span className="text-red-400">red</span> when 20 or fewer sends remain.
+                        Counts <span className="text-neutral-300">venue_emails</span> marked{' '}
+                        <span className="text-neutral-300">sent</span> where Resend returned a message id (confirmed
+                        handoff to Resend), with <span className="text-neutral-300">sent_at</span> today in Los Angeles.
+                        Daily cap default <span className="text-neutral-300">300</span> — set{' '}
+                        <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> to match your plan. Turns{' '}
+                        <span className="text-red-400">red</span> when 20 or fewer sends remain. Does not include email
+                        sent outside this app with the same API key.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -1703,14 +1723,15 @@ export default function EmailQueue() {
                       sideOffset={6}
                       className="max-w-[min(18rem,calc(100vw-2rem))] border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-[11px] font-normal leading-relaxed text-neutral-400 shadow-xl"
                     >
-                      <p className="text-neutral-200 font-medium mb-1">Sent this calendar month (Pacific)</p>
+                      <p className="text-neutral-200 font-medium mb-1">Resend sends this month (Pacific)</p>
                       <p>
-                        Count resets on the <span className="text-neutral-300">1st</span> (Pacific). Cap default{' '}
+                        Same as “today,” but for the current calendar month (Pacific). Count resets on the{' '}
+                        <span className="text-neutral-300">1st</span>. Cap default{' '}
                         <span className="text-neutral-300">3,000</span> — set{' '}
                         <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span> to match Resend. Turns{' '}
-                        <span className="text-red-400">red</span> when 300 or fewer sends remain. Totals reflect this
-                        workspace’s <span className="text-neutral-300">venue_emails</span> ledger, not Resend’s full API
-                        usage if you send from elsewhere with the same key.
+                        <span className="text-red-400">red</span> when 300 or fewer sends remain. Older rows sent before
+                        this tracking shipped may show as <span className="text-neutral-300">sent</span> in History but
+                        omit a Resend id and are excluded here.
                       </p>
                     </TooltipContent>
                   </Tooltip>

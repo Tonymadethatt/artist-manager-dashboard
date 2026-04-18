@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
+import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { buildManagementReportData } from '@/lib/reports/buildManagementReportData'
 
 const REPORT_RESEND_CONFIRM_MS = 3 * 60 * 1000
@@ -123,6 +124,8 @@ export default function Reports() {
         }),
       })
       if (res.ok) {
+        const sendBody = await res.json().catch(() => ({}))
+        const resendMessageId = parseResendMessageIdFromSendFunctionJson(sendBody)
         setStatus('success')
         const recipient = testOnly ? (profile.manager_email ?? 'you') : profile.artist_email
         setMsg(`Report sent to ${recipient}`)
@@ -141,6 +144,7 @@ export default function Reports() {
               status: 'sent',
               source: 'reports_manual',
               detail: `${startDate}\u2013${endDate}`,
+              ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
             })
           }
         }
