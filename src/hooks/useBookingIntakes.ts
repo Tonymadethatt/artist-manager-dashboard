@@ -315,7 +315,7 @@ export function useBookingIntakes() {
       venueData: BookingIntakeVenueDataV3
       showData: BookingIntakeShowDataV3
       linkedVenueId: string | null
-      gatekeeperContact: { name: string; role: string; phone: string } | null
+      gatekeeperContact: { name: string; title_key: string; phone: string } | null
     }): Promise<BookingIntakeRow | null> => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
@@ -388,8 +388,8 @@ export function useBookingIntakes() {
             user_id: user.id,
             venue_id: params.linkedVenueId,
             name: gk.name.trim(),
-            title_key: null,
-            role: gk.role.trim() || null,
+            title_key: gk.title_key.trim() || null,
+            role: null,
             email: null,
             phone: gk.phone.trim() || null,
             company: null,

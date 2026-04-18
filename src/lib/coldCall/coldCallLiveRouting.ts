@@ -16,12 +16,6 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {
         if (!d.target_title_key) return {}
-        const hasTarget = !!d.target_name.trim()
-        if (hasTarget) {
-          if (!d.confirmed_name) return {}
-        } else {
-          if (!d.cold_no_target_name_status) return {}
-        }
         return withHistory(d, 'p3')
       }
       if (d.who_answered === 'gatekeeper') return withHistory(d, 'p2a')
@@ -31,7 +25,6 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p2a': {
       if (!d.gatekeeper_result) return {}
-      if (!d.gatekeeper_got_name || !d.gatekeeper_staff_role) return {}
       if (d.gatekeeper_result === 'gave_name') return withHistory(d, 'p2a_detail')
       if (d.gatekeeper_result === 'transferred')
         return { ...withHistory(d, 'p3'), transferred_note: true }
@@ -45,10 +38,22 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       }
       return {}
     }
-    case 'p2a_detail':
+    case 'p2a_detail': {
+      if (!d.best_time) return {}
+      if (d.best_time === 'specific' && !d.best_time_specific.trim()) return {}
+      if (!d.dm_direct_line) return {}
+      if (d.dm_direct_line === 'phone' || d.dm_direct_line === 'both') {
+        if (!d.decision_maker_direct_phone.trim()) return {}
+      }
+      if (d.dm_direct_line === 'email' || d.dm_direct_line === 'both') {
+        if (!d.decision_maker_direct_email.trim()) return {}
+      }
       return withHistory(d, 'p6')
-    case 'p2_msg':
+    }
+    case 'p2_msg': {
+      if (!d.callback_expected) return {}
       return withHistory(d, 'p6')
+    }
     case 'p3': {
       if (!d.initial_reaction) return {}
       if (d.initial_reaction === 'not_interested') {
@@ -69,6 +74,7 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p3c': {
       if (!d.parking_result) return {}
+      if (d.parking_result === 'send_info' && !d.send_to) return {}
       return withHistory(d, 'p6')
     }
     case 'p4a': {
@@ -78,7 +84,17 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     case 'p4b':
       return withHistory(d, 'p4c')
     case 'p4c': {
-      if (!d.booking_process || !d.decision_maker_same) return {}
+      if (!d.booking_process) return {}
+      if (d.booking_process === 'unsaid' && !d.decision_maker_same) return {}
+      if (d.booking_process === 'someone_else' || d.booking_process === 'committee') {
+        if (!d.other_dm_line) return {}
+        if (d.other_dm_line === 'phone' || d.other_dm_line === 'both') {
+          if (!d.other_dm_phone.trim()) return {}
+        }
+        if (d.other_dm_line === 'email' || d.other_dm_line === 'both') {
+          if (!d.other_dm_email.trim()) return {}
+        }
+      }
       if (showBudget) return withHistory(d, 'p4d')
       return withHistory(d, 'p4e')
     }
@@ -88,6 +104,8 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       return withHistory(d, 'p5')
     case 'p5': {
       if (!d.ask_response) return {}
+      if (d.ask_response === 'send_info_first' && !d.ask_send_channel) return {}
+      if (d.ask_response === 'check_back' && !d.ask_followup_when) return {}
       return withHistory(d, 'p6')
     }
     case 'p6': {
@@ -100,7 +118,6 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p6_na': {
       if (!d.no_answer_retry_timing) return {}
-      if (!d.no_answer_notes_flag) return {}
       return 'post'
     }
     default:

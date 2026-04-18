@@ -132,8 +132,6 @@ export type ColdCallVoicemailFollowup = '' | 'tomorrow' | 'few_days' | 'next_wee
 
 export type ColdCallNoAnswerRetry = '' | 'later_today' | 'tomorrow' | 'next_week' | 'remove'
 
-export type ColdCallNoTargetNameStatus = '' | 'deferred' | 'not_yet'
-
 /** Pre-call pitch fill-in chip ids → clause text (spec Tier 4). */
 export const COLD_CALL_PITCH_REASON_CHIPS: Record<
   string,
@@ -177,7 +175,14 @@ export type ColdCallPivotResponse = '' | 'sometimes' | 'not_really' | 'special_e
 
 export type ColdCallParkingResult = '' | 'send_info' | 'no_bother' | 'try_later'
 
-export type ColdCallSendTo = '' | 'email' | 'text' | 'instagram' | 'they_find_us'
+export type ColdCallSendTo = '' | 'email' | 'text' | 'instagram' | 'they_already_know'
+
+/** p2a_detail / p4c: inline contact capture — no "capture later". */
+export type ColdCallDmDirectLine = '' | 'no' | 'phone' | 'email' | 'both'
+
+export type ColdCallAskSendChannel = '' | 'email' | 'text' | 'instagram'
+
+export type ColdCallAskFollowupWhen = '' | 'few_days' | 'next_week' | 'end_of_month' | 'they_reach_out'
 
 export type ColdCallBookingProcess = '' | 'this_person' | 'someone_else' | 'committee' | 'unsaid'
 
@@ -215,7 +220,7 @@ export type ColdCallAskResponse =
   | 'not_now'
   | 'no'
 
-export type ColdCallEndedNaturally = '' | 'yes' | 'had_to_go' | 'cut_off'
+export type ColdCallEndedNaturally = '' | 'clean_wrap' | 'they_had_to_go' | 'cut_off' | 'i_ended_it'
 
 export type ColdCallDurationFeel = '' | 'quick' | 'short' | 'medium' | 'long'
 
@@ -367,25 +372,25 @@ export interface ColdCallDataV1 {
   priority: number
 
   who_answered: ColdCallWhoAnswered
-  confirmed_name: '' | 'match_target' | 'different' | 'none'
-  /** When no pre-call target name + right person on line (spec). */
-  cold_no_target_name_status: ColdCallNoTargetNameStatus
-  different_name_note: string
+  /** Gatekeeper / staff on the line (p1 when not right person). */
+  gatekeeper_name: string
+  gatekeeper_title_key: ContactTitleKey | ''
 
   gatekeeper_result: ColdCallGatekeeperResult
-  gatekeeper_got_name: '' | 'yes_later' | 'no'
-  gatekeeper_staff_role: ColdCallGatekeeperStaffRole
 
   voicemail_left: ColdCallVoicemailLeft
   voicemail_followup_timing: ColdCallVoicemailFollowup
 
   no_answer_retry_timing: ColdCallNoAnswerRetry
-  no_answer_notes_flag: '' | 'note' | 'none'
   decision_maker_name: string
   decision_maker_title_key: ContactTitleKey | ''
-  best_time: '' | 'morning' | 'afternoon' | 'evening' | 'specific_later' | 'unsaid'
-  direct_line_flag: '' | 'yes_later' | 'no'
-  message_left_with: '' | 'got_name_later' | 'no_name'
+  best_time: '' | 'morning' | 'afternoon' | 'evening' | 'specific' | 'unsaid'
+  /** When best_time === 'specific' (e.g. "Tuesday after 2pm"). */
+  best_time_specific: string
+  dm_direct_line: ColdCallDmDirectLine
+  decision_maker_direct_phone: string
+  decision_maker_direct_email: string
+  message_taker_name: string
   callback_expected: '' | 'yes' | 'no_retry'
 
   initial_reaction: ColdCallInitialReaction
@@ -394,13 +399,17 @@ export interface ColdCallDataV1 {
   send_to: ColdCallSendTo
 
   event_nights: string[]
-  night_details_flag: '' | 'yes_later' | 'days_only'
+  night_details_note: string
 
   venue_vibes: string[]
 
   booking_process: ColdCallBookingProcess
   decision_maker_same: ColdCallDecisionMakerSame
-  other_decision_maker_flag: '' | 'got_info_later' | 'vague'
+  other_dm_name: string
+  other_dm_title_key: ContactTitleKey | ''
+  other_dm_line: ColdCallDmDirectLine
+  other_dm_phone: string
+  other_dm_email: string
 
   budget_range: ColdCallBudgetRange
   rate_reaction: ColdCallRateReaction
@@ -409,6 +418,8 @@ export interface ColdCallDataV1 {
   venue_type_confirm: ColdCallVenueTypeConfirm
 
   ask_response: ColdCallAskResponse
+  ask_send_channel: ColdCallAskSendChannel
+  ask_followup_when: ColdCallAskFollowupWhen
 
   call_ended_naturally: ColdCallEndedNaturally
   call_duration_feel: ColdCallDurationFeel
@@ -471,24 +482,23 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     priority: 3,
 
     who_answered: '',
-    confirmed_name: '',
-    cold_no_target_name_status: '',
-    different_name_note: '',
+    gatekeeper_name: '',
+    gatekeeper_title_key: '',
 
     gatekeeper_result: '',
-    gatekeeper_got_name: '',
-    gatekeeper_staff_role: '',
 
     voicemail_left: '',
     voicemail_followup_timing: '',
 
     no_answer_retry_timing: '',
-    no_answer_notes_flag: '',
     decision_maker_name: '',
     decision_maker_title_key: '',
     best_time: '',
-    direct_line_flag: '',
-    message_left_with: '',
+    best_time_specific: '',
+    dm_direct_line: '',
+    decision_maker_direct_phone: '',
+    decision_maker_direct_email: '',
+    message_taker_name: '',
     callback_expected: '',
 
     initial_reaction: '',
@@ -497,13 +507,17 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     send_to: '',
 
     event_nights: [],
-    night_details_flag: '',
+    night_details_note: '',
 
     venue_vibes: [],
 
     booking_process: '',
     decision_maker_same: '',
-    other_decision_maker_flag: '',
+    other_dm_name: '',
+    other_dm_title_key: '',
+    other_dm_line: '',
+    other_dm_phone: '',
+    other_dm_email: '',
 
     budget_range: '',
     rate_reaction: '',
@@ -512,6 +526,8 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     venue_type_confirm: '',
 
     ask_response: '',
+    ask_send_channel: '',
+    ask_followup_when: '',
 
     call_ended_naturally: '',
     call_duration_feel: '',
@@ -556,6 +572,51 @@ function asNextActions(v: unknown): ColdCallNextActionKey[] {
     'other',
   ]
   return v.filter((x): x is ColdCallNextActionKey => allowed.includes(x as ColdCallNextActionKey))
+}
+
+function legacyGatekeeperStaffToTitleKey(r: string): ContactTitleKey | '' {
+  const map: Record<string, ContactTitleKey> = {
+    receptionist: 'day_of_coordinator',
+    bartender: 'other',
+    security: 'other',
+    staff: 'other',
+    not_sure: 'other',
+  }
+  return map[r] ?? ''
+}
+
+function parseEndedNaturally(s: string): ColdCallEndedNaturally {
+  if (s === 'clean_wrap' || s === 'they_had_to_go' || s === 'cut_off' || s === 'i_ended_it') return s
+  if (s === 'yes') return 'clean_wrap'
+  if (s === 'had_to_go') return 'they_had_to_go'
+  return ''
+}
+
+function parseSendTo(s: string): ColdCallSendTo {
+  if (s === 'they_find_us') return 'they_already_know'
+  if (s === 'they_already_know' || s === 'email' || s === 'text' || s === 'instagram') return s as ColdCallSendTo
+  return ''
+}
+
+function parseBestTime(s: string): ColdCallDataV1['best_time'] {
+  if (s === 'specific_later') return 'specific'
+  if (s === 'morning' || s === 'afternoon' || s === 'evening' || s === 'specific' || s === 'unsaid') return s
+  return ''
+}
+
+function parseDmDirectLine(s: string): ColdCallDmDirectLine {
+  if (s === 'no' || s === 'phone' || s === 'email' || s === 'both') return s
+  return ''
+}
+
+function parseAskSendChannel(s: string): ColdCallAskSendChannel {
+  if (s === 'email' || s === 'text' || s === 'instagram') return s
+  return ''
+}
+
+function parseAskFollowupWhen(s: string): ColdCallAskFollowupWhen {
+  if (s === 'few_days' || s === 'next_week' || s === 'end_of_month' || s === 'they_reach_out') return s
+  return ''
 }
 
 const COLD_CALL_PURPOSE_WHITELIST: ColdCallPurpose[] = [
@@ -631,22 +692,15 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     priority: typeof o.priority === 'number' && o.priority >= 1 && o.priority <= 5 ? o.priority : base.priority,
 
     who_answered: asStr(o.who_answered, '') as ColdCallWhoAnswered,
-    confirmed_name: asStr(o.confirmed_name, '') as ColdCallDataV1['confirmed_name'],
-    cold_no_target_name_status: ((): ColdCallDataV1['cold_no_target_name_status'] => {
-      const s = asStr(o.cold_no_target_name_status, '')
-      return s === 'deferred' || s === 'not_yet' ? s : ''
+    gatekeeper_name: asStr(o.gatekeeper_name),
+    gatekeeper_title_key: ((): ContactTitleKey | '' => {
+      const direct = asContactTitleKeyField(o.gatekeeper_title_key)
+      if (direct) return direct
+      const staff = asStr(o.gatekeeper_staff_role, '')
+      return staff ? legacyGatekeeperStaffToTitleKey(staff) : ''
     })(),
-    different_name_note: asStr(o.different_name_note),
 
     gatekeeper_result: asStr(o.gatekeeper_result, '') as ColdCallGatekeeperResult,
-    gatekeeper_got_name: ((): ColdCallDataV1['gatekeeper_got_name'] => {
-      const s = asStr(o.gatekeeper_got_name, '')
-      return s === 'yes_later' || s === 'no' ? s : ''
-    })(),
-    gatekeeper_staff_role: ((): ColdCallDataV1['gatekeeper_staff_role'] => {
-      const s = asStr(o.gatekeeper_staff_role, '')
-      return s in COLD_CALL_GATEKEEPER_STAFF_LABELS ? (s as ColdCallGatekeeperStaffRole) : ''
-    })(),
 
     voicemail_left: ((): ColdCallDataV1['voicemail_left'] => {
       const s = asStr(o.voicemail_left, '')
@@ -661,30 +715,38 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
       const s = asStr(o.no_answer_retry_timing, '')
       return s === 'later_today' || s === 'tomorrow' || s === 'next_week' || s === 'remove' ? s : ''
     })(),
-    no_answer_notes_flag: ((): ColdCallDataV1['no_answer_notes_flag'] => {
-      const s = asStr(o.no_answer_notes_flag, '')
-      return s === 'note' || s === 'none' ? s : ''
-    })(),
     decision_maker_name: asStr(o.decision_maker_name),
     decision_maker_title_key: parseDecisionMakerTitleKey(o),
-    best_time: asStr(o.best_time, '') as ColdCallDataV1['best_time'],
-    direct_line_flag: asStr(o.direct_line_flag, '') as ColdCallDataV1['direct_line_flag'],
-    message_left_with: asStr(o.message_left_with, '') as ColdCallDataV1['message_left_with'],
+    best_time: parseBestTime(asStr(o.best_time, '')),
+    best_time_specific: asStr(o.best_time_specific),
+    dm_direct_line: ((): ColdCallDmDirectLine => {
+      const raw = parseDmDirectLine(asStr(o.dm_direct_line, ''))
+      if (raw) return raw
+      const legacy = asStr(o.direct_line_flag, '')
+      return legacy === 'no' ? 'no' : ''
+    })(),
+    decision_maker_direct_phone: asStr(o.decision_maker_direct_phone),
+    decision_maker_direct_email: asStr(o.decision_maker_direct_email),
+    message_taker_name: asStr(o.message_taker_name),
     callback_expected: asStr(o.callback_expected, '') as ColdCallDataV1['callback_expected'],
 
     initial_reaction: asStr(o.initial_reaction, '') as ColdCallInitialReaction,
     pivot_response: asStr(o.pivot_response, '') as ColdCallPivotResponse,
     parking_result: asStr(o.parking_result, '') as ColdCallParkingResult,
-    send_to: asStr(o.send_to, '') as ColdCallSendTo,
+    send_to: parseSendTo(asStr(o.send_to, '')),
 
     event_nights: asStrArr(o.event_nights),
-    night_details_flag: asStr(o.night_details_flag, '') as ColdCallDataV1['night_details_flag'],
+    night_details_note: asStr(o.night_details_note),
 
     venue_vibes: asStrArr(o.venue_vibes),
 
     booking_process: asStr(o.booking_process, '') as ColdCallBookingProcess,
     decision_maker_same: asStr(o.decision_maker_same, '') as ColdCallDecisionMakerSame,
-    other_decision_maker_flag: asStr(o.other_decision_maker_flag, '') as ColdCallDataV1['other_decision_maker_flag'],
+    other_dm_name: asStr(o.other_dm_name),
+    other_dm_title_key: asContactTitleKeyField(o.other_dm_title_key),
+    other_dm_line: parseDmDirectLine(asStr(o.other_dm_line, '')),
+    other_dm_phone: asStr(o.other_dm_phone),
+    other_dm_email: asStr(o.other_dm_email),
 
     budget_range: asStr(o.budget_range, '') as ColdCallBudgetRange,
     rate_reaction: asStr(o.rate_reaction, '') as ColdCallRateReaction,
@@ -693,8 +755,10 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     venue_type_confirm: asStr(o.venue_type_confirm, '') as ColdCallVenueTypeConfirm,
 
     ask_response: asStr(o.ask_response, '') as ColdCallAskResponse,
+    ask_send_channel: parseAskSendChannel(asStr(o.ask_send_channel, '')),
+    ask_followup_when: parseAskFollowupWhen(asStr(o.ask_followup_when, '')),
 
-    call_ended_naturally: asStr(o.call_ended_naturally, '') as ColdCallEndedNaturally,
+    call_ended_naturally: parseEndedNaturally(asStr(o.call_ended_naturally, '')),
     call_duration_feel: asStr(o.call_duration_feel, '') as ColdCallDurationFeel,
     transferred_note: asBool(o.transferred_note),
 

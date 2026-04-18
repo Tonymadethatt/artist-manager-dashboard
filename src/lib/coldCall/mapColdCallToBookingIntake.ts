@@ -11,13 +11,7 @@ import {
 } from '@/lib/intake/intakePayloadV3'
 import type { Venue, VenueType } from '@/types'
 import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
-import {
-  COLD_CALL_GATEKEEPER_STAFF_LABELS,
-  COLD_CALL_WEEKDAY_LABELS,
-  type ColdCallCapacityBucket,
-  type ColdCallDataV1,
-  type ColdCallPurpose,
-} from './coldCallPayload'
+import { COLD_CALL_WEEKDAY_LABELS, type ColdCallCapacityBucket, type ColdCallDataV1, type ColdCallPurpose } from './coldCallPayload'
 import { BUDGET_RANGE_OPTIONS } from '@/pages/cold-call/liveFieldOptions'
 
 export type ColdCallIntakeConversionContext = 'mid_call' | 'post_call'
@@ -135,7 +129,6 @@ function primaryIntakeContactName(d: ColdCallDataV1): string {
   return (
     d.decision_maker_name.trim() ||
     d.target_name.trim() ||
-    d.different_name_note.trim() ||
     d.flag_captures['decision_maker_name']?.trim() ||
     ''
   )
@@ -151,19 +144,15 @@ function primaryIntakeContactRole(d: ColdCallDataV1): string {
 
 export function buildGatekeeperSecondContact(d: ColdCallDataV1): {
   name: string
-  role: string
+  title_key: ContactTitleKey | ''
   phone: string
 } | null {
   if (d.who_answered !== 'gatekeeper') return null
   const dm = d.decision_maker_name.trim()
-  const gk = d.target_name.trim()
+  const gk = d.gatekeeper_name.trim()
   if (!dm || !gk) return null
   if (dm.toLowerCase() === gk.toLowerCase()) return null
-  const role =
-    d.gatekeeper_staff_role && COLD_CALL_GATEKEEPER_STAFF_LABELS[d.gatekeeper_staff_role]
-      ? COLD_CALL_GATEKEEPER_STAFF_LABELS[d.gatekeeper_staff_role]
-      : 'Gatekeeper'
-  return { name: gk, role, phone: d.target_phone.trim() }
+  return { name: gk, title_key: d.gatekeeper_title_key, phone: d.target_phone.trim() }
 }
 
 function inquirySummaryFromCold(d: ColdCallDataV1, callDateIso: string | null): string {
@@ -172,6 +161,14 @@ function inquirySummaryFromCold(d: ColdCallDataV1, callDateIso: string | null): 
   if (d.pitch_angle.trim()) bits.push(`Pitch: ${d.pitch_angle.trim()}`)
   if (d.known_events.trim()) bits.push(`Known for: ${d.known_events.trim()}`)
   if (d.event_nights.length) bits.push(`Nights: ${d.event_nights.join(', ')}`)
+  if (d.night_details_note.trim()) bits.push(`Night note: ${d.night_details_note.trim()}`)
+  if (d.best_time_specific.trim()) bits.push(`Best time detail: ${d.best_time_specific.trim()}`)
+  if (d.decision_maker_direct_phone.trim()) bits.push(`DM phone: ${d.decision_maker_direct_phone.trim()}`)
+  if (d.decision_maker_direct_email.trim()) bits.push(`DM email: ${d.decision_maker_direct_email.trim()}`)
+  if (d.message_taker_name.trim()) bits.push(`Message with: ${d.message_taker_name.trim()}`)
+  if (d.other_dm_name.trim()) bits.push(`Also reach: ${d.other_dm_name.trim()}`)
+  if (d.ask_send_channel) bits.push(`Send info via: ${d.ask_send_channel}`)
+  if (d.ask_followup_when) bits.push(`Follow up when: ${d.ask_followup_when}`)
   if (d.budget_range) {
     const label = BUDGET_RANGE_OPTIONS.find(o => o.id === d.budget_range)?.label
     if (label) bits.push(`Budget: ${label}`)
@@ -217,8 +214,8 @@ export function buildIntakeBundleFromColdCall(
   venue.existing_venue_id = options.resolvedExistingVenueId
   venue.contact_name = contactName
   venue.contact_role = contactRole
-  venue.contact_phone = d.target_phone.trim()
-  venue.contact_email = d.target_email.trim()
+  venue.contact_phone = d.decision_maker_direct_phone.trim() || d.target_phone.trim()
+  venue.contact_email = d.decision_maker_direct_email.trim() || d.target_email.trim()
   venue.contact_company = venueName
   venue.known_venue_name = venueName
   venue.known_city = d.city.trim()

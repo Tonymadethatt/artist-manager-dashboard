@@ -38,7 +38,6 @@ import {
   resolveColdCallOutreachVenueId,
 } from '@/lib/coldCall/mapColdCallToBookingIntake'
 import {
-  COLD_CALL_GATEKEEPER_STAFF_LABELS,
   COLD_CALL_HOW_FOUND_LABELS,
   COLD_CALL_NEXT_ACTION_LABELS,
   COLD_CALL_OUTCOME_LABELS,
@@ -50,6 +49,7 @@ import {
   type ColdCallDataV1,
   type ColdCallNextActionKey,
   type ColdCallTemperature,
+  type ColdCallVenueTypeConfirm,
 } from '@/lib/coldCall/coldCallPayload'
 import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
 import { CONTACT_TITLE_LABELS } from '@/lib/contacts/contactTitles'
@@ -75,14 +75,16 @@ import {
 } from '@/components/ui/select'
 import { coldCallLiveScriptBeats, coldCallScriptContext, liveCardStepTitle } from '@/pages/cold-call/liveCardCopy'
 import {
+  ASK_FOLLOWUP_WHEN_OPTIONS,
   ASK_RESPONSE_OPTIONS,
+  ASK_SEND_CHANNEL_OPTIONS,
   BEST_TIME_OPTIONS,
   BOOKING_PROCESS_OPTIONS,
   BUDGET_RANGE_OPTIONS,
   CALL_PURPOSE_TOGGLE,
   CAPACITY_OPTIONS,
-  CONFIRMED_NAME_OPTIONS,
   DECISION_SAME_OPTIONS,
+  DM_DIRECT_LINE_OPTIONS,
   DURATION_OPTIONS,
   ENDED_OPTIONS,
   GATEKEEPER_RESULT_OPTIONS,
@@ -373,12 +375,30 @@ export default function ColdCallFormPage() {
     if (auto !== data.outcome) patch({ outcome: auto })
   }, [selectedId, data, patch])
 
-  /** p4c: "This person decides" implies you're talking to the booker — keep routing fields consistent with saved rows that predate branching. */
+  /** p4c: "This person decides" implies you're talking to the booker. */
   useEffect(() => {
     if (!selectedId || !data) return
     if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4c') return
     if (data.booking_process === 'this_person' && data.decision_maker_same !== 'yes') {
-      patch({ decision_maker_same: 'yes', other_decision_maker_flag: '' })
+      patch({ decision_maker_same: 'yes' })
+    }
+  }, [selectedId, data, patch])
+
+  useEffect(() => {
+    if (!selectedId || !data) return
+    if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4d') return
+    if (data.budget_range === 'no_say' && data.rate_reaction !== 'skipped') {
+      patch({ rate_reaction: 'skipped' })
+    }
+  }, [selectedId, data, patch])
+
+  useEffect(() => {
+    if (!selectedId || !data) return
+    if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4e') return
+    const vt = data.venue_type.trim()
+    const allowed: ColdCallVenueTypeConfirm[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
+    if (!data.venue_type_confirm && vt && (allowed as string[]).includes(vt)) {
+      patch({ venue_type_confirm: vt as ColdCallVenueTypeConfirm })
     }
   }, [selectedId, data, patch])
 
@@ -547,7 +567,8 @@ export default function ColdCallFormPage() {
   const handleConvert = async () => {
     if (!selectedId || !data || !selectedRow) return
     const venueOk = data.venue_name.trim()
-    const nameOk = data.decision_maker_name.trim() || data.target_name.trim()
+    const nameOk =
+      data.decision_maker_name.trim() || data.target_name.trim() || data.gatekeeper_name.trim()
     const phoneOk = data.target_phone.trim()
     if (!venueOk || !nameOk || !phoneOk) {
       setConvertInlineError(
@@ -763,53 +784,43 @@ export default function ColdCallFormPage() {
                 {data.who_answered === 'right_person' ? (
                   <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Name on the line</Label>
+                      <Label className="text-neutral-400 text-xs">Name</Label>
                       <Input
                         className="h-10 border-neutral-800 bg-neutral-950/80"
                         value={data.target_name}
                         onChange={e => patch({ target_name: e.target.value })}
                         placeholder="Type their name if they gave it"
                       />
-                      <p className="text-[11px] text-neutral-500">
-                        If they didn’t introduce themselves yet, leave blank and pick a status below.
-                      </p>
                     </div>
-                    {data.target_name.trim() ? (
-                      <div className="space-y-1.5">
-                        <Label className="text-neutral-400 text-xs">Name check</Label>
-                        <SelectChipRow
-                          value={data.confirmed_name}
-                          onChange={v => patch({ confirmed_name: v })}
-                          options={CONFIRMED_NAME_OPTIONS}
-                        />
-                        {data.confirmed_name === 'different' ? (
-                          <Input
-                            className="h-10 border-neutral-800 bg-neutral-950/80"
-                            value={data.different_name_note}
-                            onChange={e => patch({ different_name_note: e.target.value })}
-                            placeholder="Their name"
-                          />
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <Label className="text-neutral-400 text-xs">No name yet?</Label>
-                        <SelectChipRow
-                          value={data.cold_no_target_name_status}
-                          onChange={v => patch({ cold_no_target_name_status: v })}
-                          options={[
-                            { id: 'deferred', label: 'Will capture later' },
-                            { id: 'not_yet', label: 'Hasn’t said yet' },
-                          ]}
-                        />
-                      </div>
-                    )}
                     <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Their title</Label>
+                      <Label className="text-neutral-400 text-xs">Title</Label>
                       <ContactTitleSelect
                         allowEmpty
                         value={data.target_title_key}
                         onValueChange={key => patch({ target_title_key: key })}
+                        placeholder="Select title"
+                        triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {data.who_answered === 'gatekeeper' ? (
+                  <div className="space-y-3 border-t border-white/[0.06] pt-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Gatekeeper name</Label>
+                      <Input
+                        className="h-10 border-neutral-800 bg-neutral-950/80"
+                        value={data.gatekeeper_name}
+                        onChange={e => patch({ gatekeeper_name: e.target.value })}
+                        placeholder="Their name if they gave it"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Gatekeeper title</Label>
+                      <ContactTitleSelect
+                        allowEmpty
+                        value={data.gatekeeper_title_key}
+                        onValueChange={key => patch({ gatekeeper_title_key: key })}
                         placeholder="Select title"
                         triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
                       />
@@ -834,27 +845,6 @@ export default function ColdCallFormPage() {
                   onChange={v => patch({ gatekeeper_result: v })}
                   options={GATEKEEPER_RESULT_OPTIONS}
                 />
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Name or callback — captured?</Label>
-                  <SelectChipRow
-                    value={data.gatekeeper_got_name}
-                    onChange={v => patch({ gatekeeper_got_name: v })}
-                    options={[
-                      { id: 'yes_later', label: 'Yes — fill in later' },
-                      { id: 'no', label: 'No' },
-                    ]}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Their role (who you spoke with)</Label>
-                  <SelectChipRow
-                    value={data.gatekeeper_staff_role}
-                    onChange={v => patch({ gatekeeper_staff_role: v })}
-                    options={(Object.keys(COLD_CALL_GATEKEEPER_STAFF_LABELS) as (keyof typeof COLD_CALL_GATEKEEPER_STAFF_LABELS)[]).map(
-                      k => ({ id: k, label: COLD_CALL_GATEKEEPER_STAFF_LABELS[k] }),
-                    )}
-                  />
-                </div>
               </div>
             }
           />
@@ -885,20 +875,55 @@ export default function ColdCallFormPage() {
                     triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-neutral-400 text-xs">Best time</Label>
-                  <SelectChipRow value={data.best_time} onChange={v => patch({ best_time: v })} options={BEST_TIME_OPTIONS} />
+                  <SelectChipRow
+                    value={data.best_time}
+                    onChange={v => patch({ best_time: v, best_time_specific: v !== 'specific' ? '' : data.best_time_specific })}
+                    options={BEST_TIME_OPTIONS}
+                  />
+                  {data.best_time === 'specific' ? (
+                    <Input
+                      className="h-10 border-neutral-800 bg-neutral-950/80"
+                      placeholder="e.g., Tuesday after 2pm"
+                      value={data.best_time_specific}
+                      onChange={e => patch({ best_time_specific: e.target.value })}
+                    />
+                  ) : null}
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-neutral-400 text-xs">Direct line / email?</Label>
+                  <Label className="text-neutral-400 text-xs">Direct line / email</Label>
                   <SelectChipRow
-                    value={data.direct_line_flag}
-                    onChange={v => patch({ direct_line_flag: v })}
-                    options={[
-                      { id: 'yes_later', label: 'Yes — capture later' },
-                      { id: 'no', label: 'No' },
-                    ]}
+                    value={data.dm_direct_line}
+                    onChange={v =>
+                      patch({
+                        dm_direct_line: v,
+                        decision_maker_direct_phone: v === 'email' || v === 'no' ? '' : data.decision_maker_direct_phone,
+                        decision_maker_direct_email: v === 'phone' || v === 'no' ? '' : data.decision_maker_direct_email,
+                      })
+                    }
+                    options={DM_DIRECT_LINE_OPTIONS}
                   />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {data.dm_direct_line === 'phone' || data.dm_direct_line === 'both' ? (
+                      <Input
+                        className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
+                        type="tel"
+                        placeholder="Phone"
+                        value={data.decision_maker_direct_phone}
+                        onChange={e => patch({ decision_maker_direct_phone: e.target.value })}
+                      />
+                    ) : null}
+                    {data.dm_direct_line === 'email' || data.dm_direct_line === 'both' ? (
+                      <Input
+                        className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
+                        type="email"
+                        placeholder="Email"
+                        value={data.decision_maker_direct_email}
+                        onChange={e => patch({ decision_maker_direct_email: e.target.value })}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </div>
             }
@@ -912,22 +937,26 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <SelectChipRow
-                  value={data.message_left_with}
-                  onChange={v => patch({ message_left_with: v })}
-                  options={[
-                    { id: 'got_name_later', label: 'Got name — later' },
-                    { id: 'no_name', label: 'No name' },
-                  ]}
-                />
-                <SelectChipRow
-                  value={data.callback_expected}
-                  onChange={v => patch({ callback_expected: v })}
-                  options={[
-                    { id: 'yes', label: 'Expecting callback' },
-                    { id: 'no_retry', label: 'No — I’ll try again' },
-                  ]}
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Who took the message?</Label>
+                  <Input
+                    className="h-10 border-neutral-800 bg-neutral-950/80"
+                    placeholder="Name if they gave it"
+                    value={data.message_taker_name}
+                    onChange={e => patch({ message_taker_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Callback expected?</Label>
+                  <SelectChipRow
+                    value={data.callback_expected}
+                    onChange={v => patch({ callback_expected: v })}
+                    options={[
+                      { id: 'yes', label: 'Yes — they’ll call back' },
+                      { id: 'no_retry', label: 'No — I’ll try again' },
+                    ]}
+                  />
+                </div>
               </div>
             }
           />
@@ -987,14 +1016,15 @@ export default function ColdCallFormPage() {
                   labels={dayLabels}
                   onChange={next => patch({ event_nights: next })}
                 />
-                <SelectChipRow
-                  value={data.night_details_flag}
-                  onChange={v => patch({ night_details_flag: v })}
-                  options={[
-                    { id: 'yes_later', label: 'Yes — specifics later' },
-                    { id: 'days_only', label: 'Just the days' },
-                  ]}
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Quick note (optional)</Label>
+                  <Input
+                    className="h-10 border-neutral-800 bg-neutral-950/80"
+                    placeholder="e.g., Latin Thursdays, hip-hop Saturdays"
+                    value={data.night_details_note}
+                    onChange={e => patch({ night_details_note: e.target.value })}
+                  />
+                </div>
               </div>
             }
           />
@@ -1039,35 +1069,97 @@ export default function ColdCallFormPage() {
                     value={data.booking_process}
                     onChange={v => {
                       if (v === 'this_person') {
-                        patch({ booking_process: v, decision_maker_same: 'yes', other_decision_maker_flag: '' })
+                        patch({
+                          booking_process: v,
+                          decision_maker_same: 'yes',
+                          other_dm_name: '',
+                          other_dm_title_key: '',
+                          other_dm_line: '',
+                          other_dm_phone: '',
+                          other_dm_email: '',
+                        })
+                      } else if (v === 'someone_else' || v === 'committee') {
+                        patch({ booking_process: v, decision_maker_same: '' })
                       } else {
-                        patch({ booking_process: v, decision_maker_same: '', other_decision_maker_flag: '' })
+                        patch({
+                          booking_process: v,
+                          decision_maker_same: '',
+                          other_dm_name: '',
+                          other_dm_title_key: '',
+                          other_dm_line: '',
+                          other_dm_phone: '',
+                          other_dm_email: '',
+                        })
                       }
                     }}
                     options={BOOKING_PROCESS_OPTIONS}
                   />
                 </div>
-                {data.booking_process && data.booking_process !== 'this_person' ? (
+                {data.booking_process === 'unsaid' ? (
                   <div className="space-y-1.5">
                     <Label className="text-neutral-400 text-xs">Talking to the decision-maker?</Label>
                     <SelectChipRow
                       value={data.decision_maker_same}
-                      onChange={v => patch({ decision_maker_same: v, other_decision_maker_flag: '' })}
+                      onChange={v => patch({ decision_maker_same: v })}
                       options={DECISION_SAME_OPTIONS}
                     />
                   </div>
                 ) : null}
-                {data.booking_process && data.booking_process !== 'this_person' && data.decision_maker_same === 'no' ? (
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">How much did you get about who decides?</Label>
-                    <SelectChipRow
-                      value={data.other_decision_maker_flag}
-                      onChange={v => patch({ other_decision_maker_flag: v })}
-                      options={[
-                        { id: 'got_info_later', label: 'Got info — later' },
-                        { id: 'vague', label: 'They were vague' },
-                      ]}
-                    />
+                {data.booking_process === 'someone_else' || data.booking_process === 'committee' ? (
+                  <div className="space-y-3 border-t border-white/[0.06] pt-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Who should I talk to?</Label>
+                      <Input
+                        className="h-10 border-neutral-800 bg-neutral-950/80"
+                        placeholder="Name if they gave it"
+                        value={data.other_dm_name}
+                        onChange={e => patch({ other_dm_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Their title</Label>
+                      <ContactTitleSelect
+                        allowEmpty
+                        value={data.other_dm_title_key}
+                        onValueChange={key => patch({ other_dm_title_key: key })}
+                        placeholder="Select title"
+                        triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Contact info?</Label>
+                      <SelectChipRow
+                        value={data.other_dm_line}
+                        onChange={v =>
+                          patch({
+                            other_dm_line: v,
+                            other_dm_phone: v === 'email' || v === 'no' ? '' : data.other_dm_phone,
+                            other_dm_email: v === 'phone' || v === 'no' ? '' : data.other_dm_email,
+                          })
+                        }
+                        options={DM_DIRECT_LINE_OPTIONS}
+                      />
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {data.other_dm_line === 'phone' || data.other_dm_line === 'both' ? (
+                          <Input
+                            className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
+                            type="tel"
+                            placeholder="Phone"
+                            value={data.other_dm_phone}
+                            onChange={e => patch({ other_dm_phone: e.target.value })}
+                          />
+                        ) : null}
+                        {data.other_dm_line === 'email' || data.other_dm_line === 'both' ? (
+                          <Input
+                            className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
+                            type="email"
+                            placeholder="Email"
+                            value={data.other_dm_email}
+                            onChange={e => patch({ other_dm_email: e.target.value })}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -1084,9 +1176,15 @@ export default function ColdCallFormPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Budget range</Label>
-                  <SelectChipRow value={data.budget_range} onChange={v => patch({ budget_range: v })} options={BUDGET_RANGE_OPTIONS} />
+                  <SelectChipRow
+                    value={data.budget_range}
+                    onChange={v => patch({ budget_range: v, rate_reaction: v === 'no_say' ? 'skipped' : data.rate_reaction })}
+                    options={BUDGET_RANGE_OPTIONS}
+                  />
                 </div>
-                <SelectChipRow value={data.rate_reaction} onChange={v => patch({ rate_reaction: v })} options={RATE_REACTION_OPTIONS} />
+                {data.budget_range !== 'no_say' ? (
+                  <SelectChipRow value={data.rate_reaction} onChange={v => patch({ rate_reaction: v })} options={RATE_REACTION_OPTIONS} />
+                ) : null}
               </div>
             }
           />
@@ -1099,6 +1197,11 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="grid gap-3 sm:grid-cols-2">
+                {data.venue_type.trim() || data.capacity_range ? (
+                  <p className="text-[11px] text-neutral-500 sm:col-span-2">
+                    From your research when set — update if the call changed your read.
+                  </p>
+                ) : null}
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Capacity</Label>
                   <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
@@ -1122,7 +1225,39 @@ export default function ColdCallFormPage() {
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
-              <SelectChipRow value={data.ask_response} onChange={v => patch({ ask_response: v })} options={ASK_RESPONSE_OPTIONS} />
+              <div className="space-y-3">
+                <SelectChipRow
+                  value={data.ask_response}
+                  onChange={v =>
+                    patch({
+                      ask_response: v,
+                      ask_send_channel: '',
+                      ask_followup_when: '',
+                    })
+                  }
+                  options={ASK_RESPONSE_OPTIONS}
+                />
+                {data.ask_response === 'send_info_first' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Send via</Label>
+                    <SelectChipRow
+                      value={data.ask_send_channel}
+                      onChange={v => patch({ ask_send_channel: v })}
+                      options={ASK_SEND_CHANNEL_OPTIONS}
+                    />
+                  </div>
+                ) : null}
+                {data.ask_response === 'check_back' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">When should I follow up?</Label>
+                    <SelectChipRow
+                      value={data.ask_followup_when}
+                      onChange={v => patch({ ask_followup_when: v })}
+                      options={ASK_FOLLOWUP_WHEN_OPTIONS}
+                    />
+                  </div>
+                ) : null}
+              </div>
             }
           />
         )
@@ -1210,17 +1345,6 @@ export default function ColdCallFormPage() {
                       { id: 'tomorrow', label: 'Tomorrow' },
                       { id: 'next_week', label: 'Next week' },
                       { id: 'remove', label: 'Drop this lead' },
-                    ]}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Notes</Label>
-                  <SelectChipRow
-                    value={data.no_answer_notes_flag}
-                    onChange={v => patch({ no_answer_notes_flag: v })}
-                    options={[
-                      { id: 'note', label: 'Add note after' },
-                      { id: 'none', label: 'Nothing to add' },
                     ]}
                   />
                 </div>

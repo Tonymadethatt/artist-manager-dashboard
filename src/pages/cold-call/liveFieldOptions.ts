@@ -25,12 +25,6 @@ export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] 
   { id: 'no_answer', label: 'No answer' },
 ]
 
-export const CONFIRMED_NAME_OPTIONS: { id: 'match_target' | 'different' | 'none'; label: string }[] = [
-  { id: 'match_target', label: 'Yes — it’s them' },
-  { id: 'different', label: 'No — different person' },
-  { id: 'none', label: 'No name from them yet' },
-]
-
 export const GATEKEEPER_RESULT_OPTIONS: { id: ColdCallGatekeeperResult; label: string }[] = [
   { id: 'gave_name', label: 'They gave me a name' },
   { id: 'transferred', label: 'They transferred me' },
@@ -62,7 +56,7 @@ export const SEND_TO_OPTIONS: { id: ColdCallSendTo; label: string }[] = [
   { id: 'email', label: 'Email' },
   { id: 'text', label: 'Text' },
   { id: 'instagram', label: 'Instagram DM' },
-  { id: 'they_find_us', label: 'They’ll find us' },
+  { id: 'they_already_know', label: 'They already know about us' },
 ]
 
 export const BOOKING_PROCESS_OPTIONS: { id: ColdCallBookingProcess; label: string }[] = [
@@ -116,15 +110,32 @@ export const VENUE_TYPE_CONFIRM_OPTIONS: { id: ColdCallVenueTypeConfirm; label: 
 export const ASK_RESPONSE_OPTIONS: { id: ColdCallAskResponse; label: string }[] = [
   { id: 'yes_setup', label: 'Yes — let’s set something up' },
   { id: 'check_back', label: 'I need to check and get back' },
-  { id: 'send_info_first', label: 'Send me his info first' },
+  { id: 'send_info_first', label: 'Send me info first' },
   { id: 'not_now', label: 'Not right now' },
   { id: 'no', label: 'No' },
 ]
 
+export const ASK_SEND_CHANNEL_OPTIONS: { id: 'email' | 'text' | 'instagram'; label: string }[] = [
+  { id: 'email', label: 'Email' },
+  { id: 'text', label: 'Text' },
+  { id: 'instagram', label: 'Instagram DM' },
+]
+
+export const ASK_FOLLOWUP_WHEN_OPTIONS: {
+  id: 'few_days' | 'next_week' | 'end_of_month' | 'they_reach_out'
+  label: string
+}[] = [
+  { id: 'few_days', label: 'A few days' },
+  { id: 'next_week', label: 'Next week' },
+  { id: 'end_of_month', label: 'End of month' },
+  { id: 'they_reach_out', label: 'They’ll reach out' },
+]
+
 export const ENDED_OPTIONS: { id: ColdCallEndedNaturally; label: string }[] = [
-  { id: 'yes', label: 'Yes' },
-  { id: 'had_to_go', label: 'They had to go' },
+  { id: 'clean_wrap', label: 'Clean wrap' },
+  { id: 'they_had_to_go', label: 'They had to go' },
   { id: 'cut_off', label: 'Got cut off' },
+  { id: 'i_ended_it', label: 'I ended it' },
 ]
 
 export const DURATION_OPTIONS: { id: ColdCallDurationFeel; label: string }[] = [
@@ -146,6 +157,13 @@ export const BEST_TIME_OPTIONS: { id: ColdCallDataV1['best_time']; label: string
   { id: 'morning', label: 'Morning' },
   { id: 'afternoon', label: 'Afternoon' },
   { id: 'evening', label: 'Evening' },
-  { id: 'specific_later', label: 'Specific day — later' },
+  { id: 'specific', label: 'Specific day' },
   { id: 'unsaid', label: 'They didn’t say' },
+]
+
+export const DM_DIRECT_LINE_OPTIONS: { id: Exclude<ColdCallDataV1['dm_direct_line'], ''>; label: string }[] = [
+  { id: 'phone', label: 'Got a number' },
+  { id: 'email', label: 'Got an email' },
+  { id: 'both', label: 'Got both' },
+  { id: 'no', label: 'No' },
 ]

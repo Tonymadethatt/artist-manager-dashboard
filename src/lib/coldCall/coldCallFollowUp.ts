@@ -42,7 +42,16 @@ export function suggestColdCallFollowUpDate(d: ColdCallDataV1): string {
   if (d.gatekeeper_result === 'message') return addDays(now, 3)
   if (d.parking_result === 'try_later') return addDays(now, 30)
   if (d.ask_response === 'send_info_first') return addDays(now, 4)
-  if (d.ask_response === 'check_back') return addBusinessDays(now, 4)
+  if (d.ask_response === 'check_back') {
+    if (d.ask_followup_when === 'few_days') return addDays(now, 3)
+    if (d.ask_followup_when === 'next_week') return addDays(now, 7)
+    if (d.ask_followup_when === 'end_of_month') {
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      return ymd(end)
+    }
+    if (d.ask_followup_when === 'they_reach_out') return ''
+    return addBusinessDays(now, 4)
+  }
   if (d.ask_response === 'yes_setup') return addDays(now, 2)
   const temp = d.operator_temperature || d.final_temperature
   if (temp === 'hot' || temp === 'converting') return addDays(now, 2)

@@ -67,7 +67,7 @@ export function coldCallScriptContext(profile: ArtistProfile | null): ColdCallSc
 function nameOrHey(d: ColdCallDataV1): string {
   const raw =
     d.target_name.trim()
-    || (d.confirmed_name === 'different' ? d.different_name_note : '')
+    || (d.who_answered === 'gatekeeper' ? d.gatekeeper_name.trim() : '')
     || d.decision_maker_name.trim()
   return coldCallFirstName(raw)
 }

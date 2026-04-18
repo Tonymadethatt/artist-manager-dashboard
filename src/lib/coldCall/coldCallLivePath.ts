@@ -73,18 +73,29 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       need('who_answered', !!d.who_answered, 'Pick who picked up.')
       if (d.who_answered === 'right_person') {
         need('target_title_key', !!d.target_title_key, 'Pick their title.')
-        if (d.target_name.trim()) {
-          need('confirmed_name', !!d.confirmed_name, 'Confirm the name.')
-        } else {
-          need('cold_no_target_name_status', !!d.cold_no_target_name_status, 'Pick one.')
-        }
       }
       break
     }
     case 'p2a': {
       need('gatekeeper_result', !!d.gatekeeper_result, 'Pick what happened.')
-      need('gatekeeper_got_name', !!d.gatekeeper_got_name, 'Pick one.')
-      need('gatekeeper_staff_role', !!d.gatekeeper_staff_role, 'Pick their role.')
+      break
+    }
+    case 'p2a_detail': {
+      need('best_time', !!d.best_time, 'Pick best time.')
+      need('dm_direct_line', !!d.dm_direct_line, 'Pick direct line / email if any.')
+      if (d.best_time === 'specific') {
+        need('best_time_specific', !!d.best_time_specific.trim(), 'Add the specific day or time.')
+      }
+      if (d.dm_direct_line === 'phone' || d.dm_direct_line === 'both') {
+        need('decision_maker_direct_phone', !!d.decision_maker_direct_phone.trim(), 'Add their phone.')
+      }
+      if (d.dm_direct_line === 'email' || d.dm_direct_line === 'both') {
+        need('decision_maker_direct_email', !!d.decision_maker_direct_email.trim(), 'Add their email.')
+      }
+      break
+    }
+    case 'p2_msg': {
+      need('callback_expected', !!d.callback_expected, 'Pick callback expectation.')
       break
     }
     case 'p3':
@@ -93,19 +104,42 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
     case 'p3b':
       need('pivot_response', !!d.pivot_response, 'Pick one.')
       break
-    case 'p3c':
+    case 'p3c': {
       need('parking_result', !!d.parking_result, 'Pick one.')
+      if (d.parking_result === 'send_info') {
+        need('send_to', !!d.send_to, 'Pick how to send info.')
+      }
       break
+    }
     case 'p4a':
       need('event_nights', d.event_nights.length > 0, 'Select at least one night.')
       break
-    case 'p4c':
+    case 'p4c': {
       need('booking_process', !!d.booking_process, 'Pick who handles booking.')
-      need('decision_maker_same', !!d.decision_maker_same, 'Pick one.')
+      if (d.booking_process === 'unsaid') {
+        need('decision_maker_same', !!d.decision_maker_same, 'Pick one.')
+      }
+      if (d.booking_process === 'someone_else' || d.booking_process === 'committee') {
+        need('other_dm_line', !!d.other_dm_line, 'Pick contact info if any.')
+        if (d.other_dm_line === 'phone' || d.other_dm_line === 'both') {
+          need('other_dm_phone', !!d.other_dm_phone.trim(), 'Add their phone.')
+        }
+        if (d.other_dm_line === 'email' || d.other_dm_line === 'both') {
+          need('other_dm_email', !!d.other_dm_email.trim(), 'Add their email.')
+        }
+      }
       break
-    case 'p5':
+    }
+    case 'p5': {
       need('ask_response', !!d.ask_response, 'Pick their answer.')
+      if (d.ask_response === 'send_info_first') {
+        need('ask_send_channel', !!d.ask_send_channel, 'Pick how to send info.')
+      }
+      if (d.ask_response === 'check_back') {
+        need('ask_followup_when', !!d.ask_followup_when, 'Pick when to follow up.')
+      }
       break
+    }
     case 'p6':
       need('call_ended_naturally', !!d.call_ended_naturally, 'Pick how the call ended.')
       need('call_duration_feel', !!d.call_duration_feel, 'Pick duration.')
@@ -116,7 +150,6 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       break
     case 'p6_na':
       need('no_answer_retry_timing', !!d.no_answer_retry_timing, 'Pick one.')
-      need('no_answer_notes_flag', !!d.no_answer_notes_flag, 'Pick one.')
       break
     default:
       break
