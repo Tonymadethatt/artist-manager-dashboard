@@ -4,16 +4,24 @@ import {
   emptyVenueDataV3,
   INTAKE_DEFAULT_EVENT_CITY_TEXT,
   INTAKE_DEFAULT_EVENT_STATE_REGION,
+  mapVibePresetIdsToGenres,
   MUSIC_VIBE_PRESETS,
+  type Phase2RecurrenceIntervalV3,
+  type Phase2EventScheduleV3,
 } from '@/lib/intake/intakePayloadV3'
-import type { VenueType } from '@/types'
+import type { Venue, VenueType } from '@/types'
 import {
-  COLD_CALL_TARGET_ROLE_LABELS,
+  COLD_CALL_GATEKEEPER_STAFF_LABELS,
+  COLD_CALL_WEEKDAY_LABELS,
   type ColdCallCapacityBucket,
   type ColdCallDataV1,
+  type ColdCallPurpose,
   type ColdCallTargetRole,
-  defaultColdCallTitle,
+  COLD_CALL_TARGET_ROLE_LABELS,
 } from './coldCallPayload'
+import { BUDGET_RANGE_OPTIONS } from '@/pages/cold-call/liveFieldOptions'
+
+export type ColdCallIntakeConversionContext = 'mid_call' | 'post_call'
 
 function targetRoleLabel(role: ColdCallTargetRole): string {
   if (!role) return ''
@@ -54,38 +62,141 @@ function venueTypeFromCold(d: ColdCallDataV1): VenueType {
   return 'other'
 }
 
-function genresFromVibeIds(ids: string[]): BookingIntakeShowDataV3['genres'] {
-  const out = new Set<string>()
-  for (const id of ids) {
-    const preset = MUSIC_VIBE_PRESETS.find(p => p.id === id)
-    if (preset) for (const g of preset.genres) out.add(g)
-  }
-  if (out.size === 0) return [...MUSIC_VIBE_PRESETS[0].genres]
-  return [...out] as BookingIntakeShowDataV3['genres']
+/** Match outreach venue by name + city (case-insensitive). */
+export function findMatchingOutreachVenue(venues: Venue[], name: string, city: string): Venue | null {
+  const nn = name.trim().toLowerCase()
+  const cc = city.trim().toLowerCase()
+  if (!nn) return null
+  return (
+    venues.find(v => {
+      const vn = (v.name ?? '').trim().toLowerCase()
+      if (vn !== nn) return false
+      if (!cc) return true
+      const vc = (v.city ?? '').trim().toLowerCase()
+      return vc === cc
+    }) ?? null
+  )
 }
 
-function primaryContactName(d: ColdCallDataV1): string {
+export function resolveColdCallOutreachVenueId(d: ColdCallDataV1, venues: Venue[]): string | null {
+  if (d.existing_venue_id && venues.some(v => v.id === d.existing_venue_id)) return d.existing_venue_id
+  const hit = findMatchingOutreachVenue(venues, d.venue_name, d.city)
+  return hit?.id ?? null
+}
+
+/** Maps cold call purpose to intake §2A schedule fields. */
+export function mapCallPurposeToEventSchedule(purpose: ColdCallPurpose): {
+  event_schedule_type: Phase2EventScheduleV3
+  event_recurrence_interval: Phase2RecurrenceIntervalV3
+} {
+  switch (purpose) {
+    case 'residency':
+      return { event_schedule_type: 'recurring', event_recurrence_interval: 'weekly' }
+    case 'one_time':
+    case 'upcoming_event':
+      return { event_schedule_type: 'one_off', event_recurrence_interval: '' }
+    case 'availability':
+    case 'follow_up':
+    case '':
+    default:
+      return { event_schedule_type: 'one_off', event_recurrence_interval: '' }
+  }
+}
+
+/**
+ * Next occurrence of the first selected weekday (cold call uses full day names like "Thursday").
+ * Uses local timezone; returns YYYY-MM-DD or null.
+ */
+export function suggestDateFromColdCallNights(nights: string[]): string | null {
+  if (!nights.length) return null
+  const first = nights[0]!.trim()
+  const idx = (COLD_CALL_WEEKDAY_LABELS as readonly string[]).indexOf(first)
+  if (idx < 0) return null
+  const targetDow = idx === 6 ? 0 : idx + 1
+  const today = new Date()
+  const todayDow = today.getDay()
+  let daysUntil = targetDow - todayDow
+  if (daysUntil <= 0) daysUntil += 7
+  const suggested = new Date(today)
+  suggested.setDate(today.getDate() + daysUntil)
+  const y = suggested.getFullYear()
+  const m = String(suggested.getMonth() + 1).padStart(2, '0')
+  const day = String(suggested.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function coldCallBudgetPrefillNote(range: ColdCallDataV1['budget_range']): string {
+  if (!range) return ''
+  const label = BUDGET_RANGE_OPTIONS.find(o => o.id === range)?.label
+  if (!label) return ''
+  return `Budget discussed on cold call: ${label}`
+}
+
+function primaryIntakeContactName(d: ColdCallDataV1): string {
   return (
-    d.target_name.trim() ||
     d.decision_maker_name.trim() ||
+    d.target_name.trim() ||
     d.different_name_note.trim() ||
     d.flag_captures['decision_maker_name']?.trim() ||
     ''
   )
 }
 
-function inquirySummaryFromCold(d: ColdCallDataV1): string {
+function primaryIntakeContactRole(d: ColdCallDataV1): string {
+  if (d.decision_maker_name.trim()) {
+    return targetRoleLabel(d.decision_maker_role || d.target_role)
+  }
+  return targetRoleLabel(d.target_role)
+}
+
+export function buildGatekeeperSecondContact(d: ColdCallDataV1): {
+  name: string
+  role: string
+  phone: string
+} | null {
+  if (d.who_answered !== 'gatekeeper') return null
+  const dm = d.decision_maker_name.trim()
+  const gk = d.target_name.trim()
+  if (!dm || !gk) return null
+  if (dm.toLowerCase() === gk.toLowerCase()) return null
+  const role =
+    d.gatekeeper_staff_role && COLD_CALL_GATEKEEPER_STAFF_LABELS[d.gatekeeper_staff_role]
+      ? COLD_CALL_GATEKEEPER_STAFF_LABELS[d.gatekeeper_staff_role]
+      : 'Gatekeeper'
+  return { name: gk, role, phone: d.target_phone.trim() }
+}
+
+function inquirySummaryFromCold(d: ColdCallDataV1, callDateIso: string | null): string {
   const bits: string[] = []
+  if (callDateIso?.trim()) bits.push(`Call date: ${callDateIso.trim()}`)
   if (d.pitch_angle.trim()) bits.push(`Pitch: ${d.pitch_angle.trim()}`)
   if (d.known_events.trim()) bits.push(`Known for: ${d.known_events.trim()}`)
   if (d.event_nights.length) bits.push(`Nights: ${d.event_nights.join(', ')}`)
-  if (d.budget_range) bits.push(`Budget (cold call): ${d.budget_range}`)
+  if (d.budget_range) {
+    const label = BUDGET_RANGE_OPTIONS.find(o => o.id === d.budget_range)?.label
+    if (label) bits.push(`Budget: ${label}`)
+  }
   if (d.call_notes.trim()) bits.push(`Notes: ${d.call_notes.trim()}`)
   return bits.join(' · ').slice(0, 4000)
 }
 
+function validMusicVibePresetIds(ids: string[]): string[] {
+  const allowed = new Set(MUSIC_VIBE_PRESETS.map(p => p.id))
+  return ids.filter(id => allowed.has(id))
+}
+
 /** Build booking intake bundle after cold call conversion (§15). */
-export function buildIntakeBundleFromColdCall(d: ColdCallDataV1): {
+export function buildIntakeBundleFromColdCall(
+  d: ColdCallDataV1,
+  options: {
+    conversionContext: ColdCallIntakeConversionContext
+    /** Merged call notes (e.g. DB `notes` + `call_data.call_notes`). */
+    mergedCallNotes: string
+    /** When known, sets intake venue linkage before commission rules run in the hook. */
+    resolvedExistingVenueId: string | null
+    callDateIso: string | null
+  },
+): {
   title: string
   venue: BookingIntakeVenueDataV3
   show: BookingIntakeShowDataV3
@@ -93,26 +204,32 @@ export function buildIntakeBundleFromColdCall(d: ColdCallDataV1): {
   const venue = emptyVenueDataV3()
   const show = emptyShowDataV3(0)
 
-  const contactName = primaryContactName(d)
-  const contactRole = targetRoleLabel(d.decision_maker_role || d.target_role)
+  const contactName = primaryIntakeContactName(d)
+  const contactRole = primaryIntakeContactRole(d)
+  const venueName = d.venue_name.trim()
 
-  venue.session_mode = 'live_call'
-  venue.last_active_section = '2A'
-  venue.view_section = '2A'
-  venue.venue_source = d.existing_venue_id ? 'existing' : 'new'
-  venue.existing_venue_id = d.existing_venue_id
+  const intakeSession = options.conversionContext === 'mid_call' ? 'live_call' : 'pre_call'
+
+  venue.session_mode = intakeSession
+  venue.last_active_section = '1B'
+  venue.view_section = '1B'
+  venue.venue_source = options.resolvedExistingVenueId ? 'existing' : 'new'
+  venue.existing_venue_id = options.resolvedExistingVenueId
   venue.contact_name = contactName
   venue.contact_role = contactRole
   venue.contact_phone = d.target_phone.trim()
   venue.contact_email = d.target_email.trim()
-  venue.known_venue_name = d.venue_name.trim()
+  venue.contact_company = venueName
+  venue.known_venue_name = venueName
   venue.known_city = d.city.trim()
   venue.outreach_track = 'pipeline'
   venue.commission_tier = 'new_doors'
   venue.priority = d.priority
-  venue.inquiry_summary = inquirySummaryFromCold(d)
+  venue.inquiry_summary = inquirySummaryFromCold(d, options.callDateIso)
   venue.pre_call_notes = [
+    options.mergedCallNotes.trim() ? options.mergedCallNotes.trim() : '',
     d.venue_vibe.trim() ? `Vibe: ${d.venue_vibe.trim()}` : '',
+    d.known_events.trim() ? `Known events: ${d.known_events.trim()}` : '',
     d.website.trim() ? `Web: ${d.website.trim()}` : '',
     d.social_handle.trim() ? `Social: ${d.social_handle.trim()}` : '',
   ]
@@ -121,15 +238,23 @@ export function buildIntakeBundleFromColdCall(d: ColdCallDataV1): {
 
   const cap = mapColdCapacityToIntake(d.capacity_range)
   const vtype = venueTypeFromCold(d)
+  const presetIds = validMusicVibePresetIds(d.venue_vibes)
+  const sched = mapCallPurposeToEventSchedule(d.call_purpose)
+  const suggestedDate = suggestDateFromColdCallNights(d.event_nights)
 
-  show.venue_name_text = d.venue_name.trim()
+  show.venue_name_text = venueName
   show.city_text = d.city.trim() || INTAKE_DEFAULT_EVENT_CITY_TEXT
   show.state_region = d.state_region.trim() || INTAKE_DEFAULT_EVENT_STATE_REGION
   show.venue_type = vtype
   if (cap) show.capacity_range = cap
-  show.genres = genresFromVibeIds(d.venue_vibes)
+  show.music_vibe_preset_ids = presetIds
+  show.genres = mapVibePresetIdsToGenres(presetIds)
+  show.event_schedule_type = sched.event_schedule_type
+  show.event_recurrence_interval = sched.event_recurrence_interval
+  if (suggestedDate) show.event_date = suggestedDate
+  show.pricing_prefill_note = coldCallBudgetPrefillNote(d.budget_range)
 
-  const title = defaultColdCallTitle(d.venue_name.trim())
+  const title = venueName ? `${venueName} — Booking (from cold call)` : 'Booking (from cold call)'
 
   return { title, venue, show }
 }

@@ -23,7 +23,11 @@ import {
   coldCallLiveAutoTemperature,
   computeColdCallTemperatureScore,
 } from '@/lib/coldCall/coldCallTemperatureScore'
-import { buildIntakeBundleFromColdCall } from '@/lib/coldCall/mapColdCallToBookingIntake'
+import {
+  buildGatekeeperSecondContact,
+  buildIntakeBundleFromColdCall,
+  resolveColdCallOutreachVenueId,
+} from '@/lib/coldCall/mapColdCallToBookingIntake'
 import {
   COLD_CALL_GATEKEEPER_STAFF_LABELS,
   COLD_CALL_HOW_FOUND_LABELS,
@@ -305,6 +309,7 @@ export default function ColdCallFormPage() {
   const [precallError, setPrecallError] = useState<string | null>(null)
   const [savingUi, setSavingUi] = useState(false)
   const [convertBusy, setConvertBusy] = useState(false)
+  const [convertInlineError, setConvertInlineError] = useState<string | null>(null)
   const [importBusy, setImportBusy] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
   const [liveFieldIssues, setLiveFieldIssues] = useState<Record<string, string>>({})
@@ -518,20 +523,35 @@ export default function ColdCallFormPage() {
   }
 
   const handleConvert = async () => {
-    if (!selectedId || !data) return
+    if (!selectedId || !data || !selectedRow) return
+    const venueOk = data.venue_name.trim()
+    const nameOk = data.decision_maker_name.trim() || data.target_name.trim()
+    const phoneOk = data.target_phone.trim()
+    if (!venueOk || !nameOk || !phoneOk) {
+      setConvertInlineError(
+        'We need at least a venue name, a contact name, and a phone number to create a booking. Fill these in first.',
+      )
+      return
+    }
+    setConvertInlineError(null)
     setConvertBusy(true)
     try {
       await cold.flushAllPending()
-      const bundle = buildIntakeBundleFromColdCall({
-        ...data,
-        operator_temperature: 'converting',
-        final_temperature: 'converting',
+      const mergedNotes = [selectedRow.notes?.trim() || '', data.call_notes.trim()].filter(Boolean).join('\n\n')
+      const linkedId = resolveColdCallOutreachVenueId(data, venues)
+      const bundle = buildIntakeBundleFromColdCall(data, {
+        conversionContext: data.session_mode === 'live_call' ? 'mid_call' : 'post_call',
+        mergedCallNotes: mergedNotes,
+        resolvedExistingVenueId: linkedId,
+        callDateIso: selectedRow.call_date,
       })
       const row = await booking.createIntakeFromColdCall({
         coldCallId: selectedId,
         title: bundle.title,
         venueData: bundle.venue,
         showData: bundle.show,
+        linkedVenueId: linkedId,
+        gatekeeperContact: buildGatekeeperSecondContact(data),
       })
       if (row) navigate(`/forms/intake?intakeId=${encodeURIComponent(row.id)}`)
     } finally {
@@ -1249,6 +1269,25 @@ export default function ColdCallFormPage() {
           </Button>
         </div>
       </header>
+
+      {convertInlineError ? (
+        <div className="shrink-0 border-b border-red-900/50 bg-red-950/35 px-4 py-2 text-xs text-red-100">
+          {convertInlineError}
+        </div>
+      ) : null}
+
+      {selectedRow.converted_to_intake_id ? (
+        <div className="shrink-0 border-b border-emerald-900/40 bg-emerald-950/30 px-4 py-2.5">
+          <p className="text-xs font-semibold text-emerald-100">Converted</p>
+          <p className="text-[11px] text-emerald-200/85 mt-0.5">This call has a booking intake linked.</p>
+          <Link
+            to={`/forms/intake?intakeId=${encodeURIComponent(selectedRow.converted_to_intake_id)}`}
+            className="text-[11px] font-medium text-emerald-200 underline underline-offset-2 hover:text-emerald-50 mt-1 inline-block"
+          >
+            View booking intake →
+          </Link>
+        </div>
+      ) : null}
 
       {data.session_mode === 'pre_call' ? (
         <div className="flex-1 overflow-y-auto">

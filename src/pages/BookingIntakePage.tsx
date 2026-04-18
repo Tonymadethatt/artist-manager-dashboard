@@ -20,6 +20,7 @@ import { useDeals } from '@/hooks/useDeals'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { SHOW_REPORT_PRESETS } from '@/lib/showReportCatalog'
+import { COLD_CALL_TEMPERATURE_META, type ColdCallTemperature } from '@/lib/coldCall/coldCallPayload'
 import { supabase } from '@/lib/supabase'
 import {
   catalogHasMinimumForDealLogging,
@@ -736,23 +737,26 @@ const VIBE_PRESET_LABEL_GRADIENT: Record<string, string> = {
 
 function MusicVibePresetRow({
   selectedGenres,
+  selectedPresetIds = [],
   onApplyPreset,
 }: {
   selectedGenres: PerformanceGenreV3[]
-  onApplyPreset: (genres: readonly PerformanceGenreV3[]) => void
+  /** When set (e.g. cold call transfer), highlights presets even if combined genres aren’t an exact single-preset match. */
+  selectedPresetIds?: string[]
+  onApplyPreset: (presetId: string, genres: readonly PerformanceGenreV3[]) => void
 }) {
   return (
     <div className="space-y-2">
       <Label className="text-neutral-400 text-xs">Vibe preset</Label>
       <div className="flex flex-wrap gap-1.5">
         {MUSIC_VIBE_PRESETS.map(p => {
-          const on = genreSetsEqual(selectedGenres, p.genres)
+          const on = selectedPresetIds.includes(p.id) || genreSetsEqual(selectedGenres, p.genres)
           const grad = VIBE_PRESET_LABEL_GRADIENT[p.id] ?? 'from-neutral-200 to-neutral-100'
           return (
             <button
               key={p.id}
               type="button"
-              onClick={() => onApplyPreset(p.genres)}
+              onClick={() => onApplyPreset(p.id, p.genres)}
               className={cn(
                 'min-h-9 px-2.5 py-1.5 text-[11px] sm:text-xs rounded-md border transition-colors leading-snug text-left',
                 on
@@ -854,6 +858,15 @@ function fmtKnownDate(iso: string): string {
   }
 }
 
+function coldCallTemperatureDisplay(raw: string): string {
+  if (!raw.trim()) return ''
+  if (Object.prototype.hasOwnProperty.call(COLD_CALL_TEMPERATURE_META, raw)) {
+    const m = COLD_CALL_TEMPERATURE_META[raw as Exclude<ColdCallTemperature, ''>]
+    return `${m.emoji} ${m.label}`
+  }
+  return raw.trim()
+}
+
 export default function BookingIntakePage() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
@@ -880,11 +893,41 @@ export default function BookingIntakePage() {
   const [mismatchAddNewChosen, setMismatchAddNewChosen] = useState(false)
   /** Live 4B: user chose “Add new” for different on-site POC (skip venue contact chips). */
   const [onsiteAddNewChosen, setOnsiteAddNewChosen] = useState(false)
+  const [coldCallBannerMeta, setColdCallBannerMeta] = useState<{
+    call_date: string | null
+    temperature: string
+  } | null>(null)
 
   const selectedRow = useMemo(
     () => booking.intakes.find(i => i.id === selectedId) ?? null,
     [booking.intakes, selectedId],
   )
+
+  useEffect(() => {
+    const cid = selectedRow?.source_cold_call_id
+    const st = selectedRow?.source_type
+    if (st !== 'cold_call' || !cid) {
+      setColdCallBannerMeta(null)
+      return
+    }
+    let cancelled = false
+    void supabase
+      .from('cold_calls')
+      .select('call_date, temperature')
+      .eq('id', cid)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        if (!data) {
+          setColdCallBannerMeta(null)
+          return
+        }
+        setColdCallBannerMeta({ call_date: data.call_date, temperature: data.temperature })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedRow?.source_type, selectedRow?.source_cold_call_id])
 
   const data: BookingIntakeVenueDataV3 | null = useMemo(
     () => (selectedRow ? parseVenueDataV3(selectedRow.venue_data, selectedRow.schema_version) : null),
@@ -2814,6 +2857,31 @@ export default function BookingIntakePage() {
         </div>
       </header>
 
+      {selectedRow.source_type === 'cold_call' && selectedRow.source_cold_call_id ? (
+        <div className="shrink-0 border-b border-white/[0.08] bg-neutral-900/55 px-3 py-2.5">
+          <p className="text-xs text-neutral-200">
+            <span className="mr-1.5" aria-hidden>
+              📞
+            </span>
+            This booking originated from a cold call
+            {coldCallBannerMeta?.call_date ? ` on ${fmtKnownDate(coldCallBannerMeta.call_date)}` : ''}.
+          </p>
+          {coldCallBannerMeta?.temperature ? (
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              Temperature at conversion: {coldCallTemperatureDisplay(coldCallBannerMeta.temperature)}
+            </p>
+          ) : null}
+          <Link
+            to={`/forms/cold-call?callId=${encodeURIComponent(selectedRow.source_cold_call_id)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] font-medium text-neutral-300 underline underline-offset-2 hover:text-white mt-1 inline-block"
+          >
+            View original cold call
+          </Link>
+        </div>
+      ) : null}
+
       {data.session_mode === 'pre_call' ? (
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-8 pb-24">
@@ -4191,15 +4259,26 @@ export default function BookingIntakePage() {
                             ) : null}
                             <MusicVibePresetRow
                               selectedGenres={sd.genres}
-                              onApplyPreset={genres =>
-                                applyShowPatch(row.id, { genres: [...genres] }, '3b')
+                              selectedPresetIds={sd.music_vibe_preset_ids}
+                              onApplyPreset={(presetId, genres) =>
+                                applyShowPatch(
+                                  row.id,
+                                  { genres: [...genres], music_vibe_preset_ids: [presetId] },
+                                  '3b',
+                                )
                               }
                             />
                             <div className="space-y-2">
                               <Label className="text-neutral-400 text-xs">Genre</Label>
                               <GenreChipRow
                                 selected={sd.genres}
-                                onChange={next => applyShowPatch(row.id, { genres: next }, '3b')}
+                                onChange={next =>
+                                  applyShowPatch(
+                                    row.id,
+                                    { genres: next, music_vibe_preset_ids: [] },
+                                    '3b',
+                                  )
+                                }
                               />
                             </div>
                           </div>
@@ -4619,6 +4698,11 @@ export default function BookingIntakePage() {
                                 style={{ background: sd.color }}
                               />
                               {showLabelFromEventDate(sd.event_date) || `Show ${idx + 1}`}
+                            </p>
+                          ) : null}
+                          {sd.pricing_prefill_note.trim() ? (
+                            <p className="text-[11px] text-neutral-400 rounded-md border border-white/[0.06] bg-neutral-900/35 px-2.5 py-2 leading-snug">
+                              {sd.pricing_prefill_note.trim()}
                             </p>
                           ) : null}
                           {isPkg &&

@@ -7,6 +7,7 @@ import {
   INTAKE_SCHEMA_VERSION_V3,
   parseShowDataV3,
   parseVenueDataV3,
+  suggestedCommissionTierForVenue,
   type BookingIntakeShowDataV3,
   type BookingIntakeVenueDataV3,
 } from '@/lib/intake/intakePayloadV3'
@@ -313,10 +314,40 @@ export function useBookingIntakes() {
       title: string
       venueData: BookingIntakeVenueDataV3
       showData: BookingIntakeShowDataV3
+      linkedVenueId: string | null
+      gatekeeperContact: { name: string; role: string; phone: string } | null
     }): Promise<BookingIntakeRow | null> => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
-      const vd = { ...params.venueData, _v: 3 as const }
+
+      let vd: BookingIntakeVenueDataV3 = { ...params.venueData, _v: 3 as const }
+      if (params.linkedVenueId) {
+        const { data: ven } = await supabase
+          .from('venues')
+          .select('outreach_track')
+          .eq('id', params.linkedVenueId)
+          .maybeSingle()
+        if (ven?.outreach_track) {
+          const tier = await suggestedCommissionTierForVenue(
+            { id: params.linkedVenueId, outreach_track: ven.outreach_track },
+            async venueId => {
+              const { count } = await supabase
+                .from('deals')
+                .select('id', { count: 'exact', head: true })
+                .eq('venue_id', venueId)
+              return count ?? 0
+            },
+          )
+          vd = {
+            ...vd,
+            existing_venue_id: params.linkedVenueId,
+            venue_source: 'existing',
+            outreach_track: ven.outreach_track,
+            commission_tier: tier,
+          }
+        }
+      }
+
       const sd = { ...params.showData, _v: 3 as const }
       const { data: intake, error: ie } = await supabase
         .from('booking_intakes')
@@ -342,6 +373,30 @@ export function useBookingIntakes() {
         show_data: sd as unknown as Database['public']['Tables']['booking_intake_shows']['Insert']['show_data'],
       })
       if (se) setError(se.message)
+
+      if (params.linkedVenueId) {
+        await supabase
+          .from('venues')
+          .update({ status: 'in_discussion', follow_up_date: null })
+          .eq('id', params.linkedVenueId)
+      }
+
+      if (params.gatekeeperContact && params.linkedVenueId) {
+        const gk = params.gatekeeperContact
+        if (gk.name.trim()) {
+          await supabase.from('contacts').insert({
+            user_id: user.id,
+            venue_id: params.linkedVenueId,
+            name: gk.name.trim(),
+            title_key: null,
+            role: gk.role.trim() || null,
+            email: null,
+            phone: gk.phone.trim() || null,
+            company: null,
+          })
+        }
+      }
+
       await supabase
         .from('cold_calls')
         .update({

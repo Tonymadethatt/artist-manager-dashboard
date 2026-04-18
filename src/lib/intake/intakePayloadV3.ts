@@ -1535,6 +1535,19 @@ export const MUSIC_VIBE_PRESETS: readonly MusicVibePresetV3[] = [
 /** New shows + empty legacy rows: default to Latin Party (specialty). */
 export const INTAKE_DEFAULT_GENRES: readonly PerformanceGenreV3[] = MUSIC_VIBE_PRESETS[0].genres
 
+const MUSIC_VIBE_PRESET_ID_SET = new Set(MUSIC_VIBE_PRESETS.map(p => p.id))
+
+/** Union of genres from intake vibe preset ids (same mapping as Music & Vibe chips). */
+export function mapVibePresetIdsToGenres(ids: readonly string[]): PerformanceGenreV3[] {
+  const out = new Set<PerformanceGenreV3>()
+  for (const id of ids) {
+    const preset = MUSIC_VIBE_PRESETS.find(p => p.id === id)
+    if (preset) for (const g of preset.genres) out.add(g)
+  }
+  if (out.size === 0) return [...INTAKE_DEFAULT_GENRES]
+  return [...out]
+}
+
 export function genreSetsEqual(a: readonly PerformanceGenreV3[], b: readonly PerformanceGenreV3[]): boolean {
   if (a.length !== b.length) return false
   const sa = [...a].sort()
@@ -1868,6 +1881,10 @@ export type BookingIntakeShowDataV3 = {
   /** True when set_end_time < set_start_time (performance crosses midnight). */
   overnight_set: boolean
   genres: PerformanceGenreV3[]
+  /** Selected Music & Vibe preset ids (supports multiple, e.g. from cold call transfer). */
+  music_vibe_preset_ids: string[]
+  /** Cold call / operator context shown on §5 pricing (not a quoted amount). */
+  pricing_prefill_note: string
   custom_setlist: Phase3CustomSetlistV3
   /** Tappable setlist / music intent chips. */
   setlist_request_tags: SetlistRequestTagV3[]
@@ -2390,6 +2407,8 @@ export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
     set_end_time: '',
     overnight_set: false,
     genres: [...INTAKE_DEFAULT_GENRES],
+    music_vibe_preset_ids: [],
+    pricing_prefill_note: '',
     custom_setlist: '',
     setlist_request_tags: [],
     music_requests_flag: '',
@@ -3291,6 +3310,13 @@ export function parseShowDataV3(raw: unknown, sortIndex = 0): BookingIntakeShowD
     set_end_time: setEnd,
     overnight_set: overnightSet,
     genres: asGenreArray(o.genres),
+    music_vibe_preset_ids: (() => {
+      if (!Array.isArray(o.music_vibe_preset_ids)) return []
+      return o.music_vibe_preset_ids.filter(
+        (x): x is string => typeof x === 'string' && MUSIC_VIBE_PRESET_ID_SET.has(x),
+      )
+    })(),
+    pricing_prefill_note: typeof o.pricing_prefill_note === 'string' ? o.pricing_prefill_note : '',
     custom_setlist: parsePhase1Enum(
       o.custom_setlist,
       ['', 'djs_call', 'specific_requests'],
