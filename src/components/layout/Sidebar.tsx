@@ -67,7 +67,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
   },
   {
     id: 'content',
-    label: 'Content',
+    label: 'Paperwork',
     items: [
       { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
       { to: '/files',     label: 'Documents', icon: FolderOpen, end: false, badgeKey: null },
