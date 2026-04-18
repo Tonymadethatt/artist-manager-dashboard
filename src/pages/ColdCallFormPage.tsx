@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2, PhoneForwarded, Save } from 'lucide-react'
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  PhoneForwarded,
+  Pin,
+  Save,
+  Undo2,
+} from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useColdCalls } from '@/hooks/useColdCalls'
 import { useVenues } from '@/hooks/useVenues'
@@ -1678,8 +1687,10 @@ export default function ColdCallFormPage() {
       ) : data.session_mode === 'live_call' ? (
         <div className="flex-1 flex flex-col md:flex-row min-h-0 relative">
           <aside className="w-full md:w-[248px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 flex flex-col py-2 md:py-3 px-2 bg-neutral-950">
-            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-2">Cold call</p>
-            <nav className="flex md:flex-col flex-row gap-0.5 overflow-x-auto pb-1 md:pb-0">
+            <p className="text-[10px] uppercase tracking-wider text-neutral-500 px-2 mb-1.5 md:mb-2 shrink-0">
+              Cold call
+            </p>
+            <nav className="flex md:flex-col flex-row gap-0.5 md:space-y-0.5 overflow-x-auto md:overflow-y-auto md:overflow-x-visible pb-1 md:pb-0 flex-1 md:min-h-0 -mx-0.5 px-0.5 md:mx-0 md:px-0">
               {LIVE_WAYPOINTS.map((w, idx) => {
                 const skipped = coldCallPhaseSkipped(idx, data)
                 const onPath = idx <= bookmarkIdx
@@ -1690,7 +1701,7 @@ export default function ColdCallFormPage() {
                     type="button"
                     onClick={() => handleJumpWaypoint(idx)}
                     className={cn(
-                      'shrink-0 md:w-full rounded-lg px-3 py-2 text-sm border text-left transition-colors',
+                      'shrink-0 md:w-full rounded-lg px-3 py-2 text-sm border text-left transition-colors flex items-center gap-2',
                       activeView
                         ? 'bg-neutral-100 text-neutral-950 font-semibold border-neutral-200'
                         : 'text-neutral-500 border-transparent hover:border-white/[0.08] hover:bg-neutral-900/50',
@@ -1698,29 +1709,37 @@ export default function ColdCallFormPage() {
                       skipped ? 'opacity-60' : '',
                     )}
                   >
-                    <span className="font-mono text-xs w-4 inline-block mr-1">{idx + 1}</span>
-                    {bookmarkIdx === idx && dc !== bm ? <span className="mr-1" title="Bookmark">📌</span> : null}
-                    {skipped ? <span className="mr-1 text-neutral-600">⊘</span> : null}
-                    {w.label}
+                    <span className="font-mono text-xs w-4 shrink-0">{idx + 1}</span>
+                    <span className="flex-1 min-w-0">{w.label}</span>
+                    {idx === bookmarkIdx && showJumpReturn ? (
+                      <span className="shrink-0 inline-flex" title="Your place in the flow">
+                        <Pin className="h-3.5 w-3.5 text-amber-500" aria-hidden />
+                      </span>
+                    ) : null}
+                    {skipped ? <span className="shrink-0 text-neutral-600">⊘</span> : null}
                   </button>
                 )
               })}
             </nav>
-          </aside>
-          <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
             {showJumpReturn ? (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 px-2 w-full max-w-2xl flex justify-center pointer-events-none">
-                <Button
+              <div className="shrink-0 mt-2 pt-2 border-t border-white/[0.08] px-1">
+                <button
                   type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="pointer-events-auto shadow-lg border-neutral-600 bg-neutral-900/95"
                   onClick={() => handleJumpReturn()}
+                  title={`Return to ${liveCardStepTitle(bm)}`}
+                  aria-label={`Return to ${liveCardStepTitle(bm)}`}
+                  className={cn(
+                    'flex h-10 w-full items-center justify-center rounded-lg border-2 border-orange-500',
+                    'bg-black text-orange-500 hover:border-orange-400 hover:text-orange-400',
+                    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950',
+                  )}
                 >
-                  ↩ Return to {liveCardStepTitle(bm)}
-                </Button>
+                  <Undo2 className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+                </button>
               </div>
             ) : null}
+          </aside>
+          <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
             <div className="flex min-h-0 flex-1 justify-center overflow-y-auto p-4 pb-24 sm:p-6 items-start">
               <div
                 key={`${dc}-${bm}`}
