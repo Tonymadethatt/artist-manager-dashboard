@@ -15,6 +15,7 @@ import {
 import type { Metric, MetricCategory } from '@/types'
 import { METRIC_CATEGORY_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 const CATEGORY_BADGE: Record<MetricCategory, 'blue' | 'success' | 'purple'> = {
   brand_partnership: 'blue',
@@ -46,7 +47,7 @@ const EMPTY_FORM = {
 function fmtNum(n: number | null, category: MetricCategory) {
   if (n === null) return '—'
   if (category === 'brand_partnership') {
-    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+    return formatUsdDisplayCeil(n)
   }
   return n.toLocaleString()
 }

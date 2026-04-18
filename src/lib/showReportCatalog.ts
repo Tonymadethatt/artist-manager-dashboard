@@ -3,6 +3,8 @@
  * Matches product spec in .cursor plan.
  */
 
+import { formatUsdDisplayCeil } from './format/displayCurrency'
+
 export type ShowReportNightMood = 'crushed' | 'great' | 'solid' | 'meh' | 'rough' | 'disaster'
 
 export interface ShowReportPresetDef {
@@ -146,10 +148,6 @@ export function isLineMajor(line: DealPromiseLine): boolean {
   return false
 }
 
-function formatUsdWhole(n: number): string {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
-}
-
 /**
  * Display label for a promise row (e.g. guaranteed-fee preset includes booked gross when present).
  */
@@ -170,7 +168,7 @@ export function resolvePromiseLineDisplayLabel(
       : null
 
   if (amount != null) {
-    return `Guaranteed fee — ${formatUsdWhole(amount)} promised for this show`
+    return `Guaranteed fee — ${formatUsdDisplayCeil(amount)} promised for this show`
   }
   return line.label
 }

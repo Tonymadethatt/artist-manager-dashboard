@@ -15,8 +15,7 @@ import {
 } from '../calendar/pacificWallTime'
 import { buildPricingAgreementTransparency } from './pricingAgreementTransparency'
 import { contactRoleForDisplay } from '../contacts/contactTitles'
-
-const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 /** Pretty US phone for agreements; non‑10/11-digit input returned trimmed as-is. */
 export function formatPhoneDisplay(raw: string | null | undefined): string {
@@ -93,7 +92,7 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
     }
     if (dt?.pay != null) {
       out.artist_pay = String(dt.pay)
-      if (!Number.isNaN(dt.pay)) out.artist_pay_display = usd.format(dt.pay)
+      if (!Number.isNaN(dt.pay)) out.artist_pay_display = formatUsdDisplayCeil(dt.pay)
     }
     if (dt?.set_length) out.set_length = String(dt.set_length)
     if (dt?.load_in_time) out.load_in_time = String(dt.load_in_time)
@@ -127,28 +126,22 @@ export function buildVenueProfilePrefill(venue: Venue | null, profile: ArtistPro
   return out
 }
 
-const usdWhole = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
-
 /** Plain-text lines for templates; only when `pricing_snapshot` exists on the deal. */
 export function pricingSnapshotAgreementFields(deal: Deal): Record<string, string> {
   if (!deal.pricing_snapshot || !isDealPricingSnapshot(deal.pricing_snapshot)) return {}
   const s = deal.pricing_snapshot
   const lines: string[] = []
-  lines.push(`Quote total: ${usdWhole.format(s.total)}`)
-  if (s.taxAmount) lines.push(`Tax: ${usdWhole.format(s.taxAmount)}`)
-  if (s.depositDue) lines.push(`Deposit: ${usdWhole.format(s.depositDue)}`)
+  lines.push(`Quote total: ${formatUsdDisplayCeil(s.total)}`)
+  if (s.taxAmount) lines.push(`Tax: ${formatUsdDisplayCeil(s.taxAmount)}`)
+  if (s.depositDue) lines.push(`Deposit: ${formatUsdDisplayCeil(s.depositDue)}`)
   if (s.depositPercentApplied != null && Number.isFinite(s.depositPercentApplied)) {
     lines.push(`Deposit policy: ${Math.round(s.depositPercentApplied)}% of contract total`)
   }
   lines.push(`Basis: ${s.finalSource === 'manual' ? 'manual gross on deal' : 'calculator'}`)
   return {
     pricing_summary_text: lines.join('\n'),
-    pricing_total_display: usdWhole.format(s.total),
-    pricing_deposit_display: usdWhole.format(s.depositDue),
+    pricing_total_display: formatUsdDisplayCeil(s.total),
+    pricing_deposit_display: formatUsdDisplayCeil(s.depositDue),
   }
 }
 
@@ -260,21 +253,21 @@ export function buildAgreementPrefill(
     const balPaid = Number(deal.balance_paid_amount ?? 0)
     const totalPaid = dealTotalPaidTowardGross(deal)
     const balanceDue = dealRemainingClientBalance(deal)
-    const balanceFmt = usd.format(balanceDue)
+    const balanceFmt = formatUsdDisplayCeil(balanceDue)
     out.balance_amount = balanceFmt
     out.balance_amount_display = balanceFmt
     out.balance_amount_numeric = String(balanceDue)
     out.remaining_balance = balanceFmt
     out.remaining_balance_display = balanceFmt
-    out.deposit_paid_display = usdWhole.format(depPaid)
-    out.balance_paid_display = usdWhole.format(balPaid)
-    out.total_paid_display = usdWhole.format(totalPaid)
+    out.deposit_paid_display = formatUsdDisplayCeil(depPaid)
+    out.balance_paid_display = formatUsdDisplayCeil(balPaid)
+    out.total_paid_display = formatUsdDisplayCeil(totalPaid)
     const depDueSnap =
       deal.pricing_snapshot && isDealPricingSnapshot(deal.pricing_snapshot)
         ? deal.pricing_snapshot.depositDue
         : deal.deposit_due_amount ?? 0
     const depDueN = Number(depDueSnap) || 0
-    out.deposit_due_display = usdWhole.format(depDueN)
+    out.deposit_due_display = formatUsdDisplayCeil(depDueN)
     out.deposit_satisfied_plain = dealDepositSatisfied(deal) ? 'yes' : 'no'
     out.fully_settled_plain = deal.artist_paid ? 'yes' : 'no'
     if (deal.artist_paid) {
@@ -290,7 +283,7 @@ export function buildAgreementPrefill(
     }
 
     out.gross_amount = String(deal.gross_amount)
-    out.gross_amount_display = usd.format(deal.gross_amount)
+    out.gross_amount_display = formatUsdDisplayCeil(deal.gross_amount)
     out.full_fee_display = out.gross_amount_display
     out.cancellation_full_fee_display = out.gross_amount_display
     out.contract_fee_display = out.gross_amount_display
@@ -298,7 +291,7 @@ export function buildAgreementPrefill(
     out.commission_rate = `${Math.round(deal.commission_rate * 100)}%`
     out.commission_rate_fraction = String(deal.commission_rate)
     out.commission_amount = String(deal.commission_amount)
-    out.commission_amount_display = usd.format(deal.commission_amount)
+    out.commission_amount_display = formatUsdDisplayCeil(deal.commission_amount)
     out.commission_tier = COMMISSION_TIER_LABELS[deal.commission_tier]
     if (deal.payment_due_date) out.payment_due_date = deal.payment_due_date
     if (deal.agreement_url) out.agreement_url = deal.agreement_url

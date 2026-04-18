@@ -9,7 +9,7 @@ import { pricingSnapshotAgreementFields } from '../agreement/tokens'
 import { formatVenuePostalLine } from '../calendar/venueAddressForGoogle'
 import {
   scheduleWhenStackFromDeal,
-  whenLineCompactFromDeal,
+  whenLineFriendlyFromDeal,
 } from '../calendar/pacificWallTime'
 import {
   resolveArtistPromiseLinesForDeal,
@@ -19,6 +19,7 @@ import {
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
 import { EMAIL_BODY_SECONDARY } from './emailDarkSurfacePalette'
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 /** Minimum deal fields required to render gig-booked email sections (previews may pass only this). */
 export type GigBookedEmailDealInput = Pick<
@@ -36,12 +37,6 @@ export type GigBookedEmailDealInput = Pick<
   | 'pricing_snapshot'
   | 'notes'
 >
-
-const usdWhole = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
 
 const CARD_ACCENTS = ['#22c55e', '#60a5fa', '#fbbf24', '#a78bfa', '#f97316'] as const
 
@@ -78,7 +73,7 @@ function describeSnapshotLines(snapshot: DealPricingSnapshot, catalog: PricingCa
       const pkg = catalog.packages.find(p => p.id === snapshot.packageId)
       if (pkg) {
         lines.push(
-          `Package: ${pkg.name} — ${pkg.hoursIncluded} hr included (${usdWhole.format(pkg.price)} base)`,
+          `Package: ${pkg.name} — ${pkg.hoursIncluded} hr included (${formatUsdDisplayCeil(pkg.price)} base)`,
         )
       } else {
         lines.push('Package-based quote (package details unavailable — catalog may have changed).')
@@ -88,8 +83,8 @@ function describeSnapshotLines(snapshot: DealPricingSnapshot, catalog: PricingCa
       if (svc) {
         const rate =
           svc.priceType === 'per_hour'
-            ? `${usdWhole.format(svc.price)}/hr`
-            : usdWhole.format(svc.price)
+            ? `${formatUsdDisplayCeil(svc.price)}/hr`
+            : formatUsdDisplayCeil(svc.price)
         lines.push(`Service: ${svc.name} (${rate})`)
       } else {
         lines.push('Hourly quote (service details unavailable — catalog may have changed).')
@@ -161,7 +156,7 @@ export function buildGigBookedEmailMiddleHtml(args: {
   const stack = scheduleWhenStackFromDeal(deal)
   const whenInner = stack
     ? stackedScheduleWhenCellHtml(stack, '#ffffff', 'digest')
-    : `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(whenLineCompactFromDeal(deal) || deal.event_date?.trim() || '')}</p>`
+    : `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(whenLineFriendlyFromDeal(deal) || deal.event_date?.trim() || '')}</p>`
 
   const showWhenBody =
     `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(title)}</p>`
@@ -180,7 +175,7 @@ export function buildGigBookedEmailMiddleHtml(args: {
 
   const tierLabel = COMMISSION_TIER_LABELS[deal.commission_tier] ?? deal.commission_tier
   const payBody =
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Gross:</strong> ${escapeHtmlPlain(usdWhole.format(deal.gross_amount))}</p>`
+    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Gross:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(deal.gross_amount))}</p>`
     + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Payment due:</strong> ${escapeHtmlPlain(formatPaymentDueEmail(deal.payment_due_date))}</p>`
     + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;"><strong style="color:#ffffff;">Booking category:</strong> ${escapeHtmlPlain(tierLabel)}</p>`
   cards.push(emailSectionCardHtml('Pay & terms', payBody, nextAccent(ai++)))

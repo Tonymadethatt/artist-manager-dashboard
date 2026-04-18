@@ -5,12 +5,7 @@ import {
   computeDealPriceInputFromSnapshot,
   roundUsd,
 } from '../pricing/computeDealPrice'
-
-const usd0 = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 function fmtHours(n: number): string {
   if (!Number.isFinite(n) || n < 0) return ''
@@ -21,8 +16,8 @@ function fmtHours(n: number): string {
 }
 
 function formatServiceRate(svc: PricingService): string {
-  if (svc.priceType === 'per_hour') return `${usd0.format(svc.price)}/hour`
-  return `${usd0.format(svc.price)} (flat fee)`
+  if (svc.priceType === 'per_hour') return `${formatUsdDisplayCeil(svc.price)}/hour`
+  return `${formatUsdDisplayCeil(svc.price)} (flat fee)`
 }
 
 /**
@@ -62,12 +57,12 @@ const PRICING_FEE_DRIFT_NOTE =
 
 function appendFeeTransparencyNoSnapshot(deal: Deal, out: Record<string, string>): void {
   const gross = roundUsd(Number(deal.gross_amount))
-  out.pricing_fee_total_display = usd0.format(gross)
+  out.pricing_fee_total_display = formatUsdDisplayCeil(gross)
   out.pricing_fee_scope_amount_display = ''
   out.pricing_fee_operations_bundle_amount_display = ''
-  out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+  out.pricing_fee_transparency_plain = `Contract total: ${formatUsdDisplayCeil(gross)}`
   out.pricing_fee_transparency_table_html =
-    `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+    `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${formatUsdDisplayCeil(gross)}</td></tr></tbody></table>`
   out.pricing_fee_breakdown_note = ''
 }
 
@@ -78,14 +73,14 @@ function appendFeeTransparencyFromSnapshot(
   out: Record<string, string>,
 ): void {
   const gross = roundUsd(Number(deal.gross_amount))
-  out.pricing_fee_total_display = usd0.format(gross)
+  out.pricing_fee_total_display = formatUsdDisplayCeil(gross)
 
   if (!catalog) {
     out.pricing_fee_scope_amount_display = ''
     out.pricing_fee_operations_bundle_amount_display = ''
-    out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+    out.pricing_fee_transparency_plain = `Contract total: ${formatUsdDisplayCeil(gross)}`
     out.pricing_fee_transparency_table_html =
-      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${formatUsdDisplayCeil(gross)}</td></tr></tbody></table>`
     out.pricing_fee_breakdown_note =
       Math.abs(gross - snapshot.total) >= 1 ? PRICING_FEE_DRIFT_NOTE : ''
     return
@@ -95,9 +90,9 @@ function appendFeeTransparencyFromSnapshot(
   if (!input) {
     out.pricing_fee_scope_amount_display = ''
     out.pricing_fee_operations_bundle_amount_display = ''
-    out.pricing_fee_transparency_plain = `Contract total: ${usd0.format(gross)}`
+    out.pricing_fee_transparency_plain = `Contract total: ${formatUsdDisplayCeil(gross)}`
     out.pricing_fee_transparency_table_html =
-      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${usd0.format(gross)}</td></tr></tbody></table>`
+      `<table class="fee-transparency"><tbody><tr><th scope="row">${FEE_LABEL_TOTAL}</th><td>${formatUsdDisplayCeil(gross)}</td></tr></tbody></table>`
     out.pricing_fee_breakdown_note =
       Math.abs(gross - snapshot.total) >= 1 ? PRICING_FEE_DRIFT_NOTE : ''
     return
@@ -107,17 +102,17 @@ function appendFeeTransparencyFromSnapshot(
   const afterAddons = b.afterAddons
   const bundle = gross - afterAddons
 
-  out.pricing_fee_scope_amount_display = usd0.format(afterAddons)
+  out.pricing_fee_scope_amount_display = formatUsdDisplayCeil(afterAddons)
   out.pricing_fee_operations_bundle_amount_display =
-    Math.abs(bundle) >= 1 ? usd0.format(bundle) : ''
+    Math.abs(bundle) >= 1 ? formatUsdDisplayCeil(bundle) : ''
 
   const rows: { label: string; amount: string }[] = [
-    { label: FEE_LABEL_SCOPE, amount: usd0.format(afterAddons) },
+    { label: FEE_LABEL_SCOPE, amount: formatUsdDisplayCeil(afterAddons) },
   ]
   if (Math.abs(bundle) >= 1) {
-    rows.push({ label: FEE_LABEL_BUNDLE, amount: usd0.format(bundle) })
+    rows.push({ label: FEE_LABEL_BUNDLE, amount: formatUsdDisplayCeil(bundle) })
   }
-  rows.push({ label: FEE_LABEL_TOTAL, amount: usd0.format(gross) })
+  rows.push({ label: FEE_LABEL_TOTAL, amount: formatUsdDisplayCeil(gross) })
 
   out.pricing_fee_transparency_plain = rows.map(r => `${r.label}: ${r.amount}`).join('\n')
 
@@ -182,14 +177,14 @@ export function buildPricingAgreementTransparency(
       if (pkg) {
         out.pricing_package_name = pkg.name
         out.pricing_package_hours_included = fmtHours(pkg.hoursIncluded)
-        out.pricing_package_price_display = usd0.format(pkg.price)
+        out.pricing_package_price_display = formatUsdDisplayCeil(pkg.price)
         if (additionalSvc?.priceType === 'per_hour') {
           out.pricing_base_structure_line =
-            `${pkg.name} (${usd0.format(pkg.price)}) includes up to ${fmtHours(pkg.hoursIncluded)} hour${pkg.hoursIncluded === 1 ? '' : 's'} of performance; ` +
+            `${pkg.name} (${formatUsdDisplayCeil(pkg.price)}) includes up to ${fmtHours(pkg.hoursIncluded)} hour${pkg.hoursIncluded === 1 ? '' : 's'} of performance; ` +
             `additional performance time, when agreed, is billed at ${formatServiceRate(additionalSvc)}.`
         } else {
           out.pricing_base_structure_line =
-            `${pkg.name} (${usd0.format(pkg.price)}) includes up to ${fmtHours(pkg.hoursIncluded)} hour${pkg.hoursIncluded === 1 ? '' : 's'} of performance.`
+            `${pkg.name} (${formatUsdDisplayCeil(pkg.price)}) includes up to ${fmtHours(pkg.hoursIncluded)} hour${pkg.hoursIncluded === 1 ? '' : 's'} of performance.`
         }
       } else {
         out.pricing_base_structure_line = 'Package-based engagement (see contract total).'

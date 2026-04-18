@@ -1,7 +1,7 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import {
-  performanceWindowCompactFromDeal,
-  whenLineCompactFromDeal,
+  performanceWindowReadableFromDeal,
+  whenLineFriendlyFromDeal,
 } from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
@@ -15,9 +15,9 @@ export type GigCalendarBrandedKind =
   | 'gig_day_summary_manual'
 
 export type GigCalendarScheduleRow = {
-  /** Same string as 24h reminder `whenLine` (`whenLineCompactFromDeal`). */
+  /** Pacific long date + 12h range (matches reminder `whenLine`). */
   when: string
-  /** Same as reminder `setLine` (`performanceWindowCompactFromDeal`); optional. */
+  /** DJ/set window (`performanceWindowReadableFromDeal`); optional. */
   setLine?: string | null
   title: string
   venue: string
@@ -36,8 +36,8 @@ export function buildGigCalendarTableRow(
   venue: string,
 ): GigCalendarScheduleRow {
   return {
-    when: whenLineCompactFromDeal(deal) || deal.event_date?.trim() || '',
-    setLine: performanceWindowCompactFromDeal(deal),
+    when: whenLineFriendlyFromDeal(deal) || deal.event_date?.trim() || '',
+    setLine: performanceWindowReadableFromDeal(deal),
     title,
     venue,
   }

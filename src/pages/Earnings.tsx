@@ -67,6 +67,8 @@ import {
   pacificWallToUtcIso,
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
+  formatPacificTimeRangeReadable,
+  formatPacificDateLongFromYmd,
 } from '@/lib/calendar/pacificWallTime'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import {
@@ -85,6 +87,7 @@ import { useNavBadges } from '@/context/NavBadgesContext'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
 import type { GeneratedFile } from '@/types'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 const RETAINER_RESEND_CONFIRM_MS = 3 * 60 * 1000
 
@@ -266,7 +269,7 @@ function RetainerTab(_: { hideSummary?: boolean }) {
             subject: subj,
             status: 'sent',
             source: 'earnings_manual',
-            detail: `Outstanding ${totals.outstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+            detail: `Outstanding ${formatUsdDisplayCeil(totals.outstanding)}`,
             ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
           })
         }
@@ -646,7 +649,7 @@ const EMPTY_FORM = {
 }
 
 function fmtMoney(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function balanceLegTargetAmount(deal: Deal): number {
@@ -1717,12 +1720,14 @@ export default function Earnings() {
                           ) : null}
                           {(deal.event_start_at && deal.event_end_at) ? (
                             <span className="text-neutral-500 tabular-nums">
-                              {utcIsoToPacificDateAndTime(deal.event_start_at)?.date}{' '}
-                              {utcIsoToPacificDateAndTime(deal.event_start_at)?.time}–
-                              {utcIsoToPacificDateAndTime(deal.event_end_at)?.time} PT
+                              {formatPacificTimeRangeReadable(deal.event_start_at, deal.event_end_at)}
                             </span>
                           ) : deal.event_date ? (
-                            <span className="text-neutral-500 tabular-nums">{deal.event_date}</span>
+                            <span className="text-neutral-500 tabular-nums">
+                              {/^\d{4}-\d{2}-\d{2}$/.test(deal.event_date.trim())
+                                ? formatPacificDateLongFromYmd(deal.event_date.trim())
+                                : deal.event_date}
+                            </span>
                           ) : null}
                         </p>
                       )}

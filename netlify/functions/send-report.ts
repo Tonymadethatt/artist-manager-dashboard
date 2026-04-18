@@ -15,6 +15,7 @@ import type { ManagementReportEmailData } from '../../src/lib/reports/buildManag
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
+import { formatUsdDisplayCeil } from '../../src/lib/format/displayCurrency'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -39,7 +40,7 @@ interface ArtistProfile {
 }
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDate(iso: string) {

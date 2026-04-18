@@ -24,9 +24,9 @@ import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
 import {
-  formatPacificTimeRangeCompact,
+  formatPacificTimeRangeReadable,
   pacificWallToUtcIso,
-  performanceWindowCompactFromDeal,
+  performanceWindowReadableFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 
 const VENUE_EMAIL_TYPES = new Set<string>([
@@ -333,8 +333,8 @@ export async function sendEmailTemplateTest(
         reminder: {
           venueName: PREVIEW_MOCK_VENUE.name,
           dealDescription: PREVIEW_MOCK_DEAL.description,
-          whenLine: startIso && endIso ? formatPacificTimeRangeCompact(startIso, endIso) : '',
-          setLine: performanceWindowCompactFromDeal({
+          whenLine: startIso && endIso ? formatPacificTimeRangeReadable(startIso, endIso) : '',
+          setLine: performanceWindowReadableFromDeal({
             performance_start_at: previewPerfStart,
             performance_end_at: previewPerfEnd,
           }),

@@ -1,4 +1,5 @@
 import type { VenueRenderDeal, VenueRenderProfile, VenueRenderRecipient, VenueRenderVenue } from './renderVenueEmail'
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 /** Allowed merge keys for custom template prose / static cells. Bound fields use valueKey separately. */
 export const VENUE_CUSTOM_MERGE_KEYS = [
@@ -34,7 +35,7 @@ export interface CustomEmailMergeContext {
 }
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDate(iso: string | null | undefined): string {

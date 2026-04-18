@@ -10,12 +10,7 @@ import {
   normalizePromiseLinesDoc,
   resolvePromiseLineDisplayLabel,
 } from '../showReportCatalog'
-
-const usdWhole = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-})
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 const FULL_DETAIL_FOOTER =
   'For the full breakdown of venue commitments, pricing, and logistics, see the booking confirmation email your team sent for this show (search your inbox for the venue or show name).'
@@ -128,10 +123,10 @@ export function buildGoogleCalendarDealDescription(
   const tier = deal.commission_tier ?? null
   const sections: DescSection[] = []
 
-  const payLines: string[] = [`Gross: ${usdWhole.format(gross)}`]
+  const payLines: string[] = [`Gross: ${formatUsdDisplayCeil(gross)}`]
   const snap = isDealPricingSnapshot(deal.pricing_snapshot) ? deal.pricing_snapshot : null
   if (snap && Number.isFinite(snap.total) && Math.round(snap.total) !== Math.round(gross)) {
-    payLines.push(`Quote total: ${usdWhole.format(snap.total)}`)
+    payLines.push(`Quote total: ${formatUsdDisplayCeil(snap.total)}`)
   }
   sections.push({ title: 'PAY', body: payLines.join('\n') })
 

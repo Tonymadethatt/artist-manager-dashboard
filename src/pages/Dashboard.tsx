@@ -17,14 +17,18 @@ import {
   type VenueEmailType,
 } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
+import { formatPacificDateLongFromYmd } from '@/lib/calendar/pacificWallTime'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDate(iso: string) {
+  const t = iso.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return formatPacificDateLongFromYmd(t)
   const [y, m, d] = iso.split('-')
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   return `${months[parseInt(m) - 1]} ${parseInt(d)}, ${y}`

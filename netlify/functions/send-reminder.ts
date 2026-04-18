@@ -12,6 +12,7 @@ import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBra
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
+import { formatUsdDisplayCeil } from '../../src/lib/format/displayCurrency'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -43,7 +44,7 @@ interface UnpaidFee {
 }
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function buildReminderHtml(profile: ArtistProfile, unpaidFees: UnpaidFee[], totalOutstanding: number, L: EmailTemplateLayoutV1): string {

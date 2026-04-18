@@ -6,6 +6,7 @@ import {
   EMAIL_META_TAGLINE,
 } from './emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from './artistBrandedEmailFooterHtml'
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -16,7 +17,7 @@ function escapeHtmlEnt(s: string): string {
 }
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 export type RetainerReceivedProfile = {

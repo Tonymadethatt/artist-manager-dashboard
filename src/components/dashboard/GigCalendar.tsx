@@ -7,6 +7,7 @@ import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import {
   pacificDateKeyFromUtcIso,
   formatPacificTimeRangeReadable,
+  formatPacificDateLongFromYmd,
   weekdaySunday0PacificYmd,
   addCalendarDaysPacific,
   pacificTodayYmd,
@@ -17,6 +18,7 @@ import { queueManualGigReminderForDeal } from '@/lib/calendar/queueManualGigRemi
 import { formatGoogleCalendarDescription } from '@/lib/calendar/formatGoogleCalendarDescription'
 import { dealRemainingClientBalance, dealTotalPaidTowardGross } from '@/lib/deals/dealPaymentTotals'
 import { cn } from '@/lib/utils'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -862,7 +864,11 @@ export function GigCalendar({
                     {formatPacificTimeRangeReadable(selectedDeal.event_start_at, selectedDeal.event_end_at)}
                   </p>
                 ) : selectedDeal.event_date ? (
-                  <p className="text-white text-sm">{selectedDeal.event_date}</p>
+                  <p className="text-white text-sm">
+                    {/^\d{4}-\d{2}-\d{2}$/.test(selectedDeal.event_date.trim())
+                      ? formatPacificDateLongFromYmd(selectedDeal.event_date.trim())
+                      : selectedDeal.event_date}
+                  </p>
                 ) : (
                   <p className="text-neutral-400 text-sm">No times set</p>
                 )}
@@ -874,7 +880,7 @@ export function GigCalendar({
                   <div className={row}>
                     <span className={rowLabel}>Gross</span>
                     <span className={cn(rowValue, 'tabular-nums')}>
-                      {selectedDeal.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                      {formatUsdDisplayCeil(selectedDeal.gross_amount)}
                     </span>
                   </div>
                 )}
@@ -891,31 +897,29 @@ export function GigCalendar({
                 <div className={row}>
                   <span className={rowLabel}>Your cut</span>
                   <span className={cn(rowValue, 'tabular-nums')}>
-                    {selectedDeal.commission_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    {formatUsdDisplayCeil(selectedDeal.commission_amount)}
                   </span>
                 </div>
                 {selectedDeal.payment_due_date && (
                   <div className={row}>
                     <span className={rowLabel}>Payment due</span>
-                    <span className={rowValue}>{selectedDeal.payment_due_date}</span>
+                    <span className={rowValue}>
+                      {/^\d{4}-\d{2}-\d{2}$/.test(selectedDeal.payment_due_date.trim())
+                        ? formatPacificDateLongFromYmd(selectedDeal.payment_due_date.trim())
+                        : selectedDeal.payment_due_date}
+                    </span>
                   </div>
                 )}
                 <div className={row}>
                   <span className={rowLabel}>Paid in (deposit + balance)</span>
                   <span className={cn(rowValue, 'tabular-nums')}>
-                    {dealTotalPaidTowardGross(selectedDeal).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                    })}
+                    {formatUsdDisplayCeil(dealTotalPaidTowardGross(selectedDeal))}
                   </span>
                 </div>
                 <div className={row}>
                   <span className={rowLabel}>Still due</span>
                   <span className={cn(rowValue, 'tabular-nums')}>
-                    {dealRemainingClientBalance(selectedDeal).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                    })}
+                    {formatUsdDisplayCeil(dealRemainingClientBalance(selectedDeal))}
                   </span>
                 </div>
                 <div className={row}>

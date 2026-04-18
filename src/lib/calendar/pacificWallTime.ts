@@ -277,7 +277,8 @@ export function whenLineFriendlyFromDeal(d: DealWhenAndPerformanceInput): string
     return formatPacificTimeRangeReadable(d.event_start_at, d.event_end_at)
   }
   const ed = d.event_date?.trim()
-  return ed ?? ''
+  if (!ed) return ''
+  return /^\d{4}-\d{2}-\d{2}$/.test(ed) ? formatPacificDateLongFromYmd(ed) : ed
 }
 
 const WEEKDAY_SHORT_STACK = new Intl.DateTimeFormat('en-US', {
@@ -326,6 +327,21 @@ export function performanceWindowCompactFromDeal(d: DealWhenAndPerformanceInput)
   return null
 }
 
+/** Same as {@link performanceWindowCompactFromDeal} but long date + 12h range (artist-facing copy). */
+export function performanceWindowReadableFromDeal(d: DealWhenAndPerformanceInput): string | null {
+  const ps = d.performance_start_at?.trim()
+  const pe = d.performance_end_at?.trim()
+  if (ps && pe) {
+    const line = formatPacificTimeRangeReadable(ps, pe)
+    return line || null
+  }
+  if (ps) {
+    const t = formatPacificTime12h(ps)
+    return t ? `${t} PT` : null
+  }
+  return null
+}
+
 /** Pacific wall date (YYYY-MM-DD) → three display lines for table cells. */
 export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null {
   const trimmed = (ymd ?? '').trim()
@@ -347,7 +363,7 @@ export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null 
 
 /** Deal instants or event_date → stack for gig digest / day-summary tables. */
 export function scheduleWhenStackFromDeal(d: DealWhenAndPerformanceInput): ScheduleWhenStack | null {
-  const setTimeLine = performanceWindowCompactFromDeal(d)
+  const setTimeLine = performanceWindowReadableFromDeal(d)
   const withSet = (base: ScheduleWhenStack): ScheduleWhenStack =>
     setTimeLine ? { ...base, setTimeLine } : base
 

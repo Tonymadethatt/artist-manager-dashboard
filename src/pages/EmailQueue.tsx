@@ -16,6 +16,7 @@ import {
 import type { ArtistEmailType, GeneratedFile, VenueEmail, VenueEmailType } from '@/types'
 import { ARTIST_EMAIL_TYPE_LABELS, VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 import { supabase } from '@/lib/supabase'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
@@ -48,9 +49,9 @@ import {
   formatPacificDateLongFromYmd,
   pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
-  performanceWindowCompactFromDeal,
+  performanceWindowReadableFromDeal,
   stripOnTheHourMinutes12h,
-  whenLineCompactFromDeal,
+  whenLineFriendlyFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
@@ -515,11 +516,11 @@ export default function EmailQueue() {
             + `<p style="margin:0 0 12px"><strong>Outreach</strong><br/>`
             + `New venues: ${report.outreach.venuesContacted} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
             + `<p style="margin:0 0 12px"><strong>Artist earnings</strong><br/>`
-            + `Booking gross: ${report.artistEarnings.grossBookedInPeriod.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Paid toggle gross: ${report.artistEarnings.grossArtistPaidInPeriod.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `Booking gross: ${formatUsdDisplayCeil(report.artistEarnings.grossBookedInPeriod)} · Paid toggle gross: ${formatUsdDisplayCeil(report.artistEarnings.grossArtistPaidInPeriod)}</p>`
             + `<p style="margin:0 0 12px"><strong>Your commission</strong><br/>`
-            + `On new deals in window: ${report.deals.totalCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · Outstanding: ${report.deals.allOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `On new deals in window: ${formatUsdDisplayCeil(report.deals.totalCommission)} · Outstanding: ${formatUsdDisplayCeil(report.deals.allOutstanding)}</p>`
             + `<p style="margin:0 0 12px"><strong>Retainer</strong><br/>`
-            + `Outstanding: ${report.retainer.feeOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `Outstanding: ${formatUsdDisplayCeil(report.retainer.feeOutstanding)}</p>`
             + `<p style="margin:0;color:${EMAIL_HINT};font-size:11px">Layout matches Reports → Send management update.</p></div></body></html>`,
           )
         } else if (email.email_type === 'retainer_reminder') {
@@ -536,12 +537,12 @@ export default function EmailQueue() {
           const rows = unpaidFees.length === 0
             ? '<p style="color:#f87171">No outstanding balance — send would be skipped.</p>'
             : `<ul style="margin:0;padding-left:18px">${unpaidFees.map(f =>
-              `<li>${esc(f.month)}: balance ${f.balance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</li>`,
+              `<li>${esc(f.month)}: balance ${formatUsdDisplayCeil(f.balance)}</li>`,
             ).join('')}</ul>`
           setPreviewHtml(
             `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${totalOutstanding.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer reminder preview · total outstanding ${formatUsdDisplayCeil(totalOutstanding)}</p>`
             + rows
             + `<p style="margin:16px 0 0;color:${EMAIL_HINT};font-size:11px">Layout matches Earnings → Send reminder.</p></div></body></html>`,
           )
@@ -560,12 +561,12 @@ export default function EmailQueue() {
           const rows = settledFees.length === 0
             ? `<p style="color:#86efac">No settled invoice rows in Earnings yet — live email still sends a short thank-you.</p>`
             : `<ul style="margin:0;padding-left:18px">${settledFees.map(f =>
-              `<li>${esc(f.month)}: ${f.paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} paid (invoiced ${f.invoiced.toLocaleString('en-US', { style: 'currency', currency: 'USD' })})</li>`,
+              `<li>${esc(f.month)}: ${formatUsdDisplayCeil(f.paid)} paid (invoiced ${formatUsdDisplayCeil(f.invoiced)})</li>`,
             ).join('')}</ul>`
           setPreviewHtml(
             `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;background:#0d0d0d;color:#e6e6e6;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5">`
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
-            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer received preview · total acknowledged ${totalAcknowledged.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} · sent to <strong>${toe}</strong></p>`
+            + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Retainer received preview · total acknowledged ${formatUsdDisplayCeil(totalAcknowledged)} · sent to <strong>${toe}</strong></p>`
             + rows
             + `<p style="margin:16px 0 0;color:${EMAIL_HINT};font-size:11px">Layout matches Email templates → Retainer payment received.</p></div></body></html>`,
           )
@@ -741,8 +742,8 @@ export default function EmailQueue() {
                 reminder: {
                   venueName: vn,
                   dealDescription: deal.description?.trim() || 'Gig',
-                  whenLine: whenLineCompactFromDeal(deal),
-                  setLine: performanceWindowCompactFromDeal(deal),
+                  whenLine: whenLineFriendlyFromDeal(deal),
+                  setLine: performanceWindowReadableFromDeal(deal),
                 },
               }))
             } else {
@@ -1280,8 +1281,8 @@ export default function EmailQueue() {
                 reminder: {
                   venueName,
                   dealDescription: deal.description?.trim() || 'Gig',
-                  whenLine: whenLineCompactFromDeal(deal),
-                  setLine: performanceWindowCompactFromDeal(deal),
+                  whenLine: whenLineFriendlyFromDeal(deal),
+                  setLine: performanceWindowReadableFromDeal(deal),
                 },
               })
               const sendKind = gigN.kind === 'gig_reminder_manual' ? 'gig_reminder_manual' : 'gig_reminder_24h'

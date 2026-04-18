@@ -16,13 +16,14 @@ import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { buildManagementReportData } from '@/lib/reports/buildManagementReportData'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 const REPORT_RESEND_CONFIRM_MS = 3 * 60 * 1000
 
 type Preset = '7d' | '30d' | 'custom'
 
 function fmtMoney(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDateDisplay(iso: string) {

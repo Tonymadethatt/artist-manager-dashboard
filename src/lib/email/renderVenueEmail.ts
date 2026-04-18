@@ -20,6 +20,7 @@ import {
 } from './venueClientEmailHeaderBrandHtml'
 import { scheduleWhenStackFromYmd } from '../calendar/pacificWallTime'
 import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 function hrefAttr(u: string): string {
   return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -96,7 +97,7 @@ export interface BuildVenueEmailDocumentOptions {
 }
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDate(iso: string) {

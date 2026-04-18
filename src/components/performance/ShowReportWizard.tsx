@@ -8,6 +8,7 @@ import {
   type PublicFormBranding,
 } from '@/lib/publicFormBranding'
 import { cn } from '@/lib/utils'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 import {
   nightMoodsForWizardGrid,
   TOP_THREE_MOOD,
@@ -86,7 +87,7 @@ const STEP_QUESTION_CLASS =
   'mb-4 text-center text-lg font-bold leading-snug tracking-tight text-white sm:text-xl max-w-md mx-auto px-1'
 
 function fmtMoney(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+  return formatUsdDisplayCeil(n)
 }
 
 type PayoutChoice = 'full' | 'none' | 'partial'

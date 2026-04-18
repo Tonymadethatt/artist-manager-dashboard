@@ -16,6 +16,7 @@ import {
 } from '@/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmailFooterHtml'
 import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
+import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -33,7 +34,7 @@ function artistEmailPreviewGreetingName(fullName: string): string {
 const logoUrl = '/dj-luijay-logo-email.png'
 
 function money(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+  return formatUsdDisplayCeil(n)
 }
 
 function fmtDate(iso: string) {
