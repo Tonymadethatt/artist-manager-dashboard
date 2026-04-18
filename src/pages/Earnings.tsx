@@ -67,7 +67,6 @@ import {
   pacificWallToUtcIso,
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
-  whenLineCompactFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import {
@@ -651,16 +650,10 @@ function fmtMoney(n: number) {
   return formatUsdDisplayCeil(n)
 }
 
-/** Venue + compact Pacific schedule for the deals table (narrow Deal column). */
+/** Venue name only under the deal title (date/time lives in the deal editor / calendar). */
 function earningsDealTableFootText(deal: Deal): string | null {
-  const whenCompact = whenLineCompactFromDeal({
-    event_start_at: deal.event_start_at,
-    event_end_at: deal.event_end_at,
-    event_date: deal.event_date,
-  })
-  const parts = [deal.venue?.name?.trim(), whenCompact].filter(Boolean)
-  const line = parts.join(' · ')
-  return line || null
+  const v = deal.venue?.name?.trim()
+  return v || null
 }
 
 function balanceLegTargetAmount(deal: Deal): number {
@@ -1705,37 +1698,37 @@ export default function Earnings() {
               <tr className="border-b border-neutral-800 bg-neutral-950">
                 <th
                   scope="col"
-                  className="w-[34%] sm:w-[28%] md:w-[24%] text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom"
+                  className="w-[28%] sm:w-[22%] md:w-[20%] text-left px-2.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom"
                 >
                   Deal
                 </th>
                 <th
                   scope="col"
-                  className="w-[17%] md:w-[12%] text-left px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell"
+                  className="w-[16%] md:w-[13%] text-left px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell"
                 >
                   Tier
                 </th>
                 <th
                   scope="col"
-                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                  className="w-[12%] md:w-[7%] text-right px-1.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
                 >
                   Gross
                 </th>
                 <th
                   scope="col"
-                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                  className="w-[12%] md:w-[7%] text-right px-1.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
                 >
                   Owed
                 </th>
                 <th
                   scope="col"
-                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                  className="w-[12%] md:w-[7%] text-right px-1.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
                 >
                   My cut
                 </th>
                 <th
                   scope="col"
-                  className="w-[14%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
+                  className="w-[15%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
                 >
                   Deposit / balance
                 </th>
@@ -1747,7 +1740,7 @@ export default function Earnings() {
                 </th>
                 <th
                   scope="col"
-                  className="w-[16%] md:w-[15%] px-1 py-2.5 text-right font-medium text-neutral-500 text-xs align-bottom"
+                  className="w-[20%] md:w-[20%] px-0.5 py-2.5 text-right font-medium text-neutral-500 text-xs align-bottom"
                 >
                   <span className="sr-only">Actions</span>
                 </th>
@@ -1765,7 +1758,7 @@ export default function Earnings() {
                     deal.event_cancelled_at && 'opacity-[0.88]',
                   )}
                 >
-                  <td className="px-3 py-3 align-top min-w-0">
+                  <td className="px-2.5 py-3 align-top min-w-0">
                     <div className="font-medium text-neutral-100 leading-tight flex items-center gap-1.5 min-w-0">
                       {isDealFinanciallySettled(deal) && (
                         <span
@@ -1787,10 +1780,10 @@ export default function Earnings() {
                     </div>
                     {dealFootText && (
                       <div
-                        className="mt-1 text-[11px] text-neutral-500 leading-snug line-clamp-2 break-words"
+                        className="mt-1 text-[11px] text-neutral-500 leading-snug truncate"
                         title={dealFootText}
                       >
-                        <span className="tabular-nums">{dealFootText}</span>
+                        {dealFootText}
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
