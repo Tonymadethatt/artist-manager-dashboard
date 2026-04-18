@@ -70,6 +70,11 @@ import {
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
+import {
+  fetchVenueEmailSentCountsForUser,
+  resendPlanCaps,
+  usageNearLimitFlags,
+} from '@/lib/email/emailQueueSendUsage'
 
 function fmtDate(iso: string) {
   return stripOnTheHourMinutes12h(new Date(iso).toLocaleString('en-US', {
@@ -388,7 +393,7 @@ type RecentCaptureRow = {
 }
 
 export default function EmailQueue() {
-  const { pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
+  const { emails, pendingEmails, sentEmails, loading, refetch, dismissQueued, updateEmailStatus } = useVenueEmails()
   const { profile } = useArtistProfile()
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue')
   const [queueSubTab, setQueueSubTab] = useState<'immediate' | 'scheduled'>('immediate')
@@ -400,6 +405,26 @@ export default function EmailQueue() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewSubject, setPreviewSubject] = useState<string>('')
   const [previewLoading, setPreviewLoading] = useState(false)
+  const resendCaps = useMemo(() => resendPlanCaps(), [])
+  const [sendUsage, setSendUsage] = useState<{ today: number; month: number } | null>(null)
+  const [sendUsageLoadFailed, setSendUsageLoadFailed] = useState(false)
+
+  const loadSendUsage = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const c = await fetchVenueEmailSentCountsForUser(user.id)
+    if (c) {
+      setSendUsage(c)
+      setSendUsageLoadFailed(false)
+    } else {
+      setSendUsageLoadFailed(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    const t = window.setTimeout(() => void loadSendUsage(), 400)
+    return () => window.clearTimeout(t)
+  }, [emails, loadSendUsage])
 
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
@@ -413,13 +438,27 @@ export default function EmailQueue() {
   const displayedPending =
     queueSubTab === 'scheduled' ? pendingScheduled : pendingImmediate
 
+  const usageHot = useMemo(
+    () =>
+      sendUsage
+        ? usageNearLimitFlags({
+            sentToday: sendUsage.today,
+            sentMonth: sendUsage.month,
+            dailyCap: resendCaps.daily,
+            monthlyCap: resendCaps.monthly,
+          })
+        : { dailyHot: false, monthlyHot: false },
+    [sendUsage, resendCaps.daily, resendCaps.monthly],
+  )
+
   useEffect(() => {
     if (activeTab !== 'queue') return
     const id = window.setInterval(() => {
       void refetch({ silent: true })
+      void loadSendUsage()
     }, 30_000)
     return () => window.clearInterval(id)
-  }, [activeTab, refetch])
+  }, [activeTab, refetch, loadSendUsage])
 
   useEffect(() => {
     if (activeTab !== 'history') return
@@ -448,6 +487,7 @@ export default function EmailQueue() {
   const handleRefresh = async () => {
     setRefreshing(true)
     await refetch()
+    await loadSendUsage()
     setRefreshing(false)
   }
 
@@ -1562,38 +1602,123 @@ export default function EmailQueue() {
 
   return (
     <div className="space-y-5 w-full min-w-0">
-      <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-neutral-800">
-        <div className="flex gap-1 flex-1 min-w-[12rem]">
-          <button
-            onClick={() => setActiveTab('queue')}
-            className={cn(
-              'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              activeTab === 'queue'
-                ? 'border-neutral-300 text-neutral-100'
-                : 'border-transparent text-neutral-500 hover:text-neutral-300'
-            )}
-          >
-            Queue
-            {pendingEmails.length > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center min-w-[1rem] h-4 px-1 text-[10px] font-bold bg-neutral-700 text-neutral-200 rounded-full">
-                {pendingEmails.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={cn(
-              'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              activeTab === 'history'
-                ? 'border-neutral-300 text-neutral-100'
-                : 'border-transparent text-neutral-500 hover:text-neutral-300'
-            )}
-          >
-            History
-          </button>
-        </div>
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-neutral-800">
+          <div className="flex flex-col gap-2 flex-1 min-w-0 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('queue')}
+                className={cn(
+                  'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+                  activeTab === 'queue'
+                    ? 'border-neutral-300 text-neutral-100'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
+                )}
+              >
+                Queue
+                {pendingEmails.length > 0 && (
+                  <span className="ml-2 inline-flex items-center justify-center min-w-[1rem] h-4 px-1 text-[10px] font-bold bg-neutral-700 text-neutral-200 rounded-full">
+                    {pendingEmails.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={cn(
+                  'px-3 sm:px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+                  activeTab === 'history'
+                    ? 'border-neutral-300 text-neutral-100'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-300'
+                )}
+              >
+                History
+              </button>
+            </div>
 
-        <TooltipProvider delayDuration={200}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-0.5 sm:justify-end shrink-0 text-[11px] tabular-nums">
+              {sendUsageLoadFailed ? (
+                <span className="text-neutral-500">Usage unavailable</span>
+              ) : sendUsage == null ? (
+                <span className="text-neutral-500">Usage …</span>
+              ) : (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex items-baseline gap-1.5 cursor-default border-0 bg-transparent p-0 text-left',
+                          'border-b border-dotted border-transparent hover:border-neutral-600',
+                        )}
+                      >
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Today</span>
+                        <span
+                          className={cn(
+                            'font-medium',
+                            usageHot.dailyHot ? 'text-red-400' : 'text-neutral-200',
+                          )}
+                        >
+                          {sendUsage.today.toLocaleString('en-US')} / {resendCaps.daily.toLocaleString('en-US')}
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="end"
+                      sideOffset={6}
+                      className="max-w-[min(18rem,calc(100vw-2rem))] border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-[11px] font-normal leading-relaxed text-neutral-400 shadow-xl"
+                    >
+                      <p className="text-neutral-200 font-medium mb-1">Sent today (Pacific)</p>
+                      <p>
+                        Rows in this app marked <span className="text-neutral-300">sent</span> with today’s date in Los
+                        Angeles, compared to your daily cap (default <span className="text-neutral-300">300</span> —
+                        set <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> to match Resend).
+                        Turns <span className="text-red-400">red</span> when 20 or fewer sends remain.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex items-baseline gap-1.5 cursor-default border-0 bg-transparent p-0 text-left',
+                          'border-b border-dotted border-transparent hover:border-neutral-600',
+                        )}
+                      >
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Month</span>
+                        <span
+                          className={cn(
+                            'font-medium',
+                            usageHot.monthlyHot ? 'text-red-400' : 'text-neutral-200',
+                          )}
+                        >
+                          {sendUsage.month.toLocaleString('en-US')} / {resendCaps.monthly.toLocaleString('en-US')}
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="end"
+                      sideOffset={6}
+                      className="max-w-[min(18rem,calc(100vw-2rem))] border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-[11px] font-normal leading-relaxed text-neutral-400 shadow-xl"
+                    >
+                      <p className="text-neutral-200 font-medium mb-1">Sent this calendar month (Pacific)</p>
+                      <p>
+                        Count resets on the <span className="text-neutral-300">1st</span> (Pacific). Cap default{' '}
+                        <span className="text-neutral-300">3,000</span> — set{' '}
+                        <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span> to match Resend. Turns{' '}
+                        <span className="text-red-400">red</span> when 300 or fewer sends remain. Totals reflect this
+                        workspace’s <span className="text-neutral-300">venue_emails</span> ledger, not Resend’s full API
+                        usage if you send from elsewhere with the same key.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 shrink-0 pb-1">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1649,8 +1774,8 @@ export default function EmailQueue() {
               <RefreshCw className={cn('h-4 w-4', (refreshing || loading) && 'animate-spin')} />
             </Button>
           </div>
-        </TooltipProvider>
-      </div>
+        </div>
+      </TooltipProvider>
 
       {sendError && (
         <div className="px-3 py-2 rounded-lg bg-red-950 border border-red-800 text-xs text-red-400">
