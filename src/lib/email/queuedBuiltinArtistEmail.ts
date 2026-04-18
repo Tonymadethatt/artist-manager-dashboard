@@ -6,6 +6,7 @@ export function isQueuedBuiltinArtistEmailType(emailType: string): boolean {
     || emailType === 'performance_report_received'
     || emailType === 'gig_calendar_digest_weekly'
     || emailType === 'gig_reminder_24h'
+    || emailType === 'gig_reminder_manual'
     || emailType === 'gig_booked_ics'
     || emailType === 'gig_day_summary_manual'
 }

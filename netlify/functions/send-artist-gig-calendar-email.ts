@@ -34,6 +34,14 @@ export type GigCalendarEmailPayload =
     user_id?: string
   }
   | {
+    kind: 'gig_reminder_manual'
+    profile: Profile
+    to: string
+    subject: string
+    html: string
+    user_id?: string
+  }
+  | {
     kind: 'gig_calendar_digest_weekly'
     profile: Profile
     to: string
@@ -67,7 +75,7 @@ const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) }
   }
 
-  // Defense-in-depth: reject premature day-before reminders regardless of caller.
+  // Defense-in-depth: reject premature day-before reminders regardless of caller (`gig_reminder_manual` skips this).
   if (payload.kind === 'gig_reminder_24h') {
     const iso = 'showStartIso' in payload ? payload.showStartIso : undefined
     if (iso) {

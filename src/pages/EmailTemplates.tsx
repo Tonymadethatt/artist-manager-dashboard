@@ -244,6 +244,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
   gig_calendar_digest_weekly: 'Weekly on Sundays ~5am PT: digest of booked gigs in the next 14 days — one card per show. Jobs are pre-enqueued with that send time so they appear under Email Queue → Scheduled until they go out.',
   gig_reminder_24h:           'Per show: one email the calendar day before start (~10:00 AM Pacific), not tied to show clock time (queued when a gig is on the calendar).',
+  gig_reminder_manual:        'Same layout as the day-before reminder, but queued from a gig’s detail modal when you want to nudge the artist on demand (no calendar window).',
   gig_booked_ics:             'After a gig is calendar-ready and the deal has an agreement on file or deposit paid: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a stacked card for each booked gig on one day (queued; sends on next cron tick).',
 }
@@ -256,6 +257,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   performance_report_received: '{firstName}, we received your show check-in',
   gig_calendar_digest_weekly: '{firstName}, your gigs — next two weeks',
   gig_reminder_24h:           '{firstName}, reminder: {venue} tomorrow',
+  gig_reminder_manual:        '{firstName}, reminder: {venue}',
   gig_booked_ics:             '{firstName}, you’re booked — show details',
   gig_day_summary_manual:     '{firstName}, your gigs — one day',
 }
@@ -268,6 +270,7 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'performance_report_received',
   'gig_calendar_digest_weekly',
   'gig_reminder_24h',
+  'gig_reminder_manual',
   'gig_booked_ics',
   'gig_day_summary_manual',
 ]
@@ -594,7 +597,7 @@ export default function EmailTemplates() {
           publicSiteOrigin(),
         )
       }
-      if (selectedType === 'gig_reminder_24h') {
+      if (selectedType === 'gig_reminder_24h' || selectedType === 'gig_reminder_manual') {
         const Lsend = artistLayoutForSend(layout, null, null)
         return buildBrandedGigCalendarEmail({
           kind: 'gig_reminder_24h',

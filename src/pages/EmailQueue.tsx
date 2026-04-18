@@ -116,6 +116,10 @@ function pendingNotesLine(email: VenueEmail): string | null {
     const n = parseGigCalendarQueueNotes(email.notes)
     if (n?.kind === 'gig_day_summary_manual') return `Day summary · ${n.ymd}`
   }
+  if (email.email_type === 'gig_reminder_manual') {
+    const n = parseGigCalendarQueueNotes(email.notes)
+    if (n?.kind === 'gig_reminder_manual') return 'Manual gig reminder · queued'
+  }
   if (email.email_type === 'gig_reminder_24h' || email.email_type === 'gig_booked_ics') {
     const n = parseGigCalendarQueueNotes(email.notes)
     if (n?.kind === email.email_type) return email.email_type === 'gig_booked_ics' ? 'Booked gig email · queued' : 'Day-before reminder · queued'
@@ -588,16 +592,26 @@ export default function EmailQueue() {
         } else if (
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
+          || email.email_type === 'gig_reminder_manual'
           || email.email_type === 'gig_booked_ics'
           || email.email_type === 'gig_day_summary_manual'
         ) {
           const gigN = parseGigCalendarQueueNotes(email.notes)
-          const { data: gcTmpl } = await supabase
+          let { data: gcTmpl } = await supabase
             .from('email_templates')
             .select('custom_subject, custom_intro, layout')
             .eq('user_id', user.id)
             .eq('email_type', email.email_type)
             .maybeSingle()
+          if (!gcTmpl && email.email_type === 'gig_reminder_manual') {
+            const { data: fb } = await supabase
+              .from('email_templates')
+              .select('custom_subject, custom_intro, layout')
+              .eq('user_id', user.id)
+              .eq('email_type', 'gig_reminder_24h')
+              .maybeSingle()
+            gcTmpl = fb
+          }
           const Lg = artistLayoutForSend(gcTmpl?.layout ?? null, gcTmpl?.custom_subject ?? null, gcTmpl?.custom_intro ?? null)
           const subj = Lg.subject?.trim() || email.subject
           setPreviewSubject(subj)
@@ -693,7 +707,7 @@ export default function EmailQueue() {
               ...gigShellP,
               daySummary: { dayLabel: dayLabelD, rows: rowsD },
             }))
-          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
+          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_reminder_manual' || gigN?.kind === 'gig_booked_ics') {
             const { data: dealRow } = await supabase
               .from('deals')
               .select('*')
@@ -703,7 +717,7 @@ export default function EmailQueue() {
             const deal = dealRow as Deal | null
             if (!deal?.event_start_at || !deal.event_end_at) {
               setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Deal or show times missing.</div>')
-            } else if (gigN.kind === 'gig_reminder_24h') {
+            } else if (gigN.kind === 'gig_reminder_24h' || gigN.kind === 'gig_reminder_manual') {
               const { data: venueRow } = await supabase.from('venues').select('name').eq('id', deal.venue_id as string).maybeSingle()
               const vn = (venueRow as { name?: string } | null)?.name?.trim() || deal.description?.trim() || 'Show'
               setPreviewHtml(buildBrandedGigCalendarEmail({
@@ -1072,17 +1086,27 @@ export default function EmailQueue() {
         } else if (
           email.email_type === 'gig_calendar_digest_weekly'
           || email.email_type === 'gig_reminder_24h'
+          || email.email_type === 'gig_reminder_manual'
           || email.email_type === 'gig_booked_ics'
           || email.email_type === 'gig_day_summary_manual'
         ) {
           if (!profile.artist_email?.trim()) throw new Error('Artist email not set in profile.')
           const gigN = parseGigCalendarQueueNotes(email.notes)
-          const { data: gcTmpl } = await supabase
+          let { data: gcTmpl } = await supabase
             .from('email_templates')
             .select('custom_subject, custom_intro, layout')
             .eq('user_id', user.id)
             .eq('email_type', email.email_type)
             .maybeSingle()
+          if (!gcTmpl && email.email_type === 'gig_reminder_manual') {
+            const { data: fb } = await supabase
+              .from('email_templates')
+              .select('custom_subject, custom_intro, layout')
+              .eq('user_id', user.id)
+              .eq('email_type', 'gig_reminder_24h')
+              .maybeSingle()
+            gcTmpl = fb
+          }
           const Lsend = artistLayoutForSend(gcTmpl?.layout ?? null, gcTmpl?.custom_subject ?? null, gcTmpl?.custom_intro ?? null)
           const subj = Lsend.subject?.trim() || email.subject
           const sendProfile = {
@@ -1205,7 +1229,7 @@ export default function EmailQueue() {
               }),
             })
             if (!res.ok) throw new Error(await parseErr(res))
-          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_booked_ics') {
+          } else if (gigN?.kind === 'gig_reminder_24h' || gigN?.kind === 'gig_reminder_manual' || gigN?.kind === 'gig_booked_ics') {
             const { data: dealRow } = await supabase
               .from('deals')
               .select('*')
@@ -1226,7 +1250,7 @@ export default function EmailQueue() {
               .eq('user_id', user.id)
               .maybeSingle()
             const venue = venueRow as Venue | null
-            if (gigN.kind === 'gig_reminder_24h') {
+            if (gigN.kind === 'gig_reminder_24h' || gigN.kind === 'gig_reminder_manual') {
               const venueName = venue?.name?.trim() || deal.description?.trim() || 'Show'
               const html = buildBrandedGigCalendarEmail({
                 kind: 'gig_reminder_24h',
@@ -1240,16 +1264,17 @@ export default function EmailQueue() {
                   setLine: performanceWindowCompactFromDeal(deal),
                 },
               })
+              const sendKind = gigN.kind === 'gig_reminder_manual' ? 'gig_reminder_manual' : 'gig_reminder_24h'
               const res = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  kind: 'gig_reminder_24h',
+                  kind: sendKind,
                   profile: sendProfile,
                   to: profile.artist_email.trim(),
                   subject: subj,
                   html,
-                  showStartIso: deal.event_start_at,
+                  ...(gigN.kind === 'gig_reminder_manual' ? {} : { showStartIso: deal.event_start_at }),
                   user_id: user.id,
                 }),
               })

@@ -13,6 +13,7 @@ import {
   pacificWallToUtcIso,
 } from '@/lib/calendar/pacificWallTime'
 import { queueManualGigDaySummary } from '@/lib/calendar/queueManualGigDaySummary'
+import { queueManualGigReminderForDeal } from '@/lib/calendar/queueManualGigReminderForDeal'
 import { formatGoogleCalendarDescription } from '@/lib/calendar/formatGoogleCalendarDescription'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -160,6 +161,7 @@ export function GigCalendar({
   const [dayActionsFor, setDayActionsFor] = useState<string | null>(null)
   const [calendarNotice, setCalendarNotice] = useState<string | null>(null)
   const [queueingDayEmail, setQueueingDayEmail] = useState(false)
+  const [queueingDealReminder, setQueueingDealReminder] = useState(false)
   const [syncDeleting, setSyncDeleting] = useState(false)
   const [syncDeleteError, setSyncDeleteError] = useState<string | null>(null)
 
@@ -375,6 +377,20 @@ export function GigCalendar({
     if (res.ok) {
       setCalendarNotice('Queued email to your artist. It will send on the next queue run (usually within a minute).')
       setDayActionsFor(null)
+    } else {
+      setCalendarNotice(res.message)
+    }
+  }
+
+  async function handleQueueDealReminder(dealId: string) {
+    setQueueingDealReminder(true)
+    setCalendarNotice(null)
+    const res = await queueManualGigReminderForDeal(dealId)
+    setQueueingDealReminder(false)
+    if (res.ok) {
+      setCalendarNotice(
+        'Queued this gig’s reminder to your artist (same template as the day-before email). It sends on the next queue run.',
+      )
     } else {
       setCalendarNotice(res.message)
     }
@@ -942,23 +958,43 @@ export function GigCalendar({
                 </section>
               )}
 
-              <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4 sm:flex-row">
-                <Button asChild variant="default" className="flex-1 h-9 text-sm">
-                  <Link to={`/earnings#earnings-deal-${selectedDeal.id}`} onClick={() => setSelectedDeal(null)}>
-                    Open in Earnings
-                  </Link>
-                </Button>
-                {selectedDeal.venue_id && (
-                  <Button asChild variant="outline" className="flex-1 h-9 text-sm">
-                    <Link
-                      to="/pipeline"
-                      state={{ openVenueId: selectedDeal.venue_id }}
-                      onClick={() => setSelectedDeal(null)}
-                    >
-                      Venue in Pipeline
+              <div className="flex flex-col gap-2 border-t border-neutral-800 pt-4">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button asChild variant="default" className="flex-1 h-9 text-sm">
+                    <Link to={`/earnings#earnings-deal-${selectedDeal.id}`} onClick={() => setSelectedDeal(null)}>
+                      Open in Earnings
                     </Link>
                   </Button>
-                )}
+                  {selectedDeal.venue_id && (
+                    <Button asChild variant="outline" className="flex-1 h-9 text-sm">
+                      <Link
+                        to="/pipeline"
+                        state={{ openVenueId: selectedDeal.venue_id }}
+                        onClick={() => setSelectedDeal(null)}
+                      >
+                        Venue in Pipeline
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full h-9 text-sm"
+                  disabled={
+                    !selectedDeal.event_start_at
+                    || !selectedDeal.event_end_at
+                    || queueingDealReminder
+                  }
+                  title={
+                    !selectedDeal.event_start_at || !selectedDeal.event_end_at
+                      ? 'Add event start and end times in Earnings to send the reminder.'
+                      : undefined
+                  }
+                  onClick={() => void handleQueueDealReminder(selectedDeal.id)}
+                >
+                  {queueingDealReminder ? 'Queueing…' : 'Send reminder to artist'}
+                </Button>
               </div>
             </div>
             )

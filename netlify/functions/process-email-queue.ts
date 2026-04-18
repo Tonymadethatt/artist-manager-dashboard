@@ -482,6 +482,7 @@ const handler: Handler = async (event) => {
     if (
       gigCal?.kind === 'gig_booked_ics'
       || gigCal?.kind === 'gig_reminder_24h'
+      || gigCal?.kind === 'gig_reminder_manual'
       || gigCal?.kind === 'gig_calendar_digest_weekly'
       || gigCal?.kind === 'gig_day_summary_manual'
     ) {
@@ -502,7 +503,10 @@ const handler: Handler = async (event) => {
         manager_email: (row.manager_email as string | null) ?? null,
       }
 
-      const tmpl = templateByUserAndType.get(`${email.user_id}:${email.email_type}`)
+      let tmpl = templateByUserAndType.get(`${email.user_id}:${email.email_type}`)
+      if (!tmpl && email.email_type === 'gig_reminder_manual') {
+        tmpl = templateByUserAndType.get(`${email.user_id}:gig_reminder_24h`)
+      }
       const layoutMerged = artistLayoutForSend(
         tmpl?.layout ?? null,
         tmpl?.custom_subject ?? null,
@@ -768,7 +772,7 @@ const handler: Handler = async (event) => {
           continue
         }
 
-        // gig_reminder_24h
+        // gig_reminder_24h | gig_reminder_manual
         if (!deal.event_start_at || !deal.event_end_at) {
           await supabase
             .from('venue_emails')
@@ -777,13 +781,15 @@ const handler: Handler = async (event) => {
           results.push({ id: email.id, result: 'failed', reason: 'deal_times' })
           continue
         }
+        const isManualReminder = gigCal.kind === 'gig_reminder_manual'
         const sendNowCheck = shouldSendGigReminderNow(Date.now(), deal.event_start_at)
         console.log(
           `[gig_reminder_24h:send] id=${email.id} deal_id=${deal.id}`
           + ` event_start_at=${deal.event_start_at} sendNowCheck=${sendNowCheck}`
+          + ` manual=${isManualReminder}`
           + ` now=${new Date().toISOString()}`,
         )
-        if (!sendNowCheck) {
+        if (!isManualReminder && !sendNowCheck) {
           // Claim set status to `sending`; release so the next cron run can retry when the window opens.
           await supabase
             .from('venue_emails')
@@ -804,17 +810,18 @@ const handler: Handler = async (event) => {
             setLine: performanceWindowCompactFromDeal(deal),
           },
         })
-        const subj = layoutMerged.subject?.trim() || email.subject || `Reminder: ${venueName} tomorrow`
+        const subj = layoutMerged.subject?.trim() || email.subject || `Reminder: ${venueName}${isManualReminder ? '' : ' tomorrow'}`
+        const sendKind = isManualReminder ? 'gig_reminder_manual' : 'gig_reminder_24h'
         const sendRes = await fetch(`${siteUrl}/.netlify/functions/send-artist-gig-calendar-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            kind: 'gig_reminder_24h',
+            kind: sendKind,
             profile: sendProfile,
             to: String(row.artist_email ?? ''),
             subject: subj,
             html,
-            showStartIso: deal.event_start_at,
+            ...(isManualReminder ? {} : { showStartIso: deal.event_start_at }),
             user_id: email.user_id as string,
           }),
         })

@@ -324,7 +324,7 @@ export async function sendEmailTemplateTest(
       social_handle: profile.social_handle ?? null,
       phone: profile.phone ?? null,
     }
-    if (params.selectedType === 'gig_reminder_24h') {
+    if (params.selectedType === 'gig_reminder_24h' || params.selectedType === 'gig_reminder_manual') {
       const html = buildBrandedGigCalendarEmail({
         kind: 'gig_reminder_24h',
         L: Lsend,
@@ -340,11 +340,12 @@ export async function sendEmailTemplateTest(
           }),
         },
       })
+      const sendKind = params.selectedType === 'gig_reminder_manual' ? 'gig_reminder_manual' : 'gig_reminder_24h'
       const res = await fetch('/.netlify/functions/send-artist-gig-calendar-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          kind: 'gig_reminder_24h',
+          kind: sendKind,
           profile: {
             artist_name: profile.artist_name,
             from_email: profile.from_email,

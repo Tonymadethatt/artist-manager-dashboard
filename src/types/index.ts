@@ -579,6 +579,8 @@ export type ArtistEmailType =
   | 'performance_report_received'
   | 'gig_calendar_digest_weekly'
   | 'gig_reminder_24h'
+  /** Per-show reminder queued from gig detail modal; same creative as 24h reminder, no day-before gate. */
+  | 'gig_reminder_manual'
   | 'gig_booked_ics'
   /** Queued from gig calendar: one-day schedule to artist (buffer 0). */
   | 'gig_day_summary_manual'
@@ -611,6 +613,7 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   performance_report_received: 'Performance report received',
   gig_calendar_digest_weekly: 'Weekly (Sundays, PT) — next 2 weeks of gigs',
   gig_reminder_24h: 'Gig reminder — day before show (morning PT)',
+  gig_reminder_manual: 'Gig reminder — manual (from calendar)',
   gig_booked_ics: 'Gig booked — confirmation email (calendar synced)',
   gig_day_summary_manual: 'Gig schedule — day summary (manual)',
 }
