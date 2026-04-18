@@ -59,8 +59,8 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavItem[] }> = [
     id: 'content',
     label: 'Content',
     items: [
-      { to: '/templates', label: 'Documents', icon: FileText,   end: false, badgeKey: null },
-      { to: '/files',     label: 'Files',     icon: FolderOpen, end: false, badgeKey: null },
+      { to: '/templates', label: 'Templates', icon: FileText,   end: false, badgeKey: null },
+      { to: '/files',     label: 'Documents', icon: FolderOpen, end: false, badgeKey: null },
       { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
     ],
   },
