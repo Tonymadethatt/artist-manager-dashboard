@@ -79,27 +79,50 @@ export const CONTACT_TITLE_MISMATCH = Object.fromEntries(
 
 const CONTACT_MISMATCH_ROLE_KEY_SET = new Set<string>(CONTACT_MISMATCH_ROLE_ORDER)
 
-/** String stored on `BookingIntakeVenueDataV3.contact_role` when picking an existing contact or editing pre-call. */
+/** Default catalog title for a mismatch “bucket” (first row in {@link CONTACT_TITLE_ROWS} for that bucket). */
+export function mismatchContextToDefaultTitleKey(
+  ctx: Exclude<Phase1ContactMismatchContextV3, ''>,
+): ContactTitleKey {
+  const row = CONTACT_TITLE_ROWS.find(r => r.m === ctx)
+  return (row?.key ?? 'other') as ContactTitleKey
+}
+
+/** Normalize `BookingIntakeVenueDataV3.contact_role`: may be a {@link ContactTitleKey} or legacy mismatch key. */
+export function intakeContactTitleKeyFromContactRoleField(raw: string): ContactTitleKey | '' {
+  const t = raw.trim()
+  if (!t) return ''
+  if (t in CONTACT_TITLE_LABELS) return t as ContactTitleKey
+  if (CONTACT_MISMATCH_ROLE_KEY_SET.has(t)) {
+    return mismatchContextToDefaultTitleKey(t as Exclude<Phase1ContactMismatchContextV3, ''>)
+  }
+  return ''
+}
+
+/**
+ * String stored on `BookingIntakeVenueDataV3.contact_role` — always a {@link ContactTitleKey} when known
+ * (legacy mismatch-only values are mapped to a default title in the same bucket).
+ */
 export function intakeContactRoleFieldFromContact(
   c: Pick<Contact, 'title_key' | 'role'> | null | undefined,
 ): string {
   if (!c) return ''
-  const r = c.role?.trim() ?? ''
-  if (r && CONTACT_MISMATCH_ROLE_KEY_SET.has(r)) return r
   const k = c.title_key?.trim()
-  if (k && k in CONTACT_TITLE_MISMATCH) return CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
-  return r
+  if (k && k in CONTACT_TITLE_LABELS) return k
+  const r = c.role?.trim() ?? ''
+  if (r && CONTACT_MISMATCH_ROLE_KEY_SET.has(r)) {
+    return mismatchContextToDefaultTitleKey(r as Mismatch)
+  }
+  if (r) {
+    return mismatchContextToDefaultTitleKey(mapContactRoleTextToMismatchContext(r))
+  }
+  return ''
 }
 
-/** Radix Select `value` for pre-call / venue intake role (sentinels `__none__`, `__legacy__`). */
-export function intakeContactRoleSelectControlValue(
-  raw: string,
-): '__none__' | '__legacy__' | Exclude<Phase1ContactMismatchContextV3, ''> {
-  const t = raw.trim()
-  if (!t) return '__none__'
-  if (CONTACT_MISMATCH_ROLE_KEY_SET.has(t)) return t as Exclude<Phase1ContactMismatchContextV3, ''>
-  if (t in CONTACT_TITLE_MISMATCH) return CONTACT_TITLE_MISMATCH[t as ContactTitleKey]
-  return '__legacy__'
+/** Best {@link ContactTitleKey} for a venue contact row (for intake chip picks and defaults). */
+export function contactTitleKeyFromContactForIntake(c: Pick<Contact, 'title_key' | 'role'>): ContactTitleKey {
+  const k = c.title_key?.trim()
+  if (k && k in CONTACT_TITLE_LABELS) return k as ContactTitleKey
+  return mismatchContextToDefaultTitleKey(contactToMismatchContext(c))
 }
 
 export const CONTACT_TITLE_GROUPS: { label: string; keys: readonly ContactTitleKey[] }[] = (() => {

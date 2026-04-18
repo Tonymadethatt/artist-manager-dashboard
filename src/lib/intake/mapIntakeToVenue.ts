@@ -1,5 +1,9 @@
 import type { DealTerms, Venue, VenueType, Contact } from '@/types'
-import { CONTACT_TITLE_LABELS, contactRoleForDisplay } from '@/lib/contacts/contactTitles'
+import {
+  CONTACT_TITLE_LABELS,
+  contactRoleForDisplay,
+  type ContactTitleKey,
+} from '@/lib/contacts/contactTitles'
 import {
   VENUE_ARCHETYPE_LABELS,
   computeSetLengthHours,
@@ -111,10 +115,12 @@ export function intakeContactsFromVenueDataV3(
   const primary: IntakeDerivedContactRow[] = []
   const mainName = data.contact_name.trim()
   if (mainName) {
+    const cr = data.contact_role.trim()
+    const isTitleKey = !!(cr && cr in CONTACT_TITLE_LABELS)
     primary.push({
       name: mainName,
-      role: data.contact_role.trim() || null,
-      title_key: null,
+      role: isTitleKey ? null : cr || null,
+      title_key: isTitleKey ? cr : null,
       email: data.contact_email.trim() || null,
       phone: data.contact_phone.trim() || null,
       company: data.contact_company.trim() || null,
@@ -125,10 +131,13 @@ export function intakeContactsFromVenueDataV3(
     !data.onsite_linked_contact_id &&
     (data.onsite_contact_name.trim() || data.onsite_contact_phone.trim())
   ) {
+    const otk = data.onsite_contact_title_key.trim()
+    const isOtk = !!(otk && otk in CONTACT_TITLE_LABELS)
+    const roleFree = data.onsite_contact_role.trim() || 'On-site'
     primary.push({
       name: data.onsite_contact_name.trim() || 'On-site contact',
-      role: data.onsite_contact_role.trim() || 'On-site',
-      title_key: null,
+      role: isOtk ? null : roleFree,
+      title_key: isOtk ? (otk as ContactTitleKey) : null,
       email: null,
       phone: data.onsite_contact_phone.trim() || null,
       company: data.contact_company.trim() || null,

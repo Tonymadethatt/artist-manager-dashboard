@@ -10,16 +10,11 @@ import {
   type Phase2EventScheduleV3,
 } from '@/lib/intake/intakePayloadV3'
 import type { Venue, VenueType } from '@/types'
-import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
+import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
 import { COLD_CALL_WEEKDAY_LABELS, type ColdCallCapacityBucket, type ColdCallDataV1, type ColdCallPurpose } from './coldCallPayload'
 import { BUDGET_RANGE_OPTIONS } from '@/pages/cold-call/liveFieldOptions'
 
 export type ColdCallIntakeConversionContext = 'mid_call' | 'post_call'
-
-function titleLabel(key: ContactTitleKey | ''): string {
-  if (!key) return ''
-  return CONTACT_TITLE_LABELS[key] ?? ''
-}
 
 function mapColdCapacityToIntake(bucket: ColdCallCapacityBucket): CapacityRangeV3 {
   switch (bucket) {
@@ -136,10 +131,9 @@ function primaryIntakeContactName(d: ColdCallDataV1): string {
 
 function primaryIntakeContactRole(d: ColdCallDataV1): string {
   if (d.decision_maker_name.trim()) {
-    const k = d.decision_maker_title_key || d.target_title_key
-    return titleLabel(k)
+    return (d.decision_maker_title_key || d.target_title_key || '').trim()
   }
-  return titleLabel(d.target_title_key)
+  return (d.target_title_key || '').trim()
 }
 
 export function buildGatekeeperSecondContact(d: ColdCallDataV1): {

@@ -8,6 +8,7 @@ import {
   CONTACT_MISMATCH_CONTEXT_LABELS,
   type Phase1ContactMismatchContextV3,
 } from './contactMismatchCatalog'
+import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
 
 export {
   CONTACT_MISMATCH_CONTEXT_KEYS,
@@ -1758,6 +1759,11 @@ export type BookingIntakeVenueDataV3 = {
    * Suppresses redundant name/title UI in live 1A; Add new clears until a new person is saved on advance.
    */
   contact_mismatch_linked_contact_id: string | null
+  /**
+   * Precise {@link ContactTitleKey} for the on-call person when `confirmed_contact === 'no_different_person'`.
+   * Kept in sync with `contact_mismatch_context` (intake mismatch bucket) when set from the title picker.
+   */
+  contact_mismatch_title_key: string
   /** Preferred channel for the email we’ll use (when multiple in play). */
   preferred_email_channel: Phase1PreferredEmailChannelV3
   /** Per §8.5 — Phase 2 subsection defaults per spec §8.4 */
@@ -1829,6 +1835,8 @@ export type BookingIntakeVenueDataV3 = {
   /** §19.8A — on-site contact (typed after live flags). */
   onsite_contact_name: string
   onsite_contact_phone: string
+  /** Precise {@link ContactTitleKey} when on-site POC is not linked to an existing contact row. */
+  onsite_contact_title_key: string
   onsite_contact_role: string
   /** §19.8A — invoicing / billing (typed after live flags). */
   invoice_company_text: string
@@ -2593,6 +2601,7 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     contact_mismatch_context: '',
     contact_mismatch_note: '',
     contact_mismatch_linked_contact_id: null,
+    contact_mismatch_title_key: '',
     preferred_email_channel: '',
     same_for_all_2a: true,
     same_for_all_2b: false,
@@ -2640,6 +2649,7 @@ export function emptyVenueDataV3(): BookingIntakeVenueDataV3 {
     red_flags: '',
     onsite_contact_name: '',
     onsite_contact_phone: '',
+    onsite_contact_title_key: '',
     onsite_contact_role: '',
     invoice_company_text: '',
     invoice_email_text: '',
@@ -2894,6 +2904,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
       typeof o.contact_mismatch_linked_contact_id === 'string' && o.contact_mismatch_linked_contact_id.trim()
         ? o.contact_mismatch_linked_contact_id.trim()
         : null,
+    contact_mismatch_title_key: typeof o.contact_mismatch_title_key === 'string' ? o.contact_mismatch_title_key : '',
     preferred_email_channel: parsePhase1Enum(
       o.preferred_email_channel,
       ['', 'work', 'personal', 'billing', 'production'],
@@ -2952,6 +2963,7 @@ export function parseVenueDataV3(raw: unknown, schemaVersion: number): BookingIn
     red_flags: String(o.red_flags ?? ''),
     onsite_contact_name: String(o.onsite_contact_name ?? ''),
     onsite_contact_phone: String(o.onsite_contact_phone ?? ''),
+    onsite_contact_title_key: typeof o.onsite_contact_title_key === 'string' ? o.onsite_contact_title_key : '',
     onsite_contact_role: String(o.onsite_contact_role ?? ''),
     invoice_company_text: String(o.invoice_company_text ?? ''),
     invoice_email_text: String(o.invoice_email_text ?? ''),
@@ -3003,11 +3015,13 @@ function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVe
     out.contact_mismatch_context = ''
     out.contact_mismatch_note = ''
     out.contact_mismatch_linked_contact_id = null
+    out.contact_mismatch_title_key = ''
   }
   if (out.onsite_same_contact !== 'different') {
     out.onsite_contact_name = ''
     out.onsite_contact_phone = ''
     out.onsite_contact_role = ''
+    out.onsite_contact_title_key = ''
     out.onsite_poc_role = ''
     out.onsite_connect_method = ''
     out.onsite_connect_window = ''
@@ -3018,6 +3032,7 @@ function finalizeVenuePostCaptures(v: BookingIntakeVenueDataV3): BookingIntakeVe
     if (out.onsite_phone_flag !== 'capture_later') out.onsite_contact_phone = ''
     if (out.onsite_name_flag !== 'capture_later' && out.onsite_phone_flag !== 'capture_later') {
       out.onsite_contact_role = ''
+      out.onsite_contact_title_key = ''
       out.onsite_title_context = ''
     }
   }
@@ -3856,9 +3871,14 @@ export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): strin
   }
   if (v.confirmed_contact === 'no_different_person') {
     const name = v.contact_mismatch_note.trim()
+    const tk = v.contact_mismatch_title_key.trim()
     const roleKey = v.contact_mismatch_context
     const role =
-      roleKey ? CONTACT_MISMATCH_CONTEXT_LABELS[roleKey as Exclude<Phase1ContactMismatchContextV3, ''>] : ''
+      tk && tk in CONTACT_TITLE_LABELS
+        ? CONTACT_TITLE_LABELS[tk as ContactTitleKey]
+        : roleKey
+          ? CONTACT_MISMATCH_CONTEXT_LABELS[roleKey as Exclude<Phase1ContactMismatchContextV3, ''>]
+          : ''
     if (name && role) lines.push(`On-call: ${name} (${role})`)
     else if (name) lines.push(`On-call name: ${name}`)
     else if (role) lines.push(`On-call role: ${role}`)
@@ -3883,11 +3903,14 @@ export function substantiveVenueCaptureLines(v: BookingIntakeVenueDataV3): strin
   }
   if (v.onsite_same_contact === 'different') {
     const onName = v.onsite_contact_name.trim()
+    const onTk = v.onsite_contact_title_key.trim()
     const onCtx = v.onsite_title_context.trim()
     const onRoleLbl =
-      onCtx && (CONTACT_MISMATCH_CONTEXT_KEYS as readonly string[]).includes(onCtx)
-        ? CONTACT_MISMATCH_CONTEXT_LABELS[onCtx as Exclude<Phase1ContactMismatchContextV3, ''>]
-        : ''
+      onTk && onTk in CONTACT_TITLE_LABELS
+        ? CONTACT_TITLE_LABELS[onTk as ContactTitleKey]
+        : onCtx && (CONTACT_MISMATCH_CONTEXT_KEYS as readonly string[]).includes(onCtx)
+          ? CONTACT_MISMATCH_CONTEXT_LABELS[onCtx as Exclude<Phase1ContactMismatchContextV3, ''>]
+          : ''
     if (onName && onRoleLbl) lines.push(`On-site contact: ${onName} (${onRoleLbl})`)
     else if (onName) lines.push(`On-site contact: ${onName}`)
     else if (onRoleLbl) lines.push(`On-site contact: ${onRoleLbl}`)

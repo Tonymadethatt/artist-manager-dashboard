@@ -38,7 +38,6 @@ import { cn } from '@/lib/utils'
 import {
   CAPACITY_RANGE_OPTIONS,
   CONTACT_MISMATCH_CONTEXT_LABELS,
-  CONTACT_MISMATCH_ROLE_ORDER,
   computeOvernightEvent,
   computeSetLengthHours,
   defaultIntakeTitleV3,
@@ -115,12 +114,18 @@ import {
   type VenuePromiseLineIdV3,
   type VenueAccessNoteTagV3,
 } from '@/lib/intake/intakePayloadV3'
+import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
 import {
+  CONTACT_TITLE_LABELS,
+  CONTACT_TITLE_MISMATCH,
   contactRoleForDisplay,
+  contactTitleKeyFromContactForIntake,
   contactToMismatchContext,
   intakeContactRoleFieldFromContact,
-  intakeContactRoleSelectControlValue,
+  intakeContactTitleKeyFromContactRoleField,
   isVenueSoundTechContact,
+  mismatchContextToDefaultTitleKey,
+  type ContactTitleKey,
 } from '@/lib/contacts/contactTitles'
 import type {
   CommissionTier,
@@ -415,9 +420,6 @@ function isGuestArtistAddon(addon: { name: string }): boolean {
     n.includes('second operator')
   )
 }
-
-/** Live 4B — new on-site POC (artist arrival / night-of) saved to `contacts.role` when operator adds a name. */
-const INTAKE_4B_NEW_ONSITE_CONTACT_TITLE: Exclude<Phase1ContactMismatchContextV3, ''> = 'day_of_coordinator'
 
 const EVENT_TYPE_OPTIONS: { value: KnownEventTypeV3; label: string }[] = [
   { value: 'after_party', label: 'After-Party' },
@@ -1219,13 +1221,15 @@ export default function BookingIntakePage() {
     if (data?.contact_mismatch_linked_contact_id) return false
     const note = data?.contact_mismatch_note?.trim() ?? ''
     const ctx = data?.contact_mismatch_context?.trim() ?? ''
-    if (note && ctx) return false
+    const titleK = data?.contact_mismatch_title_key?.trim() ?? ''
+    if (note && (ctx || titleK)) return false
     return true
   }, [
     live1aShowVenueMismatchChips,
     data?.contact_mismatch_linked_contact_id,
     data?.contact_mismatch_note,
     data?.contact_mismatch_context,
+    data?.contact_mismatch_title_key,
     mismatchAddNewChosen,
   ])
 
@@ -1233,7 +1237,11 @@ export default function BookingIntakePage() {
     if (!data || data.view_section !== '1A') return false
     if (data.confirmed_contact !== 'no_different_person' || live1aShowVenueContactPick) return false
     if (data.contact_mismatch_linked_contact_id) return false
-    if (data.contact_mismatch_note.trim() && data.contact_mismatch_context.trim()) return false
+    if (
+      data.contact_mismatch_note.trim() &&
+      (data.contact_mismatch_title_key.trim() || data.contact_mismatch_context.trim())
+    )
+      return false
     return mismatchAddNewChosen || otherVenueContactsForMismatch.length === 0
   }, [
     data,
@@ -1241,6 +1249,7 @@ export default function BookingIntakePage() {
     data?.confirmed_contact,
     data?.contact_mismatch_note,
     data?.contact_mismatch_context,
+    data?.contact_mismatch_title_key,
     data?.contact_mismatch_linked_contact_id,
     live1aShowVenueContactPick,
     mismatchAddNewChosen,
@@ -1269,13 +1278,14 @@ export default function BookingIntakePage() {
     if (!data || data.view_section !== '4B') return false
     if (data.onsite_same_contact !== 'different' || live4bVenueOnsiteContactPick) return false
     if (data.onsite_linked_contact_id) return false
-    if (data.onsite_contact_name.trim()) return false
+    if (data.onsite_contact_name.trim() && data.onsite_contact_title_key.trim()) return false
     return onsiteAddNewChosen || otherVenueContactsForMismatch.length === 0
   }, [
     data,
     data?.view_section,
     data?.onsite_same_contact,
     data?.onsite_contact_name,
+    data?.onsite_contact_title_key,
     data?.onsite_linked_contact_id,
     live4bVenueOnsiteContactPick,
     onsiteAddNewChosen,
@@ -1969,11 +1979,14 @@ export default function BookingIntakePage() {
       let linkedId = data.contact_mismatch_linked_contact_id
       const note = data.contact_mismatch_note.trim()
       const ctxRaw = data.contact_mismatch_context.trim()
+      const tkRaw = data.contact_mismatch_title_key.trim()
+      const tk = tkRaw && tkRaw in CONTACT_TITLE_LABELS ? (tkRaw as ContactTitleKey) : null
+      const hasTitle = !!(tk || ctxRaw)
       const needsPersist =
         !linkedId &&
         !!data.existing_venue_id?.trim() &&
         !!note &&
-        !!ctxRaw &&
+        hasTitle &&
         (mismatchAddNewChosen || otherVenueContactsForMismatch.length === 0)
       if (needsPersist) {
         const { data: auth } = await supabase.auth.getUser()
@@ -1982,15 +1995,20 @@ export default function BookingIntakePage() {
           setAdvanceNudge('Sign in to save this contact to the venue.')
           return
         }
-        const ctxKey = ctxRaw as Exclude<Phase1ContactMismatchContextV3, ''>
-        const roleLabel = CONTACT_MISMATCH_CONTEXT_LABELS[ctxKey] ?? ctxRaw
+        const ctxKey = (
+          tk ? CONTACT_TITLE_MISMATCH[tk] : ctxRaw
+        ) as Exclude<Phase1ContactMismatchContextV3, ''>
+        const roleLabel = tk
+          ? CONTACT_TITLE_LABELS[tk]
+          : CONTACT_MISMATCH_CONTEXT_LABELS[ctxKey] ?? ctxRaw
         const { data: ins, error: insErr } = await supabase
           .from('contacts')
           .insert({
             user_id: uid,
             venue_id: data.existing_venue_id!.trim(),
             name: note,
-            role: roleLabel,
+            title_key: tk,
+            role: tk ? null : roleLabel,
             email: null,
             phone: null,
             company: null,
@@ -2008,11 +2026,11 @@ export default function BookingIntakePage() {
         const { data: rows } = await supabase.from('contacts').select('*').eq('venue_id', vid).order('created_at')
         setContactsForVenue((rows ?? []) as Contact[])
       }
-      const hasMismatch = !!linkedId || (!!note && !!ctxRaw)
+      const hasMismatch = !!linkedId || (!!note && hasTitle)
       if (!hasMismatch) {
         const gaps: string[] = []
         if (!note) gaps.push('Enter the caller’s name.')
-        if (!ctxRaw) gaps.push('Select their title / role.')
+        if (!hasTitle) gaps.push('Select their title / role.')
         setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
         return
       }
@@ -2024,10 +2042,13 @@ export default function BookingIntakePage() {
       }
       let linkedId = data.onsite_linked_contact_id
       const note = data.onsite_contact_name.trim()
+      const otkRaw = data.onsite_contact_title_key.trim()
+      const otk = otkRaw && otkRaw in CONTACT_TITLE_LABELS ? (otkRaw as ContactTitleKey) : null
       const needsPersist =
         !linkedId &&
         !!data.existing_venue_id?.trim() &&
         !!note &&
+        !!otk &&
         (onsiteAddNewChosen || otherVenueContactsForMismatch.length === 0)
       if (needsPersist) {
         const { data: auth } = await supabase.auth.getUser()
@@ -2036,15 +2057,16 @@ export default function BookingIntakePage() {
           setAdvanceNudge('Sign in to save this contact to the venue.')
           return
         }
-        const ctxKey = INTAKE_4B_NEW_ONSITE_CONTACT_TITLE
-        const roleLabel = CONTACT_MISMATCH_CONTEXT_LABELS[ctxKey]
+        const ctxKey = CONTACT_TITLE_MISMATCH[otk]
+        const roleLabel = CONTACT_TITLE_LABELS[otk]
         const { data: ins, error: insErr } = await supabase
           .from('contacts')
           .insert({
             user_id: uid,
             venue_id: data.existing_venue_id!.trim(),
             name: note,
-            role: roleLabel,
+            title_key: otk,
+            role: null,
             email: null,
             phone: null,
             company: null,
@@ -2060,15 +2082,19 @@ export default function BookingIntakePage() {
           onsite_linked_contact_id: linkedId,
           onsite_title_context: ctxKey,
           onsite_contact_role: roleLabel,
+          onsite_contact_title_key: otk,
         })
         await booking.flushIntakeImmediate(selectedId)
         const vid = data.existing_venue_id!.trim()
         const { data: rows } = await supabase.from('contacts').select('*').eq('venue_id', vid).order('created_at')
         setContactsForVenue((rows ?? []) as Contact[])
       }
-      const hasOnsite = !!linkedId || !!note
+      const hasOnsite = !!linkedId || (!!note && !!otk)
       if (!hasOnsite) {
-        setAdvanceNudge('Enter the on-site contact’s name.')
+        const gaps: string[] = []
+        if (!note) gaps.push('Enter the on-site contact’s name.')
+        if (!otk) gaps.push('Select their on-site title / role.')
+        setAdvanceNudge(gaps.length ? gaps.join(' ') : null)
         return
       }
       setAdvanceNudge(null)
@@ -2982,32 +3008,18 @@ export default function BookingIntakePage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Role / title</Label>
-                  <Select
-                    value={intakeContactRoleSelectControlValue(data.contact_role)}
-                    onValueChange={v => {
-                      if (v === '__none__') patch({ contact_role: '' })
-                      else if (v === '__legacy__') return
-                      else patch({ contact_role: v })
-                    }}
-                  >
-                    <SelectTrigger
-                      className="h-11 border-neutral-800 bg-neutral-950/80"
-                      aria-label="Contact role or title"
-                    >
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">—</SelectItem>
-                      {intakeContactRoleSelectControlValue(data.contact_role) === '__legacy__' ? (
-                        <SelectItem value="__legacy__">Custom (from record)</SelectItem>
-                      ) : null}
-                      {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
-                        <SelectItem key={key} value={key}>
-                          {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ContactTitleSelect
+                    allowEmpty
+                    value={intakeContactTitleKeyFromContactRoleField(data.contact_role)}
+                    onValueChange={k => patch({ contact_role: k })}
+                    placeholder="Search or select title"
+                    triggerClassName="h-11 border-neutral-800 bg-neutral-950/80 text-sm"
+                  />
+                  {data.contact_role.trim() && !intakeContactTitleKeyFromContactRoleField(data.contact_role) ? (
+                    <p className="text-[10px] text-amber-200/80">
+                      Legacy value on file — pick a catalog title to replace “{data.contact_role.trim()}”.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Phone *</Label>
@@ -3220,12 +3232,14 @@ export default function BookingIntakePage() {
                                               contact_mismatch_context: '',
                                               contact_mismatch_note: '',
                                               contact_mismatch_linked_contact_id: null,
+                                              contact_mismatch_title_key: '',
                                             }
                                           : {
                                               confirmed_contact: v,
                                               contact_mismatch_context: '',
                                               contact_mismatch_note: '',
                                               contact_mismatch_linked_contact_id: null,
+                                              contact_mismatch_title_key: '',
                                             },
                                       )
                                     }}
@@ -3252,6 +3266,7 @@ export default function BookingIntakePage() {
                                             contact_mismatch_note: c.name,
                                             contact_mismatch_context: contactToMismatchContext(c),
                                             contact_mismatch_linked_contact_id: c.id,
+                                            contact_mismatch_title_key: contactTitleKeyFromContactForIntake(c),
                                           })
                                         }}
                                         className={cn(
@@ -3272,6 +3287,7 @@ export default function BookingIntakePage() {
                                           contact_mismatch_context: '',
                                           contact_mismatch_note: '',
                                           contact_mismatch_linked_contact_id: null,
+                                          contact_mismatch_title_key: '',
                                         })
                                       }}
                                       className={cn(
@@ -3297,34 +3313,32 @@ export default function BookingIntakePage() {
                                     </div>
                                     <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[11rem] sm:max-w-md sm:flex-1">
                                       <Label className="text-neutral-400 text-[10px] sm:text-xs">Title</Label>
-                                      <Select
+                                      <ContactTitleSelect
+                                        allowEmpty
                                         value={
-                                          data.contact_mismatch_context.trim()
-                                            ? data.contact_mismatch_context
-                                            : '__none__'
+                                          data.contact_mismatch_title_key.trim() &&
+                                          data.contact_mismatch_title_key.trim() in CONTACT_TITLE_LABELS
+                                            ? data.contact_mismatch_title_key.trim()
+                                            : data.contact_mismatch_context.trim()
+                                              ? mismatchContextToDefaultTitleKey(
+                                                  data.contact_mismatch_context as Exclude<
+                                                    Phase1ContactMismatchContextV3,
+                                                    ''
+                                                  >,
+                                                )
+                                              : ''
                                         }
-                                        onValueChange={v =>
+                                        onValueChange={k =>
                                           patch({
-                                            contact_mismatch_context:
-                                              v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                                            contact_mismatch_title_key: k,
+                                            contact_mismatch_context: k
+                                              ? CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
+                                              : '',
                                           })
                                         }
-                                      >
-                                        <SelectTrigger
-                                          className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
-                                          aria-label="Their title or role"
-                                        >
-                                          <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="__none__">—</SelectItem>
-                                          {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
-                                            <SelectItem key={key} value={key}>
-                                              {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                        placeholder="Search or select title"
+                                        triggerClassName="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                      />
                                     </div>
                                   </>
                                 ) : null}
@@ -4355,6 +4369,7 @@ export default function BookingIntakePage() {
                                   onsite_contact_name: '',
                                   onsite_contact_phone: '',
                                   onsite_contact_role: '',
+                                  onsite_contact_title_key: '',
                                   onsite_poc_role: '',
                                   onsite_connect_method: '',
                                   onsite_connect_window: '',
@@ -4396,6 +4411,7 @@ export default function BookingIntakePage() {
                                         onsite_contact_name: c.name,
                                         onsite_contact_phone: phone,
                                         onsite_contact_role: contactRoleForDisplay(c),
+                                        onsite_contact_title_key: contactTitleKeyFromContactForIntake(c),
                                         onsite_title_context: contactToMismatchContext(c),
                                         onsite_name_flag: 'capture_later',
                                         onsite_phone_flag: phone ? 'capture_later' : 'not_discussed',
@@ -4419,9 +4435,9 @@ export default function BookingIntakePage() {
                                       onsite_linked_contact_id: null,
                                       onsite_contact_name: '',
                                       onsite_contact_phone: '',
-                                      onsite_title_context: INTAKE_4B_NEW_ONSITE_CONTACT_TITLE,
-                                      onsite_contact_role:
-                                        CONTACT_MISMATCH_CONTEXT_LABELS[INTAKE_4B_NEW_ONSITE_CONTACT_TITLE],
+                                      onsite_title_context: '',
+                                      onsite_contact_role: '',
+                                      onsite_contact_title_key: '',
                                       onsite_name_flag: 'capture_later',
                                       onsite_phone_flag: 'capture_later',
                                     })
@@ -4435,23 +4451,48 @@ export default function BookingIntakePage() {
                               </div>
                             ) : null}
                             {live4bShowOnsiteMismatchForm ? (
-                              <div className="min-w-0 flex-1 space-y-0.5 sm:min-w-[10rem] sm:max-w-xs">
-                                <Label className="text-neutral-400 text-[10px] sm:text-xs">Name</Label>
-                                <Input
-                                  className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
-                                  value={data.onsite_contact_name}
-                                  onChange={e =>
-                                    patch({
-                                      onsite_contact_name: e.target.value,
-                                      onsite_title_context: INTAKE_4B_NEW_ONSITE_CONTACT_TITLE,
-                                      onsite_contact_role:
-                                        CONTACT_MISMATCH_CONTEXT_LABELS[INTAKE_4B_NEW_ONSITE_CONTACT_TITLE],
-                                    })
-                                  }
-                                  placeholder="Their name"
-                                  autoComplete="name"
-                                  aria-label="On-site contact name"
-                                />
+                              <div className="min-w-0 flex-1 space-y-3 sm:min-w-[10rem] sm:max-w-sm">
+                                <div className="space-y-0.5">
+                                  <Label className="text-neutral-400 text-[10px] sm:text-xs">Name</Label>
+                                  <Input
+                                    className="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                    value={data.onsite_contact_name}
+                                    onChange={e => patch({ onsite_contact_name: e.target.value })}
+                                    placeholder="Their name"
+                                    autoComplete="name"
+                                    aria-label="On-site contact name"
+                                  />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <Label className="text-neutral-400 text-[10px] sm:text-xs">Title</Label>
+                                  <ContactTitleSelect
+                                    allowEmpty
+                                    value={
+                                      data.onsite_contact_title_key.trim() &&
+                                      data.onsite_contact_title_key.trim() in CONTACT_TITLE_LABELS
+                                        ? data.onsite_contact_title_key.trim()
+                                        : data.onsite_title_context.trim()
+                                          ? mismatchContextToDefaultTitleKey(
+                                              data.onsite_title_context as Exclude<
+                                                Phase1ContactMismatchContextV3,
+                                                ''
+                                              >,
+                                            )
+                                          : ''
+                                    }
+                                    onValueChange={k =>
+                                      patch({
+                                        onsite_contact_title_key: k,
+                                        onsite_title_context: k
+                                          ? CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
+                                          : '',
+                                        onsite_contact_role: k ? CONTACT_TITLE_LABELS[k as ContactTitleKey] : '',
+                                      })
+                                    }
+                                    placeholder="Search or select title"
+                                    triggerClassName="h-9 border-neutral-800 bg-neutral-950/80 text-sm"
+                                  />
+                                </div>
                               </div>
                             ) : null}
                           </>
@@ -5945,9 +5986,14 @@ export default function BookingIntakePage() {
                             <span className="text-neutral-500">
                               {' '}
                               —{' '}
-                              {CONTACT_MISMATCH_CONTEXT_LABELS[
-                                data.contact_mismatch_context as Exclude<Phase1ContactMismatchContextV3, ''>
-                              ] ?? data.contact_mismatch_context.trim()}
+                              {data.contact_mismatch_title_key.trim() &&
+                              data.contact_mismatch_title_key.trim() in CONTACT_TITLE_LABELS
+                                ? CONTACT_TITLE_LABELS[
+                                    data.contact_mismatch_title_key.trim() as ContactTitleKey
+                                  ]
+                                : CONTACT_MISMATCH_CONTEXT_LABELS[
+                                    data.contact_mismatch_context as Exclude<Phase1ContactMismatchContextV3, ''>
+                                  ] ?? data.contact_mismatch_context.trim()}
                             </span>
                           </p>
                           <p className="text-[11px] text-neutral-600">
@@ -5967,31 +6013,32 @@ export default function BookingIntakePage() {
                           </div>
                           <div className="space-y-1.5 min-w-0">
                             <Label className="text-neutral-400 text-xs">Title</Label>
-                            <Select
+                            <ContactTitleSelect
+                              allowEmpty
                               value={
-                                data.contact_mismatch_context.trim()
-                                  ? data.contact_mismatch_context
-                                  : '__none__'
+                                data.contact_mismatch_title_key.trim() &&
+                                data.contact_mismatch_title_key.trim() in CONTACT_TITLE_LABELS
+                                  ? data.contact_mismatch_title_key.trim()
+                                  : data.contact_mismatch_context.trim()
+                                    ? mismatchContextToDefaultTitleKey(
+                                        data.contact_mismatch_context as Exclude<
+                                          Phase1ContactMismatchContextV3,
+                                          ''
+                                        >,
+                                      )
+                                    : ''
                               }
-                              onValueChange={v =>
+                              onValueChange={k =>
                                 patch({
-                                  contact_mismatch_context:
-                                    v === '__none__' ? '' : (v as Phase1ContactMismatchContextV3),
+                                  contact_mismatch_title_key: k,
+                                  contact_mismatch_context: k
+                                    ? CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
+                                    : '',
                                 })
                               }
-                            >
-                              <SelectTrigger className="h-10 border-neutral-800 bg-neutral-950/80 text-sm">
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">—</SelectItem>
-                                {CONTACT_MISMATCH_ROLE_ORDER.map(key => (
-                                  <SelectItem key={key} value={key}>
-                                    {CONTACT_MISMATCH_CONTEXT_LABELS[key]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              placeholder="Search or select title"
+                              triggerClassName="h-10 border-neutral-800 bg-neutral-950/80 text-sm"
+                            />
                           </div>
                         </div>
                       )}
@@ -6082,12 +6129,30 @@ export default function BookingIntakePage() {
                         </div>
                       ) : null}
                       <div className="space-y-1.5">
-                        <Label className="text-neutral-400 text-xs">On-site role</Label>
-                        <Input
-                          className="h-10 border-neutral-800 bg-neutral-950/80"
-                          value={data.onsite_contact_role}
-                          onChange={e => patch({ onsite_contact_role: e.target.value })}
-                          placeholder="e.g. Production manager"
+                        <Label className="text-neutral-400 text-xs">On-site title</Label>
+                        <ContactTitleSelect
+                          allowEmpty
+                          value={
+                            data.onsite_contact_title_key.trim() &&
+                            data.onsite_contact_title_key.trim() in CONTACT_TITLE_LABELS
+                              ? data.onsite_contact_title_key.trim()
+                              : data.onsite_title_context.trim()
+                                ? mismatchContextToDefaultTitleKey(
+                                    data.onsite_title_context as Exclude<Phase1ContactMismatchContextV3, ''>,
+                                  )
+                                : ''
+                          }
+                          onValueChange={k =>
+                            patch({
+                              onsite_contact_title_key: k,
+                              onsite_title_context: k
+                                ? CONTACT_TITLE_MISMATCH[k as ContactTitleKey]
+                                : '',
+                              onsite_contact_role: k ? CONTACT_TITLE_LABELS[k as ContactTitleKey] : '',
+                            })
+                          }
+                          placeholder="Search or select title"
+                          triggerClassName="h-10 border-neutral-800 bg-neutral-950/80 text-sm"
                         />
                       </div>
                     </div>
