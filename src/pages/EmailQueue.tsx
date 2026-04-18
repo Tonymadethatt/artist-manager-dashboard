@@ -1702,8 +1702,8 @@ export default function EmailQueue() {
                       <p className="text-neutral-200 font-medium mb-1">Resend sends today (Pacific)</p>
                       <p>
                         Shown total = Settings offsets (Email queue) + optional{' '}
-                        <span className="text-neutral-300">VITE_RESEND_USAGE_DAY_OFFSET</span>, plus sends this app
-                        logged today with a Resend message id. Cap: set{' '}
+                        <span className="text-neutral-300">VITE_RESEND_USAGE_DAY_OFFSET</span>, plus every successful
+                        Resend send today (queue, template tests, reports, reminders, etc.) counted by message id. Cap: set{' '}
                         <span className="text-neutral-300">Settings → Email queue</span> (or{' '}
                         <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span>; default{' '}
                         <span className="text-neutral-300">100</span>). Turns <span className="text-red-400">red</span>{' '}
@@ -1748,7 +1748,7 @@ export default function EmailQueue() {
                       <p>
                         Shown total = Settings month offset + optional{' '}
                         <span className="text-neutral-300">VITE_RESEND_USAGE_MONTH_OFFSET</span>, plus this month’s
-                        id-backed sends (Pacific; resets on the <span className="text-neutral-300">1st</span>). Cap:{' '}
+                        successful Resend sends (Pacific; resets on the <span className="text-neutral-300">1st</span>). Cap:{' '}
                         <span className="text-neutral-300">Settings → Email queue</span> (or{' '}
                         <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span>; default{' '}
                         <span className="text-neutral-300">3,000</span>). Turns <span className="text-red-400">red</span>{' '}

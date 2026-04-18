@@ -88,10 +88,19 @@ function resolveCapsFromProfile(
   }
 }
 
+function rpcCountToNumber(data: unknown): number {
+  if (typeof data === 'number' && Number.isFinite(data)) return Math.max(0, Math.floor(data))
+  if (typeof data === 'string' && data.trim() !== '') {
+    const x = parseInt(data.trim(), 10)
+    if (Number.isFinite(x) && x >= 0) return x
+  }
+  return 0
+}
+
 /**
- * Sent rows in `venue_emails` for the signed-in user (Pacific calendar day / month).
- * Counts only rows where Resend accepted the message (`resend_message_id` set), then adds baselines from
- * `VITE_RESEND_USAGE_*` (build env) and `artist_profile.email_usage_*_offset` (Settings).
+ * Distinct successful Resend sends for the signed-in user (Pacific calendar day / month):
+ * `resend_outbound_send_log` ∪ `venue_emails` with `resend_message_id` (deduped per message id),
+ * plus baselines from `VITE_RESEND_USAGE_*` and `artist_profile.email_usage_*_offset`.
  */
 export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<VenueEmailSendUsageResult | null> {
   const todayYmd = pacificTodayYmd()
@@ -101,22 +110,14 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
   if (!dayStart || !dayEndEx || !monthR) return null
 
   const [dayQ, monthQ, profQ] = await Promise.all([
-    supabase
-      .from('venue_emails')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('status', 'sent')
-      .not('resend_message_id', 'is', null)
-      .gte('sent_at', dayStart)
-      .lt('sent_at', dayEndEx),
-    supabase
-      .from('venue_emails')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('status', 'sent')
-      .not('resend_message_id', 'is', null)
-      .gte('sent_at', monthR.startIso)
-      .lt('sent_at', monthR.endExclusiveIso),
+    supabase.rpc('count_distinct_resend_sends', {
+      p_start: dayStart,
+      p_end_exclusive: dayEndEx,
+    }),
+    supabase.rpc('count_distinct_resend_sends', {
+      p_start: monthR.startIso,
+      p_end_exclusive: monthR.endExclusiveIso,
+    }),
     supabase
       .from('artist_profile')
       .select(
@@ -149,10 +150,12 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
   const baseDay = envOff.day + profDay
   const baseMonth = envOff.month + profMonth
   const caps = resolveCapsFromProfile(prof, defaults)
+  const dayCount = rpcCountToNumber(dayQ.data)
+  const monthCount = rpcCountToNumber(monthQ.data)
 
   return {
-    today: (dayQ.count ?? 0) + baseDay,
-    month: (monthQ.count ?? 0) + baseMonth,
+    today: dayCount + baseDay,
+    month: monthCount + baseMonth,
     offsetsApplied: { day: baseDay, month: baseMonth },
     caps,
   }

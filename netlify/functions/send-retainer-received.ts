@@ -4,7 +4,7 @@ import { buildRetainerReceivedEmailHtml } from '../../src/lib/email/retainerRece
 import type { RetainerReceivedSettledRow } from '../../src/lib/email/retainerReceivedEmailDocument'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 interface ArtistProfile {
   artist_name: string
@@ -141,6 +141,7 @@ const handler: Handler = async (event) => {
 
   const resendPayload = await resendRes.json().catch(() => null)
   const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+  await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_retainer_received' })
 
   return {
     statusCode: 200,

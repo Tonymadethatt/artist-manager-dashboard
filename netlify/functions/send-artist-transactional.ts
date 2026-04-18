@@ -7,7 +7,7 @@ import {
 } from '../../src/lib/email/artistTransactionalEmailDocument'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 interface ArtistProfile {
   artist_name: string
@@ -152,6 +152,7 @@ const handler: Handler = async (event) => {
 
   const resendPayload = await resendRes.json().catch(() => null)
   const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+  await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_artist_transactional' })
 
   return {
     statusCode: 200,

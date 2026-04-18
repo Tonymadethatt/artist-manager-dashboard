@@ -14,7 +14,7 @@ import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBra
 import type { ManagementReportEmailData } from '../../src/lib/reports/buildManagementReportData'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -369,6 +369,7 @@ const handler: Handler = async (event) => {
 
   const resendPayload = await resendRes.json().catch(() => null)
   const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+  await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_report' })
 
   return {
     statusCode: 200,

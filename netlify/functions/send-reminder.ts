@@ -11,7 +11,7 @@ import {
 import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBrandedEmailFooterHtml'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -284,6 +284,7 @@ const handler: Handler = async (event) => {
 
   const resendPayload = await resendRes.json().catch(() => null)
   const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+  await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_reminder' })
 
   return {
     statusCode: 200,

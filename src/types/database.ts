@@ -738,6 +738,30 @@ export interface Database {
         }
         Relationships: []
       }
+      resend_outbound_send_log: {
+        Row: {
+          id: string
+          user_id: string
+          resend_message_id: string
+          sent_at: string
+          source: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          resend_message_id: string
+          sent_at?: string
+          source: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          resend_message_id?: string
+          sent_at?: string
+          source?: string
+        }
+        Relationships: []
+      }
       venue_emails: {
         Row: {
           id: string
@@ -1517,6 +1541,10 @@ export interface Database {
       partnership_roll_clear_list_confirmation: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      count_distinct_resend_sends: {
+        Args: { p_start: string; p_end_exclusive: string }
+        Returns: number
       }
     }
     Enums: {

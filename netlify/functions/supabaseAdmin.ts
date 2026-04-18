@@ -94,3 +94,32 @@ export async function fetchEmailTestModeRowForSend(
     },
   }
 }
+
+/** After a successful Resend POST /emails — powers Email Queue usage for sends without a venue_emails row (e.g. template tests). Idempotent per resend_message_id. */
+export async function logResendOutboundSendForUsage(args: {
+  userId: string | undefined | null
+  resendMessageId: string | null | undefined
+  source: string
+}): Promise<void> {
+  const uid = typeof args.userId === 'string' ? args.userId.trim() : ''
+  const rid = typeof args.resendMessageId === 'string' ? args.resendMessageId.trim() : ''
+  if (!uid || !rid) return
+  const supabase = getServiceSupabase()
+  if (!supabase) {
+    console.warn('[logResendOutboundSendForUsage] service supabase not configured')
+    return
+  }
+  const src = args.source.trim().slice(0, 200) || 'unknown'
+  const { error } = await supabase.from('resend_outbound_send_log').upsert(
+    {
+      user_id: uid,
+      resend_message_id: rid,
+      source: src,
+      sent_at: new Date().toISOString(),
+    },
+    { onConflict: 'resend_message_id', ignoreDuplicates: true },
+  )
+  if (error) {
+    console.warn('[logResendOutboundSendForUsage]', error.message)
+  }
+}

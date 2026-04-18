@@ -12,7 +12,7 @@ import {
   resolveVenueFacingResend,
 } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 type VenueEmailType =
   | 'booking_confirmation'
@@ -379,6 +379,7 @@ const handler: Handler = async (event) => {
 
     const resendPayload = await resendRes.json().catch(() => null)
     const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
+    await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_venue_email' })
 
     return {
       statusCode: 200,
