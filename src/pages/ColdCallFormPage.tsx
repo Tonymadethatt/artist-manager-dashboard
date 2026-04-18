@@ -242,6 +242,15 @@ export default function ColdCallFormPage() {
     [selectedId, cold],
   )
 
+  /** p4c: "This person decides" implies you're talking to the booker — keep routing fields consistent with saved rows that predate branching. */
+  useEffect(() => {
+    if (!selectedId || !data) return
+    if (data.session_mode !== 'live_call' || data.live_card !== 'p4c') return
+    if (data.booking_process === 'this_person' && data.decision_maker_same !== 'yes') {
+      patch({ decision_maker_same: 'yes', other_decision_maker_flag: '' })
+    }
+  }, [selectedId, data, patch])
+
   const applyVenuePick = useCallback(
     async (venue: Venue) => {
       if (!selectedId) return
@@ -692,16 +701,43 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <SelectChipRow value={data.booking_process} onChange={v => patch({ booking_process: v })} options={BOOKING_PROCESS_OPTIONS} />
-                <SelectChipRow value={data.decision_maker_same} onChange={v => patch({ decision_maker_same: v })} options={DECISION_SAME_OPTIONS} />
-                <SelectChipRow
-                  value={data.other_decision_maker_flag}
-                  onChange={v => patch({ other_decision_maker_flag: v })}
-                  options={[
-                    { id: 'got_info_later', label: 'Got info — later' },
-                    { id: 'vague', label: 'They were vague' },
-                  ]}
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-neutral-400 text-xs">Who handles booking?</Label>
+                  <SelectChipRow
+                    value={data.booking_process}
+                    onChange={v => {
+                      if (v === 'this_person') {
+                        patch({ booking_process: v, decision_maker_same: 'yes', other_decision_maker_flag: '' })
+                      } else {
+                        patch({ booking_process: v, decision_maker_same: '', other_decision_maker_flag: '' })
+                      }
+                    }}
+                    options={BOOKING_PROCESS_OPTIONS}
+                  />
+                </div>
+                {data.booking_process && data.booking_process !== 'this_person' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Talking to the decision-maker?</Label>
+                    <SelectChipRow
+                      value={data.decision_maker_same}
+                      onChange={v => patch({ decision_maker_same: v, other_decision_maker_flag: '' })}
+                      options={DECISION_SAME_OPTIONS}
+                    />
+                  </div>
+                ) : null}
+                {data.booking_process && data.booking_process !== 'this_person' && data.decision_maker_same === 'no' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">How much did you get about who decides?</Label>
+                    <SelectChipRow
+                      value={data.other_decision_maker_flag}
+                      onChange={v => patch({ other_decision_maker_flag: v })}
+                      options={[
+                        { id: 'got_info_later', label: 'Got info — later' },
+                        { id: 'vague', label: 'They were vague' },
+                      ]}
+                    />
+                  </div>
+                ) : null}
               </div>
             }
           />
