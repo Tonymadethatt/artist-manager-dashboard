@@ -69,7 +69,11 @@ import {
   addCalendarDaysPacific,
 } from '@/lib/calendar/pacificWallTime'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
-import { depositDueFromDeal, dealDepositSatisfied } from '@/lib/deals/dealPaymentTotals'
+import {
+  dealRemainingClientBalance,
+  depositDueFromDeal,
+  dealDepositSatisfied,
+} from '@/lib/deals/dealPaymentTotals'
 import {
   normalizeDealPricingSnapshot,
   resolveDepositPercentForDealFromCatalog,
@@ -657,28 +661,151 @@ function PayToggle({
   date,
   onToggle,
   disabled,
+  compact,
 }: {
   label: string
   paid: boolean
   date: string | null
   onToggle: () => void
   disabled?: boolean
+  /** Match height/border of deal payment segment row */
+  compact?: boolean
 }) {
   return (
     <button
+      type="button"
+      title={paid && date ? `Paid ${date}` : undefined}
       onClick={onToggle}
       disabled={disabled}
       className={cn(
-        'flex flex-col items-center gap-0.5 px-2 py-1 rounded text-xs font-medium transition-colors min-w-[64px]',
-        paid
-          ? 'bg-green-950 text-green-400 hover:bg-green-900'
-          : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300',
-        disabled && 'opacity-40 cursor-not-allowed'
+        'text-xs font-medium transition-colors',
+        compact
+          ? cn(
+              'inline-flex flex-col items-center justify-center gap-0 min-h-[2.5rem] w-[4.5rem] px-2 py-1.5 rounded-md border border-neutral-800 bg-neutral-950/90',
+              paid
+                ? 'border-green-900/50 bg-green-950/35 text-green-400 hover:bg-green-950/50'
+                : 'text-neutral-400 hover:bg-neutral-900',
+            )
+          : cn(
+              'flex flex-col items-center gap-0.5 px-2 py-1 rounded min-w-[64px]',
+              paid
+                ? 'bg-green-950 text-green-400 hover:bg-green-900'
+                : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300',
+            ),
+        disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
-      <span>{paid ? '✓' : '○'} {label}</span>
-      {paid && date && <span className="text-[10px] opacity-70">{date}</span>}
+      <span className="tabular-nums">{paid ? '✓' : '○'} {label}</span>
+      {paid && date && !compact && <span className="text-[10px] opacity-70">{date}</span>}
     </button>
+  )
+}
+
+function DealRowPaymentsControl({
+  deal,
+  toggling,
+  onDeposit,
+  onBalance,
+  onSettled,
+}: {
+  deal: Deal
+  toggling: string | null
+  onDeposit: () => void
+  onBalance: () => void
+  onSettled: () => void
+}) {
+  const depDue = depositDueFromDeal(deal)
+  const depositMet = dealDepositSatisfied(deal) && depDue > 0
+  const noDepositScheduled = depDue <= 0
+  const targetBal = balanceLegTargetAmount(deal)
+  const bal = Number(deal.balance_paid_amount ?? 0)
+  const balanceMet = targetBal > 0.01 && bal + 1e-6 >= targetBal
+  const noBalanceLeg = targetBal <= 0.01
+  const settled = deal.artist_paid
+  const remaining = dealRemainingClientBalance(deal)
+
+  const seg =
+    'flex-1 min-w-0 px-0.5 sm:px-1.5 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
+
+  return (
+    <div className="flex flex-col items-stretch gap-1 w-full min-w-[168px] max-w-[260px] mx-auto">
+      <div
+        className="flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden"
+        role="group"
+        aria-label="Client payment tracking"
+      >
+        <button
+          type="button"
+          title={
+            noDepositScheduled
+              ? 'No deposit amount on this deal'
+              : depositMet
+                ? 'Clear deposit received'
+                : 'Record full deposit received'
+          }
+          disabled={toggling === `dep-${deal.id}` || noDepositScheduled}
+          onClick={onDeposit}
+          className={cn(
+            seg,
+            !noDepositScheduled && depositMet && 'bg-green-950/40 text-green-400',
+            !noDepositScheduled && !depositMet && 'text-neutral-400 hover:bg-neutral-900',
+            noDepositScheduled && 'text-neutral-600',
+          )}
+        >
+          Deposit
+        </button>
+        <button
+          type="button"
+          title={
+            noBalanceLeg
+              ? 'No separate balance (covers full gross or no remainder)'
+              : balanceMet
+                ? 'Clear balance received'
+                : 'Record full balance received'
+          }
+          disabled={toggling === `bal-${deal.id}` || noBalanceLeg}
+          onClick={onBalance}
+          className={cn(
+            seg,
+            !noBalanceLeg && balanceMet && 'bg-green-950/40 text-green-400',
+            !noBalanceLeg && !balanceMet && 'text-neutral-400 hover:bg-neutral-900',
+            noBalanceLeg && 'text-neutral-600',
+          )}
+        >
+          Balance
+        </button>
+        <button
+          type="button"
+          title={
+            settled
+              ? 'Mark deal as not fully settled'
+              : 'Mark artist fully settled for this gig'
+          }
+          disabled={toggling === `artist-${deal.id}`}
+          onClick={onSettled}
+          className={cn(
+            seg,
+            settled && 'bg-green-950/50 text-green-400',
+            !settled && 'text-neutral-400 hover:bg-neutral-900',
+          )}
+        >
+          Settled
+        </button>
+      </div>
+      <p className="text-[10px] text-neutral-600 tabular-nums text-center leading-snug min-h-[2.5ex] px-0.5">
+        {settled ? (
+          deal.artist_paid_date ? (
+            <span className="text-neutral-500">{deal.artist_paid_date}</span>
+          ) : (
+            <span className="text-neutral-500">Settled</span>
+          )
+        ) : remaining > 0.01 ? (
+          <span>Owed {fmtMoney(remaining)}</span>
+        ) : (
+          <span className="text-neutral-500">Gross covered — tap Settled</span>
+        )}
+      </p>
+    </div>
   )
 }
 
@@ -1521,9 +1648,8 @@ export default function Earnings() {
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Tier</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Gross</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">My cut</th>
-                <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">
-                  <span className="block">Payments</span>
-                  <span className="block text-[9px] font-normal text-neutral-600 normal-case">Dep · Bal · Done</span>
+                <th className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell w-[200px]">
+                  Client payments
                 </th>
                 <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">I got paid</th>
                 <th className="px-3 py-2.5 w-16" />
@@ -1548,19 +1674,30 @@ export default function Earnings() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {deal.venue && (
-                        <span className="text-xs text-neutral-500">{deal.venue.name}</span>
+                    <div className="mt-1 text-xs text-neutral-500 leading-snug">
+                      {(deal.venue || deal.event_start_at || deal.event_date) && (
+                        <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+                          {deal.venue && (
+                            <span className="text-neutral-400">{deal.venue.name}</span>
+                          )}
+                          {deal.venue && (deal.event_start_at || deal.event_date) ? (
+                            <span className="text-neutral-700 select-none" aria-hidden>
+                              ·
+                            </span>
+                          ) : null}
+                          {(deal.event_start_at && deal.event_end_at) ? (
+                            <span className="text-neutral-500 tabular-nums">
+                              {utcIsoToPacificDateAndTime(deal.event_start_at)?.date}{' '}
+                              {utcIsoToPacificDateAndTime(deal.event_start_at)?.time}–
+                              {utcIsoToPacificDateAndTime(deal.event_end_at)?.time} PT
+                            </span>
+                          ) : deal.event_date ? (
+                            <span className="text-neutral-500 tabular-nums">{deal.event_date}</span>
+                          ) : null}
+                        </p>
                       )}
-                      {(deal.event_start_at && deal.event_end_at) ? (
-                        <span className="text-xs text-neutral-600 tabular-nums">
-                          {utcIsoToPacificDateAndTime(deal.event_start_at)?.date}{' '}
-                          {utcIsoToPacificDateAndTime(deal.event_start_at)?.time}–
-                          {utcIsoToPacificDateAndTime(deal.event_end_at)?.time} PT
-                        </span>
-                      ) : deal.event_date ? (
-                        <span className="text-xs text-neutral-600">{deal.event_date}</span>
-                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {/* Commission flagged indicator */}
                       {perfReports.some(r => r.deal_id === deal.id && r.commission_flagged) && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
@@ -1605,46 +1742,24 @@ export default function Earnings() {
                       {fmtMoney(deal.commission_amount)}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-center hidden md:table-cell">
-                    <div className="flex justify-center gap-1 flex-wrap max-w-[200px] mx-auto">
-                      <PayToggle
-                        label="Dep"
-                        paid={dealDepositSatisfied(deal) && depositDueFromDeal(deal) > 0}
-                        date={null}
-                        onToggle={() => handleToggleDeposit(deal)}
-                        disabled={
-                          toggling === `dep-${deal.id}` ||
-                          depositDueFromDeal(deal) <= 0
-                        }
-                      />
-                      <PayToggle
-                        label="Bal"
-                        paid={(() => {
-                          const targetBal = balanceLegTargetAmount(deal)
-                          const bal = Number(deal.balance_paid_amount ?? 0)
-                          return targetBal > 0.01 && bal + 1e-6 >= targetBal
-                        })()}
-                        date={null}
-                        onToggle={() => handleToggleBalance(deal)}
-                        disabled={toggling === `bal-${deal.id}` || balanceLegTargetAmount(deal) <= 0.01}
-                      />
-                      <PayToggle
-                        label="Done"
-                        paid={deal.artist_paid}
-                        date={deal.artist_paid_date}
-                        onToggle={() => handleToggleArtist(deal)}
-                        disabled={toggling === `artist-${deal.id}`}
-                      />
-                    </div>
+                  <td className="px-2 py-3 text-center hidden md:table-cell align-top">
+                    <DealRowPaymentsControl
+                      deal={deal}
+                      toggling={toggling}
+                      onDeposit={() => handleToggleDeposit(deal)}
+                      onBalance={() => handleToggleBalance(deal)}
+                      onSettled={() => handleToggleArtist(deal)}
+                    />
                   </td>
-                  <td className="px-3 py-3 text-center hidden md:table-cell">
-                    <div className="flex justify-center">
+                  <td className="px-2 py-3 text-center hidden md:table-cell align-top">
+                    <div className="flex justify-center pt-0.5">
                       <PayToggle
                         label="Me"
                         paid={deal.manager_paid}
                         date={deal.manager_paid_date}
                         onToggle={() => handleToggleManager(deal)}
                         disabled={toggling === `manager-${deal.id}` || !deal.artist_paid}
+                        compact
                       />
                     </div>
                   </td>
