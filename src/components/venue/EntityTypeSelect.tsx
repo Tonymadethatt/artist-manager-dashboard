@@ -24,6 +24,8 @@ export function EntityTypeSelect({
   placeholder = 'Select entity type',
   disabled,
   triggerClassName,
+  /** Root wrapper — default `w-full`; use e.g. `sm:w-[148px]` in toolbars so the control doesn’t stretch full width when wrapped. */
+  rootClassName,
   allowEmpty = false,
   /** When set, first row clears the value (emits ''). */
   emptyLabel = '—',
@@ -35,6 +37,7 @@ export function EntityTypeSelect({
   placeholder?: string
   disabled?: boolean
   triggerClassName?: string
+  rootClassName?: string
   allowEmpty?: boolean
   emptyLabel?: string
   /** `filter`: value may be `all` for Contacts list filters. */
@@ -85,10 +88,10 @@ export function EntityTypeSelect({
   )
 
   return (
-    <div ref={rootRef} className="relative w-full min-w-0">
+    <div ref={rootRef} className={cn('relative min-w-0', rootClassName ?? 'w-full')}>
       <div
         className={cn(
-          'flex w-full min-w-0 min-h-8 items-stretch overflow-hidden rounded-md border border-neutral-700 bg-neutral-800',
+          'flex h-full w-full min-w-0 min-h-8 items-stretch overflow-hidden rounded-md border border-neutral-700 bg-neutral-800',
           triggerClassName,
         )}
       >

@@ -231,78 +231,99 @@ export default function Outreach() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500 pointer-events-none" />
+      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3 sm:p-4 space-y-3">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-neutral-500"
+            aria-hidden
+          />
           <Input
             placeholder="Search venues, cities…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-8"
+            className="h-10 w-full border-neutral-700 bg-neutral-950/80 pl-10 pr-3 text-sm shadow-sm placeholder:text-neutral-600"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <Select value={filterStatus} onValueChange={v => setFilterStatus(v as OutreachStatus | 'all')}>
-            <SelectTrigger className="w-[145px]">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {OUTREACH_STATUS_ORDER.map(s => (
-                <SelectItem key={s} value={s}>{OUTREACH_STATUS_LABELS[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch lg:gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:min-w-0 lg:flex-1 lg:flex-wrap lg:gap-2">
+            <Select value={filterStatus} onValueChange={v => setFilterStatus(v as OutreachStatus | 'all')}>
+              <SelectTrigger className="h-10 w-full border-neutral-700 bg-neutral-950/80 text-sm lg:w-[152px] lg:shrink-0">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {OUTREACH_STATUS_ORDER.map(s => (
+                  <SelectItem key={s} value={s}>
+                    {OUTREACH_STATUS_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <EntityTypeSelect
-            variant="filter"
-            value={filterType}
-            onValueChange={v => setFilterType(v as VenueType | 'all')}
-            triggerClassName="min-h-9 min-w-[140px]"
-            allLabel="All types"
-            placeholder="Entity type"
-          />
+            <EntityTypeSelect
+              variant="filter"
+              value={filterType}
+              onValueChange={v => setFilterType(v as VenueType | 'all')}
+              rootClassName="w-full min-w-0 lg:w-[152px] lg:shrink-0"
+              triggerClassName="h-10 min-h-10 border-neutral-700 bg-neutral-950/80"
+              allLabel="All types"
+              placeholder="Entity type"
+            />
 
-          <Select value={filterTrack} onValueChange={v => setFilterTrack(v as OutreachTrack | 'all')}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="All tracks" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All tracks</SelectItem>
-              {OUTREACH_TRACK_ORDER.map(t => (
-                <SelectItem key={t} value={t}>{OUTREACH_TRACK_LABELS[t]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={filterTrack} onValueChange={v => setFilterTrack(v as OutreachTrack | 'all')}>
+              <SelectTrigger className="h-10 w-full border-neutral-700 bg-neutral-950/80 text-sm lg:w-[152px] lg:shrink-0">
+                <SelectValue placeholder="All tracks" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tracks</SelectItem>
+                {OUTREACH_TRACK_ORDER.map(t => (
+                  <SelectItem key={t} value={t}>
+                    {OUTREACH_TRACK_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={sortBy} onValueChange={v => setSortBy(v as typeof sortBy)}>
-            <SelectTrigger className="w-[120px]">
-              <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5 opacity-50" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="updated">Last updated</SelectItem>
-              <SelectItem value="priority">Priority</SelectItem>
-              <SelectItem value="name">Name A–Z</SelectItem>
-              <SelectItem value="follow_up">Follow-up date</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={sortBy} onValueChange={v => setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="h-10 w-full border-neutral-700 bg-neutral-950/80 text-sm lg:w-[152px] lg:shrink-0">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
+                  <SelectValue placeholder="Sort" />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated">Last updated</SelectItem>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="name">Name A–Z</SelectItem>
+                <SelectItem value="follow_up">Follow-up date</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Button variant="outline" onClick={() => setIntakeVenuePickerOpen(true)}>
-            <Upload className="h-3.5 w-3.5" />
-            Import from intake
-          </Button>
-          <Button
-            onClick={() => {
-              setVenueAddSeed(null)
-              pendingVenueContactsRef.current = []
-              setAddOpen(true)
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add venue
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-2 lg:w-auto lg:shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full shrink-0 border-neutral-600 bg-neutral-950/60 text-sm sm:flex-1 lg:w-auto lg:flex-initial lg:px-3"
+              onClick={() => setIntakeVenuePickerOpen(true)}
+            >
+              <Upload className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              Import from intake
+            </Button>
+            <Button
+              type="button"
+              className="h-10 w-full shrink-0 text-sm sm:flex-1 lg:w-auto lg:flex-initial lg:px-3"
+              onClick={() => {
+                setVenueAddSeed(null)
+                pendingVenueContactsRef.current = []
+                setAddOpen(true)
+              }}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              Add venue
+            </Button>
+          </div>
         </div>
       </div>
 
