@@ -3,7 +3,7 @@ import {
   dealDepositSatisfied,
   dealRemainingClientBalance,
   dealTotalPaidTowardGross,
-} from '@/lib/deals/dealPaymentTotals'
+} from '../deals/dealPaymentTotals'
 import { isDealPricingSnapshot } from '../../types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
 import {

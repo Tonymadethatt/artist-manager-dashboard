@@ -1,5 +1,5 @@
-import type { Deal } from '@/types'
-import { isDealPricingSnapshot } from '@/types'
+import type { Deal } from '../../types'
+import { isDealPricingSnapshot } from '../../types'
 
 /** Sum of client payments recorded toward the contract (deposit + balance legs). */
 export function dealTotalPaidTowardGross(
