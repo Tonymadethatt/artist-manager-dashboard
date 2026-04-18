@@ -730,7 +730,7 @@ function artistSettlementSyncFromFormSave(args: {
 
 /** Matches Deposit / Balance control — shared shell for deal row payment toggles. */
 const DEAL_ROW_PAYMENT_GROUP_CLASS =
-  'flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden w-full min-w-[120px] max-w-[200px] mx-auto'
+  'flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden w-full max-w-full min-w-0 mx-auto'
 
 const DEAL_ROW_PAYMENT_SEGMENT_CLASS =
   'flex-1 min-w-0 px-0.5 sm:px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -1695,37 +1695,60 @@ export default function Earnings() {
           <Button variant="outline" size="sm" onClick={openAdd}>Log first deal</Button>
         </div>
       ) : (
-        <div className="rounded border border-neutral-800 bg-neutral-900">
+        <div className="rounded border border-neutral-800 bg-neutral-900 overflow-hidden">
           {/*
-            Scroll horizontally on narrow viewports instead of table-fixed squeezing columns into each other.
-            min-w keeps numeric + control columns readable; actions get a real width budget.
+            table-fixed + % widths: fits the card width with no horizontal scrollbar.
+            Hidden breakpoint columns drop out; remaining %s apply to visible columns only.
           */}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[72rem] text-sm border-collapse">
+            <table className="w-full table-fixed border-collapse text-sm">
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-950">
-                <th scope="col" className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom">
+                <th
+                  scope="col"
+                  className="w-[34%] sm:w-[28%] md:w-[24%] text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom"
+                >
                   Deal
                 </th>
-                <th scope="col" className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell">
+                <th
+                  scope="col"
+                  className="w-[17%] md:w-[12%] text-left px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell"
+                >
                   Tier
                 </th>
-                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
+                <th
+                  scope="col"
+                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                >
                   Gross
                 </th>
-                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
+                <th
+                  scope="col"
+                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                >
                   Owed
                 </th>
-                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
+                <th
+                  scope="col"
+                  className="w-[11%] md:w-[8%] text-right px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap"
+                >
                   My cut
                 </th>
-                <th scope="col" className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap">
+                <th
+                  scope="col"
+                  className="w-[14%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
+                >
                   Deposit / balance
                 </th>
-                <th scope="col" className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap">
+                <th
+                  scope="col"
+                  className="w-[11%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
+                >
                   I got paid
                 </th>
-                <th scope="col" className="px-2 py-2.5 text-right font-medium text-neutral-500 text-xs align-bottom">
+                <th
+                  scope="col"
+                  className="w-[16%] md:w-[15%] px-1 py-2.5 text-right font-medium text-neutral-500 text-xs align-bottom"
+                >
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -1742,7 +1765,7 @@ export default function Earnings() {
                     deal.event_cancelled_at && 'opacity-[0.88]',
                   )}
                 >
-                  <td className="px-3 py-3 align-top min-w-[14rem] max-w-[24rem] lg:max-w-none">
+                  <td className="px-3 py-3 align-top min-w-0">
                     <div className="font-medium text-neutral-100 leading-tight flex items-center gap-1.5 min-w-0">
                       {isDealFinanciallySettled(deal) && (
                         <span
@@ -1798,7 +1821,7 @@ export default function Earnings() {
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-3 hidden sm:table-cell align-top min-w-[9.5rem]">
+                  <td className="px-3 py-3 hidden sm:table-cell align-top min-w-0">
                     <Badge
                       variant={TIER_BADGE_VARIANT[deal.commission_tier]}
                       className="flex w-full min-w-0 max-w-none items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
@@ -1812,10 +1835,10 @@ export default function Earnings() {
                       </span>
                     </Badge>
                   </td>
-                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
+                  <td className="px-2 py-3 text-right align-top whitespace-nowrap">
                     <span className="text-neutral-200 font-medium tabular-nums">{fmtMoney(deal.gross_amount)}</span>
                   </td>
-                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
+                  <td className="px-2 py-3 text-right align-top whitespace-nowrap">
                     <span
                       className={cn(
                         'font-medium tabular-nums',
@@ -1825,7 +1848,7 @@ export default function Earnings() {
                       {fmtMoney(dealRemainingClientBalance(deal))}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
+                  <td className="px-2 py-3 text-right align-top whitespace-nowrap">
                     <span className={cn(
                       'font-bold tabular-nums',
                       deal.manager_paid ? 'text-green-400' : deal.artist_paid ? 'text-orange-400' : 'text-neutral-300'
@@ -1932,7 +1955,6 @@ export default function Earnings() {
               </tfoot>
             )}
           </table>
-          </div>
         </div>
       )}
       <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
