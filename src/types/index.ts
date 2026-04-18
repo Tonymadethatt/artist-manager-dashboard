@@ -479,6 +479,15 @@ export type GeneratedFileOutputFormat = 'text' | 'pdf'
 
 export type GeneratedFileSource = 'generated' | 'upload'
 
+/** User-created folder on the Documents page (nullable parent = root). */
+export interface DocumentFolder {
+  id: string
+  user_id: string
+  name: string
+  parent_id: string | null
+  created_at: string
+}
+
 export interface GeneratedFile {
   id: string
   user_id: string
@@ -486,6 +495,8 @@ export interface GeneratedFile {
   template_id: string | null
   venue_id: string | null
   deal_id: string | null
+  /** Documents organizer; null = root library. */
+  folder_id?: string | null
   content: string
   output_format: GeneratedFileOutputFormat
   /** `generated` = File Builder; `upload` = user upload in Files. */

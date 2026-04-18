@@ -272,6 +272,7 @@ export interface Database {
           template_id: string | null
           venue_id: string | null
           deal_id: string | null
+          folder_id: string | null
           content: string
           output_format: 'text' | 'pdf'
           file_source: 'generated' | 'upload'
@@ -290,6 +291,7 @@ export interface Database {
           template_id?: string | null
           venue_id?: string | null
           deal_id?: string | null
+          folder_id?: string | null
           content?: string
           output_format?: 'text' | 'pdf'
           file_source?: 'generated' | 'upload'
@@ -308,6 +310,7 @@ export interface Database {
           template_id?: string | null
           venue_id?: string | null
           deal_id?: string | null
+          folder_id?: string | null
           content?: string
           output_format?: 'text' | 'pdf'
           file_source?: 'generated' | 'upload'
@@ -336,6 +339,12 @@ export interface Database {
             foreignKeyName: 'generated_files_deal_id_fkey'
             columns: ['deal_id']
             referencedRelation: 'deals'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'generated_files_folder_id_fkey'
+            columns: ['folder_id']
+            referencedRelation: 'document_folders'
             referencedColumns: ['id']
           },
         ]
@@ -466,6 +475,37 @@ export interface Database {
             foreignKeyName: 'deals_onsite_contact_id_fkey'
             columns: ['onsite_contact_id']
             referencedRelation: 'contacts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      document_folders: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          parent_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          parent_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          parent_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'document_folders_parent_id_fkey'
+            columns: ['parent_id']
+            referencedRelation: 'document_folders'
             referencedColumns: ['id']
           },
         ]

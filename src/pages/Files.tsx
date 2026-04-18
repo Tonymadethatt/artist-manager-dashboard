@@ -1,10 +1,27 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Plus, Download, Trash2, Eye, X, Files as FilesIcon, Link2, Copy, Check, Upload } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  Plus,
+  Download,
+  Trash2,
+  Eye,
+  X,
+  Files as FilesIcon,
+  Link2,
+  Copy,
+  Upload,
+  Folder,
+  FileText,
+  MoreHorizontal,
+  ChevronRight,
+  Pencil,
+  FolderInput,
+} from 'lucide-react'
 import { useFiles } from '@/hooks/useFiles'
 import { useDeals } from '@/hooks/useDeals'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -12,13 +29,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { sanitizeFilenameStem } from '@/lib/agreement'
 import { publicSiteOrigin, resolvedPdfHref } from '@/lib/files/pdfShareUrl'
+import {
+  folderBreadcrumbItems,
+  flatFolderPickList,
+  collectFolderSubtreeIds,
+} from '@/lib/files/folderTree'
 import { resolveGeneratedFileDownloadUrl } from '@/lib/files/resolveGeneratedFileDownloadUrl'
 import { copyTextToClipboard } from '@/lib/copyToClipboard'
-import type { Deal, GeneratedFile } from '@/types'
+import type { Deal, GeneratedFile, DocumentFolder } from '@/types'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function parseFolderQuery(raw: string | null): string | null {
+  if (!raw?.trim()) return null
+  const t = raw.trim()
+  return UUID_RE.test(t) ? t : null
+}
 
 type TaskFileLink = { id: string; title: string; completed: boolean }
 
@@ -31,7 +74,26 @@ function fileKind(f: GeneratedFile): FileKind {
 
 export default function Files() {
   const navigate = useNavigate()
-  const { files, loading, deleteFile, addUploadedAsset, refetch } = useFiles()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const folderParamRaw = searchParams.get('folder')
+  const folderIdFromUrl = useMemo(() => parseFolderQuery(folderParamRaw), [folderParamRaw])
+  const filterFolderId: string | null = folderIdFromUrl
+
+  const {
+    files,
+    folders,
+    loading,
+    error,
+    folderFileCounts,
+    deleteFile,
+    addUploadedAsset,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveFolder,
+    moveFile,
+  } = useFiles({ filterFolderId })
+
   const { deals, updateDeal } = useDeals()
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const [uploadDealId, setUploadDealId] = useState<string>('__none__')
@@ -43,9 +105,42 @@ export default function Files() {
   const [dealForUrl, setDealForUrl] = useState<string>('')
   const [settingUrl, setSettingUrl] = useState(false)
   const [urlFeedback, setUrlFeedback] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [clipboardBanner, setClipboardBanner] = useState<string | null>(null)
   const [taskLinksByFileId, setTaskLinksByFileId] = useState<Map<string, TaskFileLink[]>>(new Map())
+
+  const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [newFolderSaving, setNewFolderSaving] = useState(false)
+  const [newFolderErr, setNewFolderErr] = useState<string | null>(null)
+
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameFolderRow, setRenameFolderRow] = useState<DocumentFolder | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameSaving, setRenameSaving] = useState(false)
+
+  const [moveFileOpen, setMoveFileOpen] = useState(false)
+  const [moveFileRow, setMoveFileRow] = useState<GeneratedFile | null>(null)
+  const [moveFileDest, setMoveFileDest] = useState<string>('__root__')
+  const [moveFileSaving, setMoveFileSaving] = useState(false)
+
+  const [moveFolderOpen, setMoveFolderOpen] = useState(false)
+  const [moveFolderRow, setMoveFolderRow] = useState<DocumentFolder | null>(null)
+  const [moveFolderDest, setMoveFolderDest] = useState<string>('__root__')
+  const [moveFolderSaving, setMoveFolderSaving] = useState(false)
+
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<DocumentFolder | null>(null)
+
+  useEffect(() => {
+    if (folderParamRaw?.trim() && !UUID_RE.test(folderParamRaw.trim())) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [folderParamRaw, setSearchParams])
+
+  useEffect(() => {
+    if (!loading && folderIdFromUrl && !folders.some(f => f.id === folderIdFromUrl)) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [loading, folderIdFromUrl, folders, setSearchParams])
 
   useEffect(() => {
     let cancelled = false
@@ -79,12 +174,42 @@ export default function Files() {
     return m
   }, [deals])
 
+  const breadcrumb = useMemo(
+    () => folderBreadcrumbItems(folders, filterFolderId),
+    [folders, filterFolderId],
+  )
+
+  const childFolders = useMemo(() => {
+    return folders
+      .filter(f => f.parent_id === filterFolderId)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [folders, filterFolderId])
+
+  const fileMoveTargets = useMemo(() => flatFolderPickList(folders), [folders])
+
+  const folderMoveOmit = useMemo(
+    () => (moveFolderRow ? collectFolderSubtreeIds(folders, moveFolderRow.id) : undefined),
+    [folders, moveFolderRow],
+  )
+
+  const folderMoveTargets = useMemo(
+    () => flatFolderPickList(folders, folderMoveOmit),
+    [folders, folderMoveOmit],
+  )
+
   const taskLinkSummary = (fileId: string): { open: TaskFileLink[]; done: number } => {
     const all = taskLinksByFileId.get(fileId) ?? []
     const open = all.filter(t => !t.completed)
     const done = all.length - open.length
     return { open, done: Math.max(0, done) }
   }
+
+  const setFolderInUrl = (id: string | null) => {
+    if (id === null) setSearchParams({}, { replace: true })
+    else setSearchParams({ folder: id }, { replace: true })
+  }
+
+  const filesNewPath = filterFolderId ? `/files/new?folder=${encodeURIComponent(filterFolderId)}` : '/files/new'
 
   const handleDownload = async (file: GeneratedFile) => {
     const href = resolveGeneratedFileDownloadUrl(file, publicSiteOrigin())
@@ -142,8 +267,8 @@ export default function Files() {
     }
     const ok = await copyTextToClipboard(href)
     if (ok) {
-      setCopiedId(file.id)
-      window.setTimeout(() => setCopiedId(null), 2000)
+      setClipboardBanner('Link copied.')
+      window.setTimeout(() => setClipboardBanner(null), 2000)
       return
     }
     const msg =
@@ -170,6 +295,8 @@ export default function Files() {
     window.setTimeout(() => setUrlFeedback(null), 3000)
   }
 
+  const totalItemsHere = childFolders.length + files.length
+
   return (
     <div className="space-y-4 w-full min-w-0">
       {clipboardBanner && (
@@ -177,9 +304,35 @@ export default function Files() {
           {clipboardBanner}
         </p>
       )}
+      {error && (
+        <p className="text-xs text-red-400 border border-red-900/50 bg-red-950/30 rounded-md px-3 py-2">{error}</p>
+      )}
+
+      <nav className="flex flex-wrap items-center gap-1 text-sm text-neutral-400 min-w-0" aria-label="Folder path">
+        {breadcrumb.map((crumb, i) => (
+          <span key={crumb.id ?? 'root'} className="flex items-center gap-1 min-w-0">
+            {i > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-neutral-600" aria-hidden />}
+            {i === breadcrumb.length - 1 ? (
+              <span className="text-neutral-100 font-medium truncate">{crumb.name}</span>
+            ) : (
+              <button
+                type="button"
+                className="hover:text-neutral-100 truncate transition-colors"
+                onClick={() => setFolderInUrl(crumb.id)}
+              >
+                {crumb.name}
+              </button>
+            )}
+          </span>
+        ))}
+      </nav>
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-500">
-          {files.length} file{files.length !== 1 ? 's' : ''}
+          {totalItemsHere} item{totalItemsHere !== 1 ? 's' : ''} in this folder
+          {filterFolderId === null && folders.length > 0 && (
+            <span className="text-neutral-600"> · {folders.length} folder{folders.length !== 1 ? 's' : ''} total</span>
+          )}
         </p>
         <div className="flex flex-wrap gap-2 justify-end">
           <input
@@ -194,13 +347,12 @@ export default function Files() {
               setUploadError(null)
               setUploading(true)
               const dealId = uploadDealId === '__none__' ? null : uploadDealId
-              const res = await addUploadedAsset({ file: f, deal_id: dealId })
+              const res = await addUploadedAsset({ file: f, deal_id: dealId, folder_id: filterFolderId })
               setUploading(false)
               if (res.error) {
                 setUploadError(res.error.message)
                 return
               }
-              void refetch()
             }}
           />
           <div className="flex flex-col gap-1 min-w-[200px]">
@@ -227,7 +379,11 @@ export default function Files() {
             <Upload className="h-3.5 w-3.5" />
             {uploading ? 'Uploading…' : 'Upload file'}
           </Button>
-          <Button onClick={() => navigate('/files/new')}>
+          <Button variant="outline" onClick={() => { setNewFolderErr(null); setNewFolderName(''); setNewFolderOpen(true) }}>
+            <Folder className="h-3.5 w-3.5" />
+            New folder
+          </Button>
+          <Button onClick={() => navigate(filesNewPath)}>
             <Plus className="h-3.5 w-3.5" />
             Generate file
           </Button>
@@ -241,144 +397,379 @@ export default function Files() {
         <div className="flex items-center justify-center py-16">
           <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
         </div>
-      ) : files.length === 0 ? (
+      ) : totalItemsHere === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-neutral-700 rounded-lg">
           <FilesIcon className="h-8 w-8 text-neutral-600 mx-auto mb-3" />
-          <p className="font-medium text-neutral-400 text-sm mb-1">No files yet</p>
+          <p className="font-medium text-neutral-400 text-sm mb-1">This folder is empty</p>
           <p className="text-xs text-neutral-500 mb-4">
-            Upload a PDF or image for email attachments, or generate a file from a template.
+            Upload a file, create a folder, or generate from a template.
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
             <Button variant="outline" size="sm" onClick={() => uploadInputRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
               Upload
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/files/new')}>
+            <Button variant="outline" size="sm" onClick={() => { setNewFolderName(''); setNewFolderErr(null); setNewFolderOpen(true) }}>
+              <Folder className="h-3.5 w-3.5" />
+              New folder
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(filesNewPath)}>
               Generate file
             </Button>
           </div>
         </div>
       ) : (
-        <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-800 bg-neutral-950">
-                <th className="text-left px-4 py-2.5 font-medium text-neutral-500 text-xs">Name</th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Type</th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Venue</th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">Template</th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs">Date</th>
-                <th className="px-3 py-2.5 w-28" />
-              </tr>
-            </thead>
-            <tbody>
-              {files.map(file => {
-                const fmt = fileKind(file)
-                const canon = canonicalDealsByFileId.get(file.id)
-                return (
-                  <tr key={file.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <span className="font-medium text-neutral-100">{file.name}</span>
-                        {canon && (
-                          <Badge variant="outline" className="text-[10px] w-fit border-emerald-700/50 text-emerald-400">
-                            Canonical agreement · {canon.venue?.name ?? canon.description}
-                          </Badge>
-                        )}
-                        {(() => {
-                          const { open, done } = taskLinkSummary(file.id)
-                          if (open.length === 0 && done === 0) return null
-                          return (
-                            <div className="flex flex-col gap-1">
-                              {open.slice(0, 2).map(t => (
-                                <Badge
-                                  key={t.id}
-                                  variant="secondary"
-                                  className="text-[10px] w-fit border-neutral-600 text-neutral-300"
-                                >
-                                  Pipeline task · {t.title}
-                                </Badge>
-                              ))}
-                              {open.length > 2 && (
-                                <span className="text-[10px] text-neutral-500">
-                                  +{open.length - 2} more open task{open.length - 2 !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                              {open.length === 0 && done > 0 && (
-                                <span className="text-[10px] text-neutral-500">
-                                  {done} completed task{done !== 1 ? 's' : ''} linked this PDF
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 hidden sm:table-cell">
-                      <Badge
-                        variant={fmt === 'pdf' ? 'blue' : fmt === 'upload' ? 'outline' : 'secondary'}
-                        className="text-xs"
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {childFolders.map(sub => {
+            const subCount = folders.filter(f => f.parent_id === sub.id).length
+            const fileCount = folderFileCounts.byFolderId[sub.id] ?? 0
+            return (
+              <div
+                key={sub.id}
+                className={cn(
+                  'group relative rounded-lg border border-neutral-800 bg-neutral-900/80 p-3',
+                  'hover:border-neutral-600 hover:bg-neutral-900 transition-colors min-w-0 flex flex-col',
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex flex-col items-stretch text-left min-w-0 flex-1"
+                  onClick={() => setFolderInUrl(sub.id)}
+                >
+                  <Folder className="h-8 w-8 text-amber-500/90 mb-2 shrink-0" strokeWidth={1.5} />
+                  <span className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug">{sub.name}</span>
+                  <span className="text-[11px] text-neutral-500 mt-1 tabular-nums">
+                    {subCount} folder{subCount !== 1 ? 's' : ''}, {fileCount} file{fileCount !== 1 ? 's' : ''}
+                  </span>
+                </button>
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Folder ${sub.name} actions`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRenameFolderRow(sub)
+                          setRenameValue(sub.name)
+                          setRenameOpen(true)
+                        }}
                       >
-                        {fmt === 'upload' ? 'Upload' : fmt === 'pdf' ? 'PDF' : 'Text'}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 hidden sm:table-cell">
-                      {file.venue ? (
-                        <span className="text-xs text-neutral-400">{file.venue.name}</span>
-                      ) : (
-                        <span className="text-neutral-600 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 hidden md:table-cell">
-                      {file.template ? (
-                        <Badge variant="secondary" className="text-xs">{file.template.name}</Badge>
-                      ) : (
-                        <span className="text-neutral-600 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className="text-xs text-neutral-500">
-                        {new Date(file.created_at).toLocaleDateString()}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-1 justify-end flex-wrap">
-                        {resolveGeneratedFileDownloadUrl(file, publicSiteOrigin()) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title="Copy PDF link"
-                            onClick={() => copyPdfLink(file)}
-                          >
-                            {copiedId === file.id ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPreview(file)}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(file)}>
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-500 hover:text-red-400"
-                          onClick={() => setConfirmDelete(file)}
+                        <Pencil className="h-3.5 w-3.5 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMoveFolderRow(sub)
+                          setMoveFolderDest('__root__')
+                          setMoveFolderOpen(true)
+                        }}
+                      >
+                        <FolderInput className="h-3.5 w-3.5 mr-2" />
+                        Move to…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-400 focus:text-red-400"
+                        onClick={() => setConfirmDeleteFolder(sub)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            )
+          })}
+
+          {files.map(file => {
+            const fmt = fileKind(file)
+            const canon = canonicalDealsByFileId.get(file.id)
+            const { open: openTasks, done: doneTasks } = taskLinkSummary(file.id)
+            return (
+              <div
+                key={file.id}
+                className={cn(
+                  'group relative rounded-lg border border-neutral-800 bg-neutral-900/80 p-3',
+                  'hover:border-neutral-600 hover:bg-neutral-900 transition-colors min-w-0 flex flex-col',
+                )}
+              >
+                <button
+                  type="button"
+                  className="flex flex-col items-stretch text-left min-w-0 flex-1"
+                  onClick={() => setPreview(file)}
+                >
+                  <div className="flex items-start justify-between gap-1 mb-2">
+                    <FileText className="h-8 w-8 text-neutral-400 shrink-0" strokeWidth={1.5} />
+                    <Badge
+                      variant={fmt === 'pdf' ? 'blue' : fmt === 'upload' ? 'outline' : 'secondary'}
+                      className="text-[10px] shrink-0"
+                    >
+                      {fmt === 'upload' ? 'Upload' : fmt === 'pdf' ? 'PDF' : 'Text'}
+                    </Badge>
+                  </div>
+                  <span className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug" title={file.name}>
+                    {file.name}
+                  </span>
+                  <span className="text-[11px] text-neutral-500 mt-1">
+                    {new Date(file.created_at).toLocaleDateString()}
+                  </span>
+                  {(canon || openTasks.length > 0 || doneTasks > 0) && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {canon && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-800/50 text-emerald-400/95 truncate max-w-full"
+                          title={`Canonical · ${canon.venue?.name ?? canon.description}`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                          Canonical
+                        </span>
+                      )}
+                      {openTasks.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-400">
+                          {openTasks.length} task{openTasks.length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {openTasks.length === 0 && doneTasks > 0 && (
+                        <span className="text-[10px] text-neutral-500">{doneTasks} done</span>
+                      )}
+                    </div>
+                  )}
+                </button>
+                <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${file.name} actions`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {resolveGeneratedFileDownloadUrl(file, publicSiteOrigin()) && (
+                        <DropdownMenuItem onClick={() => copyPdfLink(file)}>
+                          <Copy className="h-3.5 w-3.5 mr-2" />
+                          Copy link
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => setPreview(file)}>
+                        <Eye className="h-3.5 w-3.5 mr-2" />
+                        Preview
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDownload(file)}>
+                        <Download className="h-3.5 w-3.5 mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setMoveFileRow(file)
+                          setMoveFileDest(file.folder_id ?? '__root__')
+                          setMoveFileOpen(true)
+                        }}
+                      >
+                        <FolderInput className="h-3.5 w-3.5 mr-2" />
+                        Move to…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-400 focus:text-red-400"
+                        onClick={() => setConfirmDelete(file)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New folder</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            placeholder="Folder name"
+            className="bg-neutral-950 border-neutral-800"
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void (async () => {
+                  setNewFolderSaving(true)
+                  setNewFolderErr(null)
+                  const r = await createFolder(newFolderName, filterFolderId)
+                  setNewFolderSaving(false)
+                  if (r.error) {
+                    setNewFolderErr(r.error.message)
+                    return
+                  }
+                  setNewFolderOpen(false)
+                  setNewFolderName('')
+                })()
+              }
+            }}
+          />
+          {newFolderErr && <p className="text-xs text-red-400">{newFolderErr}</p>}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setNewFolderOpen(false)}>Cancel</Button>
+            <Button
+              disabled={newFolderSaving || !newFolderName.trim()}
+              onClick={async () => {
+                setNewFolderSaving(true)
+                setNewFolderErr(null)
+                const r = await createFolder(newFolderName, filterFolderId)
+                setNewFolderSaving(false)
+                if (r.error) {
+                  setNewFolderErr(r.error.message)
+                  return
+                }
+                setNewFolderOpen(false)
+                setNewFolderName('')
+              }}
+            >
+              {newFolderSaving ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename folder</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            className="bg-neutral-950 border-neutral-800"
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
+            <Button
+              disabled={renameSaving || !renameFolderRow || !renameValue.trim()}
+              onClick={async () => {
+                if (!renameFolderRow) return
+                setRenameSaving(true)
+                const r = await renameFolder(renameFolderRow.id, renameValue)
+                setRenameSaving(false)
+                if (r.error) return
+                setRenameOpen(false)
+                setRenameFolderRow(null)
+              }}
+            >
+              {renameSaving ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moveFileOpen} onOpenChange={setMoveFileOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move file</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-neutral-500 truncate">{moveFileRow?.name}</p>
+          <Select value={moveFileDest} onValueChange={setMoveFileDest}>
+            <SelectTrigger className="bg-neutral-950 border-neutral-800">
+              <SelectValue placeholder="Destination" />
+            </SelectTrigger>
+            <SelectContent>
+              {fileMoveTargets.map(t => (
+                <SelectItem key={t.id ?? '__root__'} value={t.id ?? '__root__'}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setMoveFileOpen(false)}>Cancel</Button>
+            <Button
+              disabled={moveFileSaving || !moveFileRow}
+              onClick={async () => {
+                if (!moveFileRow) return
+                setMoveFileSaving(true)
+                const dest = moveFileDest === '__root__' ? null : moveFileDest
+                const r = await moveFile(moveFileRow.id, dest)
+                setMoveFileSaving(false)
+                if (r.error) return
+                setMoveFileOpen(false)
+                setMoveFileRow(null)
+              }}
+            >
+              {moveFileSaving ? 'Moving…' : 'Move'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moveFolderOpen} onOpenChange={setMoveFolderOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move folder</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-neutral-500 truncate">{moveFolderRow?.name}</p>
+          <Select value={moveFolderDest} onValueChange={setMoveFolderDest}>
+            <SelectTrigger className="bg-neutral-950 border-neutral-800">
+              <SelectValue placeholder="Destination" />
+            </SelectTrigger>
+            <SelectContent>
+              {folderMoveTargets.map(t => (
+                <SelectItem key={t.id ?? '__root__'} value={t.id ?? '__root__'}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setMoveFolderOpen(false)}>Cancel</Button>
+            <Button
+              disabled={moveFolderSaving || !moveFolderRow}
+              onClick={async () => {
+                if (!moveFolderRow) return
+                setMoveFolderSaving(true)
+                const dest = moveFolderDest === '__root__' ? null : moveFolderDest
+                const r = await moveFolder(moveFolderRow.id, dest)
+                setMoveFolderSaving(false)
+                if (r.error) return
+                setMoveFolderOpen(false)
+                setMoveFolderRow(null)
+              }}
+            >
+              {moveFolderSaving ? 'Moving…' : 'Move'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {confirmDeleteFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDeleteFolder(null)} />
+          <div className="relative bg-neutral-900 rounded-lg border border-neutral-700 p-6 max-w-sm w-full shadow-xl">
+            <h3 className="font-semibold text-neutral-100 mb-2">Delete folder?</h3>
+            <p className="text-sm text-neutral-400 mb-4">
+              <strong className="text-neutral-200">{confirmDeleteFolder.name}</strong> and any subfolders will be removed.
+              Files inside will move to <strong className="text-neutral-200">Documents</strong> (root).
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDeleteFolder(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const r = await deleteFolder(confirmDeleteFolder.id)
+                  if (r.error) return
+                  if (filterFolderId === confirmDeleteFolder.id) setFolderInUrl(null)
+                  setConfirmDeleteFolder(null)
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

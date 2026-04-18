@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { makeAgreementPdfSlug } from '@/lib/agreement/sanitize'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
-import type { GeneratedFile, GeneratedFileOutputFormat, GeneratedFileSource } from '@/types'
+import { wouldCreateFolderCycle } from '@/lib/files/folderTree'
+import type { DocumentFolder, GeneratedFile, GeneratedFileOutputFormat, GeneratedFileSource } from '@/types'
 
 const FILE_SELECT = `
   *,
@@ -13,12 +14,21 @@ const FILE_SELECT = `
 const PDF_MIGRATION_HINT =
   'PDF storage needs the latest database migration. In Supabase: SQL editor → run supabase/migrations/010_agreement_pdf_files.sql (or supabase db push).'
 
+export type UseFilesOptions = {
+  /**
+   * When set (including `null` for root), list only files in that folder and load folder tree + counts.
+   * When omitted, list all files (e.g. Email templates, Agreement picker).
+   */
+  filterFolderId?: string | null
+}
+
 export type AddTextFileInput = {
   name: string
   content: string
   template_id: string | null
   venue_id: string | null
   deal_id?: string | null
+  folder_id?: string | null
 }
 
 export type AddPdfFileInput = AddTextFileInput & {
@@ -33,6 +43,7 @@ export type AddUploadedAssetInput = {
   /** Row label; defaults to file.name */
   name?: string
   deal_id?: string | null
+  folder_id?: string | null
 }
 
 /** PostgREST when a column exists in types but not on the remote DB. */
@@ -43,12 +54,13 @@ function isMissingColumnError(err: { message?: string } | null | undefined): boo
 
 function normalizeGeneratedRow(
   row: Record<string, unknown>,
-  fallbackDealId: string | null | undefined
+  fallbackDealId: string | null | undefined,
 ): GeneratedFile {
   const src = row.file_source as GeneratedFileSource | undefined
   return {
     ...(row as unknown as GeneratedFile),
     deal_id: (row.deal_id as string | null | undefined) ?? fallbackDealId ?? null,
+    folder_id: (row.folder_id as string | null | undefined) ?? null,
     output_format: (row.output_format as GeneratedFileOutputFormat | undefined) ?? 'text',
     file_source: src ?? 'generated',
     pdf_storage_path: (row.pdf_storage_path as string | null | undefined) ?? null,
@@ -66,26 +78,68 @@ function safeUploadObjectName(original: string, fileId: string): string {
   return `${fileId}_${cleaned.slice(0, 100)}`
 }
 
-export function useFiles() {
+function aggregateFolderCounts(rows: { folder_id: string | null }[]): {
+  root: number
+  byFolderId: Record<string, number>
+} {
+  const byFolderId: Record<string, number> = {}
+  let root = 0
+  for (const r of rows) {
+    if (r.folder_id == null) root++
+    else byFolderId[r.folder_id] = (byFolderId[r.folder_id] ?? 0) + 1
+  }
+  return { root, byFolderId }
+}
+
+export function useFiles(options: UseFilesOptions = {}) {
+  const filterFolderId = options.filterFolderId
+  const scoped = filterFolderId !== undefined
+
   const [files, setFiles] = useState<GeneratedFile[]>([])
+  const [folders, setFolders] = useState<DocumentFolder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [folderFileCounts, setFolderFileCounts] = useState<{ root: number; byFolderId: Record<string, number> }>({
+    root: 0,
+    byFolderId: {},
+  })
 
-  const fetchFiles = useCallback(async () => {
+  const refetch = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('generated_files')
-      .select(FILE_SELECT)
-      .order('created_at', { ascending: false })
-    if (error) setError(error.message)
-    else
-      setFiles(
-        (data ?? []).map(r => normalizeGeneratedRow(r as Record<string, unknown>, null))
-      )
-    setLoading(false)
-  }, [])
+    setError(null)
 
-  useEffect(() => { fetchFiles() }, [fetchFiles])
+    if (scoped) {
+      const { data: folderRows, error: folderErr } = await supabase
+        .from('document_folders')
+        .select('*')
+        .order('name')
+      if (folderErr) setError(folderErr.message)
+      setFolders((folderRows ?? []) as DocumentFolder[])
+
+      const { data: countRows, error: countErr } = await supabase.from('generated_files').select('folder_id')
+      if (countErr && !isMissingColumnError(countErr)) setError(countErr.message)
+      if (!countErr) setFolderFileCounts(aggregateFolderCounts((countRows ?? []) as { folder_id: string | null }[]))
+    } else {
+      setFolders([])
+      setFolderFileCounts({ root: 0, byFolderId: {} })
+    }
+
+    let q = supabase.from('generated_files').select(FILE_SELECT).order('created_at', { ascending: false })
+    if (scoped) {
+      if (filterFolderId === null) q = q.is('folder_id', null)
+      else q = q.eq('folder_id', filterFolderId)
+    }
+
+    const { data, error: fileErr } = await q
+    if (fileErr) setError(fileErr.message)
+    else setFiles((data ?? []).map(r => normalizeGeneratedRow(r as Record<string, unknown>, null)))
+
+    setLoading(false)
+  }, [scoped, filterFolderId])
+
+  useEffect(() => {
+    void refetch()
+  }, [refetch])
 
   /** Plain-text generated file (legacy + default). */
   const addTextFile = async (file: AddTextFileInput) => {
@@ -103,6 +157,7 @@ export function useFiles() {
     const full = {
       ...base,
       deal_id: file.deal_id ?? null,
+      folder_id: file.folder_id ?? null,
       output_format: 'text' as const,
       pdf_storage_path: null,
       pdf_public_url: null,
@@ -111,8 +166,8 @@ export function useFiles() {
     let { data, error } = await supabase.from('generated_files').insert(full).select(FILE_SELECT).single()
 
     if (error && isMissingColumnError(error)) {
-      const { deal_id: _d, ...withoutDeal } = full
-      const retry = await supabase.from('generated_files').insert(withoutDeal).select(FILE_SELECT).single()
+      const { deal_id: _d, folder_id: _f, ...withoutOptional } = full
+      const retry = await supabase.from('generated_files').insert(withoutOptional).select(FILE_SELECT).single()
       data = retry.data
       error = retry.error
     }
@@ -125,17 +180,10 @@ export function useFiles() {
 
     if (error) return { error }
     const row = normalizeGeneratedRow(data as Record<string, unknown>, file.deal_id ?? null)
-    setFiles(prev => [row, ...prev])
+    void refetch()
     return { data: row }
   }
 
-  /**
-   * Insert row, upload PDF to Storage, update row with paths + public URL.
-   * Rolls back DB row or Storage object on failure.
-   *
-   * Each save creates a **new** `generated_files` row (new slug). To “replace” an agreement for a deal,
-   * point the deal at the new row (File Builder toggle, Files panel, or Earnings) — we do not upsert storage in-place here.
-   */
   const addPdfFile = async (file: AddPdfFileInput) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -151,6 +199,7 @@ export function useFiles() {
     const full = {
       ...base,
       deal_id: file.deal_id ?? null,
+      folder_id: file.folder_id ?? null,
       output_format: 'pdf' as const,
       pdf_storage_path: null,
       pdf_public_url: null,
@@ -163,8 +212,8 @@ export function useFiles() {
       .single()
 
     if (insErr && isMissingColumnError(insErr)) {
-      const { deal_id: _d, ...withoutDeal } = full
-      const retry = await supabase.from('generated_files').insert(withoutDeal).select('id').single()
+      const { deal_id: _d, folder_id: _f, ...withoutOptional } = full
+      const retry = await supabase.from('generated_files').insert(withoutOptional).select('id').single()
       inserted = retry.data
       insErr = retry.error
     }
@@ -233,11 +282,10 @@ export function useFiles() {
     }
 
     const row = normalizeGeneratedRow(final as Record<string, unknown>, file.deal_id ?? null)
-    setFiles(prev => [row, ...prev])
+    void refetch()
     return { data: row }
   }
 
-  /** Upload PDF/image for email attachments; stored in `email-assets` bucket. */
   const addUploadedAsset = async (input: AddUploadedAssetInput) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -259,6 +307,7 @@ export function useFiles() {
       template_id: null as string | null,
       venue_id: null as string | null,
       deal_id: input.deal_id ?? null,
+      folder_id: input.folder_id ?? null,
       output_format: 'text' as const,
       file_source: 'upload' as const,
       pdf_storage_path: null as string | null,
@@ -319,8 +368,65 @@ export function useFiles() {
     }
 
     const row = normalizeGeneratedRow(final as Record<string, unknown>, input.deal_id ?? null)
-    setFiles(prev => [row, ...prev])
+    void refetch()
     return { data: row }
+  }
+
+  const createFolder = async (name: string, parentId: string | null) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: new Error('Not authenticated') }
+    const trimmed = name.trim()
+    if (!trimmed) return { error: new Error('Folder name is required.') }
+    const { data, error } = await supabase
+      .from('document_folders')
+      .insert({ user_id: user.id, name: trimmed, parent_id: parentId })
+      .select('*')
+      .single()
+    if (error) {
+      if (error.code === '23505') return { error: new Error('A folder with that name already exists here.') }
+      return { error }
+    }
+    void refetch()
+    return { data: data as DocumentFolder }
+  }
+
+  const renameFolder = async (id: string, name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return { error: new Error('Folder name is required.') }
+    const { error } = await supabase.from('document_folders').update({ name: trimmed }).eq('id', id)
+    if (error) {
+      if (error.code === '23505') return { error: new Error('A folder with that name already exists here.') }
+      return { error }
+    }
+    void refetch()
+    return {}
+  }
+
+  const deleteFolder = async (id: string) => {
+    const { error } = await supabase.from('document_folders').delete().eq('id', id)
+    if (error) return { error }
+    void refetch()
+    return {}
+  }
+
+  const moveFolder = async (folderId: string, newParentId: string | null) => {
+    if (wouldCreateFolderCycle(folders, folderId, newParentId)) {
+      return { error: new Error('Cannot move a folder into itself or one of its subfolders.') }
+    }
+    const { error } = await supabase.from('document_folders').update({ parent_id: newParentId }).eq('id', folderId)
+    if (error) {
+      if (error.code === '23505') return { error: new Error('A folder with that name already exists here.') }
+      return { error }
+    }
+    void refetch()
+    return {}
+  }
+
+  const moveFile = async (fileId: string, targetFolderId: string | null) => {
+    const { error } = await supabase.from('generated_files').update({ folder_id: targetFolderId }).eq('id', fileId)
+    if (error) return { error }
+    void refetch()
+    return {}
   }
 
   const deleteFile = async (id: string) => {
@@ -360,18 +466,25 @@ export function useFiles() {
 
     const { error } = await supabase.from('generated_files').delete().eq('id', id)
     if (error) return { error }
-    setFiles(prev => prev.filter(f => f.id !== id))
+    void refetch()
     return {}
   }
 
   return {
     files,
+    folders,
     loading,
     error,
-    refetch: fetchFiles,
+    folderFileCounts,
+    refetch,
     addTextFile,
     addPdfFile,
     addUploadedAsset,
     deleteFile,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveFolder,
+    moveFile,
   }
 }

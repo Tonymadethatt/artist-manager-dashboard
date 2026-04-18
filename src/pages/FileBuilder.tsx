@@ -32,9 +32,22 @@ import {
 } from '@/lib/agreement'
 import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
 
+const FOLDER_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function folderIdFromSearchParams(searchParams: URLSearchParams): string | null {
+  const raw = searchParams.get('folder')?.trim() ?? ''
+  return FOLDER_UUID_RE.test(raw) ? raw : null
+}
+
 export default function FileBuilder() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const saveFolderId = useMemo(() => folderIdFromSearchParams(searchParams), [searchParams])
+  const filesListPath = useMemo(() => {
+    const raw = searchParams.get('folder')?.trim() ?? ''
+    return FOLDER_UUID_RE.test(raw) ? `/files?folder=${encodeURIComponent(raw)}` : '/files'
+  }, [searchParams])
   const { templates, loading: tplLoading } = useTemplates()
   const { venues } = useVenues()
   const { profile } = useArtistProfile()
@@ -288,6 +301,7 @@ export default function FileBuilder() {
       template_id: selectedTemplateId || null,
       venue_id: selectedVenueId || null,
       deal_id: selectedDealId || null,
+      folder_id: saveFolderId,
     })
     setSavingText(false)
     if (error) {
@@ -311,6 +325,7 @@ export default function FileBuilder() {
         template_id: selectedTemplateId || null,
         venue_id: selectedVenueId || null,
         deal_id: selectedDealId || null,
+        folder_id: saveFolderId,
         pdfBlob: blob,
       })
       if (error) {
@@ -357,7 +372,7 @@ export default function FileBuilder() {
 
       <button
         type="button"
-        onClick={() => navigate('/files')}
+        onClick={() => navigate(filesListPath)}
         className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors mb-5 sm:mb-6"
       >
         <ArrowLeft className="h-4 w-4 shrink-0" />
