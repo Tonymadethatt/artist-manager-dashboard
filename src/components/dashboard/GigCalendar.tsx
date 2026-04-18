@@ -17,6 +17,7 @@ import { queueManualGigDaySummary } from '@/lib/calendar/queueManualGigDaySummar
 import { queueManualGigReminderForDeal } from '@/lib/calendar/queueManualGigReminderForDeal'
 import { formatGoogleCalendarDescription } from '@/lib/calendar/formatGoogleCalendarDescription'
 import { dealRemainingClientBalance, dealTotalPaidTowardGross } from '@/lib/deals/dealPaymentTotals'
+import { dealCommissionRateFromTier } from '@/lib/deals/dealCommissionFromTier'
 import { cn } from '@/lib/utils'
 import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 import { Button } from '@/components/ui/button'
@@ -892,7 +893,7 @@ export function GigCalendar({
                 </div>
                 <div className={row}>
                   <span className={rowLabel}>Rate</span>
-                  <span className={cn(rowValue, 'tabular-nums')}>{Math.round(selectedDeal.commission_rate * 100)}%</span>
+                  <span className={cn(rowValue, 'tabular-nums')}>{Math.round(dealCommissionRateFromTier(selectedDeal) * 100)}%</span>
                 </div>
                 <div className={row}>
                   <span className={rowLabel}>Your cut</span>

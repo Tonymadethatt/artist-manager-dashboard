@@ -4,6 +4,7 @@ import {
   dealRemainingClientBalance,
   dealTotalPaidTowardGross,
 } from '../deals/dealPaymentTotals'
+import { dealCommissionRateFromTier } from '../deals/dealCommissionFromTier'
 import { isDealPricingSnapshot } from '../../types'
 import { COMMISSION_TIER_LABELS, VENUE_TYPE_LABELS } from '../../types'
 import {
@@ -287,9 +288,10 @@ export function buildAgreementPrefill(
     out.full_fee_display = out.gross_amount_display
     out.cancellation_full_fee_display = out.gross_amount_display
     out.contract_fee_display = out.gross_amount_display
-    // Match Earnings UI: stored as fraction (0.2), agreements show as percent (20%)
-    out.commission_rate = `${Math.round(deal.commission_rate * 100)}%`
-    out.commission_rate_fraction = String(deal.commission_rate)
+    // Tier is source of truth; rate fraction matches Earnings / commission math.
+    const tierRate = dealCommissionRateFromTier(deal)
+    out.commission_rate = `${Math.round(tierRate * 100)}%`
+    out.commission_rate_fraction = String(tierRate)
     out.commission_amount = String(deal.commission_amount)
     out.commission_amount_display = formatUsdDisplayCeil(deal.commission_amount)
     out.commission_tier = COMMISSION_TIER_LABELS[deal.commission_tier]

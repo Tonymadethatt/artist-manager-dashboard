@@ -102,6 +102,7 @@ export function useDeals() {
 
     const patch: Omit<DealUpdate, 'id' | 'user_id'> = {
       ...updates,
+      commission_rate: rate,
       commission_amount: Math.round(gross * rate * 100) / 100,
     }
 

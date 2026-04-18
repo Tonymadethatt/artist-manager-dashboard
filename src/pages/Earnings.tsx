@@ -75,6 +75,7 @@ import {
   depositDueFromDeal,
   dealDepositSatisfied,
 } from '@/lib/deals/dealPaymentTotals'
+import { dealCommissionRateFromTier } from '@/lib/deals/dealCommissionFromTier'
 import {
   normalizeDealPricingSnapshot,
   resolveDepositPercentForDealFromCatalog,
@@ -1820,13 +1821,13 @@ export default function Earnings() {
                     <Badge
                       variant={TIER_BADGE_VARIANT[deal.commission_tier]}
                       className="flex w-full min-w-0 max-w-none flex-col items-stretch gap-1 px-2.5 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-2"
-                      title={`${COMMISSION_TIER_LABELS[deal.commission_tier]} · ${Math.round(deal.commission_rate * 100)}%`}
+                      title={`${COMMISSION_TIER_LABELS[deal.commission_tier]} · ${Math.round(dealCommissionRateFromTier(deal) * 100)}%`}
                     >
                       <span className="min-w-0 break-words font-medium leading-snug text-left sm:min-w-0 sm:flex-1">
                         {COMMISSION_TIER_LABELS[deal.commission_tier]}
                       </span>
                       <span className="shrink-0 self-end tabular-nums font-semibold opacity-90 sm:self-center">
-                        {Math.round(deal.commission_rate * 100)}%
+                        {Math.round(dealCommissionRateFromTier(deal) * 100)}%
                       </span>
                     </Badge>
                   </td>
