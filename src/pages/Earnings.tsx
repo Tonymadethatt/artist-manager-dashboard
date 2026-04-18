@@ -67,6 +67,7 @@ import {
   pacificWallToUtcIso,
   utcIsoToPacificDateAndTime,
   addCalendarDaysPacific,
+  formatDealTableWhenMicro,
 } from '@/lib/calendar/pacificWallTime'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import {
@@ -650,10 +651,12 @@ function fmtMoney(n: number) {
   return formatUsdDisplayCeil(n)
 }
 
-/** Venue name only under the deal title (date/time lives in the deal editor / calendar). */
+/** Venue + compact Pacific when under the deal title (numeric dates, short am/pm). */
 function earningsDealTableFootText(deal: Deal): string | null {
   const v = deal.venue?.name?.trim()
-  return v || null
+  const when = formatDealTableWhenMicro(deal)
+  if (!v && !when) return null
+  return [v, when].filter(Boolean).join(' · ')
 }
 
 function balanceLegTargetAmount(deal: Deal): number {
@@ -746,27 +749,26 @@ function PayToggle({
 }) {
   if (compact) {
     return (
-      <div
-        className={DEAL_ROW_PAYMENT_GROUP_CLASS}
-        role="group"
-        aria-label={label === 'Me' ? 'Record manager commission received' : undefined}
+      <button
+        type="button"
+        aria-label={label === 'Me' ? 'Record manager commission received' : label}
+        title={paid && date ? `Paid ${date}` : undefined}
+        onClick={onToggle}
+        disabled={disabled}
+        className={cn(
+          'rounded-md border border-neutral-800 bg-neutral-950/90',
+          'mx-auto flex w-full max-w-[5.25rem] min-w-0 justify-center',
+          'px-0.5 sm:px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500',
+          'disabled:opacity-40 disabled:cursor-not-allowed',
+          paid
+            ? 'border-green-900/50 bg-green-950/40 text-green-400'
+            : 'text-neutral-400 hover:bg-neutral-900',
+          disabled && !paid && 'text-neutral-600',
+        )}
       >
-        <button
-          type="button"
-          title={paid && date ? `Paid ${date}` : undefined}
-          onClick={onToggle}
-          disabled={disabled}
-          className={cn(
-            DEAL_ROW_PAYMENT_SEGMENT_CLASS,
-            paid
-              ? 'bg-green-950/40 text-green-400'
-              : 'text-neutral-400 hover:bg-neutral-900',
-            disabled && !paid && 'text-neutral-600',
-          )}
-        >
-          <span className="tabular-nums">{paid ? '✓' : '○'} {label}</span>
-        </button>
-      </div>
+        <span className="tabular-nums whitespace-nowrap">{paid ? '✓' : '○'} {label}</span>
+      </button>
     )
   }
 
@@ -1698,13 +1700,13 @@ export default function Earnings() {
               <tr className="border-b border-neutral-800 bg-neutral-950">
                 <th
                   scope="col"
-                  className="w-[28%] sm:w-[22%] md:w-[20%] text-left px-2.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom"
+                  className="w-[28%] sm:w-[22%] md:w-[19%] text-left px-2.5 py-2.5 font-medium text-neutral-500 text-xs align-bottom"
                 >
                   Deal
                 </th>
                 <th
                   scope="col"
-                  className="w-[16%] md:w-[13%] text-left px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell"
+                  className="w-[16%] md:w-[17%] text-left px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell"
                 >
                   Tier
                 </th>
@@ -1734,7 +1736,7 @@ export default function Earnings() {
                 </th>
                 <th
                   scope="col"
-                  className="w-[11%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
+                  className="w-[8%] text-center px-1 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap"
                 >
                   I got paid
                 </th>
@@ -1817,13 +1819,13 @@ export default function Earnings() {
                   <td className="px-3 py-3 hidden sm:table-cell align-top min-w-0">
                     <Badge
                       variant={TIER_BADGE_VARIANT[deal.commission_tier]}
-                      className="flex w-full min-w-0 max-w-none items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
+                      className="flex w-full min-w-0 max-w-none flex-col items-stretch gap-1 px-2.5 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-2"
                       title={`${COMMISSION_TIER_LABELS[deal.commission_tier]} · ${Math.round(deal.commission_rate * 100)}%`}
                     >
-                      <span className="min-w-0 truncate font-medium">
+                      <span className="min-w-0 break-words font-medium leading-snug text-left sm:min-w-0 sm:flex-1">
                         {COMMISSION_TIER_LABELS[deal.commission_tier]}
                       </span>
-                      <span className="shrink-0 tabular-nums font-semibold opacity-90">
+                      <span className="shrink-0 self-end tabular-nums font-semibold opacity-90 sm:self-center">
                         {Math.round(deal.commission_rate * 100)}%
                       </span>
                     </Badge>

@@ -244,6 +244,49 @@ export function formatPacificTimeRangeCompact(startIso: string, endIso: string):
   return `${day0}, ${t0} – ${day1}, ${t1}`
 }
 
+const MD_NUM_LA = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  month: 'numeric',
+  day: 'numeric',
+})
+
+const MDY_NUM_LA = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  month: 'numeric',
+  day: 'numeric',
+  year: '2-digit',
+})
+
+/** "8:30 PM" → "8:30p"; "8 PM" → "8p" (Pacific wall). */
+function microClockLa(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  const raw = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms)))
+  return raw.replace(/\s*(AM|PM)\b/gi, (_, ap: string) => (ap.toUpperCase() === 'AM' ? 'a' : 'p'))
+}
+
+/**
+ * Minimal Pacific range for dense dashboard rows, e.g. `4/18 11p–4a` or `4/18 11p–4/19 4a`.
+ */
+export function formatPacificEventRangeMicroFoot(startIso: string, endIso: string): string {
+  const ms0 = new Date(startIso).getTime()
+  const ms1 = new Date(endIso).getTime()
+  if (!Number.isFinite(ms0) || !Number.isFinite(ms1)) return ''
+  const k0 = pacificDateKeyFromUtcIso(startIso)
+  const k1 = pacificDateKeyFromUtcIso(endIso)
+  if (!k0 || !k1) return ''
+  const y0 = Number(k0.slice(0, 4))
+  const y1 = Number(k1.slice(0, 4))
+  const crossYear = y0 !== y1
+  const date0 = crossYear ? MDY_NUM_LA.format(new Date(ms0)) : MD_NUM_LA.format(new Date(ms0))
+  const date1 = crossYear ? MDY_NUM_LA.format(new Date(ms1)) : MD_NUM_LA.format(new Date(ms1))
+  const t0 = microClockLa(startIso)
+  const t1 = microClockLa(endIso)
+  if (!t0 || !t1) return ''
+  if (k0 === k1) return `${date0} ${t0}–${t1}`
+  return `${date0} ${t0}–${date1} ${t1}`
+}
+
 /** Date-only fallback when instants missing (raw YYYY-MM-DD). */
 function compactDateFromYmd(ymd: string): string {
   const iso = pacificWallToUtcIso(ymd.trim(), '12:00')
@@ -258,6 +301,21 @@ export type DealWhenAndPerformanceInput = {
   event_date?: string | null
   performance_start_at?: string | null
   performance_end_at?: string | null
+}
+
+/** Deal table foot: M/D + compact 12h markers; YMD-only → M/D. */
+export function formatDealTableWhenMicro(d: DealWhenAndPerformanceInput): string {
+  if (d.event_start_at && d.event_end_at) {
+    return formatPacificEventRangeMicroFoot(d.event_start_at, d.event_end_at)
+  }
+  const ed = d.event_date?.trim()
+  if (!ed) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ed)) {
+    const iso = pacificWallToUtcIso(ed, '12:00')
+    if (!iso) return ed
+    return MD_NUM_LA.format(new Date(iso))
+  }
+  return ed
 }
 
 /**
