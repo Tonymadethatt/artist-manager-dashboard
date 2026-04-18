@@ -42,6 +42,8 @@ export function useDeals() {
     deposit_due_amount?: number | null
     deposit_paid_amount?: number
     balance_paid_amount?: number
+    artist_paid?: boolean
+    artist_paid_date?: string | null
     notes: string | null
     performance_genre?: string | null
     performance_start_at?: string | null
@@ -75,6 +77,8 @@ export function useDeals() {
         deposit_due_amount: deal.deposit_due_amount ?? null,
         deposit_paid_amount: deal.deposit_paid_amount ?? 0,
         balance_paid_amount: deal.balance_paid_amount ?? 0,
+        artist_paid: deal.artist_paid ?? false,
+        artist_paid_date: deal.artist_paid_date ?? null,
         notes: deal.notes,
         performance_genre: deal.performance_genre ?? null,
         performance_start_at: deal.performance_start_at ?? null,

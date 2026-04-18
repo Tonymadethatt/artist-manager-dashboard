@@ -655,6 +655,65 @@ function balanceLegTargetAmount(deal: Deal): number {
   return Math.max(0, Math.round((g - dep) * 100) / 100)
 }
 
+/** Client payments cover contract gross (deposit + balance legs). */
+function isDealFinanciallySettled(deal: Deal): boolean {
+  const g = Number(deal.gross_amount ?? 0)
+  if (g <= 0.01) return false
+  return dealRemainingClientBalance(deal) <= 0.01
+}
+
+/** Keep `artist_paid` in sync with recorded payments (no separate Settled control). */
+function artistSettlementSyncFromPayments(
+  before: Deal,
+  nextDeposit: number,
+  nextBalance: number,
+): { artist_paid: boolean; artist_paid_date: string | null } {
+  const merged: Deal = {
+    ...before,
+    deposit_paid_amount: nextDeposit,
+    balance_paid_amount: nextBalance,
+  }
+  if (!isDealFinanciallySettled(merged)) {
+    return { artist_paid: false, artist_paid_date: null }
+  }
+  return {
+    artist_paid: true,
+    artist_paid_date:
+      before.artist_paid && before.artist_paid_date
+        ? before.artist_paid_date
+        : new Date().toISOString().split('T')[0],
+  }
+}
+
+function artistSettlementSyncFromFormSave(args: {
+  before: Deal | null
+  gross: number
+  depositPaid: number
+  balancePaid: number
+  pricing_snapshot: unknown | null
+  deposit_due_amount: number | null
+}): { artist_paid: boolean; artist_paid_date: string | null } {
+  const base: Deal = {
+    ...(args.before ?? ({} as Deal)),
+    gross_amount: args.gross,
+    deposit_paid_amount: args.depositPaid,
+    balance_paid_amount: args.balancePaid,
+    pricing_snapshot: args.pricing_snapshot ?? args.before?.pricing_snapshot ?? null,
+    deposit_due_amount: args.deposit_due_amount ?? args.before?.deposit_due_amount ?? null,
+  }
+  if (!isDealFinanciallySettled(base)) {
+    return { artist_paid: false, artist_paid_date: null }
+  }
+  const prev = args.before
+  return {
+    artist_paid: true,
+    artist_paid_date:
+      prev?.artist_paid && prev?.artist_paid_date
+        ? prev.artist_paid_date
+        : new Date().toISOString().split('T')[0],
+  }
+}
+
 function PayToggle({
   label,
   paid,
@@ -706,13 +765,11 @@ function DealRowPaymentsControl({
   toggling,
   onDeposit,
   onBalance,
-  onSettled,
 }: {
   deal: Deal
   toggling: string | null
   onDeposit: () => void
   onBalance: () => void
-  onSettled: () => void
 }) {
   const depDue = depositDueFromDeal(deal)
   const depositMet = dealDepositSatisfied(deal) && depDue > 0
@@ -721,90 +778,56 @@ function DealRowPaymentsControl({
   const bal = Number(deal.balance_paid_amount ?? 0)
   const balanceMet = targetBal > 0.01 && bal + 1e-6 >= targetBal
   const noBalanceLeg = targetBal <= 0.01
-  const settled = deal.artist_paid
-  const remaining = dealRemainingClientBalance(deal)
 
   const seg =
-    'flex-1 min-w-0 px-0.5 sm:px-1.5 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
+    'flex-1 min-w-0 px-0.5 sm:px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
 
   return (
-    <div className="flex flex-col items-stretch gap-1 w-full min-w-[168px] max-w-[260px] mx-auto">
-      <div
-        className="flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden"
-        role="group"
-        aria-label="Client payment tracking"
-      >
-        <button
-          type="button"
-          title={
-            noDepositScheduled
-              ? 'No deposit amount on this deal'
-              : depositMet
-                ? 'Clear deposit received'
-                : 'Record full deposit received'
-          }
-          disabled={toggling === `dep-${deal.id}` || noDepositScheduled}
-          onClick={onDeposit}
-          className={cn(
-            seg,
-            !noDepositScheduled && depositMet && 'bg-green-950/40 text-green-400',
-            !noDepositScheduled && !depositMet && 'text-neutral-400 hover:bg-neutral-900',
-            noDepositScheduled && 'text-neutral-600',
-          )}
-        >
-          Deposit
-        </button>
-        <button
-          type="button"
-          title={
-            noBalanceLeg
-              ? 'No separate balance (covers full gross or no remainder)'
-              : balanceMet
-                ? 'Clear balance received'
-                : 'Record full balance received'
-          }
-          disabled={toggling === `bal-${deal.id}` || noBalanceLeg}
-          onClick={onBalance}
-          className={cn(
-            seg,
-            !noBalanceLeg && balanceMet && 'bg-green-950/40 text-green-400',
-            !noBalanceLeg && !balanceMet && 'text-neutral-400 hover:bg-neutral-900',
-            noBalanceLeg && 'text-neutral-600',
-          )}
-        >
-          Balance
-        </button>
-        <button
-          type="button"
-          title={
-            settled
-              ? 'Mark deal as not fully settled'
-              : 'Mark artist fully settled for this gig'
-          }
-          disabled={toggling === `artist-${deal.id}`}
-          onClick={onSettled}
-          className={cn(
-            seg,
-            settled && 'bg-green-950/50 text-green-400',
-            !settled && 'text-neutral-400 hover:bg-neutral-900',
-          )}
-        >
-          Settled
-        </button>
-      </div>
-      <p className="text-[10px] text-neutral-600 tabular-nums text-center leading-snug min-h-[2.5ex] px-0.5">
-        {settled ? (
-          deal.artist_paid_date ? (
-            <span className="text-neutral-500">{deal.artist_paid_date}</span>
-          ) : (
-            <span className="text-neutral-500">Settled</span>
-          )
-        ) : remaining > 0.01 ? (
-          <span>Owed {fmtMoney(remaining)}</span>
-        ) : (
-          <span className="text-neutral-500">Gross covered — tap Settled</span>
+    <div
+      className="flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden w-full min-w-[120px] max-w-[200px] mx-auto"
+      role="group"
+      aria-label="Record deposit and balance received"
+    >
+      <button
+        type="button"
+        title={
+          noDepositScheduled
+            ? 'No deposit amount on this deal'
+            : depositMet
+              ? 'Clear deposit received'
+              : 'Record full deposit received'
+        }
+        disabled={toggling === `dep-${deal.id}` || noDepositScheduled}
+        onClick={onDeposit}
+        className={cn(
+          seg,
+          !noDepositScheduled && depositMet && 'bg-green-950/40 text-green-400',
+          !noDepositScheduled && !depositMet && 'text-neutral-400 hover:bg-neutral-900',
+          noDepositScheduled && 'text-neutral-600',
         )}
-      </p>
+      >
+        Deposit
+      </button>
+      <button
+        type="button"
+        title={
+          noBalanceLeg
+            ? 'No separate balance (deposit covers gross or no remainder)'
+            : balanceMet
+              ? 'Clear balance received'
+              : 'Record full balance received'
+        }
+        disabled={toggling === `bal-${deal.id}` || noBalanceLeg}
+        onClick={onBalance}
+        className={cn(
+          seg,
+          !noBalanceLeg && balanceMet && 'bg-green-950/40 text-green-400',
+          !noBalanceLeg && !balanceMet && 'text-neutral-400 hover:bg-neutral-900',
+          noBalanceLeg && 'text-neutral-600',
+        )}
+      >
+        Balance
+      </button>
     </div>
   )
 }
@@ -815,7 +838,7 @@ export default function Earnings() {
   const pricingCatalog = usePricingCatalog()
   const pricingPanelRef = useRef<EarningsPricingPanelHandle>(null)
   const [pricingToolbarError, setPricingToolbarError] = useState<string | null>(null)
-  const { deals, loading, addDeal, updateDeal, deleteDeal, toggleArtistPaid, toggleManagerPaid, refetch } = useDeals()
+  const { deals, loading, addDeal, updateDeal, deleteDeal, toggleManagerPaid, refetch } = useDeals()
   const { venues, updateVenue, refetch: refetchVenues } = useVenues()
   const { profile } = useArtistProfile()
   const { reports: perfReports, createReport } = usePerformanceReports()
@@ -1301,6 +1324,16 @@ export default function Earnings() {
       pricingSnapshotPayload = editDeal.pricing_snapshot
     }
 
+    const depositDueCol = pricingSnapshotPayload?.depositDue ?? editDeal?.deposit_due_amount ?? null
+    const settlement = artistSettlementSyncFromFormSave({
+      before: editDeal,
+      gross,
+      depositPaid: depositPaidSafe,
+      balancePaid: balancePaidSafe,
+      pricing_snapshot: pricingSnapshotPayload,
+      deposit_due_amount: depositDueCol,
+    })
+
     const payload = {
       description: form.description.trim(),
       venue_id: form.venue_id || null,
@@ -1318,9 +1351,11 @@ export default function Earnings() {
       agreement_generated_file_id: agreementFileId,
       promise_lines: promiseDoc,
       pricing_snapshot: pricingSnapshotPayload,
-      deposit_due_amount: pricingSnapshotPayload?.depositDue ?? editDeal?.deposit_due_amount ?? null,
+      deposit_due_amount: depositDueCol,
       deposit_paid_amount: depositPaidSafe,
       balance_paid_amount: balancePaidSafe,
+      artist_paid: settlement.artist_paid,
+      artist_paid_date: settlement.artist_paid_date,
       notes: form.notes || null,
     }
     let saved: Deal | null = null
@@ -1406,7 +1441,10 @@ export default function Earnings() {
     if (due <= 0) return
     setToggling(`dep-${deal.id}`)
     const satisfied = dealDepositSatisfied(deal)
-    await updateDeal(deal.id, { deposit_paid_amount: satisfied ? 0 : due })
+    const nextDep = satisfied ? 0 : due
+    const nextBal = Number(deal.balance_paid_amount ?? 0)
+    const sync = artistSettlementSyncFromPayments(deal, nextDep, nextBal)
+    await updateDeal(deal.id, { deposit_paid_amount: nextDep, ...sync })
     setToggling(null)
     await refetch()
   }
@@ -1417,28 +1455,10 @@ export default function Earnings() {
     if (targetBal <= 0.01) return
     setToggling(`bal-${deal.id}`)
     const satisfied = bal + 1e-6 >= targetBal
-    await updateDeal(deal.id, { balance_paid_amount: satisfied ? 0 : targetBal })
-    setToggling(null)
-    await refetch()
-  }
-
-  const handleToggleArtist = async (deal: Deal) => {
-    setToggling(`artist-${deal.id}`)
-    const next = !deal.artist_paid
-    if (next) {
-      const g = Number(deal.gross_amount)
-      const due = depositDueFromDeal(deal)
-      const depPaid = Math.max(Number(deal.deposit_paid_amount ?? 0), due)
-      const balPaid = Math.max(0, Math.round((g - depPaid) * 100) / 100)
-      await updateDeal(deal.id, {
-        artist_paid: true,
-        artist_paid_date: new Date().toISOString().split('T')[0],
-        deposit_paid_amount: depPaid,
-        balance_paid_amount: balPaid,
-      })
-    } else {
-      await toggleArtistPaid(deal.id, false)
-    }
+    const nextBal = satisfied ? 0 : targetBal
+    const nextDep = Number(deal.deposit_paid_amount ?? 0)
+    const sync = artistSettlementSyncFromPayments(deal, nextDep, nextBal)
+    await updateDeal(deal.id, { balance_paid_amount: nextBal, ...sync })
     setToggling(null)
     await refetch()
   }
@@ -1647,9 +1667,10 @@ export default function Earnings() {
                 <th className="text-left px-4 py-2.5 font-medium text-neutral-500 text-xs">Deal</th>
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell">Tier</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Gross</th>
+                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Owed</th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">My cut</th>
-                <th className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell w-[200px]">
-                  Client payments
+                <th className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell w-[140px]">
+                  Deposit / balance
                 </th>
                 <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">I got paid</th>
                 <th className="px-3 py-2.5 w-16" />
@@ -1667,6 +1688,15 @@ export default function Earnings() {
                 >
                   <td className="px-4 py-3">
                     <div className="font-medium text-neutral-100 leading-tight flex items-center gap-2 flex-wrap">
+                      {isDealFinanciallySettled(deal) && (
+                        <span
+                          className="inline-flex shrink-0 text-emerald-500"
+                          title="Client paid in full"
+                          aria-label="Client paid in full"
+                        >
+                          <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+                        </span>
+                      )}
                       {deal.description}
                       {deal.event_cancelled_at && (
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400/95 bg-red-950/50 border border-red-900/50 px-1.5 py-0.5 rounded">
@@ -1735,6 +1765,16 @@ export default function Earnings() {
                     <div className="text-xs text-neutral-600 tabular-nums">{Math.round(deal.commission_rate * 100)}%</div>
                   </td>
                   <td className="px-3 py-3 text-right">
+                    <span
+                      className={cn(
+                        'font-medium tabular-nums',
+                        dealRemainingClientBalance(deal) <= 0.01 ? 'text-emerald-500/90' : 'text-neutral-200',
+                      )}
+                    >
+                      {fmtMoney(dealRemainingClientBalance(deal))}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right">
                     <span className={cn(
                       'font-bold tabular-nums',
                       deal.manager_paid ? 'text-green-400' : deal.artist_paid ? 'text-orange-400' : 'text-neutral-300'
@@ -1748,7 +1788,6 @@ export default function Earnings() {
                       toggling={toggling}
                       onDeposit={() => handleToggleDeposit(deal)}
                       onBalance={() => handleToggleBalance(deal)}
-                      onSettled={() => handleToggleArtist(deal)}
                     />
                   </td>
                   <td className="px-2 py-3 text-center hidden md:table-cell align-top">
