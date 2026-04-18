@@ -1702,7 +1702,7 @@ export default function Earnings() {
                 <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs w-[11rem] sm:w-[13rem] md:w-[15rem]">
                   Deal
                 </th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell w-[8.5rem] sm:w-[9.5rem]">
+                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell w-[11rem] sm:w-[12.5rem]">
                   Tier
                 </th>
                 <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs w-[4.75rem] sm:w-[5.25rem]">
@@ -1785,15 +1785,19 @@ export default function Earnings() {
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-3 hidden sm:table-cell align-top whitespace-nowrap">
-                    <div className="flex flex-col gap-1 items-start">
-                      <Badge variant={TIER_BADGE_VARIANT[deal.commission_tier]} className="max-w-full truncate">
+                  <td className="px-3 py-3 hidden sm:table-cell align-top min-w-0">
+                    <Badge
+                      variant={TIER_BADGE_VARIANT[deal.commission_tier]}
+                      className="flex w-full min-w-0 max-w-none items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
+                      title={`${COMMISSION_TIER_LABELS[deal.commission_tier]} · ${Math.round(deal.commission_rate * 100)}%`}
+                    >
+                      <span className="min-w-0 truncate font-medium">
                         {COMMISSION_TIER_LABELS[deal.commission_tier]}
-                      </Badge>
-                      <span className="text-xs text-neutral-500 tabular-nums">
+                      </span>
+                      <span className="shrink-0 tabular-nums font-semibold opacity-90">
                         {Math.round(deal.commission_rate * 100)}%
                       </span>
-                    </div>
+                    </Badge>
                   </td>
                   <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                     <span className="text-neutral-200 font-medium tabular-nums">{fmtMoney(deal.gross_amount)}</span>
