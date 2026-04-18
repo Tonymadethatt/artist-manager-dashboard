@@ -111,7 +111,23 @@ export function coldCallLiveScriptBeats(
       if (n) {
         return [{ text: `Hey, is this ${n}?` }]
       }
-      return [{ text: `Hey, how’s it going — who am I speaking with?` }]
+      const placeForIntro = (() => {
+        const v = d.venue_name.trim()
+        if (v && cityRaw) return `${v} in ${cityRaw}`
+        if (v) return v
+        if (cityRaw) return `your venue in ${cityRaw}`
+        return ''
+      })()
+      if (!placeForIntro) {
+        return [
+          { text: `Hey, this is ${managerFirst} — I’m calling about live DJ bookings for venues.` },
+          { text: `Who am I speaking with?` },
+        ]
+      }
+      return [
+        { text: `Hey, this is ${managerFirst} — I wanted to confirm I’ve reached ${placeForIntro}.` },
+        { text: `Who am I speaking with?` },
+      ]
     }
     case 'p2a':
       return [
