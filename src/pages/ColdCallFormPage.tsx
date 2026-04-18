@@ -1927,15 +1927,6 @@ export default function ColdCallFormPage() {
           </div>
         </div>
       )}
-
-      <footer className="h-11 border-t border-neutral-800 flex items-center justify-between px-4 shrink-0 bg-neutral-950 text-[11px] text-neutral-500">
-        <span>
-          {data.session_mode === 'pre_call' ? 'Pre-call' : data.session_mode === 'live_call' ? `Live · ${liveCardStepTitle(dc)}` : 'Post-call'}
-        </span>
-        <span>
-          {data.session_mode === 'post_call' ? 'Wrap-up' : data.session_mode === 'pre_call' ? '—' : `Phase ${wIdx + 1} / ${LIVE_WAYPOINTS.length}`}
-        </span>
-      </footer>
     </div>
   )
 }
