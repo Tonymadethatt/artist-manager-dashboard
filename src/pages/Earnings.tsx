@@ -728,6 +728,13 @@ function artistSettlementSyncFromFormSave(args: {
   }
 }
 
+/** Matches Deposit / Balance control — shared shell for deal row payment toggles. */
+const DEAL_ROW_PAYMENT_GROUP_CLASS =
+  'flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden w-full min-w-[120px] max-w-[200px] mx-auto'
+
+const DEAL_ROW_PAYMENT_SEGMENT_CLASS =
+  'flex-1 min-w-0 px-0.5 sm:px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
+
 function PayToggle({
   label,
   paid,
@@ -741,9 +748,35 @@ function PayToggle({
   date: string | null
   onToggle: () => void
   disabled?: boolean
-  /** Match height/border of deal payment segment row */
+  /** Same segmented control shell as Deposit / Balance on the deals table */
   compact?: boolean
 }) {
+  if (compact) {
+    return (
+      <div
+        className={DEAL_ROW_PAYMENT_GROUP_CLASS}
+        role="group"
+        aria-label={label === 'Me' ? 'Record manager commission received' : undefined}
+      >
+        <button
+          type="button"
+          title={paid && date ? `Paid ${date}` : undefined}
+          onClick={onToggle}
+          disabled={disabled}
+          className={cn(
+            DEAL_ROW_PAYMENT_SEGMENT_CLASS,
+            paid
+              ? 'bg-green-950/40 text-green-400'
+              : 'text-neutral-400 hover:bg-neutral-900',
+            disabled && !paid && 'text-neutral-600',
+          )}
+        >
+          <span className="tabular-nums">{paid ? '✓' : '○'} {label}</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <button
       type="button"
@@ -752,24 +785,15 @@ function PayToggle({
       disabled={disabled}
       className={cn(
         'text-xs font-medium transition-colors',
-        compact
-          ? cn(
-              'inline-flex flex-col items-center justify-center gap-0 min-h-[2.5rem] w-[4.5rem] px-2 py-1.5 rounded-md border border-neutral-800 bg-neutral-950/90',
-              paid
-                ? 'border-green-900/50 bg-green-950/35 text-green-400 hover:bg-green-950/50'
-                : 'text-neutral-400 hover:bg-neutral-900',
-            )
-          : cn(
-              'flex flex-col items-center gap-0.5 px-2 py-1 rounded min-w-[64px]',
-              paid
-                ? 'bg-green-950 text-green-400 hover:bg-green-900'
-                : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300',
-            ),
+        'flex flex-col items-center gap-0.5 px-2 py-1 rounded min-w-[64px]',
+        paid
+          ? 'bg-green-950 text-green-400 hover:bg-green-900'
+          : 'bg-neutral-800 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300',
         disabled && 'opacity-40 cursor-not-allowed',
       )}
     >
       <span className="tabular-nums">{paid ? '✓' : '○'} {label}</span>
-      {paid && date && !compact && <span className="text-[10px] opacity-70">{date}</span>}
+      {paid && date && <span className="text-[10px] opacity-70">{date}</span>}
     </button>
   )
 }
@@ -793,12 +817,9 @@ function DealRowPaymentsControl({
   const balanceMet = targetBal > 0.01 && bal + 1e-6 >= targetBal
   const noBalanceLeg = targetBal <= 0.01
 
-  const seg =
-    'flex-1 min-w-0 px-0.5 sm:px-2 py-2 text-center text-[11px] font-medium leading-tight transition-colors border-r border-neutral-800 last:border-r-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-500 disabled:opacity-40 disabled:cursor-not-allowed'
-
   return (
     <div
-      className="flex rounded-md border border-neutral-800 bg-neutral-950/90 overflow-hidden w-full min-w-[120px] max-w-[200px] mx-auto"
+      className={DEAL_ROW_PAYMENT_GROUP_CLASS}
       role="group"
       aria-label="Record deposit and balance received"
     >
@@ -814,7 +835,7 @@ function DealRowPaymentsControl({
         disabled={toggling === `dep-${deal.id}` || noDepositScheduled}
         onClick={onDeposit}
         className={cn(
-          seg,
+          DEAL_ROW_PAYMENT_SEGMENT_CLASS,
           !noDepositScheduled && depositMet && 'bg-green-950/40 text-green-400',
           !noDepositScheduled && !depositMet && 'text-neutral-400 hover:bg-neutral-900',
           noDepositScheduled && 'text-neutral-600',
@@ -834,7 +855,7 @@ function DealRowPaymentsControl({
         disabled={toggling === `bal-${deal.id}` || noBalanceLeg}
         onClick={onBalance}
         className={cn(
-          seg,
+          DEAL_ROW_PAYMENT_SEGMENT_CLASS,
           !noBalanceLeg && balanceMet && 'bg-green-950/40 text-green-400',
           !noBalanceLeg && !balanceMet && 'text-neutral-400 hover:bg-neutral-900',
           noBalanceLeg && 'text-neutral-600',
@@ -1804,16 +1825,14 @@ export default function Earnings() {
                     />
                   </td>
                   <td className="px-2 py-3 text-center hidden md:table-cell align-top">
-                    <div className="flex justify-center pt-0.5">
-                      <PayToggle
-                        label="Me"
-                        paid={deal.manager_paid}
-                        date={deal.manager_paid_date}
-                        onToggle={() => handleToggleManager(deal)}
-                        disabled={toggling === `manager-${deal.id}` || !deal.artist_paid}
-                        compact
-                      />
-                    </div>
+                    <PayToggle
+                      label="Me"
+                      paid={deal.manager_paid}
+                      date={deal.manager_paid_date}
+                      onToggle={() => handleToggleManager(deal)}
+                      disabled={toggling === `manager-${deal.id}` || !deal.artist_paid}
+                      compact
+                    />
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1 justify-end">
