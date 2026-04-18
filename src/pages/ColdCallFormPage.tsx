@@ -958,9 +958,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Best time</Label>
                   <SelectChipRow
                     value={data.best_time}
-                    onChange={v =>
-                      patchAfterChip({ best_time: v, best_time_specific: v !== 'specific' ? '' : data.best_time_specific })
-                    }
+                    onChange={v => patch({ best_time: v, best_time_specific: v !== 'specific' ? '' : data.best_time_specific })}
                     options={BEST_TIME_OPTIONS}
                   />
                   {data.best_time === 'specific' ? (
@@ -977,7 +975,7 @@ export default function ColdCallFormPage() {
                   <SelectChipRow
                     value={data.dm_direct_line}
                     onChange={v =>
-                      patchAfterChip({
+                      patch({
                         dm_direct_line: v,
                         decision_maker_direct_phone: v === 'email' || v === 'no' ? '' : data.decision_maker_direct_phone,
                         decision_maker_direct_email: v === 'phone' || v === 'no' ? '' : data.decision_maker_direct_email,
@@ -1031,7 +1029,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Callback expected?</Label>
                   <SelectChipRow
                     value={data.callback_expected}
-                    onChange={v => patchAfterChip({ callback_expected: v })}
+                    onChange={v => patch({ callback_expected: v })}
                     options={[
                       { id: 'yes', label: 'Yes — they’ll call back' },
                       { id: 'no_retry', label: 'No — I’ll try again' },
@@ -1216,7 +1214,7 @@ export default function ColdCallFormPage() {
                       <SelectChipRow
                         value={data.other_dm_line}
                         onChange={v =>
-                          patchAfterChip({
+                          patch({
                             other_dm_line: v,
                             other_dm_phone: v === 'email' || v === 'no' ? '' : data.other_dm_phone,
                             other_dm_email: v === 'phone' || v === 'no' ? '' : data.other_dm_email,
@@ -1295,11 +1293,7 @@ export default function ColdCallFormPage() {
                 ) : null}
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Capacity</Label>
-                  <SelectChipRow
-                    value={data.capacity_range}
-                    onChange={v => patchAfterChip({ capacity_range: v })}
-                    options={CAPACITY_OPTIONS}
-                  />
+                  <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Entity type</Label>
