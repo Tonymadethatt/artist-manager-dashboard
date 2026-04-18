@@ -1695,26 +1695,39 @@ export default function Earnings() {
           <Button variant="outline" size="sm" onClick={openAdd}>Log first deal</Button>
         </div>
       ) : (
-        <div className="rounded border border-neutral-800 overflow-hidden bg-neutral-900">
-          <table className="w-full text-sm table-fixed">
+        <div className="rounded border border-neutral-800 bg-neutral-900">
+          {/*
+            Scroll horizontally on narrow viewports instead of table-fixed squeezing columns into each other.
+            min-w keeps numeric + control columns readable; actions get a real width budget.
+          */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[72rem] text-sm border-collapse">
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-950">
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs w-[11rem] sm:w-[13rem] md:w-[15rem]">
+                <th scope="col" className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom">
                   Deal
                 </th>
-                <th className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs hidden sm:table-cell w-[11rem] sm:w-[12.5rem]">
+                <th scope="col" className="text-left px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden sm:table-cell">
                   Tier
                 </th>
-                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs w-[4.75rem] sm:w-[5.25rem]">
+                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
                   Gross
                 </th>
-                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">Owed</th>
-                <th className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs">My cut</th>
-                <th className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell w-[140px]">
+                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
+                  Owed
+                </th>
+                <th scope="col" className="text-right px-3 py-2.5 font-medium text-neutral-500 text-xs align-bottom whitespace-nowrap">
+                  My cut
+                </th>
+                <th scope="col" className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap">
                   Deposit / balance
                 </th>
-                <th className="text-center px-3 py-2.5 font-medium text-neutral-500 text-xs hidden md:table-cell">I got paid</th>
-                <th className="px-3 py-2.5 w-16" />
+                <th scope="col" className="text-center px-2 py-2.5 font-medium text-neutral-500 text-xs align-bottom hidden md:table-cell whitespace-nowrap">
+                  I got paid
+                </th>
+                <th scope="col" className="px-2 py-2.5 text-right font-medium text-neutral-500 text-xs align-bottom">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -1729,7 +1742,7 @@ export default function Earnings() {
                     deal.event_cancelled_at && 'opacity-[0.88]',
                   )}
                 >
-                  <td className="px-3 py-3 align-top min-w-0">
+                  <td className="px-3 py-3 align-top min-w-[14rem] max-w-[24rem] lg:max-w-none">
                     <div className="font-medium text-neutral-100 leading-tight flex items-center gap-1.5 min-w-0">
                       {isDealFinanciallySettled(deal) && (
                         <span
@@ -1751,7 +1764,7 @@ export default function Earnings() {
                     </div>
                     {dealFootText && (
                       <div
-                        className="mt-1 text-[11px] text-neutral-500 leading-snug truncate"
+                        className="mt-1 text-[11px] text-neutral-500 leading-snug line-clamp-2 break-words"
                         title={dealFootText}
                       >
                         <span className="tabular-nums">{dealFootText}</span>
@@ -1785,7 +1798,7 @@ export default function Earnings() {
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-3 py-3 hidden sm:table-cell align-top min-w-0">
+                  <td className="px-3 py-3 hidden sm:table-cell align-top min-w-[9.5rem]">
                     <Badge
                       variant={TIER_BADGE_VARIANT[deal.commission_tier]}
                       className="flex w-full min-w-0 max-w-none items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
@@ -1802,7 +1815,7 @@ export default function Earnings() {
                   <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                     <span className="text-neutral-200 font-medium tabular-nums">{fmtMoney(deal.gross_amount)}</span>
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                     <span
                       className={cn(
                         'font-medium tabular-nums',
@@ -1812,7 +1825,7 @@ export default function Earnings() {
                       {fmtMoney(dealRemainingClientBalance(deal))}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                     <span className={cn(
                       'font-bold tabular-nums',
                       deal.manager_paid ? 'text-green-400' : deal.artist_paid ? 'text-orange-400' : 'text-neutral-300'
@@ -1820,7 +1833,7 @@ export default function Earnings() {
                       {fmtMoney(deal.commission_amount)}
                     </span>
                   </td>
-                  <td className="px-2 py-3 text-center hidden md:table-cell align-top">
+                  <td className="px-2 py-3 text-center hidden md:table-cell align-top min-w-0">
                     <DealRowPaymentsControl
                       deal={deal}
                       toggling={toggling}
@@ -1828,7 +1841,7 @@ export default function Earnings() {
                       onBalance={() => handleToggleBalance(deal)}
                     />
                   </td>
-                  <td className="px-2 py-3 text-center hidden md:table-cell align-top">
+                  <td className="px-2 py-3 text-center hidden md:table-cell align-top min-w-0">
                     <PayToggle
                       label="Me"
                       paid={deal.manager_paid}
@@ -1838,8 +1851,8 @@ export default function Earnings() {
                       compact
                     />
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1 justify-end">
+                  <td className="px-2 py-3 align-top">
+                    <div className="flex flex-nowrap items-start justify-end gap-0.5">
                       {deal.event_cancelled_at ? (
                         <Button
                           variant="ghost"
@@ -1903,17 +1916,23 @@ export default function Earnings() {
             {deals.length > 1 && (
               <tfoot>
                 <tr className="border-t border-neutral-800 bg-neutral-950">
-                  <td colSpan={3} className="px-4 py-2.5 text-xs text-neutral-500 hidden sm:table-cell">
+                  <td className="px-3 py-2.5 text-xs text-neutral-500">
                     {deals.length} deals
                   </td>
-                  <td className="px-3 py-2.5 text-right font-bold text-neutral-100 tabular-nums">
+                  <td className="hidden sm:table-cell" />
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5 text-right font-bold text-neutral-100 tabular-nums whitespace-nowrap">
                     {fmtMoney(stats.totalCommission)}
                   </td>
-                  <td colSpan={3} />
+                  <td className="hidden md:table-cell px-2 py-2.5" />
+                  <td className="hidden md:table-cell px-2 py-2.5" />
+                  <td className="px-2 py-2.5" aria-hidden />
                 </tr>
               </tfoot>
             )}
           </table>
+          </div>
         </div>
       )}
       <Paginator page={dealsPage} total={deals.length} onPage={setDealsPage} />
