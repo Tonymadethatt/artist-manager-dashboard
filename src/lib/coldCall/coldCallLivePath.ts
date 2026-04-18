@@ -47,6 +47,40 @@ export function pruneStaleLiveHistoryIfNeeded(d: ColdCallDataV1): { data: ColdCa
   return { data, changed: true }
 }
 
+/**
+ * Live steps that are only chip toggles (no text inputs / dropdowns) can auto-advance after a chip click.
+ * Steps with ContactTitleSelect, EntityTypeSelect, or required free-text stay manual (Continue).
+ */
+export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdCallDataV1): boolean {
+  switch (card) {
+    case 'p1':
+      return d.who_answered === 'voicemail' || d.who_answered === 'no_answer'
+    case 'p2a':
+    case 'p3':
+    case 'p3b':
+    case 'p3c':
+    case 'p4a':
+    case 'p4b':
+    case 'p4d':
+    case 'p5':
+    case 'p6':
+    case 'p6_vm':
+    case 'p6_na':
+      return true
+    case 'p4c': {
+      const bp = d.booking_process
+      if (!bp) return false
+      if (bp === 'someone_else' || bp === 'committee') return false
+      return true
+    }
+    case 'p2a_detail':
+    case 'p2_msg':
+    case 'p4e':
+    default:
+      return false
+  }
+}
+
 export function waypointIndex(card: ColdCallLiveCardId): number {
   if (card === 'p1') return 0
   if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 1

@@ -24,6 +24,7 @@ import {
   coldCallWaypointAnchor,
   displayCard,
   liveCardAdvanceBlockersAtBookmark,
+  liveCardAllowsChipAutoAdvance,
   liveHistoryEdgeValid,
   pruneStaleLiveHistoryIfNeeded,
   waypointIndex,
@@ -333,6 +334,8 @@ export default function ColdCallFormPage() {
   const [liveFieldIssues, setLiveFieldIssues] = useState<Record<string, string>>({})
   const [precallFieldIssues, setPrecallFieldIssues] = useState<Record<string, string>>({})
   const [continueShake, setContinueShake] = useState(0)
+  const chipAutoAdvancePending = useRef(false)
+  const liveAutoAdvanceInFlight = useRef(false)
 
   useEffect(() => {
     if (callIdParam) setSelectedId(callIdParam)
@@ -367,6 +370,14 @@ export default function ColdCallFormPage() {
       })
     },
     [selectedId, cold],
+  )
+
+  const patchAfterChip = useCallback(
+    (p: Partial<ColdCallDataV1>) => {
+      chipAutoAdvancePending.current = true
+      patch(p)
+    },
+    [patch],
   )
 
   useEffect(() => {
@@ -566,6 +577,35 @@ export default function ColdCallFormPage() {
     }
     patch(next)
   }
+
+  const handleLiveContinueRef = useRef(handleLiveContinue)
+  handleLiveContinueRef.current = handleLiveContinue
+
+  useEffect(() => {
+    if (!selectedId || !data) return
+    if (data.session_mode !== 'live_call') {
+      chipAutoAdvancePending.current = false
+      return
+    }
+    if (!chipAutoAdvancePending.current) return
+    if (liveAutoAdvanceInFlight.current) return
+    const card = displayCard(data)
+    if (card !== bookmarkCard(data)) {
+      chipAutoAdvancePending.current = false
+      return
+    }
+    if (!liveCardAllowsChipAutoAdvance(card, data)) {
+      chipAutoAdvancePending.current = false
+      return
+    }
+    if (liveCardAdvanceBlockersAtBookmark(data).length > 0) return
+
+    chipAutoAdvancePending.current = false
+    liveAutoAdvanceInFlight.current = true
+    void handleLiveContinueRef.current().finally(() => {
+      liveAutoAdvanceInFlight.current = false
+    })
+  }, [data, selectedId])
 
   const handleJumpWaypoint = (phaseIdx: number) => {
     if (!data) return
@@ -801,7 +841,7 @@ export default function ColdCallFormPage() {
                     value={data.who_answered}
                     onChange={v => {
                       setLiveFieldIssues({})
-                      patch({
+                      patchAfterChip({
                         who_answered: v,
                         live_history: ['p1'],
                         last_active_card: 'p1',
@@ -881,7 +921,7 @@ export default function ColdCallFormPage() {
                 <Label className="text-neutral-400 text-xs">What happened?</Label>
                 <SelectChipRow
                   value={data.gatekeeper_result}
-                  onChange={v => patch({ gatekeeper_result: v })}
+                  onChange={v => patchAfterChip({ gatekeeper_result: v })}
                   options={GATEKEEPER_RESULT_OPTIONS}
                 />
               </div>
@@ -918,7 +958,9 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Best time</Label>
                   <SelectChipRow
                     value={data.best_time}
-                    onChange={v => patch({ best_time: v, best_time_specific: v !== 'specific' ? '' : data.best_time_specific })}
+                    onChange={v =>
+                      patchAfterChip({ best_time: v, best_time_specific: v !== 'specific' ? '' : data.best_time_specific })
+                    }
                     options={BEST_TIME_OPTIONS}
                   />
                   {data.best_time === 'specific' ? (
@@ -935,7 +977,7 @@ export default function ColdCallFormPage() {
                   <SelectChipRow
                     value={data.dm_direct_line}
                     onChange={v =>
-                      patch({
+                      patchAfterChip({
                         dm_direct_line: v,
                         decision_maker_direct_phone: v === 'email' || v === 'no' ? '' : data.decision_maker_direct_phone,
                         decision_maker_direct_email: v === 'phone' || v === 'no' ? '' : data.decision_maker_direct_email,
@@ -989,7 +1031,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Callback expected?</Label>
                   <SelectChipRow
                     value={data.callback_expected}
-                    onChange={v => patch({ callback_expected: v })}
+                    onChange={v => patchAfterChip({ callback_expected: v })}
                     options={[
                       { id: 'yes', label: 'Yes — they’ll call back' },
                       { id: 'no_retry', label: 'No — I’ll try again' },
@@ -1009,7 +1051,11 @@ export default function ColdCallFormPage() {
             capture={
               <div className="space-y-1.5">
                 <Label className="text-neutral-400 text-xs">How did they respond?</Label>
-                <SelectChipRow value={data.initial_reaction} onChange={v => patch({ initial_reaction: v })} options={INITIAL_REACTION_OPTIONS} />
+                <SelectChipRow
+                  value={data.initial_reaction}
+                  onChange={v => patchAfterChip({ initial_reaction: v })}
+                  options={INITIAL_REACTION_OPTIONS}
+                />
               </div>
             }
           />
@@ -1021,7 +1067,7 @@ export default function ColdCallFormPage() {
             stepTitle={liveCardStepTitle(card)}
             script={script}
             capture={
-              <SelectChipRow value={data.pivot_response} onChange={v => patch({ pivot_response: v })} options={PIVOT_OPTIONS} />
+              <SelectChipRow value={data.pivot_response} onChange={v => patchAfterChip({ pivot_response: v })} options={PIVOT_OPTIONS} />
             }
           />
         )
@@ -1033,8 +1079,8 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <SelectChipRow value={data.parking_result} onChange={v => patch({ parking_result: v })} options={PARKING_OPTIONS} />
-                <SelectChipRow value={data.send_to} onChange={v => patch({ send_to: v })} options={SEND_TO_OPTIONS} />
+                <SelectChipRow value={data.parking_result} onChange={v => patchAfterChip({ parking_result: v })} options={PARKING_OPTIONS} />
+                <SelectChipRow value={data.send_to} onChange={v => patchAfterChip({ send_to: v })} options={SEND_TO_OPTIONS} />
               </div>
             }
           />
@@ -1053,7 +1099,7 @@ export default function ColdCallFormPage() {
                   selected={data.event_nights}
                   ids={COLD_CALL_WEEKDAY_LABELS as unknown as string[]}
                   labels={dayLabels}
-                  onChange={next => patch({ event_nights: next })}
+                  onChange={next => patchAfterChip({ event_nights: next })}
                 />
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Quick note (optional)</Label>
@@ -1080,7 +1126,7 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-2">
-                <IntakeCompactChipRow label="Vibe" selected={data.venue_vibes} ids={ids} labels={labels} onChange={v => patch({ venue_vibes: v })} />
+                <IntakeCompactChipRow label="Vibe" selected={data.venue_vibes} ids={ids} labels={labels} onChange={v => patchAfterChip({ venue_vibes: v })} />
                 {talkingPoints ? (
                   <details className="rounded-lg border border-white/[0.08] bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
                     <summary className="cursor-pointer select-none text-[11px] font-medium text-neutral-300">
@@ -1108,7 +1154,7 @@ export default function ColdCallFormPage() {
                     value={data.booking_process}
                     onChange={v => {
                       if (v === 'this_person') {
-                        patch({
+                        patchAfterChip({
                           booking_process: v,
                           decision_maker_same: 'yes',
                           other_dm_name: '',
@@ -1118,9 +1164,9 @@ export default function ColdCallFormPage() {
                           other_dm_email: '',
                         })
                       } else if (v === 'someone_else' || v === 'committee') {
-                        patch({ booking_process: v, decision_maker_same: '' })
+                        patchAfterChip({ booking_process: v, decision_maker_same: '' })
                       } else {
-                        patch({
+                        patchAfterChip({
                           booking_process: v,
                           decision_maker_same: '',
                           other_dm_name: '',
@@ -1139,7 +1185,7 @@ export default function ColdCallFormPage() {
                     <Label className="text-neutral-400 text-xs">Talking to the decision-maker?</Label>
                     <SelectChipRow
                       value={data.decision_maker_same}
-                      onChange={v => patch({ decision_maker_same: v })}
+                      onChange={v => patchAfterChip({ decision_maker_same: v })}
                       options={DECISION_SAME_OPTIONS}
                     />
                   </div>
@@ -1170,7 +1216,7 @@ export default function ColdCallFormPage() {
                       <SelectChipRow
                         value={data.other_dm_line}
                         onChange={v =>
-                          patch({
+                          patchAfterChip({
                             other_dm_line: v,
                             other_dm_phone: v === 'email' || v === 'no' ? '' : data.other_dm_phone,
                             other_dm_email: v === 'phone' || v === 'no' ? '' : data.other_dm_email,
@@ -1217,12 +1263,18 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Budget range</Label>
                   <SelectChipRow
                     value={data.budget_range}
-                    onChange={v => patch({ budget_range: v, rate_reaction: v === 'no_say' ? 'skipped' : data.rate_reaction })}
+                    onChange={v =>
+                      patchAfterChip({ budget_range: v, rate_reaction: v === 'no_say' ? 'skipped' : data.rate_reaction })
+                    }
                     options={BUDGET_RANGE_OPTIONS}
                   />
                 </div>
                 {data.budget_range !== 'no_say' ? (
-                  <SelectChipRow value={data.rate_reaction} onChange={v => patch({ rate_reaction: v })} options={RATE_REACTION_OPTIONS} />
+                  <SelectChipRow
+                    value={data.rate_reaction}
+                    onChange={v => patchAfterChip({ rate_reaction: v })}
+                    options={RATE_REACTION_OPTIONS}
+                  />
                 ) : null}
               </div>
             }
@@ -1243,7 +1295,11 @@ export default function ColdCallFormPage() {
                 ) : null}
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Capacity</Label>
-                  <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
+                  <SelectChipRow
+                    value={data.capacity_range}
+                    onChange={v => patchAfterChip({ capacity_range: v })}
+                    options={CAPACITY_OPTIONS}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Entity type</Label>
@@ -1275,7 +1331,7 @@ export default function ColdCallFormPage() {
                 <SelectChipRow
                   value={data.ask_response}
                   onChange={v =>
-                    patch({
+                    patchAfterChip({
                       ask_response: v,
                       ask_send_channel: '',
                       ask_followup_when: '',
@@ -1288,7 +1344,7 @@ export default function ColdCallFormPage() {
                     <Label className="text-neutral-400 text-xs">Send via</Label>
                     <SelectChipRow
                       value={data.ask_send_channel}
-                      onChange={v => patch({ ask_send_channel: v })}
+                      onChange={v => patchAfterChip({ ask_send_channel: v })}
                       options={ASK_SEND_CHANNEL_OPTIONS}
                     />
                   </div>
@@ -1298,7 +1354,7 @@ export default function ColdCallFormPage() {
                     <Label className="text-neutral-400 text-xs">When should I follow up?</Label>
                     <SelectChipRow
                       value={data.ask_followup_when}
-                      onChange={v => patch({ ask_followup_when: v })}
+                      onChange={v => patchAfterChip({ ask_followup_when: v })}
                       options={ASK_FOLLOWUP_WHEN_OPTIONS}
                     />
                   </div>
@@ -1315,8 +1371,16 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <SelectChipRow value={data.call_ended_naturally} onChange={v => patch({ call_ended_naturally: v })} options={ENDED_OPTIONS} />
-                <SelectChipRow value={data.call_duration_feel} onChange={v => patch({ call_duration_feel: v })} options={DURATION_OPTIONS} />
+                <SelectChipRow
+                  value={data.call_ended_naturally}
+                  onChange={v => patchAfterChip({ call_ended_naturally: v })}
+                  options={ENDED_OPTIONS}
+                />
+                <SelectChipRow
+                  value={data.call_duration_feel}
+                  onChange={v => patchAfterChip({ call_duration_feel: v })}
+                  options={DURATION_OPTIONS}
+                />
                 {data.operator_temperature === 'converting' ? (
                   <Button
                     type="button"
@@ -1346,7 +1410,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Voicemail</Label>
                   <SelectChipRow
                     value={data.voicemail_left}
-                    onChange={v => patch({ voicemail_left: v })}
+                    onChange={v => patchAfterChip({ voicemail_left: v })}
                     options={[
                       { id: 'left', label: 'Left voicemail' },
                       { id: 'skipped', label: 'Skipped' },
@@ -1357,7 +1421,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">When to follow up</Label>
                   <SelectChipRow
                     value={data.voicemail_followup_timing}
-                    onChange={v => patch({ voicemail_followup_timing: v })}
+                    onChange={v => patchAfterChip({ voicemail_followup_timing: v })}
                     options={[
                       { id: 'tomorrow', label: 'Tomorrow' },
                       { id: 'few_days', label: 'In a few days' },
@@ -1385,7 +1449,7 @@ export default function ColdCallFormPage() {
                   <Label className="text-neutral-400 text-xs">Try again</Label>
                   <SelectChipRow
                     value={data.no_answer_retry_timing}
-                    onChange={v => patch({ no_answer_retry_timing: v })}
+                    onChange={v => patchAfterChip({ no_answer_retry_timing: v })}
                     options={[
                       { id: 'later_today', label: 'Later today' },
                       { id: 'tomorrow', label: 'Tomorrow' },
