@@ -64,7 +64,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
     items: [
       { to: '/',                    label: 'Overview',      icon: LayoutDashboard, end: true,  badgeKey: null              },
       { to: '/calendar',            label: 'Calendar',      icon: Calendar,        end: false, badgeKey: 'calendar'        },
-      { to: '/outreach',            label: 'Outreach',      icon: Building2,       end: false, badgeKey: null              },
+      { to: '/outreach',            label: 'Contacts',      icon: Building2,       end: false, badgeKey: null              },
       { to: '/pipeline',            label: 'Tasks',         icon: Workflow,        end: false, badgeKey: 'pipeline'        },
       { to: '/earnings',            label: 'Deals',         icon: Banknote,        end: false, badgeKey: null              },
       { to: '/metrics',             label: 'Metrics',       icon: TrendingUp,      end: false, badgeKey: null              },
