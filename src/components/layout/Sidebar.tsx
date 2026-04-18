@@ -33,22 +33,28 @@ import { useResendSendUsage } from '@/hooks/useResendSendUsage'
 
 type NavGroupId = 'workspace' | 'content' | 'forms' | 'email'
 
+/** Nested collapsible block under a nav group (e.g. Forms → Leads). */
+type SubsectionId = 'forms-leads'
+
 type NavItem = {
   to: string
   label: string
   icon: LucideIcon
   end?: boolean
   badgeKey: string | null
-  /** Visual grouping under a subheading (e.g. Forms → Leads). */
-  indent?: boolean
 }
 
-type NavSubheading = { subheading: string }
+type NavCollapsibleSubsection = {
+  collapsible: true
+  id: SubsectionId
+  label: string
+  items: NavItem[]
+}
 
-type NavRow = NavItem | NavSubheading
+type NavRow = NavItem | NavCollapsibleSubsection
 
-function isNavSubheading(row: NavRow): row is NavSubheading {
-  return 'subheading' in row
+function isCollapsibleSubsection(row: NavRow): row is NavCollapsibleSubsection {
+  return 'collapsible' in row && row.collapsible === true
 }
 
 const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
@@ -79,9 +85,15 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
     items: [
       { to: '/forms/preview', label: 'General Forms', icon: LayoutGrid, end: false, badgeKey: null },
       { to: '/workspace/partnerships', label: 'Previous clients', icon: ListChecks, end: false, badgeKey: null },
-      { subheading: 'Leads' },
-      { to: '/forms/intakes', label: 'Booking', icon: BookOpenCheck, end: false, badgeKey: null, indent: true },
-      { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null, indent: true },
+      {
+        collapsible: true,
+        id: 'forms-leads',
+        label: 'Leads',
+        items: [
+          { to: '/forms/intakes', label: 'Booking', icon: BookOpenCheck, end: false, badgeKey: null },
+          { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null },
+        ],
+      },
     ],
   },
   {
@@ -103,6 +115,27 @@ const DEFAULT_EXPANDED: Record<NavGroupId, boolean> = {
   content: true,
   forms: true,
   email: true,
+}
+
+const SIDEBAR_SUBSECTIONS_STORAGE_KEY = 'artist-manager-sidebar-subsections-v1'
+
+const DEFAULT_SUBSECTIONS_EXPANDED: Record<SubsectionId, boolean> = {
+  'forms-leads': true,
+}
+
+function loadSubsectionsExpandedFromStorage(): Record<SubsectionId, boolean> {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_SUBSECTIONS_STORAGE_KEY)
+    if (!raw) return { ...DEFAULT_SUBSECTIONS_EXPANDED }
+    const parsed = JSON.parse(raw) as Partial<Record<SubsectionId, boolean>>
+    const out = { ...DEFAULT_SUBSECTIONS_EXPANDED }
+    for (const id of Object.keys(DEFAULT_SUBSECTIONS_EXPANDED) as SubsectionId[]) {
+      if (typeof parsed[id] === 'boolean') out[id] = parsed[id]!
+    }
+    return out
+  } catch {
+    return { ...DEFAULT_SUBSECTIONS_EXPANDED }
+  }
 }
 
 function loadExpandedGroupsFromStorage(): Record<NavGroupId, boolean> {
@@ -166,6 +199,9 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   } = useResendSendUsage({ pollMs: 30_000 })
   const [testModeBusy, setTestModeBusy] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Record<NavGroupId, boolean>>(loadExpandedGroupsFromStorage)
+  const [expandedSubsections, setExpandedSubsections] = useState<Record<SubsectionId, boolean>>(
+    loadSubsectionsExpandedFromStorage,
+  )
 
   useEffect(() => {
     try {
@@ -174,6 +210,14 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       /* ignore quota / private mode */
     }
   }, [expandedGroups])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_SUBSECTIONS_STORAGE_KEY, JSON.stringify(expandedSubsections))
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [expandedSubsections])
 
   const toggleEmailTestMode = async () => {
     if (!profile || testModeBusy) return
@@ -301,22 +345,112 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               <div id={sectionId} role="region" aria-labelledby={`${sectionId}-label`} hidden={!isOpen}>
                 <div className="flex flex-col gap-px pb-px">
                   {group.items.map(row => {
-                    if (isNavSubheading(row)) {
+                    if (isCollapsibleSubsection(row)) {
+                      const subOpen = expandedSubsections[row.id]
+                      const subSectionId = `nav-subsection-${row.id}`
+                      const subLabelId = `${subSectionId}-label`
                       return (
-                        <div
-                          key={`subheading-${row.subheading}`}
-                          className="px-2 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--sidebar-muted))]"
-                          role="presentation"
-                        >
-                          {row.subheading}
+                        <div key={row.id} className="flex flex-col gap-px">
+                          <button
+                            type="button"
+                            id={subLabelId}
+                            aria-expanded={subOpen}
+                            aria-controls={subSectionId}
+                            onClick={() =>
+                              setExpandedSubsections((p) => ({
+                                ...p,
+                                [row.id]: !p[row.id],
+                              }))
+                            }
+                            className={cn(
+                              'flex w-full items-center gap-0.5 px-1 py-0.5 rounded-md text-left text-[9.5px] font-semibold uppercase tracking-[0.14em] select-none',
+                              'hover:bg-white/[0.06] transition-colors',
+                            )}
+                          >
+                            <ChevronDown
+                              className={cn(
+                                CATEGORY_TITLE_STYLE[group.id].chevron,
+                                'h-3 w-3 shrink-0 opacity-95 transition-transform duration-150',
+                                !subOpen && '-rotate-90',
+                              )}
+                              aria-hidden
+                            />
+                            <span
+                              className={cn(
+                                'truncate min-w-0 flex-1 bg-clip-text text-transparent',
+                                CATEGORY_TITLE_STYLE[group.id].label,
+                              )}
+                            >
+                              {row.label}
+                            </span>
+                          </button>
+                          <div
+                            id={subSectionId}
+                            role="region"
+                            aria-labelledby={subLabelId}
+                            hidden={!subOpen}
+                            className="flex flex-col gap-px"
+                          >
+                            {row.items.map((item) => {
+                              const { to, label, icon: Icon, end, badgeKey } = item
+                              const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
+                              return (
+                                <div key={to} className="pl-2">
+                                  <NavLink
+                                    to={to}
+                                    end={end}
+                                    onClick={onClose}
+                                    className={({ isActive }) =>
+                                      cn(
+                                        'relative flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded text-sm transition-all duration-150',
+                                        (isActive || (to === '/pipeline' && onPipelinePath))
+                                          ? 'bg-[hsl(var(--sidebar-active))] text-white'
+                                          : 'text-[hsl(var(--sidebar-muted))] hover:bg-[hsl(var(--sidebar-hover))] hover:text-neutral-200',
+                                      )
+                                    }
+                                  >
+                                    {({ isActive }) => (
+                                      <>
+                                        {(isActive || (to === '/pipeline' && onPipelinePath)) && (
+                                          <span
+                                            className={cn(
+                                              'sidebar-active-indicator absolute left-0 top-0.5 bottom-0.5 w-[2px] rounded-full bg-gradient-to-b',
+                                              CATEGORY_TITLE_STYLE[group.id].indicator,
+                                            )}
+                                            aria-hidden
+                                          />
+                                        )}
+                                        <Icon
+                                          className={cn(
+                                            'h-[15px] w-[15px] shrink-0 transition-colors',
+                                            (isActive || (to === '/pipeline' && onPipelinePath))
+                                              ? 'text-white'
+                                              : 'text-[hsl(var(--sidebar-muted))]',
+                                          )}
+                                        />
+                                        <span className="text-[12px] font-medium tracking-[0.01em] truncate flex-1 min-w-0">
+                                          {label}
+                                        </span>
+                                        {badgeCount > 0 && (
+                                          <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold bg-red-600 text-white leading-none shrink-0">
+                                            {badgeCount > 99 ? '99+' : badgeCount}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </NavLink>
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
                       )
                     }
 
-                    const { to, label, icon: Icon, end, badgeKey, indent } = row
+                    const { to, label, icon: Icon, end, badgeKey } = row
                     const badgeCount = badgeKey ? (counts[badgeKey as keyof typeof counts] ?? 0) : 0
                     return (
-                      <div key={to} className={indent ? 'pl-2' : undefined}>
+                      <div key={to}>
                         <NavLink
                           to={to}
                           end={end}
