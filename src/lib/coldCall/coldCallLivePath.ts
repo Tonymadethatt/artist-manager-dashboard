@@ -10,6 +10,43 @@ export function displayCard(d: ColdCallDataV1): ColdCallLiveCardId {
   return d.view_card || bookmarkCard(d)
 }
 
+const GATEKEEPER_LIVE_CARDS = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail', 'p2_msg'])
+const PITCH_LIVE_CARDS = new Set<ColdCallLiveCardId>(['p3', 'p3b', 'p3c'])
+
+/** Whether `from → to` is allowed on the live path for the current `who_answered` (guards stale history). */
+export function liveHistoryEdgeValid(
+  from: ColdCallLiveCardId,
+  to: ColdCallLiveCardId,
+  d: ColdCallDataV1,
+): boolean {
+  if (from !== 'p1') return true
+  const w = d.who_answered
+  if (GATEKEEPER_LIVE_CARDS.has(to)) return w === 'gatekeeper'
+  if (PITCH_LIVE_CARDS.has(to)) return w === 'right_person'
+  if (to === 'p6_vm') return w === 'voicemail'
+  if (to === 'p6_na') return w === 'no_answer'
+  return true
+}
+
+/**
+ * If the user is reviewing an earlier card but `live_history` still contains a next step
+ * from an old branch (e.g. gatekeeper), drop the stale tail so Continue runs real advance logic.
+ */
+export function pruneStaleLiveHistoryIfNeeded(d: ColdCallDataV1): { data: ColdCallDataV1; changed: boolean } {
+  const view = displayCard(d)
+  const i = d.live_history.indexOf(view)
+  if (i < 0 || i >= d.live_history.length - 1) return { data: d, changed: false }
+  const to = d.live_history[i + 1]!
+  if (liveHistoryEdgeValid(view, to, d)) return { data: d, changed: false }
+  const data: ColdCallDataV1 = {
+    ...d,
+    live_history: d.live_history.slice(0, i + 1),
+    last_active_card: view,
+    view_card: view,
+  }
+  return { data, changed: true }
+}
+
 export function waypointIndex(card: ColdCallLiveCardId): number {
   if (card === 'p1') return 0
   if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 1

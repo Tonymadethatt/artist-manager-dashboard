@@ -24,6 +24,8 @@ import {
   coldCallWaypointAnchor,
   displayCard,
   liveCardAdvanceBlockersAtBookmark,
+  liveHistoryEdgeValid,
+  pruneStaleLiveHistoryIfNeeded,
   waypointIndex,
 } from '@/lib/coldCall/coldCallLivePath'
 import { coldCallEnsureFollowUpTask, suggestColdCallFollowUpDate } from '@/lib/coldCall/coldCallFollowUp'
@@ -479,24 +481,51 @@ export default function ColdCallFormPage() {
 
   const handleLiveContinue = async () => {
     if (!data || !selectedId || !selectedRow) return
-    const bm = bookmarkCard(data)
-    const view = displayCard(data)
+
+    const pruned = pruneStaleLiveHistoryIfNeeded(data)
+    let d = pruned.data
+    if (pruned.changed) {
+      patch({
+        live_history: d.live_history,
+        last_active_card: d.last_active_card,
+        view_card: d.view_card,
+      })
+    }
+
+    const bm = bookmarkCard(d)
+    const view = displayCard(d)
     if (view !== bm) {
-      const i = data.live_history.indexOf(view)
+      const i = d.live_history.indexOf(view)
       if (i < 0) {
         setLiveFieldIssues({ jump: 'This step wasn’t on your path — snapped back to your bookmark.' })
         patch({ view_card: bm })
         setContinueShake(s => s + 1)
         return
       }
-      if (i < data.live_history.length - 1) {
-        setLiveFieldIssues({})
-        patch({ view_card: data.live_history[i + 1]! })
-        return
+      if (i < d.live_history.length - 1) {
+        const nextHop = d.live_history[i + 1]!
+        if (!liveHistoryEdgeValid(view, nextHop, d)) {
+          const tailCut: ColdCallDataV1 = {
+            ...d,
+            live_history: d.live_history.slice(0, i + 1),
+            last_active_card: view,
+            view_card: view,
+          }
+          patch({
+            live_history: tailCut.live_history,
+            last_active_card: tailCut.last_active_card,
+            view_card: tailCut.view_card,
+          })
+          d = tailCut
+        } else {
+          setLiveFieldIssues({})
+          patch({ view_card: nextHop })
+          return
+        }
       }
     }
 
-    const blockers = liveCardAdvanceBlockersAtBookmark(data)
+    const blockers = liveCardAdvanceBlockersAtBookmark(d)
     if (blockers.length > 0) {
       const rec: Record<string, string> = {}
       for (const b of blockers) rec[b.field] = b.message
@@ -506,22 +535,22 @@ export default function ColdCallFormPage() {
     }
     setLiveFieldIssues({})
 
-    const next = advanceFromLiveCard(data)
+    const next = advanceFromLiveCard(d)
     if (next === 'post') {
-      const ft = data.final_temperature || data.operator_temperature
-      const suggestedDate = suggestColdCallFollowUpDate(data)
-      const autoOutcome = data.outcome_manual_lock ? data.outcome : computeColdCallOutcomeAuto(data)
+      const ft = d.final_temperature || d.operator_temperature
+      const suggestedDate = suggestColdCallFollowUpDate(d)
+      const autoOutcome = d.outcome_manual_lock ? d.outcome : computeColdCallOutcomeAuto(d)
       patch({
         session_mode: 'post_call',
         final_temperature: ft,
         outcome: autoOutcome,
-        follow_up_date: data.follow_up_date.trim() || suggestedDate,
-        save_to_pipeline: ft === 'dead' ? false : data.save_to_pipeline,
+        follow_up_date: d.follow_up_date.trim() || suggestedDate,
+        save_to_pipeline: ft === 'dead' ? false : d.save_to_pipeline,
       })
       await cold.flushImmediate(selectedId)
       const taskRes = await coldCallEnsureFollowUpTask({
         coldCallId: selectedId,
-        data: { ...data, session_mode: 'post_call', final_temperature: ft, outcome: autoOutcome },
+        data: { ...d, session_mode: 'post_call', final_temperature: ft, outcome: autoOutcome },
         rowVenueId: selectedRow.venue_id,
         existingTaskId: selectedRow.follow_up_task_id,
         callDateIso: selectedRow.call_date,
@@ -772,7 +801,20 @@ export default function ColdCallFormPage() {
                     value={data.who_answered}
                     onChange={v => {
                       setLiveFieldIssues({})
-                      patch({ who_answered: v })
+                      patch({
+                        who_answered: v,
+                        live_history: ['p1'],
+                        last_active_card: 'p1',
+                        view_card: 'p1',
+                        transferred_note: false,
+                        ...(v === 'gatekeeper'
+                          ? {}
+                          : {
+                              gatekeeper_result: '',
+                              gatekeeper_name: '',
+                              gatekeeper_title_key: '',
+                            }),
+                      })
                     }}
                     options={WHO_ANSWERED_OPTIONS}
                   />
