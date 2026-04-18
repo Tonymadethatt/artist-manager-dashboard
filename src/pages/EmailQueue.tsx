@@ -74,6 +74,7 @@ import {
 import {
   fetchVenueEmailSentCountsForUser,
   resendPlanCaps,
+  resendUsageBaselineOffsets,
   usageNearLimitFlags,
 } from '@/lib/email/emailQueueSendUsage'
 
@@ -407,6 +408,8 @@ export default function EmailQueue() {
   const [previewSubject, setPreviewSubject] = useState<string>('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const resendCaps = useMemo(() => resendPlanCaps(), [])
+  const resendBaselines = useMemo(() => resendUsageBaselineOffsets(), [])
+  const hasResendBaselines = resendBaselines.day > 0 || resendBaselines.month > 0
   const [sendUsage, setSendUsage] = useState<{ today: number; month: number } | null>(null)
   const [sendUsageLoadFailed, setSendUsageLoadFailed] = useState(false)
 
@@ -1687,13 +1690,18 @@ export default function EmailQueue() {
                     >
                       <p className="text-neutral-200 font-medium mb-1">Resend sends today (Pacific)</p>
                       <p>
-                        Counts <span className="text-neutral-300">venue_emails</span> marked{' '}
-                        <span className="text-neutral-300">sent</span> where Resend returned a message id (confirmed
-                        handoff to Resend), with <span className="text-neutral-300">sent_at</span> today in Los Angeles.
-                        Daily cap default <span className="text-neutral-300">300</span> — set{' '}
-                        <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> to match your plan. Turns{' '}
-                        <span className="text-red-400">red</span> when 20 or fewer sends remain. Does not include email
-                        sent outside this app with the same API key.
+                        Shown total = optional baseline{' '}
+                        <span className="text-neutral-300">VITE_RESEND_USAGE_DAY_OFFSET</span> (pre-tracking / outside
+                        this app) plus sends this app logged today with a Resend message id. Cap: set{' '}
+                        <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> (default{' '}
+                        <span className="text-neutral-300">300</span>). Turns <span className="text-red-400">red</span>{' '}
+                        when 20 or fewer sends remain.
+                        {hasResendBaselines && (
+                          <>
+                            {' '}
+                            Baseline now: <span className="text-neutral-300">+{resendBaselines.day}</span> today.
+                          </>
+                        )}
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -1725,13 +1733,18 @@ export default function EmailQueue() {
                     >
                       <p className="text-neutral-200 font-medium mb-1">Resend sends this month (Pacific)</p>
                       <p>
-                        Same as “today,” but for the current calendar month (Pacific). Count resets on the{' '}
-                        <span className="text-neutral-300">1st</span>. Cap default{' '}
-                        <span className="text-neutral-300">3,000</span> — set{' '}
-                        <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span> to match Resend. Turns{' '}
-                        <span className="text-red-400">red</span> when 300 or fewer sends remain. Older rows sent before
-                        this tracking shipped may show as <span className="text-neutral-300">sent</span> in History but
-                        omit a Resend id and are excluded here.
+                        Shown total = optional baseline{' '}
+                        <span className="text-neutral-300">VITE_RESEND_USAGE_MONTH_OFFSET</span> plus this month’s
+                        id-backed sends from this app (Pacific month; resets on the <span className="text-neutral-300">1st</span>
+                        ). Cap: <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span> (default{' '}
+                        <span className="text-neutral-300">3,000</span>). Turns <span className="text-red-400">red</span>{' '}
+                        when 300 or fewer sends remain.
+                        {hasResendBaselines && (
+                          <>
+                            {' '}
+                            Baseline now: <span className="text-neutral-300">+{resendBaselines.month}</span> this month.
+                          </>
+                        )}
                       </p>
                     </TooltipContent>
                   </Tooltip>

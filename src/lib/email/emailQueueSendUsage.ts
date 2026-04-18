@@ -18,6 +18,24 @@ export function resendPlanCaps(): { daily: number; monthly: number } {
   }
 }
 
+function parseNonNegativeIntEnv(raw: string | undefined): number {
+  const n = parseInt(String(raw ?? ''), 10)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+/**
+ * Sends already counted by Resend before this app stored `resend_message_id`, or sent outside this dashboard.
+ * Added to DB-backed counts so Today/Month match your Resend dashboard baseline, then new sends increment from there.
+ *
+ * Netlify / `.env`: `VITE_RESEND_USAGE_DAY_OFFSET=4` `VITE_RESEND_USAGE_MONTH_OFFSET=18`
+ */
+export function resendUsageBaselineOffsets(): { day: number; month: number } {
+  return {
+    day: parseNonNegativeIntEnv(import.meta.env.VITE_RESEND_USAGE_DAY_OFFSET),
+    month: parseNonNegativeIntEnv(import.meta.env.VITE_RESEND_USAGE_MONTH_OFFSET),
+  }
+}
+
 function pacificMonthRangeExclusiveFromToday(): { startIso: string; endExclusiveIso: string } | null {
   const today = pacificTodayYmd()
   const [yStr, moStr] = today.split('-')
@@ -73,9 +91,10 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
     return null
   }
 
+  const base = resendUsageBaselineOffsets()
   return {
-    today: dayQ.count ?? 0,
-    month: monthQ.count ?? 0,
+    today: (dayQ.count ?? 0) + base.day,
+    month: (monthQ.count ?? 0) + base.month,
   }
 }
 
