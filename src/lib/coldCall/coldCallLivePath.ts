@@ -28,8 +28,24 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
   switch (phaseIdx) {
     case 0:
       return 'p1'
-    case 1:
+    case 1: {
+      const w = d.who_answered
+      // Gatekeeper cards (p2a…) only apply when someone other than the DM answered.
+      // Right person / VM / no-answer skip this phase — anchoring to p2a showed the wrong script.
+      if (w === 'right_person') {
+        const pitch = d.live_history.find(c => PITCH_SET.has(c))
+        return pitch ?? 'p1'
+      }
+      if (w === 'voicemail') {
+        const vm = d.live_history.find(c => c === 'p6_vm')
+        return vm ?? 'p1'
+      }
+      if (w === 'no_answer') {
+        const na = d.live_history.find(c => c === 'p6_na')
+        return na ?? 'p1'
+      }
       return 'p2a'
+    }
     case 2: {
       const hit = d.live_history.find(c => PITCH_SET.has(c))
       return hit ?? 'p3'
