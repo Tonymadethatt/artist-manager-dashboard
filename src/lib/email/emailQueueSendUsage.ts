@@ -52,22 +52,31 @@ function pacificMonthRangeExclusiveFromToday(): { startIso: string; endExclusive
   return { startIso, endExclusiveIso }
 }
 
-/**
- * Sent rows in `venue_emails` for the signed-in user (Pacific calendar day / month).
- * Counts only rows where Resend accepted the message (`resend_message_id` set), so the meter tracks
- * provider-confirmed sends rather than queue rows merely marked sent.
- */
-export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<{
+export type VenueEmailSendUsageResult = {
   today: number
   month: number
-} | null> {
+  /** Total baseline added (env + Settings); tooltip / support. */
+  offsetsApplied: { day: number; month: number }
+}
+
+function clampNonNegativeInt(n: unknown): number {
+  if (typeof n === 'number' && Number.isFinite(n) && n >= 0) return Math.floor(n)
+  return 0
+}
+
+/**
+ * Sent rows in `venue_emails` for the signed-in user (Pacific calendar day / month).
+ * Counts only rows where Resend accepted the message (`resend_message_id` set), then adds baselines from
+ * `VITE_RESEND_USAGE_*` (build env) and `artist_profile.email_usage_*_offset` (Settings).
+ */
+export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<VenueEmailSendUsageResult | null> {
   const todayYmd = pacificTodayYmd()
   const dayStart = pacificWallToUtcIso(todayYmd, '00:00')
   const dayEndEx = pacificDayEndExclusiveUtcIso(todayYmd)
   const monthR = pacificMonthRangeExclusiveFromToday()
   if (!dayStart || !dayEndEx || !monthR) return null
 
-  const [dayQ, monthQ] = await Promise.all([
+  const [dayQ, monthQ, profQ] = await Promise.all([
     supabase
       .from('venue_emails')
       .select('id', { count: 'exact', head: true })
@@ -84,17 +93,37 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
       .not('resend_message_id', 'is', null)
       .gte('sent_at', monthR.startIso)
       .lt('sent_at', monthR.endExclusiveIso),
+    supabase
+      .from('artist_profile')
+      .select('email_usage_day_offset, email_usage_month_offset')
+      .eq('user_id', userId)
+      .maybeSingle(),
   ])
 
   if (dayQ.error || monthQ.error) {
     console.error('[fetchVenueEmailSentCountsForUser]', dayQ.error ?? monthQ.error)
     return null
   }
+  if (profQ.error) {
+    console.warn('[fetchVenueEmailSentCountsForUser] profile offsets skipped:', profQ.error.message)
+  }
 
-  const base = resendUsageBaselineOffsets()
+  const envOff = resendUsageBaselineOffsets()
+  const prof = !profQ.error
+    ? (profQ.data as {
+      email_usage_day_offset?: number | null
+      email_usage_month_offset?: number | null
+    } | null)
+    : null
+  const profDay = clampNonNegativeInt(prof?.email_usage_day_offset)
+  const profMonth = clampNonNegativeInt(prof?.email_usage_month_offset)
+  const baseDay = envOff.day + profDay
+  const baseMonth = envOff.month + profMonth
+
   return {
-    today: (dayQ.count ?? 0) + base.day,
-    month: (monthQ.count ?? 0) + base.month,
+    today: (dayQ.count ?? 0) + baseDay,
+    month: (monthQ.count ?? 0) + baseMonth,
+    offsetsApplied: { day: baseDay, month: baseMonth },
   }
 }
 

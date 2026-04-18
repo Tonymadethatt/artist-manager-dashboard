@@ -499,6 +499,8 @@ export interface Database {
           tagline: string | null
           reply_to_email: string | null
           email_queue_buffer_minutes?: number
+          email_usage_day_offset: number
+          email_usage_month_offset: number
           created_at: string
           updated_at: string
         }
@@ -518,6 +520,8 @@ export interface Database {
           tagline?: string | null
           reply_to_email?: string | null
           email_queue_buffer_minutes?: number
+          email_usage_day_offset?: number
+          email_usage_month_offset?: number
           created_at?: string
           updated_at?: string
         }
@@ -537,6 +541,8 @@ export interface Database {
           tagline?: string | null
           reply_to_email?: string | null
           email_queue_buffer_minutes?: number
+          email_usage_day_offset?: number
+          email_usage_month_offset?: number
           created_at?: string
           updated_at?: string
         }

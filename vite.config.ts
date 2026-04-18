@@ -7,7 +7,18 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE')
   const siteOrigin = (env.VITE_PUBLIC_SITE_URL || '').trim().replace(/\/$/, '')
 
+  /** Netlify/build CI sets `process.env`; `loadEnv` only reads `.env` files — merge so client bundle gets offsets/caps. */
+  const envRecord = env as Record<string, string | undefined>
+  const viteEnvString = (key: string) =>
+    JSON.stringify(String((process.env[key] ?? envRecord[key] ?? '').trim()))
+
   return {
+    define: {
+      'import.meta.env.VITE_RESEND_USAGE_DAY_OFFSET': viteEnvString('VITE_RESEND_USAGE_DAY_OFFSET'),
+      'import.meta.env.VITE_RESEND_USAGE_MONTH_OFFSET': viteEnvString('VITE_RESEND_USAGE_MONTH_OFFSET'),
+      'import.meta.env.VITE_RESEND_DAILY_EMAIL_CAP': viteEnvString('VITE_RESEND_DAILY_EMAIL_CAP'),
+      'import.meta.env.VITE_RESEND_MONTHLY_EMAIL_CAP': viteEnvString('VITE_RESEND_MONTHLY_EMAIL_CAP'),
+    },
     plugins: [
     react(),
     tailwindcss(),

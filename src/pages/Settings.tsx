@@ -194,6 +194,9 @@ export default function Settings() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [bufferSaving, setBufferSaving] = useState(false)
+  const [emailUsageDayOffset, setEmailUsageDayOffset] = useState(0)
+  const [emailUsageMonthOffset, setEmailUsageMonthOffset] = useState(0)
+  const [usageOffsetSaving, setUsageOffsetSaving] = useState(false)
 
   const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -214,6 +217,12 @@ export default function Settings() {
     setForm(formFromProfile(profile))
     lastHydratedUserId.current = profile.user_id
   }, [profile])
+
+  useEffect(() => {
+    if (!profile) return
+    setEmailUsageDayOffset(profile.email_usage_day_offset ?? 0)
+    setEmailUsageMonthOffset(profile.email_usage_month_offset ?? 0)
+  }, [profile?.user_id, profile?.email_usage_day_offset, profile?.email_usage_month_offset])
 
   const setField = (key: FormKey, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
@@ -288,6 +297,34 @@ export default function Settings() {
     },
     [profile, updateProfile, showToast]
   )
+
+  const flushEmailUsageDayOffset = useCallback(async () => {
+    if (!profile || usageOffsetSaving) return
+    const n = Math.max(0, Math.floor(Number(emailUsageDayOffset)) || 0)
+    if (n === (profile.email_usage_day_offset ?? 0)) return
+    setUsageOffsetSaving(true)
+    const result = await updateProfile({ email_usage_day_offset: n })
+    setUsageOffsetSaving(false)
+    if (result && 'error' in result && result.error) {
+      showToast(result.error.message || 'Could not save.', 'err')
+      return
+    }
+    showToast('Saved', 'ok')
+  }, [profile, emailUsageDayOffset, usageOffsetSaving, updateProfile, showToast])
+
+  const flushEmailUsageMonthOffset = useCallback(async () => {
+    if (!profile || usageOffsetSaving) return
+    const n = Math.max(0, Math.floor(Number(emailUsageMonthOffset)) || 0)
+    if (n === (profile.email_usage_month_offset ?? 0)) return
+    setUsageOffsetSaving(true)
+    const result = await updateProfile({ email_usage_month_offset: n })
+    setUsageOffsetSaving(false)
+    if (result && 'error' in result && result.error) {
+      showToast(result.error.message || 'Could not save.', 'err')
+      return
+    }
+    showToast('Saved', 'ok')
+  }, [profile, emailUsageMonthOffset, usageOffsetSaving, updateProfile, showToast])
 
   const handleDeletePreset = useCallback(
     async (id: string) => {
@@ -559,7 +596,7 @@ export default function Settings() {
 
         <SectionCard
           title="Email queue"
-          description="How long venue-targeted emails wait in the queue before the automated sender picks them up. Artist and gig automations (reminders, booked-gig notices, digest, custom artist templates, etc.) are not governed by this—they send on the next queue run or at their scheduled time."
+          description="Queue timing for venue-targeted mail, plus optional Resend usage baselines so the Email Queue meter matches your provider (Pacific day / month)."
           className="lg:col-span-2"
         >
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
@@ -589,6 +626,54 @@ export default function Settings() {
             <p className={cn(hint, 'sm:pb-1 flex-1 max-w-xl')}>
               Use this when you want a short pause to cancel mistaken venue sends. Open Email queue to see pending rows; the list refreshes about every 30 seconds while the Queue tab is open.
             </p>
+          </div>
+          <div className={cn(fieldGrid, 'pt-4 mt-4 border-t border-neutral-800')}>
+            <div className="space-y-1">
+              <Label htmlFor="email-usage-day-offset">Resend sends already today (offset)</Label>
+              <Input
+                id="email-usage-day-offset"
+                type="number"
+                min={0}
+                className="h-9 text-sm bg-neutral-950 border-neutral-700 w-[120px]"
+                value={emailUsageDayOffset === 0 ? '' : String(emailUsageDayOffset)}
+                onChange={e => {
+                  const raw = e.target.value
+                  if (raw === '') {
+                    setEmailUsageDayOffset(0)
+                    return
+                  }
+                  const n = parseInt(raw, 10)
+                  setEmailUsageDayOffset(Number.isFinite(n) && n >= 0 ? n : 0)
+                }}
+                onBlur={() => void flushEmailUsageDayOffset()}
+                disabled={!profile || usageOffsetSaving}
+                placeholder="0"
+              />
+              <p className={hint}>Added to the Email Queue “Today” counter. Set from your Resend dashboard when this app had not yet stored message ids.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="email-usage-month-offset">Resend sends already this month (offset)</Label>
+              <Input
+                id="email-usage-month-offset"
+                type="number"
+                min={0}
+                className="h-9 text-sm bg-neutral-950 border-neutral-700 w-[120px]"
+                value={emailUsageMonthOffset === 0 ? '' : String(emailUsageMonthOffset)}
+                onChange={e => {
+                  const raw = e.target.value
+                  if (raw === '') {
+                    setEmailUsageMonthOffset(0)
+                    return
+                  }
+                  const n = parseInt(raw, 10)
+                  setEmailUsageMonthOffset(Number.isFinite(n) && n >= 0 ? n : 0)
+                }}
+                onBlur={() => void flushEmailUsageMonthOffset()}
+                disabled={!profile || usageOffsetSaving}
+                placeholder="0"
+              />
+              <p className={hint}>Added to the “Month” counter (Pacific calendar month). Optional deploy env vars still add on top if set.</p>
+            </div>
           </div>
         </SectionCard>
       </div>
