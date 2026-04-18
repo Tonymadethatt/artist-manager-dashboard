@@ -21,6 +21,22 @@ import {
 import { GoogleCalendarSettingsCard } from '@/components/settings/GoogleCalendarSettingsCard'
 import type { ArtistProfile, ProfileFieldPresetKey } from '@/types'
 
+/** PostgREST may return numeric columns as strings; normalize for comparisons and inputs. */
+function profileUsageOffset(v: unknown): number {
+  if (v == null || v === '') return 0
+  if (typeof v === 'number' && Number.isFinite(v)) return Math.max(0, Math.floor(v))
+  const x = parseInt(String(v).trim(), 10)
+  return Number.isFinite(x) && x >= 0 ? x : 0
+}
+
+function profileResendCap(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n =
+    typeof v === 'number' && Number.isFinite(v) ? v : parseInt(String(v).trim(), 10)
+  if (!Number.isFinite(n) || n < 1) return null
+  return Math.floor(n)
+}
+
 type FormState = {
   artist_name: string
   artist_email: string
@@ -197,6 +213,9 @@ export default function Settings() {
   const [emailUsageDayOffset, setEmailUsageDayOffset] = useState(0)
   const [emailUsageMonthOffset, setEmailUsageMonthOffset] = useState(0)
   const [usageOffsetSaving, setUsageOffsetSaving] = useState(false)
+  const [resendDailyCap, setResendDailyCap] = useState('')
+  const [resendMonthlyCap, setResendMonthlyCap] = useState('')
+  const [resendCapSaving, setResendCapSaving] = useState(false)
 
   const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -220,9 +239,17 @@ export default function Settings() {
 
   useEffect(() => {
     if (!profile) return
-    setEmailUsageDayOffset(profile.email_usage_day_offset ?? 0)
-    setEmailUsageMonthOffset(profile.email_usage_month_offset ?? 0)
+    setEmailUsageDayOffset(profileUsageOffset(profile.email_usage_day_offset))
+    setEmailUsageMonthOffset(profileUsageOffset(profile.email_usage_month_offset))
   }, [profile?.user_id, profile?.email_usage_day_offset, profile?.email_usage_month_offset])
+
+  useEffect(() => {
+    if (!profile) return
+    const d = profileResendCap(profile.resend_daily_email_cap)
+    const m = profileResendCap(profile.resend_monthly_email_cap)
+    setResendDailyCap(d != null ? String(d) : '')
+    setResendMonthlyCap(m != null ? String(m) : '')
+  }, [profile?.user_id, profile?.resend_daily_email_cap, profile?.resend_monthly_email_cap])
 
   const setField = (key: FormKey, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
@@ -301,7 +328,7 @@ export default function Settings() {
   const flushEmailUsageDayOffset = useCallback(async () => {
     if (!profile || usageOffsetSaving) return
     const n = Math.max(0, Math.floor(Number(emailUsageDayOffset)) || 0)
-    if (n === (profile.email_usage_day_offset ?? 0)) return
+    if (n === profileUsageOffset(profile.email_usage_day_offset)) return
     setUsageOffsetSaving(true)
     const result = await updateProfile({ email_usage_day_offset: n })
     setUsageOffsetSaving(false)
@@ -315,7 +342,7 @@ export default function Settings() {
   const flushEmailUsageMonthOffset = useCallback(async () => {
     if (!profile || usageOffsetSaving) return
     const n = Math.max(0, Math.floor(Number(emailUsageMonthOffset)) || 0)
-    if (n === (profile.email_usage_month_offset ?? 0)) return
+    if (n === profileUsageOffset(profile.email_usage_month_offset)) return
     setUsageOffsetSaving(true)
     const result = await updateProfile({ email_usage_month_offset: n })
     setUsageOffsetSaving(false)
@@ -325,6 +352,54 @@ export default function Settings() {
     }
     showToast('Saved', 'ok')
   }, [profile, emailUsageMonthOffset, usageOffsetSaving, updateProfile, showToast])
+
+  const flushResendDailyCap = useCallback(async () => {
+    if (!profile || resendCapSaving) return
+    const raw = resendDailyCap.trim()
+    let next: number | null = null
+    if (raw !== '') {
+      const n = parseInt(raw, 10)
+      if (!Number.isFinite(n) || n < 1) {
+        showToast('Daily cap must be at least 1, or leave blank for default.', 'err')
+        return
+      }
+      next = n
+    }
+    const cur = profileResendCap(profile.resend_daily_email_cap)
+    if (next === cur) return
+    setResendCapSaving(true)
+    const result = await updateProfile({ resend_daily_email_cap: next })
+    setResendCapSaving(false)
+    if (result && 'error' in result && result.error) {
+      showToast(result.error.message || 'Could not save.', 'err')
+      return
+    }
+    showToast('Saved', 'ok')
+  }, [profile, resendDailyCap, resendCapSaving, updateProfile, showToast])
+
+  const flushResendMonthlyCap = useCallback(async () => {
+    if (!profile || resendCapSaving) return
+    const raw = resendMonthlyCap.trim()
+    let next: number | null = null
+    if (raw !== '') {
+      const n = parseInt(raw, 10)
+      if (!Number.isFinite(n) || n < 1) {
+        showToast('Monthly cap must be at least 1, or leave blank for default.', 'err')
+        return
+      }
+      next = n
+    }
+    const cur = profileResendCap(profile.resend_monthly_email_cap)
+    if (next === cur) return
+    setResendCapSaving(true)
+    const result = await updateProfile({ resend_monthly_email_cap: next })
+    setResendCapSaving(false)
+    if (result && 'error' in result && result.error) {
+      showToast(result.error.message || 'Could not save.', 'err')
+      return
+    }
+    showToast('Saved', 'ok')
+  }, [profile, resendMonthlyCap, resendCapSaving, updateProfile, showToast])
 
   const handleDeletePreset = useCallback(
     async (id: string) => {
@@ -596,7 +671,7 @@ export default function Settings() {
 
         <SectionCard
           title="Email queue"
-          description="Queue timing for venue-targeted mail, plus optional Resend usage baselines so the Email Queue meter matches your provider (Pacific day / month)."
+          description="Queue timing for venue-targeted mail, optional Resend plan caps (daily/monthly limits for the usage meter), and baselines so counts match your provider (Pacific day / month)."
           className="lg:col-span-2"
         >
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
@@ -673,6 +748,42 @@ export default function Settings() {
                 placeholder="0"
               />
               <p className={hint}>Added to the “Month” counter (Pacific calendar month). Optional deploy env vars still add on top if set.</p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="resend-daily-cap">Resend daily send limit</Label>
+              <Input
+                id="resend-daily-cap"
+                type="number"
+                min={1}
+                className="h-9 text-sm bg-neutral-950 border-neutral-700 w-[120px]"
+                value={resendDailyCap}
+                onChange={e => setResendDailyCap(e.target.value.replace(/[^\d]/g, ''))}
+                onBlur={() => void flushResendDailyCap()}
+                disabled={!profile || resendCapSaving}
+                placeholder="100"
+              />
+              <p className={hint}>
+                Denominator for “Today” on Email queue (e.g. 100 on free tier). Leave blank to use the app default or{' '}
+                <span className="text-neutral-400">VITE_RESEND_DAILY_EMAIL_CAP</span>.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="resend-monthly-cap">Resend monthly send limit</Label>
+              <Input
+                id="resend-monthly-cap"
+                type="number"
+                min={1}
+                className="h-9 text-sm bg-neutral-950 border-neutral-700 w-[120px]"
+                value={resendMonthlyCap}
+                onChange={e => setResendMonthlyCap(e.target.value.replace(/[^\d]/g, ''))}
+                onBlur={() => void flushResendMonthlyCap()}
+                disabled={!profile || resendCapSaving}
+                placeholder="3000"
+              />
+              <p className={hint}>
+                Denominator for “This month.” Leave blank for default (3000) or{' '}
+                <span className="text-neutral-400">VITE_RESEND_MONTHLY_EMAIL_CAP</span>.
+              </p>
             </div>
           </div>
         </SectionCard>

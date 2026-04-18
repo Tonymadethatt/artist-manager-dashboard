@@ -407,9 +407,12 @@ export default function EmailQueue() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewSubject, setPreviewSubject] = useState<string>('')
   const [previewLoading, setPreviewLoading] = useState(false)
-  const resendCaps = useMemo(() => resendPlanCaps(), [])
   const [sendUsage, setSendUsage] = useState<VenueEmailSendUsageResult | null>(null)
   const [sendUsageLoadFailed, setSendUsageLoadFailed] = useState(false)
+  const displayCaps = useMemo(
+    () => sendUsage?.caps ?? resendPlanCaps(),
+    [sendUsage],
+  )
 
   const loadSendUsage = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -426,7 +429,14 @@ export default function EmailQueue() {
   useEffect(() => {
     const t = window.setTimeout(() => void loadSendUsage(), 400)
     return () => window.clearTimeout(t)
-  }, [emails, loadSendUsage])
+  }, [
+    emails,
+    loadSendUsage,
+    profile?.email_usage_day_offset,
+    profile?.email_usage_month_offset,
+    profile?.resend_daily_email_cap,
+    profile?.resend_monthly_email_cap,
+  ])
 
   const bufferMinutes = profile
     ? clampEmailQueueBufferMinutes(profile.email_queue_buffer_minutes)
@@ -446,11 +456,11 @@ export default function EmailQueue() {
         ? usageNearLimitFlags({
             sentToday: sendUsage.today,
             sentMonth: sendUsage.month,
-            dailyCap: resendCaps.daily,
-            monthlyCap: resendCaps.monthly,
+            dailyCap: displayCaps.daily,
+            monthlyCap: displayCaps.monthly,
           })
         : { dailyHot: false, monthlyHot: false },
-    [sendUsage, resendCaps.daily, resendCaps.monthly],
+    [sendUsage, displayCaps.daily, displayCaps.monthly],
   )
 
   const hasUsageBaselines =
@@ -1679,7 +1689,7 @@ export default function EmailQueue() {
                             usageHot.dailyHot ? 'text-red-400' : 'text-neutral-200',
                           )}
                         >
-                          {sendUsage.today.toLocaleString('en-US')} / {resendCaps.daily.toLocaleString('en-US')}
+                          {sendUsage.today.toLocaleString('en-US')} / {displayCaps.daily.toLocaleString('en-US')}
                         </span>
                       </button>
                     </TooltipTrigger>
@@ -1694,8 +1704,9 @@ export default function EmailQueue() {
                         Shown total = Settings offsets (Email queue) + optional{' '}
                         <span className="text-neutral-300">VITE_RESEND_USAGE_DAY_OFFSET</span>, plus sends this app
                         logged today with a Resend message id. Cap: set{' '}
-                        <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span> (default{' '}
-                        <span className="text-neutral-300">300</span>). Turns <span className="text-red-400">red</span>{' '}
+                        <span className="text-neutral-300">Settings → Email queue</span> (or{' '}
+                        <span className="text-neutral-300">VITE_RESEND_DAILY_EMAIL_CAP</span>; default{' '}
+                        <span className="text-neutral-300">100</span>). Turns <span className="text-red-400">red</span>{' '}
                         when 20 or fewer sends remain.
                         {hasUsageBaselines && (
                           <>
@@ -1723,7 +1734,7 @@ export default function EmailQueue() {
                             usageHot.monthlyHot ? 'text-red-400' : 'text-neutral-200',
                           )}
                         >
-                          {sendUsage.month.toLocaleString('en-US')} / {resendCaps.monthly.toLocaleString('en-US')}
+                          {sendUsage.month.toLocaleString('en-US')} / {displayCaps.monthly.toLocaleString('en-US')}
                         </span>
                       </button>
                     </TooltipTrigger>
@@ -1738,9 +1749,10 @@ export default function EmailQueue() {
                         Shown total = Settings month offset + optional{' '}
                         <span className="text-neutral-300">VITE_RESEND_USAGE_MONTH_OFFSET</span>, plus this month’s
                         id-backed sends (Pacific; resets on the <span className="text-neutral-300">1st</span>). Cap:{' '}
-                        <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span> (default{' '}
+                        <span className="text-neutral-300">Settings → Email queue</span> (or{' '}
+                        <span className="text-neutral-300">VITE_RESEND_MONTHLY_EMAIL_CAP</span>; default{' '}
                         <span className="text-neutral-300">3,000</span>). Turns <span className="text-red-400">red</span>{' '}
-                        when 300 or fewer sends remain.
+                        when 300 or fewer sends remain this month.
                         {hasUsageBaselines && (
                           <>
                             {' '}

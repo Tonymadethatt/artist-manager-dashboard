@@ -501,6 +501,8 @@ export interface Database {
           email_queue_buffer_minutes?: number
           email_usage_day_offset: number
           email_usage_month_offset: number
+          resend_daily_email_cap: number | null
+          resend_monthly_email_cap: number | null
           created_at: string
           updated_at: string
         }
@@ -522,6 +524,8 @@ export interface Database {
           email_queue_buffer_minutes?: number
           email_usage_day_offset?: number
           email_usage_month_offset?: number
+          resend_daily_email_cap?: number | null
+          resend_monthly_email_cap?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -543,6 +547,8 @@ export interface Database {
           email_queue_buffer_minutes?: number
           email_usage_day_offset?: number
           email_usage_month_offset?: number
+          resend_daily_email_cap?: number | null
+          resend_monthly_email_cap?: number | null
           created_at?: string
           updated_at?: string
         }

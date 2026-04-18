@@ -6,14 +6,15 @@ import {
 } from '@/lib/calendar/pacificWallTime'
 
 /**
- * Optional caps — match your Resend plan. Defaults align with common Pro-style limits (300/day, 3k/mo).
- * Set in `.env`: VITE_RESEND_DAILY_EMAIL_CAP=300 VITE_RESEND_MONTHLY_EMAIL_CAP=3000
+ * Fallback caps when `artist_profile.resend_*_email_cap` is unset.
+ * Defaults match common Resend **free** tier (100/day); monthly 3k. Override via Settings or
+ * `VITE_RESEND_DAILY_EMAIL_CAP` / `VITE_RESEND_MONTHLY_EMAIL_CAP`.
  */
 export function resendPlanCaps(): { daily: number; monthly: number } {
   const d = parseInt(String(import.meta.env.VITE_RESEND_DAILY_EMAIL_CAP ?? ''), 10)
   const m = parseInt(String(import.meta.env.VITE_RESEND_MONTHLY_EMAIL_CAP ?? ''), 10)
   return {
-    daily: Number.isFinite(d) && d > 0 ? d : 300,
+    daily: Number.isFinite(d) && d > 0 ? d : 100,
     monthly: Number.isFinite(m) && m > 0 ? m : 3000,
   }
 }
@@ -57,11 +58,34 @@ export type VenueEmailSendUsageResult = {
   month: number
   /** Total baseline added (env + Settings); tooltip / support. */
   offsetsApplied: { day: number; month: number }
+  /** Effective caps (Settings overrides + env + defaults). */
+  caps: { daily: number; monthly: number }
 }
 
 function clampNonNegativeInt(n: unknown): number {
   if (typeof n === 'number' && Number.isFinite(n) && n >= 0) return Math.floor(n)
+  if (typeof n === 'string' && n.trim() !== '') {
+    const x = parseInt(n.trim(), 10)
+    if (Number.isFinite(x) && x >= 0) return x
+  }
   return 0
+}
+
+function resolveCapsFromProfile(
+  prof: {
+    resend_daily_email_cap?: number | string | null
+    resend_monthly_email_cap?: number | string | null
+  } | null,
+  defaults: { daily: number; monthly: number },
+): { daily: number; monthly: number } {
+  const dRaw = prof?.resend_daily_email_cap
+  const mRaw = prof?.resend_monthly_email_cap
+  const d = clampNonNegativeInt(dRaw)
+  const m = clampNonNegativeInt(mRaw)
+  return {
+    daily: d > 0 ? d : defaults.daily,
+    monthly: m > 0 ? m : defaults.monthly,
+  }
 }
 
 /**
@@ -95,7 +119,9 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
       .lt('sent_at', monthR.endExclusiveIso),
     supabase
       .from('artist_profile')
-      .select('email_usage_day_offset, email_usage_month_offset')
+      .select(
+        'email_usage_day_offset, email_usage_month_offset, resend_daily_email_cap, resend_monthly_email_cap',
+      )
       .eq('user_id', userId)
       .maybeSingle(),
   ])
@@ -109,21 +135,26 @@ export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<
   }
 
   const envOff = resendUsageBaselineOffsets()
+  const defaults = resendPlanCaps()
   const prof = !profQ.error
     ? (profQ.data as {
-      email_usage_day_offset?: number | null
-      email_usage_month_offset?: number | null
+      email_usage_day_offset?: number | string | null
+      email_usage_month_offset?: number | string | null
+      resend_daily_email_cap?: number | string | null
+      resend_monthly_email_cap?: number | string | null
     } | null)
     : null
   const profDay = clampNonNegativeInt(prof?.email_usage_day_offset)
   const profMonth = clampNonNegativeInt(prof?.email_usage_month_offset)
   const baseDay = envOff.day + profDay
   const baseMonth = envOff.month + profMonth
+  const caps = resolveCapsFromProfile(prof, defaults)
 
   return {
     today: (dayQ.count ?? 0) + baseDay,
     month: (monthQ.count ?? 0) + baseMonth,
     offsetsApplied: { day: baseDay, month: baseMonth },
+    caps,
   }
 }
 

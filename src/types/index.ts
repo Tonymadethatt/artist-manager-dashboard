@@ -407,6 +407,10 @@ export interface ArtistProfile {
   email_usage_day_offset?: number
   /** Added to Email Queue “this month” usage (Pacific). */
   email_usage_month_offset?: number
+  /** When set (≥1), Email Queue daily cap; otherwise `VITE_RESEND_DAILY_EMAIL_CAP` or app default (100). */
+  resend_daily_email_cap?: number | null
+  /** When set (≥1), Email Queue monthly cap; otherwise env or default (3000). */
+  resend_monthly_email_cap?: number | null
   /** When true, Netlify send functions replace To with test inboxes (see Settings). */
   email_test_mode?: boolean
   email_test_artist_inbox?: string | null
