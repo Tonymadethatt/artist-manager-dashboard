@@ -1,14 +1,22 @@
 /** Cold call form JSON (`cold_calls.call_data`). Desktop-only; mirrors booking intake autosave pattern. */
 
 import { CONTACT_TITLE_LABELS, type ContactTitleKey } from '@/lib/contacts/contactTitles'
+import type { VenueType } from '@/types'
+import { VENUE_TYPE_ORDER } from '@/types'
 
 export const COLD_CALL_DATA_VERSION = 1 as const
 
 const CONTACT_TITLE_KEY_SET = new Set<string>(Object.keys(CONTACT_TITLE_LABELS))
+const VENUE_TYPE_CONFIRM_SET = new Set<string>(VENUE_TYPE_ORDER)
 
 function asContactTitleKeyField(v: unknown): ContactTitleKey | '' {
   const s = typeof v === 'string' ? v.trim() : ''
   return s && CONTACT_TITLE_KEY_SET.has(s) ? (s as ContactTitleKey) : ''
+}
+
+function asVenueTypeConfirmField(v: unknown): '' | VenueType {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return s && VENUE_TYPE_CONFIRM_SET.has(s) ? (s as VenueType) : ''
 }
 
 /** Pre-filled on new cold calls; `state_region` must match `US_STATE_OPTIONS[].value` (e.g. CA for California). */
@@ -210,7 +218,7 @@ export type ColdCallCapacityBucket =
   | '1000_2000'
   | '2000_plus'
 
-export type ColdCallVenueTypeConfirm = '' | 'bar' | 'club' | 'festival' | 'theater' | 'lounge' | 'other'
+export type ColdCallVenueTypeConfirm = '' | VenueType
 
 export type ColdCallAskResponse =
   | ''
@@ -752,7 +760,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     rate_reaction: asStr(o.rate_reaction, '') as ColdCallRateReaction,
 
     capacity_range: asStr(o.capacity_range, '') as ColdCallCapacityBucket,
-    venue_type_confirm: asStr(o.venue_type_confirm, '') as ColdCallVenueTypeConfirm,
+    venue_type_confirm: asVenueTypeConfirmField(o.venue_type_confirm),
 
     ask_response: asStr(o.ask_response, '') as ColdCallAskResponse,
     ask_send_channel: parseAskSendChannel(asStr(o.ask_send_channel, '')),

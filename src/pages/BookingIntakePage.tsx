@@ -156,13 +156,12 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Intake2aVenuePickCombobox } from '@/components/intake/Intake2aVenuePickCombobox'
 import {
   IntakeCallVibeChips,
   IntakeCompactChipRow,
@@ -3663,10 +3662,10 @@ export default function BookingIntakePage() {
                                     )}
                                   </div>
                                   <div className="min-w-0 space-y-1.5">
-                                    <Label className="text-neutral-400 text-xs">Venue type</Label>
+                                    <Label className="text-neutral-400 text-xs">Entity type</Label>
                                     {showVenueFreeform ? (
                                       <Intake2aOtherFieldInput
-                                        placeholder="Describe venue type"
+                                        placeholder="Describe entity type"
                                         value={sd.venue_type_other}
                                         onValueChange={v =>
                                           applyShowPatch(row.id, { venue_type_other: v }, '2a')
@@ -3676,16 +3675,19 @@ export default function BookingIntakePage() {
                                         }
                                       />
                                     ) : (
-                                      <Select
-                                        value={
-                                          !sd.venue_type
+                                      <Intake2aVenuePickCombobox
+                                        suggested={venueSuggested}
+                                        rest={venueRest}
+                                        valueId={
+                                          !sd.venue_type ||
+                                          venuePickVal === '__custom__' ||
+                                          venuePickVal === 'other_describe'
                                             ? '__none__'
-                                            : venuePickVal === '__custom__' ||
-                                                venuePickVal === 'other_describe'
-                                              ? '__none__'
-                                              : venuePickVal
+                                            : venuePickVal
                                         }
-                                        onValueChange={v => {
+                                        popularHeading={`Popular for ${knownEventTypeLabel(sd.event_type as KnownEventTypeV3)}`}
+                                        placeholder="Search or select entity type"
+                                        onPickId={v => {
                                           if (v === '__none__') {
                                             applyShowPatch(
                                               row.id,
@@ -3710,44 +3712,7 @@ export default function BookingIntakePage() {
                                             '2a',
                                           )
                                         }}
-                                      >
-                                        <SelectTrigger className="h-11 border-neutral-800 bg-neutral-950/80">
-                                          <SelectValue placeholder="Select" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="__none__">—</SelectItem>
-                                          {venueSuggested.length > 0 ? (
-                                            <SelectGroup>
-                                              <SelectLabel>
-                                                Popular for{' '}
-                                                {knownEventTypeLabel(
-                                                  sd.event_type as KnownEventTypeV3,
-                                                )}
-                                              </SelectLabel>
-                                              {venueSuggested.map(o => (
-                                                <SelectItem key={o.id} value={o.id}>
-                                                  {o.label}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectGroup>
-                                          ) : null}
-                                          {venueSuggested.length > 0 && venueRest.length > 0 ? (
-                                            <SelectSeparator />
-                                          ) : null}
-                                          {venueRest.length > 0 ? (
-                                            <SelectGroup>
-                                              {venueSuggested.length > 0 ? (
-                                                <SelectLabel>More options</SelectLabel>
-                                              ) : null}
-                                              {venueRest.map(o => (
-                                                <SelectItem key={o.id} value={o.id}>
-                                                  {o.label}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectGroup>
-                                          ) : null}
-                                        </SelectContent>
-                                      </Select>
+                                      />
                                     )}
                                   </div>
                                   <div className="min-w-0 space-y-1.5">

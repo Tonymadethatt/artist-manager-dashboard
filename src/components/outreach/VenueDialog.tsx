@@ -19,15 +19,11 @@ import {
 import type { DealTerms, Venue, VenueType, OutreachStatus, OutreachTrack, TaskTemplate } from '@/types'
 
 type VenueFormState = Omit<Venue, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'deal_terms'>
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER, VENUE_TYPE_ORDER, VENUE_TYPE_LABELS } from '@/types'
+import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
+import { EntityTypeSelect } from '@/components/venue/EntityTypeSelect'
 import { useTaskTemplates } from '@/hooks/useTaskTemplates'
 import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
 import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
-
-const VENUE_TYPES: { value: VenueType; label: string }[] = VENUE_TYPE_ORDER.map(value => ({
-  value,
-  label: VENUE_TYPE_LABELS[value],
-}))
 
 function errorMessageFromSave(err: unknown): string {
   if (err && typeof err === 'object' && 'message' in err) {
@@ -323,15 +319,14 @@ export function VenueDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>Venue type</Label>
-              <Select value={form.venue_type} onValueChange={v => set('venue_type', v as VenueType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {VENUE_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Entity type</Label>
+              <EntityTypeSelect
+                value={form.venue_type}
+                onValueChange={v => {
+                  if (v && v !== 'all') set('venue_type', v as VenueType)
+                }}
+                placeholder="Select entity type"
+              />
             </div>
 
             <div className="space-y-1">

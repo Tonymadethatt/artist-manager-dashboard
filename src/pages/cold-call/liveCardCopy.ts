@@ -33,7 +33,7 @@ export function liveCardStepTitle(card: ColdCallLiveCardId): string {
     case 'p4d':
       return 'Budget (strong signal only)'
     case 'p4e':
-      return 'Capacity & venue type'
+      return 'Capacity & entity type'
     case 'p5':
       return 'The ask'
     case 'p6':

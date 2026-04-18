@@ -17,6 +17,7 @@ import type {
   ColdCallVenueTypeConfirm,
   ColdCallWhoAnswered,
 } from '@/lib/coldCall/coldCallPayload'
+import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 
 export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] = [
   { id: 'right_person', label: 'Right person' },
@@ -98,14 +99,9 @@ export const CAPACITY_OPTIONS: { id: ColdCallCapacityBucket; label: string }[] =
   { id: '2000_plus', label: '2,000+' },
 ]
 
-export const VENUE_TYPE_CONFIRM_OPTIONS: { id: ColdCallVenueTypeConfirm; label: string }[] = [
-  { id: 'bar', label: 'Bar' },
-  { id: 'club', label: 'Club' },
-  { id: 'festival', label: 'Festival' },
-  { id: 'theater', label: 'Theater' },
-  { id: 'lounge', label: 'Lounge' },
-  { id: 'other', label: 'Other' },
-]
+export const VENUE_TYPE_CONFIRM_OPTIONS: { id: ColdCallVenueTypeConfirm; label: string }[] = VENUE_TYPE_ORDER.map(
+  id => ({ id, label: VENUE_TYPE_LABELS[id] }),
+)
 
 export const ASK_RESPONSE_OPTIONS: { id: ColdCallAskResponse; label: string }[] = [
   { id: 'yes_setup', label: 'Yes — let’s set something up' },

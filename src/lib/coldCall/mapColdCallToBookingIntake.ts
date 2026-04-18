@@ -10,6 +10,7 @@ import {
   type Phase2EventScheduleV3,
 } from '@/lib/intake/intakePayloadV3'
 import type { Venue, VenueType } from '@/types'
+import { VENUE_TYPE_ORDER } from '@/types'
 import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
 import { COLD_CALL_WEEKDAY_LABELS, type ColdCallCapacityBucket, type ColdCallDataV1, type ColdCallPurpose } from './coldCallPayload'
 import { BUDGET_RANGE_OPTIONS } from '@/pages/cold-call/liveFieldOptions'
@@ -36,17 +37,8 @@ function mapColdCapacityToIntake(bucket: ColdCallCapacityBucket): CapacityRangeV
 }
 
 function venueTypeFromCold(d: ColdCallDataV1): VenueType {
-  const v = d.venue_type_confirm || (d.venue_type as VenueType)
-  if (
-    v === 'bar' ||
-    v === 'club' ||
-    v === 'festival' ||
-    v === 'theater' ||
-    v === 'lounge' ||
-    v === 'other'
-  )
-    return v
-  if (d.venue_type === 'bar' || d.venue_type === 'club') return d.venue_type as VenueType
+  const raw = (d.venue_type_confirm || d.venue_type || '').trim()
+  if (raw && (VENUE_TYPE_ORDER as string[]).includes(raw)) return raw as VenueType
   return 'other'
 }
 

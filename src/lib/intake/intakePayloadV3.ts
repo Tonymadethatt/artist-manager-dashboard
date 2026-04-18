@@ -2149,37 +2149,24 @@ export function knownEventTypeLabel(v: KnownEventTypeV3 | '', otherDetail?: stri
   return v ? KNOWN_EVENT_LABELS[v] ?? '' : ''
 }
 
-/** Venue type labels in Phase 2A — disambiguate from *event* type “Festival”. */
+/** Venue / entity type labels in Phase 2A — disambiguate *event* “Festival” from venue “Festival”. */
 export const VENUE_TYPE_INTAKE_2A_LABELS: Record<VenueType, string> = {
   ...VENUE_TYPE_LABELS,
   festival: 'Festival grounds / outdoor site',
 }
 
-const VENUE_BY_EVENT_TYPE: Partial<Record<Exclude<KnownEventTypeV3, 'other'>, VenueType[]>> = {
-  /** `festival` venue = grounds / outdoor site (label disambiguates from event type in UI). */
-  festival: ['festival', 'bar', 'club', 'lounge', 'theater', 'other'],
-  concert: ['theater', 'club', 'bar', 'lounge', 'festival', 'other'],
-  club_night: ['club', 'bar', 'lounge', 'theater', 'other'],
-  after_party: ['club', 'bar', 'lounge', 'theater', 'festival', 'other'],
-  wedding: ['lounge', 'theater', 'bar', 'club', 'festival', 'other'],
-  corporate: ['bar', 'club', 'lounge', 'theater', 'festival', 'other'],
-  private_event: ['bar', 'club', 'theater', 'lounge', 'festival', 'other'],
-  brand_activation: ['bar', 'club', 'lounge', 'theater', 'festival', 'other'],
-}
-
-/** When true, Phase 2A uses full venue lists and does not narrow options by event type. */
+/** When true, Phase 2A uses full entity-type lists and does not narrow options by event type. */
 export function intakePhase2aRelaxDynamicFilters(sd: BookingIntakeShowDataV3): boolean {
   return sd.event_type === 'other' || sd.venue_type === 'other' || sd.setting === 'other'
 }
 
-export function venueTypesForIntake2a(eventType: KnownEventTypeV3 | '', relax: boolean): VenueType[] {
-  if (relax || !eventType || eventType === 'other') return [...VENUE_TYPE_ORDER]
-  const subset = VENUE_BY_EVENT_TYPE[eventType as Exclude<KnownEventTypeV3, 'other'>]
-  return subset ? [...subset] : [...VENUE_TYPE_ORDER]
+/** All entity types allowed in 2A (filtering is by suggestion order only). */
+export function venueTypesForIntake2a(_eventType: KnownEventTypeV3 | '', _relax: boolean): VenueType[] {
+  return [...VENUE_TYPE_ORDER]
 }
 
 /**
- * Single row in the live 2A venue picker. Maps to DB `venue_type` (+ `venue_type_other` for presets that are not one of the five coarse enum slugs).
+ * Single row in the live 2A entity-type picker. Maps to DB `venue_type` (+ `venue_type_other` when `other`).
  */
 export type IntakeVenuePickOptionV3 = {
   id: string
@@ -2189,127 +2176,84 @@ export type IntakeVenuePickOptionV3 = {
   otherDetail?: string
 }
 
+/** Maps legacy freeform `venue_type_other` strings (pre–expanded enum) to enum slugs for picker + display. */
+export const LEGACY_INTAKE_VENUE_OTHER_DETAIL_TO_SLUG: Record<string, VenueType> = {
+  'Conference / convention center': 'convention_center',
+  'Hotel / resort': 'hotel',
+  'Hotel ballroom / event hall': 'hotel',
+  'Office / coworking event space': 'office_coworking',
+  'Restaurant (private dining)': 'restaurant',
+  'Rooftop / terrace': 'rooftop',
+  'Warehouse / industrial': 'warehouse',
+  'Gallery / museum': 'gallery',
+  'Country club / golf club': 'country_club',
+  'Casino / gaming venue': 'casino',
+  'Stadium / arena': 'stadium',
+  'Boat / yacht': 'yacht_boat',
+  'Private estate / home': 'private_estate',
+  'Park / outdoor venue': 'park_public_space',
+  'Retail / pop-up space': 'retail_popup',
+}
+
 const INTAKE_VENUE_MASTER_LIST: IntakeVenuePickOptionV3[] = [
-  { id: 'bar', label: 'Bar', venueType: 'bar' },
-  { id: 'club', label: 'Club', venueType: 'club' },
-  { id: 'lounge', label: 'Lounge', venueType: 'lounge' },
-  { id: 'theater', label: 'Theater / performance hall', venueType: 'theater' },
-  { id: 'festival', label: 'Festival grounds / outdoor site', venueType: 'festival' },
-  {
-    id: 'o_conference',
-    label: 'Conference / convention center',
-    venueType: 'other',
-    otherDetail: 'Conference / convention center',
-  },
-  { id: 'o_hotel', label: 'Hotel / resort', venueType: 'other', otherDetail: 'Hotel / resort' },
-  {
-    id: 'o_ballroom',
-    label: 'Hotel ballroom / event hall',
-    venueType: 'other',
-    otherDetail: 'Hotel ballroom / event hall',
-  },
-  {
-    id: 'o_office',
-    label: 'Office / coworking event space',
-    venueType: 'other',
-    otherDetail: 'Office / coworking event space',
-  },
-  {
-    id: 'o_restaurant',
-    label: 'Restaurant (private dining)',
-    venueType: 'other',
-    otherDetail: 'Restaurant (private dining)',
-  },
-  { id: 'o_rooftop', label: 'Rooftop / terrace', venueType: 'other', otherDetail: 'Rooftop / terrace' },
-  {
-    id: 'o_warehouse',
-    label: 'Warehouse / industrial',
-    venueType: 'other',
-    otherDetail: 'Warehouse / industrial',
-  },
-  { id: 'o_gallery', label: 'Gallery / museum', venueType: 'other', otherDetail: 'Gallery / museum' },
-  {
-    id: 'o_country',
-    label: 'Country club / golf club',
-    venueType: 'other',
-    otherDetail: 'Country club / golf club',
-  },
-  {
-    id: 'o_casino',
-    label: 'Casino / gaming venue',
-    venueType: 'other',
-    otherDetail: 'Casino / gaming venue',
-  },
-  { id: 'o_stadium', label: 'Stadium / arena', venueType: 'other', otherDetail: 'Stadium / arena' },
-  { id: 'o_boat', label: 'Boat / yacht', venueType: 'other', otherDetail: 'Boat / yacht' },
-  {
-    id: 'o_estate',
-    label: 'Private estate / home',
-    venueType: 'other',
-    otherDetail: 'Private estate / home',
-  },
-  { id: 'o_park', label: 'Park / outdoor venue', venueType: 'other', otherDetail: 'Park / outdoor venue' },
-  {
-    id: 'o_retail',
-    label: 'Retail / pop-up space',
-    venueType: 'other',
-    otherDetail: 'Retail / pop-up space',
-  },
+  ...VENUE_TYPE_ORDER.filter(t => t !== 'other').map(t => ({
+    id: t,
+    label: VENUE_TYPE_INTAKE_2A_LABELS[t],
+    venueType: t,
+  })),
   { id: 'other_describe', label: 'Other (describe)', venueType: 'other' },
 ]
 
-/** Priority order for 2A venue chips by event type (ids from `INTAKE_VENUE_MASTER_LIST`). */
+/** Priority order for 2A suggestions by event type (ids from `INTAKE_VENUE_MASTER_LIST`). */
 const EVENT_VENUE_SUGGESTED_IDS: Partial<Record<KnownEventTypeV3, string[]>> = {
   corporate: [
-    'o_conference',
-    'o_hotel',
-    'o_ballroom',
-    'o_office',
+    'convention_center',
+    'hotel',
+    'office_coworking',
     'bar',
-    'o_restaurant',
+    'restaurant',
     'lounge',
-    'o_rooftop',
+    'rooftop',
     'theater',
     'club',
   ],
-  club_night: ['club', 'bar', 'lounge', 'theater', 'o_warehouse', 'o_rooftop'],
+  club_night: ['club', 'bar', 'lounge', 'theater', 'warehouse', 'rooftop'],
   wedding: [
-    'o_hotel',
-    'o_ballroom',
-    'o_estate',
-    'o_country',
-    'o_restaurant',
-    'o_gallery',
+    'hotel',
+    'private_estate',
+    'country_club',
+    'restaurant',
+    'gallery',
     'lounge',
     'bar',
     'theater',
     'club',
   ],
-  festival: ['festival', 'o_park', 'o_stadium', 'bar', 'club', 'theater', 'lounge'],
-  concert: ['theater', 'o_stadium', 'bar', 'club', 'lounge', 'festival', 'o_warehouse'],
+  festival: ['festival', 'park_public_space', 'stadium', 'bar', 'club', 'theater', 'lounge'],
+  concert: ['theater', 'stadium', 'bar', 'club', 'lounge', 'festival', 'warehouse'],
   private_event: [
-    'o_estate',
-    'o_hotel',
-    'o_ballroom',
-    'o_restaurant',
-    'o_gallery',
+    'private_estate',
+    'hotel',
+    'restaurant',
+    'gallery',
     'bar',
     'lounge',
     'theater',
     'club',
-    'o_conference',
+    'convention_center',
   ],
   brand_activation: [
-    'o_retail',
-    'o_gallery',
-    'o_warehouse',
-    'o_rooftop',
+    'retail_popup',
+    'gallery',
+    'warehouse',
+    'rooftop',
     'bar',
     'club',
     'lounge',
     'theater',
+    'sponsor_brand',
   ],
-  after_party: ['club', 'bar', 'lounge', 'theater', 'o_warehouse', 'o_rooftop', 'o_boat'],
+  after_party: ['club', 'bar', 'lounge', 'theater', 'warehouse', 'rooftop', 'yacht_boat'],
 }
 
 function filterIntakeVenuePicksByAllowed(
@@ -2326,13 +2270,16 @@ export function findIntakeVenuePickById(id: string): IntakeVenuePickOptionV3 | u
 /** Value for the 2A venue Select, or `__none__` / `__custom__` / `other_describe` for freeform. */
 export function intakeVenuePickValueFromShow(sd: BookingIntakeShowDataV3): string {
   if (!sd.venue_type) return '__none__'
-  if (sd.venue_type !== 'other') return sd.venue_type
+  if (sd.venue_type !== 'other') {
+    const slug = sd.venue_type as VenueType
+    if (INTAKE_VENUE_MASTER_LIST.some(o => o.id === slug)) return slug
+    return '__custom__'
+  }
   const t = sd.venue_type_other.trim()
   if (!t) return 'other_describe'
-  const found = INTAKE_VENUE_MASTER_LIST.find(
-    o => o.venueType === 'other' && o.otherDetail === t,
-  )
-  return found?.id ?? '__custom__'
+  const legacySlug = LEGACY_INTAKE_VENUE_OTHER_DETAIL_TO_SLUG[t]
+  if (legacySlug && INTAKE_VENUE_MASTER_LIST.some(o => o.id === legacySlug)) return legacySlug
+  return '__custom__'
 }
 
 export function intakeVenuePickOptionsForEvent(
@@ -2378,8 +2325,6 @@ export function intakeVenueTypeDisplay(v: VenueType | '', otherDetail?: string):
   if (v === 'other' && otherDetail?.trim()) return otherDetail.trim()
   return v ? VENUE_TYPE_INTAKE_2A_LABELS[v] ?? VENUE_TYPE_LABELS[v] : ''
 }
-
-const VENUE_TYPES: VenueType[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
 
 export function emptyShowDataV3(sortIndex: number): BookingIntakeShowDataV3 {
   return {
@@ -3074,7 +3019,7 @@ function parsePhase1Enum<T extends string>(v: unknown, allowed: readonly T[], fa
 }
 
 function asVenueType(v: unknown): VenueType | '' {
-  return typeof v === 'string' && (VENUE_TYPES as string[]).includes(v) ? (v as VenueType) : ''
+  return typeof v === 'string' && (VENUE_TYPE_ORDER as string[]).includes(v) ? (v as VenueType) : ''
 }
 
 function asKnownEventType(v: unknown): KnownEventTypeV3 | '' {

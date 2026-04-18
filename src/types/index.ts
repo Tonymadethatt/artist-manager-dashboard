@@ -1,15 +1,132 @@
-export type VenueType = 'bar' | 'club' | 'festival' | 'theater' | 'lounge' | 'other'
+/** Physical venues, event spaces, and partner / org categories (stored on `venues.venue_type`). */
+export type VenueType =
+  | 'bar'
+  | 'club'
+  | 'festival'
+  | 'theater'
+  | 'lounge'
+  | 'arena'
+  | 'stadium'
+  | 'outdoor_space'
+  | 'restaurant'
+  | 'hotel'
+  | 'resort'
+  | 'casino'
+  | 'convention_center'
+  | 'gallery'
+  | 'museum'
+  | 'brewery'
+  | 'winery'
+  | 'cafe'
+  | 'warehouse'
+  | 'rooftop'
+  | 'country_club'
+  | 'yacht_boat'
+  | 'private_estate'
+  | 'retail_popup'
+  | 'park_public_space'
+  | 'university'
+  | 'office_coworking'
+  | 'sponsor_brand'
+  | 'promoter'
+  | 'talent_buyer'
+  | 'booking_agency'
+  | 'management_company'
+  | 'record_label'
+  | 'pr_agency'
+  | 'media_outlet'
+  | 'nonprofit'
+  | 'corporate_client'
+  | 'streaming_platform'
+  | 'production_company'
+  | 'other'
 
 export const VENUE_TYPE_LABELS: Record<VenueType, string> = {
   bar: 'Bar',
   club: 'Club',
   festival: 'Festival',
-  theater: 'Theater',
+  theater: 'Theater / performance hall',
   lounge: 'Lounge',
+  arena: 'Arena',
+  stadium: 'Stadium',
+  outdoor_space: 'Outdoor space / grounds',
+  restaurant: 'Restaurant',
+  hotel: 'Hotel',
+  resort: 'Resort',
+  casino: 'Casino',
+  convention_center: 'Convention / conference center',
+  gallery: 'Gallery',
+  museum: 'Museum',
+  brewery: 'Brewery / taproom',
+  winery: 'Winery',
+  cafe: 'Café / coffee shop',
+  warehouse: 'Warehouse / industrial venue',
+  rooftop: 'Rooftop / terrace',
+  country_club: 'Country / golf club',
+  yacht_boat: 'Boat / yacht',
+  private_estate: 'Private estate / residence',
+  retail_popup: 'Retail / pop-up space',
+  park_public_space: 'Park / public outdoor',
+  university: 'School / university venue',
+  office_coworking: 'Office / coworking event space',
+  sponsor_brand: 'Brand / sponsor',
+  promoter: 'Promoter / presenter',
+  talent_buyer: 'Talent buyer / booker',
+  booking_agency: 'Booking agency',
+  management_company: 'Management company',
+  record_label: 'Label / publisher',
+  pr_agency: 'PR / marketing agency',
+  media_outlet: 'Media / podcast / broadcast',
+  nonprofit: 'Nonprofit / community org',
+  corporate_client: 'Corporate client',
+  streaming_platform: 'Streaming / platform partner',
+  production_company: 'Production / promoter company',
   other: 'Other',
 }
 
-export const VENUE_TYPE_ORDER: VenueType[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
+/** Default option order in searchable entity-type controls. */
+export const VENUE_TYPE_ORDER: VenueType[] = [
+  'bar',
+  'club',
+  'lounge',
+  'theater',
+  'festival',
+  'arena',
+  'stadium',
+  'outdoor_space',
+  'restaurant',
+  'hotel',
+  'resort',
+  'cafe',
+  'brewery',
+  'winery',
+  'casino',
+  'convention_center',
+  'country_club',
+  'gallery',
+  'museum',
+  'warehouse',
+  'rooftop',
+  'retail_popup',
+  'park_public_space',
+  'private_estate',
+  'yacht_boat',
+  'university',
+  'office_coworking',
+  'sponsor_brand',
+  'promoter',
+  'talent_buyer',
+  'booking_agency',
+  'management_company',
+  'record_label',
+  'pr_agency',
+  'media_outlet',
+  'nonprofit',
+  'corporate_client',
+  'streaming_platform',
+  'production_company',
+  'other',
+]
 
 export type OutreachStatus =
   | 'not_contacted'

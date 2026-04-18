@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
+import { EntityTypeSelect } from '@/components/venue/EntityTypeSelect'
 import {
   contactRoleForDisplay,
   isContactTitleLegacy,
@@ -41,7 +42,6 @@ import {
   OUTREACH_TRACK_LABELS,
   OUTREACH_TRACK_ORDER,
   VENUE_TYPE_LABELS,
-  VENUE_TYPE_ORDER,
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { stripOnTheHourMinutes12h } from '@/lib/calendar/pacificWallTime'
@@ -265,22 +265,20 @@ export function VenueDetailPanel({ venue, onClose, onUpdate, onDelete }: Props) 
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Venue type</Label>
-              <Select
-                value={venue.venue_type ?? 'other'}
-                onValueChange={v => onUpdate(venue.id, { venue_type: v as VenueType })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VENUE_TYPE_ORDER.map(t => (
-                    <SelectItem key={t} value={t}>
-                      {VENUE_TYPE_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Entity type</Label>
+              <EntityTypeSelect
+                value={
+                  (venue.venue_type && venue.venue_type in VENUE_TYPE_LABELS
+                    ? venue.venue_type
+                    : 'other') as VenueType
+                }
+                onValueChange={v => {
+                  if (!v) return
+                  onUpdate(venue.id, { venue_type: v as VenueType })
+                }}
+                placeholder="Select entity type"
+                triggerClassName="min-h-8"
+              />
               <p className="text-[10px] text-neutral-600 leading-snug">
                 Saved on the venue record (not on each contact).
               </p>

@@ -54,9 +54,10 @@ import {
 import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
 import { CONTACT_TITLE_LABELS } from '@/lib/contacts/contactTitles'
 import { ContactTitleSelect } from '@/components/contacts/ContactTitleSelect'
+import { EntityTypeSelect } from '@/components/venue/EntityTypeSelect'
 import { MUSIC_VIBE_PRESETS, US_STATE_OPTIONS } from '@/lib/intake/intakePayloadV3'
 import type { Contact, Venue, VenueType } from '@/types'
-import { VENUE_TYPE_LABELS } from '@/types'
+import { VENUE_TYPE_ORDER } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -93,7 +94,6 @@ import {
   PIVOT_OPTIONS,
   RATE_REACTION_OPTIONS,
   SEND_TO_OPTIONS,
-  VENUE_TYPE_CONFIRM_OPTIONS,
   WHO_ANSWERED_OPTIONS,
 } from '@/pages/cold-call/liveFieldOptions'
 import type { OutreachStatus } from '@/types'
@@ -106,8 +106,6 @@ const LIVE_WAYPOINTS = [
   { id: 'ask', label: 'Ask' },
   { id: 'close', label: 'Close' },
 ] as const
-
-const PRECALL_VENUE_TYPES: VenueType[] = ['bar', 'club', 'lounge', 'festival', 'theater', 'other']
 
 function tempAccentClass(t: ColdCallTemperature): string {
   switch (t) {
@@ -396,8 +394,7 @@ export default function ColdCallFormPage() {
     if (!selectedId || !data) return
     if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4e') return
     const vt = data.venue_type.trim()
-    const allowed: ColdCallVenueTypeConfirm[] = ['bar', 'club', 'festival', 'theater', 'lounge', 'other']
-    if (!data.venue_type_confirm && vt && (allowed as string[]).includes(vt)) {
+    if (!data.venue_type_confirm && vt && (VENUE_TYPE_ORDER as string[]).includes(vt)) {
       patch({ venue_type_confirm: vt as ColdCallVenueTypeConfirm })
     }
   }, [selectedId, data, patch])
@@ -1207,11 +1204,18 @@ export default function ColdCallFormPage() {
                   <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Venue type</Label>
-                  <SelectChipRow
+                  <Label className="text-neutral-400 text-xs">Entity type</Label>
+                  <EntityTypeSelect
                     value={data.venue_type_confirm}
-                    onChange={v => patch({ venue_type_confirm: v })}
-                    options={VENUE_TYPE_CONFIRM_OPTIONS}
+                    onValueChange={v =>
+                      patch({
+                        venue_type_confirm:
+                          v && v !== 'all' ? (v as ColdCallVenueTypeConfirm) : ('' as ColdCallVenueTypeConfirm),
+                      })
+                    }
+                    allowEmpty
+                    placeholder="Confirm entity type"
+                    triggerClassName="min-h-9"
                   />
                 </div>
               </div>
@@ -1597,27 +1601,23 @@ export default function ColdCallFormPage() {
               {data.pre_call_research_open ? (
                 <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-white/[0.06]">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label className="text-neutral-400 text-xs">Type of spot</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {PRECALL_VENUE_TYPES.map(k => {
-                        const on = data.venue_type === k
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => patch({ venue_type: on ? '' : k })}
-                            className={cn(
-                              'min-h-[32px] px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors',
-                              on
-                                ? 'border-neutral-200 bg-neutral-100 text-neutral-950'
-                                : 'border-white/[0.08] bg-neutral-900/50 text-neutral-400 hover:text-neutral-200',
-                            )}
-                          >
-                            {VENUE_TYPE_LABELS[k]}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <Label className="text-neutral-400 text-xs">Entity type</Label>
+                    <EntityTypeSelect
+                      value={
+                        data.venue_type.trim() && (VENUE_TYPE_ORDER as string[]).includes(data.venue_type.trim())
+                          ? (data.venue_type.trim() as VenueType)
+                          : ''
+                      }
+                      onValueChange={v =>
+                        patch({
+                          venue_type:
+                            v && v !== 'all' ? (v as VenueType) : ('' as ColdCallDataV1['venue_type']),
+                        })
+                      }
+                      allowEmpty
+                      placeholder="Search or pick type of client / space"
+                      triggerClassName="min-h-11 border-neutral-800 bg-neutral-950/80"
+                    />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-neutral-400 text-xs">State</Label>

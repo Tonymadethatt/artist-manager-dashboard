@@ -26,17 +26,15 @@ import type { Venue, OutreachStatus, OutreachTrack, VenueType, TaskTemplate } fr
 import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
 import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
-import { OUTREACH_STATUS_LABELS, OUTREACH_STATUS_ORDER, OUTREACH_TRACK_LABELS, OUTREACH_TRACK_ORDER } from '@/types'
+import {
+  OUTREACH_STATUS_LABELS,
+  OUTREACH_STATUS_ORDER,
+  OUTREACH_TRACK_LABELS,
+  OUTREACH_TRACK_ORDER,
+  VENUE_TYPE_LABELS,
+} from '@/types'
+import { EntityTypeSelect } from '@/components/venue/EntityTypeSelect'
 import { cn } from '@/lib/utils'
-
-const VENUE_TYPE_LABELS: Record<VenueType, string> = {
-  bar: 'Bar',
-  club: 'Club',
-  festival: 'Festival',
-  theater: 'Theater',
-  lounge: 'Lounge',
-  other: 'Other',
-}
 
 function fmtFollowUp(dateStr: string) {
   const [y, m, d] = dateStr.split('-')
@@ -257,17 +255,14 @@ export default function Outreach() {
             </SelectContent>
           </Select>
 
-          <Select value={filterType} onValueChange={v => setFilterType(v as VenueType | 'all')}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {(Object.keys(VENUE_TYPE_LABELS) as VenueType[]).map(t => (
-                <SelectItem key={t} value={t}>{VENUE_TYPE_LABELS[t]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <EntityTypeSelect
+            variant="filter"
+            value={filterType}
+            onValueChange={v => setFilterType(v as VenueType | 'all')}
+            triggerClassName="min-h-9 min-w-[140px]"
+            allLabel="All types"
+            placeholder="Entity type"
+          />
 
           <Select value={filterTrack} onValueChange={v => setFilterTrack(v as OutreachTrack | 'all')}>
             <SelectTrigger className="w-[130px]">
@@ -377,7 +372,7 @@ export default function Outreach() {
                       )}
                     </td>
                     <td className="px-3 py-3 hidden sm:table-cell">
-                      <span className="text-xs text-neutral-500 capitalize">{VENUE_TYPE_LABELS[venue.venue_type]}</span>
+                      <span className="text-xs text-neutral-500">{VENUE_TYPE_LABELS[venue.venue_type]}</span>
                     </td>
                     <td className="px-3 py-3">
                       <StatusBadge
