@@ -1588,9 +1588,9 @@ export default function Earnings() {
           </div>
         )}
 
-        {/* Financial overview — compact strip; detail lives in Deals + Retainer */}
+        {/* Financial overview — compact strip; deal rows still show per-deposit detail */}
         <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-neutral-800">
+          <div className="grid grid-cols-1 divide-y divide-neutral-800 lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
             <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Bookings (gross)</p>
               <p className="mt-0.5 text-lg font-semibold tabular-nums text-neutral-100 truncate min-w-0" title={fmtMoney(artistBookingStats.totalGrossLogged)}>
@@ -1601,6 +1601,23 @@ export default function Earnings() {
                 {' '}deal{artistBookingStats.dealCount !== 1 ? 's' : ''}
                 <span className="text-neutral-600"> · </span>
                 {fmtMoney(artistBookingStats.grossMarkedPaid)} marked paid
+              </p>
+            </div>
+            <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">My cut</p>
+              <p
+                className={cn(
+                  'mt-0.5 text-lg font-semibold tabular-nums truncate min-w-0',
+                  stats.totalCommission > 0 ? 'text-neutral-100' : 'text-neutral-400',
+                )}
+                title={fmtMoney(stats.totalCommission)}
+              >
+                {fmtMoney(stats.totalCommission)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500 leading-snug tabular-nums min-w-0">
+                Recv {fmtMoney(stats.received)}
+                <span className="text-neutral-600"> · </span>
+                {stats.count} deal{stats.count !== 1 ? 's' : ''}
               </p>
             </div>
             <div className="min-w-0 px-3 py-2.5 sm:px-4 sm:py-3">
@@ -1659,7 +1676,7 @@ export default function Earnings() {
         </div>
       </div>
 
-      {/* ── Deals (gross = artist booking; My cut = your commission) ───── */}
+      {/* ── Deals table (gross / owed / my cut per row; overview strip has totals) ─ */}
       <div className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <div className="flex items-center gap-2 min-w-0 sm:flex-1">
@@ -1932,24 +1949,6 @@ export default function Earnings() {
                 )
               })}
             </tbody>
-            {deals.length > 1 && (
-              <tfoot>
-                <tr className="border-t border-neutral-800 bg-neutral-950">
-                  <td className="px-3 py-2.5 text-xs text-neutral-500">
-                    {deals.length} deals
-                  </td>
-                  <td className="hidden sm:table-cell" />
-                  <td className="px-3 py-2.5" />
-                  <td className="px-3 py-2.5" />
-                  <td className="px-3 py-2.5 text-right font-bold text-neutral-100 tabular-nums whitespace-nowrap">
-                    {fmtMoney(stats.totalCommission)}
-                  </td>
-                  <td className="hidden md:table-cell px-2 py-2.5" />
-                  <td className="hidden md:table-cell px-2 py-2.5" />
-                  <td className="px-2 py-2.5" aria-hidden />
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       )}
