@@ -1,5 +1,5 @@
 import type { Contact, Deal, DealPricingSnapshot, Venue } from '../../types'
-import { isDealPricingSnapshot } from '../../types'
+import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, isDealPricingSnapshot } from '../../types'
 import { formatArtistOnsiteContactLine } from './artistOnsiteContactLine'
 import {
   artistGigLogisticsLabelsFromDeal,
@@ -27,6 +27,7 @@ export type GigBookedEmailDealInput = Pick<
   | 'gross_amount'
   | 'payment_due_date'
   | 'commission_tier'
+  | 'commission_rate'
   | 'promise_lines'
   | 'pricing_snapshot'
   | 'deposit_due_amount'
@@ -99,14 +100,23 @@ function paySectionHtml(deal: GigBookedEmailDealInput): string {
     `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Still owed (from venue):</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(remainder))}</p>`,
   )
 
-  const comm = Number(deal.commission_amount ?? 0)
-  if (Number.isFinite(comm) && comm > 0 && deal.commission_tier !== 'artist_network') {
+  const tier = deal.commission_tier
+  if (tier === 'artist_network') {
     lines.push(
-      `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.6;"><strong style="color:#a3a3a3;">Your management fee:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(comm))}</p>`,
+      `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.65;">Artist network booking — no manager booking commission on this gig.</p>`,
     )
-  } else if (deal.commission_tier === 'artist_network') {
+  } else {
+    const rateRaw = Number((d as Deal).commission_rate ?? COMMISSION_TIER_RATES[tier])
+    const pct = Number.isFinite(rateRaw) ? Math.round(rateRaw * 100) : 0
+    const tierLabel = COMMISSION_TIER_LABELS[tier]
+    const comm = Number(deal.commission_amount ?? 0)
+    const amtFmt = formatUsdDisplayCeil(Number.isFinite(comm) ? comm : 0)
     lines.push(
-      `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.6;">Artist network booking — no booking commission on this one.</p>`,
+      `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:12px 0 0;line-height:1.65;">`
+        + `<strong style="color:#ffffff;">Tier:</strong> ${escapeHtmlPlain(tierLabel)} · `
+        + `<strong style="color:#ffffff;">Rate:</strong> ${pct}% · `
+        + `<strong style="color:#ffffff;">Send to manager:</strong> ${escapeHtmlPlain(amtFmt)}`
+        + `</p>`,
     )
   }
 
@@ -300,6 +310,7 @@ export function buildGigBookedPreviewBundle(args: {
     gross_amount: args.gross_amount,
     payment_due_date: args.payment_due_date,
     commission_tier: 'new_doors',
+    commission_rate: 0.2,
     promise_lines,
     pricing_snapshot: snapshot,
     deposit_due_amount: snapshot.depositDue,

@@ -1,5 +1,5 @@
 import type { CommissionTier, Deal, DealTerms } from '../../types'
-import { isDealPricingSnapshot } from '../../types'
+import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, isDealPricingSnapshot } from '../../types'
 import { depositDueFromDeal, dealRemainingClientBalance } from '../deals/dealPaymentTotals'
 import { artistGigLogisticsLabelsFromDeal } from '../email/gigBookedLogisticsLines'
 import {
@@ -27,6 +27,7 @@ export type GoogleCalendarDealDescriptionInput = {
   deposit_paid_amount?: number | null
   balance_paid_amount?: number | null
   commission_amount?: number | null
+  commission_rate?: number | null
 }
 
 export type GoogleCalendarDealDescriptionExtras = {
@@ -144,9 +145,17 @@ export function buildGoogleCalendarDealDescription(
   payLines.push(`Still owed (total): ${formatUsdDisplayCeil(remainder)}`)
   payLines.push(`Pay by: ${formatPaymentDue(deal.payment_due_date)}`)
 
-  const comm = Number(deal.commission_amount ?? 0)
-  if (Number.isFinite(comm) && comm > 0 && deal.commission_tier !== 'artist_network') {
-    payLines.push(`Management fee (per agreement): ${formatUsdDisplayCeil(comm)}`)
+  const tier = deal.commission_tier
+  if (tier === 'artist_network') {
+    payLines.push('Artist network — no manager booking commission.')
+  } else if (tier) {
+    const rateRaw = Number(deal.commission_rate ?? COMMISSION_TIER_RATES[tier])
+    const pct = Number.isFinite(rateRaw) ? Math.round(rateRaw * 100) : 0
+    const tierLabel = COMMISSION_TIER_LABELS[tier]
+    const comm = Number(deal.commission_amount ?? 0)
+    payLines.push(
+      `Manager commission: ${tierLabel} · ${pct}% · send ${formatUsdDisplayCeil(Number.isFinite(comm) ? comm : 0)}`,
+    )
   }
 
   sections.push({ title: 'Money', body: payLines.join('\n') })

@@ -39,6 +39,7 @@ export type DealPushRow = {
   deposit_due_amount: number | null
   deposit_paid_amount: number
   balance_paid_amount: number
+  commission_rate: number | null
   commission_amount: number | null
 }
 
@@ -131,6 +132,7 @@ async function buildGoogleEventDescriptionAsync(args: {
       deposit_due_amount: deal.deposit_due_amount,
       deposit_paid_amount: deal.deposit_paid_amount,
       balance_paid_amount: deal.balance_paid_amount,
+      commission_rate: deal.commission_rate,
       commission_amount: deal.commission_amount,
     },
     venue?.deal_terms ?? null,
@@ -407,7 +409,7 @@ export async function performGoogleCalendarDealPush(args: {
     const { data: deal, error: dealErr } = await supabase
       .from('deals')
       .select(
-        'id, user_id, description, venue_id, onsite_contact_id, event_start_at, event_end_at, event_cancelled_at, event_date, performance_start_at, performance_end_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag, gross_amount, payment_due_date, commission_tier, promise_lines, pricing_snapshot, deposit_due_amount, deposit_paid_amount, balance_paid_amount, commission_amount',
+        'id, user_id, description, venue_id, onsite_contact_id, event_start_at, event_end_at, event_cancelled_at, event_date, performance_start_at, performance_end_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag, gross_amount, payment_due_date, commission_tier, promise_lines, pricing_snapshot, deposit_due_amount, deposit_paid_amount, balance_paid_amount, commission_rate, commission_amount',
       )
       .eq('id', dealId)
       .eq('user_id', userId)
@@ -435,6 +437,10 @@ export async function performGoogleCalendarDealPush(args: {
           : null,
       deposit_paid_amount: Number(dr.deposit_paid_amount ?? 0) || 0,
       balance_paid_amount: Number(dr.balance_paid_amount ?? 0) || 0,
+      commission_rate:
+        dr.commission_rate != null && dr.commission_rate !== ''
+          ? Number(dr.commission_rate)
+          : null,
       commission_amount:
         dr.commission_amount != null && dr.commission_amount !== ''
           ? Number(dr.commission_amount)
