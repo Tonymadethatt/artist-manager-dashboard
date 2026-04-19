@@ -653,6 +653,7 @@ export default function EmailTemplates() {
           deal: bookedDeal,
           venue: bookedVenue,
           onsiteContact: bookedOnsite,
+          managerName: transactionalManagerName,
         })
         return buildBrandedGigCalendarEmail({
           kind: 'gig_booked_ics',

@@ -736,6 +736,7 @@ const handler: Handler = async (event) => {
             deal,
             venue,
             onsiteContact,
+            managerName: shellProf.managerName,
           })
           const html = buildBrandedGigCalendarEmail({
             kind: 'gig_booked_ics',

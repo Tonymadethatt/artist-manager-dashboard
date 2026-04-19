@@ -11,7 +11,7 @@ import { formatVenuePostalLine } from '../calendar/venueAddressForGoogle'
 import { performanceWindowReadableFromDeal, whenLineFriendlyFromDeal } from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { buildGigCalendarShowDetailsBody } from './gigCalendarEmailHtml'
-import { EMAIL_BODY_SECONDARY } from './emailDarkSurfacePalette'
+import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 import { normalizePricingCatalogDoc } from '../../types'
 import type { PricingCatalogDoc } from '../../types'
@@ -39,8 +39,46 @@ export type GigBookedEmailDealInput = Pick<
 
 const CARD_ACCENTS = ['#22c55e', '#60a5fa', '#fbbf24', '#a78bfa', '#f97316'] as const
 
+/** Manager’s slice in the illustrative pie (visual only; not tied to 10% vs 20%). */
+const MANAGER_PIE_SLICE_GREEN = '#22c55e'
+
 function nextAccent(i: number): string {
   return CARD_ACCENTS[i % CARD_ACCENTS.length]!
+}
+
+/** e.g. "Tony's commission" from profile manager name; falls back for generic placeholders. */
+export function formatManagerCommissionSubsectionHeading(managerName: string): string {
+  const t = managerName.trim()
+  if (!t || t === 'Management' || t === 'Your Manager') return "Manager's commission"
+  const first = t.split(/\s+/)[0] ?? t
+  const safe = first.replace(/[^a-zA-Z'-]/g, '')
+  const headRaw = (safe || 'Manager').slice(0, 48)
+  const head = headRaw.charAt(0).toUpperCase() + headRaw.slice(1).toLowerCase()
+  return `${head}'s commission`
+}
+
+/**
+ * Fixed ~15% wedge (green) vs remainder (Payment card accent) — illustration only for email clients that render SVG.
+ */
+function staticIllustrativeManagerPieSvg(artistMajorityFill: string): string {
+  const cx = 18
+  const cy = 18
+  const r = 14
+  const t0 = -Math.PI / 2
+  const t1 = t0 + 0.15 * 2 * Math.PI
+  const x1 = cx + r * Math.cos(t0)
+  const y1 = cy + r * Math.sin(t0)
+  const x2 = cx + r * Math.cos(t1)
+  const y2 = cy + r * Math.sin(t1)
+  const f = (n: number) => n.toFixed(2)
+  const dArtist = `M ${cx} ${cy} L ${f(x2)} ${f(y2)} A ${r} ${r} 0 1 1 ${f(x1)} ${f(y1)} Z`
+  const dMgr = `M ${cx} ${cy} L ${f(x1)} ${f(y1)} A ${r} ${r} 0 0 1 ${f(x2)} ${f(y2)} Z`
+  return (
+    `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style="display:block;" role="img" aria-label="Illustration: manager keeps a small slice of the fee">`
+    + `<path fill="${artistMajorityFill}" d="${dArtist}"/>`
+    + `<path fill="${MANAGER_PIE_SLICE_GREEN}" d="${dMgr}"/>`
+    + `</svg>`
+  )
 }
 
 function bulletListHtml(items: string[]): string {
@@ -65,8 +103,12 @@ function formatPaymentDueEmail(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(d)
 }
 
-function paySectionHtml(deal: GigBookedEmailDealInput): string {
+function paySectionHtml(
+  deal: GigBookedEmailDealInput,
+  options: { managerName: string; paymentCardAccent: string },
+): string {
   const d = deal as Deal
+  const { managerName, paymentCardAccent } = options
   const gross = Number(deal.gross_amount ?? 0)
   const grossFmt = formatUsdDisplayCeil(Number.isFinite(gross) ? gross : 0)
   const depDue = depositDueFromDeal(d)
@@ -112,12 +154,25 @@ function paySectionHtml(deal: GigBookedEmailDealInput): string {
     const tierLabel = COMMISSION_TIER_LABELS[tier]
     const comm = Number(deal.commission_amount ?? 0)
     const amtFmt = formatUsdDisplayCeil(Number.isFinite(comm) ? comm : 0)
+    const subHead = formatManagerCommissionSubsectionHeading(managerName)
+    const pie = staticIllustrativeManagerPieSvg(paymentCardAccent)
+    const tierLine =
+      `<strong style="color:#ffffff;">Tier:</strong> ${escapeHtmlPlain(tierLabel)} · `
+      + `<strong style="color:#ffffff;">Rate:</strong> ${pct}% · `
+      + `<strong style="color:#ffffff;">Send to manager:</strong> ${escapeHtmlPlain(amtFmt)}`
     lines.push(
-      `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:12px 0 0;line-height:1.65;">`
-        + `<strong style="color:#ffffff;">Tier:</strong> ${escapeHtmlPlain(tierLabel)} · `
-        + `<strong style="color:#ffffff;">Rate:</strong> ${pct}% · `
-        + `<strong style="color:#ffffff;">Send to manager:</strong> ${escapeHtmlPlain(amtFmt)}`
-        + `</p>`,
+      `<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.12);">`
+        + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;width:100%;">`
+        + `<tr>`
+        + `<td style="width:44px;vertical-align:middle;padding:0 12px 0 0;">${pie}</td>`
+        + `<td style="vertical-align:middle;padding:0;">`
+        + `<p style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 6px;line-height:1.35;">${escapeHtmlPlain(subHead)}</p>`
+        + `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">${tierLine}</p>`
+        + `<p style="font-size:10px;color:#737373;margin:6px 0 0;line-height:1.45;">Illustration only (~15% wedge) — your tier, rate, and amount on this row are what apply.</p>`
+        + `</td>`
+        + `</tr>`
+        + `</table>`
+        + `</div>`,
     )
   }
 
@@ -136,8 +191,11 @@ export function buildGigBookedEmailMiddleHtml(args: {
   > | null
   /** On-site / production contact when set on the deal. */
   onsiteContact: Pick<Contact, 'name' | 'phone' | 'title_key' | 'role'> | null
+  /** Manager display name from artist profile (e.g. “Tony”) — used for “Tony’s commission” subsection. */
+  managerName?: string | null
 }): string {
-  const { deal, venue, onsiteContact } = args
+  const { deal, venue, onsiteContact, managerName: managerNameRaw } = args
+  const managerName = managerNameRaw?.trim() || 'Management'
   const cards: string[] = []
   let ai = 0
 
@@ -168,7 +226,14 @@ export function buildGigBookedEmailMiddleHtml(args: {
     : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">On-site contact not set on this booking yet — ask your manager or the venue.</p>`
   cards.push(emailSectionCardHtml('Venue contact', peopleBody, nextAccent(ai++)))
 
-  cards.push(emailSectionCardHtml('Payment', paySectionHtml(deal), nextAccent(ai++)))
+  const paymentAccent = nextAccent(ai++)
+  cards.push(
+    emailSectionCardHtml(
+      'Payment',
+      paySectionHtml(deal, { managerName, paymentCardAccent: paymentAccent }),
+      paymentAccent,
+    ),
+  )
 
   const gross = deal.gross_amount
   const logisticsLabels = artistGigLogisticsLabelsFromDeal(deal.promise_lines ?? null, gross)

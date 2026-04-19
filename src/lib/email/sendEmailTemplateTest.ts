@@ -392,6 +392,7 @@ export async function sendEmailTemplateTest(
         deal: bookedDeal,
         venue: bookedVenue,
         onsiteContact: bookedOnsite,
+        managerName: gigShell.managerName,
       })
       const html = buildBrandedGigCalendarEmail({
         kind: 'gig_booked_ics',

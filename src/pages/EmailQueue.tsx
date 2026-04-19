@@ -756,7 +756,12 @@ export default function EmailQueue() {
                 .maybeSingle()
               const venue = venueRow as Venue | null
               const onsiteContact = await loadOnsiteContactForGigBooked(supabase, user.id, deal)
-              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({ deal, venue, onsiteContact })
+              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
+                deal,
+                venue,
+                onsiteContact,
+                managerName: gigShellP.managerName,
+              })
               setPreviewHtml(buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
                 L: Lg,
@@ -1303,6 +1308,7 @@ export default function EmailQueue() {
                 deal,
                 venue,
                 onsiteContact,
+                managerName: shellQ.managerName,
               })
               const html = buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
