@@ -3,48 +3,25 @@
  * Used by Email Templates preview, test send, and (later) queue/automation.
  */
 
-import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
-import { artistLayoutForSend } from '@/lib/emailLayout'
-import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
-import { decorateProgrammaticSectionCardTitle } from '@/lib/email/emailSectionCardEmoji'
+import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import { artistLayoutForSend } from '../emailLayout'
+import { renderAppendBlocksHtml } from './appendBlocksHtml'
+import { decorateProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_LABEL,
   EMAIL_META_TAGLINE,
   EMAIL_ROW_LABEL,
   EMAIL_TEXT_PRIMARY,
-} from '@/lib/email/emailDarkSurfacePalette'
-import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmailFooterHtml'
-import { formatPacificWeekdayMdYyFromYmd } from '@/lib/calendar/pacificWallTime'
-import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
-import { artistTransactionalGreetingFirstName } from '@/lib/email/artistTransactionalEmailDocument'
+} from './emailDarkSurfacePalette'
+import { buildArtistBrandedEmailFooterHtml } from './artistBrandedEmailFooterHtml'
+import { formatPacificWeekdayMdYyFromYmd } from '../calendar/pacificWallTime'
+import { formatUsdDisplayCeil } from '../format/displayCurrency'
+import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
+import type { BookingCommissionLineItem } from './bookingCommissionReminderShared'
 
-export type BookingCommissionLineItem = {
-  venueName: string
-  /** YYYY-MM-DD */
-  eventDateYmd: string
-  gigGross: number
-  commissionRatePercent: number
-  commissionAmount: number
-}
-
-/** Sample rows for template preview and test send when no live data is passed. */
-export const PREVIEW_BOOKING_COMMISSION_LINE_ITEMS: BookingCommissionLineItem[] = [
-  {
-    venueName: 'Skyline Bar & Lounge',
-    eventDateYmd: '2026-05-17',
-    gigGross: 2500,
-    commissionRatePercent: 15,
-    commissionAmount: 375,
-  },
-  {
-    venueName: 'Harbor Room',
-    eventDateYmd: '2026-06-03',
-    gigGross: 1800,
-    commissionRatePercent: 15,
-    commissionAmount: 270,
-  },
-]
+export type { BookingCommissionLineItem } from './bookingCommissionReminderShared'
+export { PREVIEW_BOOKING_COMMISSION_LINE_ITEMS } from './bookingCommissionReminderShared'
 
 export type BookingCommissionReminderFooter = {
   logoBaseUrl: string

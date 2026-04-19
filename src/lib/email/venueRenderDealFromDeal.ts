@@ -1,10 +1,10 @@
-import type { Deal } from '@/types'
+import type { Deal } from '../../types'
 import {
   computeClientAmountDueNow,
   dealRemainingClientBalance,
   dealTotalPaidTowardGross,
-} from '@/lib/deals/dealPaymentTotals'
-import type { VenueRenderDeal } from '@/lib/email/renderVenueEmail'
+} from '../deals/dealPaymentTotals'
+import type { VenueRenderDeal } from './renderVenueEmail'
 
 type DealFields = Pick<
   Deal,

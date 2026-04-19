@@ -1,14 +1,15 @@
 import type { Handler } from '@netlify/functions'
 import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
+import { fetchUnpaidBookingCommissionLineItems } from '../../src/lib/deals/fetchUnpaidBookingCommissionLineItems'
+import { buildBookingCommissionReminderEmailHtml } from '../../src/lib/email/bookingCommissionReminderEmailDocument'
 import {
-  buildBookingCommissionReminderEmailHtml,
   PREVIEW_BOOKING_COMMISSION_LINE_ITEMS,
   type BookingCommissionLineItem,
-} from '../../src/lib/email/bookingCommissionReminderEmailDocument'
+} from '../../src/lib/email/bookingCommissionReminderShared'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
-import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
+import { fetchEmailTestModeRowForSend, getServiceSupabase, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 interface ArtistProfile {
   artist_name: string
@@ -78,15 +79,35 @@ const handler: Handler = async (event) => {
   }
 
   const siteUrl = process.env.URL || ''
-  const lineItems =
-    Array.isArray(rawItems) && rawItems.length > 0
-      ? rawItems
-      : testOnly
-        ? PREVIEW_BOOKING_COMMISSION_LINE_ITEMS
-        : []
 
-  if (!testOnly && lineItems.length === 0) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'lineItems required for live send' }) }
+  let lineItems: BookingCommissionLineItem[] = []
+  if (Array.isArray(rawItems) && rawItems.length > 0) {
+    lineItems = rawItems
+  } else if (userId) {
+    const supabase = getServiceSupabase()
+    if (!supabase) {
+      return {
+        statusCode: 503,
+        body: JSON.stringify({ message: 'Email send is unavailable: database not configured on server.' }),
+      }
+    }
+    const fetched = await fetchUnpaidBookingCommissionLineItems(supabase, userId)
+    if (fetched.error) {
+      return { statusCode: 503, body: JSON.stringify({ message: fetched.error }) }
+    }
+    lineItems = fetched.lineItems
+  } else if (testOnly) {
+    lineItems = PREVIEW_BOOKING_COMMISSION_LINE_ITEMS
+  }
+
+  if (lineItems.length === 0) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        message:
+          'No unpaid booking commissions to include. Add or update deals with unpaid manager commission in Earnings, or pass lineItems explicitly.',
+      }),
+    }
   }
 
   const html = buildBookingCommissionReminderEmailHtml({
