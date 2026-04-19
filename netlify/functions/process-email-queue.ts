@@ -60,6 +60,8 @@ import {
 } from '../../src/lib/calendar/pacificWallTime'
 import { parseResendMessageIdFromSendFunctionResponse } from '../../src/lib/email/resendMessageId'
 import type { Deal, Venue } from '../../src/types'
+import { resolveVenueRecipientDisplayNameForPayload } from '../../src/lib/email/resolveVenueRecipientGreeting'
+import { venueRenderDealFromDealFields } from '../../src/lib/email/venueRenderDealFromDeal'
 
 /** Keep in sync with src/lib/emailQueueBuffer.ts */
 const EMAIL_QUEUE_BUFFER_OPTIONS = [5, 10, 15, 20, 30] as const
@@ -182,7 +184,7 @@ const handler: Handler = async (event) => {
     .select(`
       *,
       venue:venues(id, name, city, location),
-      deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date, ics_invite_sent_at),
+      deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date, ics_invite_sent_at, deposit_paid_amount, balance_paid_amount, deposit_due_amount, pricing_snapshot),
       contact:contacts(id, name, email)
     `)
     .eq('status', 'pending')
@@ -920,7 +922,10 @@ const handler: Handler = async (event) => {
     }
 
     const recipientPayload = {
-      name: (email.contact as { name?: string } | null)?.name || email.recipient_email,
+      name: resolveVenueRecipientDisplayNameForPayload({
+        name: (email.contact as { name?: string } | null)?.name ?? null,
+        email: String(email.recipient_email ?? ''),
+      }),
       email: email.recipient_email,
     }
 
@@ -952,6 +957,8 @@ const handler: Handler = async (event) => {
         siteOrigin
       )
       if (resolvedUrl) dealForSend = { ...dealForSend, agreement_url: resolvedUrl }
+      const asDeal = { ...(email.deal as unknown as Deal), ...dealForSend } as Deal
+      dealForSend = { ...dealForSend, ...venueRenderDealFromDealFields(asDeal) }
     }
 
     const dealPayload = dealForSend ? { deal: dealForSend } : {}
@@ -993,14 +1000,9 @@ const handler: Handler = async (event) => {
         },
         ...(dealForSend
           ? {
-            deal: {
-              description: String(dealForSend.description ?? ''),
-              gross_amount: Number(dealForSend.gross_amount ?? 0),
-              event_date: (dealForSend.event_date as string | null) ?? null,
-              payment_due_date: (dealForSend.payment_due_date as string | null) ?? null,
-              agreement_url: (dealForSend.agreement_url as string | null) ?? null,
-              notes: dealForSend.notes != null ? String(dealForSend.notes) : null,
-            },
+            deal: venueRenderDealFromDealFields({
+              ...(dealForSend as unknown as Deal),
+            }),
           }
           : {}),
         venue: email.venue

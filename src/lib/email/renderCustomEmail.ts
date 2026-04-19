@@ -20,6 +20,7 @@ import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
 import { applyMergeToText, resolveMergeKey, type CustomEmailMergeContext, type CustomMergeAudience } from './customEmailMerge'
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
+import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE } from './venueEmailCtaStyles'
 import {
   buildVenueClientEmailHeaderBrandInnerHtml,
@@ -133,7 +134,10 @@ function renderCustomOpeningLine(
     if (!merged) return ''
     return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
   }
-  const firstName = (recipient.name ?? '').split(/\s+/)[0] || ''
+  const firstName = resolveVenueRecipientSalutationFirstName({
+    name: recipient.name,
+    email: recipient.email,
+  })
   const line = `Hi ${firstName},`
   return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(line)}</p>`
 }

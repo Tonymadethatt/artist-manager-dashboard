@@ -59,6 +59,11 @@ import {
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
+import {
+  resolveVenueRecipientDisplayNameForPayload,
+  venueContactDisplayNameForList,
+} from '@/lib/email/resolveVenueRecipientGreeting'
+import { venueRenderDealFromDealFields } from '@/lib/email/venueRenderDealFromDeal'
 import { parseResendMessageIdFromSendFunctionResponse } from '@/lib/email/resendMessageId'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 import {
@@ -287,7 +292,7 @@ interface PendingRowProps {
 }
 
 function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sending, dismissing }: PendingRowProps) {
-  const recipientName = email.contact?.name || null
+  const displayName = venueContactDisplayNameForList(email.contact, email.recipient_email)
   const noteLine = pendingNotesLine(email)
 
   return (
@@ -300,7 +305,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
           )}
         </div>
         <p className="text-sm text-neutral-300 truncate">
-          {recipientName ? `${recipientName} · ` : ''}{email.recipient_email}
+          {displayName ? `${displayName} · ` : ''}{email.recipient_email}
         </p>
         <div className="flex items-center gap-3">
           <CountdownBadge
@@ -351,6 +356,7 @@ function PendingRow({ email, bufferMinutes, onSendNow, onDismiss, onPreview, sen
 }
 
 function HistoryRow({ email, onPreview }: { email: VenueEmail; onPreview: (email: VenueEmail) => void }) {
+  const displayName = venueContactDisplayNameForList(email.contact, email.recipient_email)
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-neutral-800 last:border-0">
       <div className="flex-1 min-w-0 space-y-1">
@@ -362,7 +368,7 @@ function HistoryRow({ email, onPreview }: { email: VenueEmail; onPreview: (email
           )}
         </div>
         <p className="text-sm text-neutral-300 truncate">
-          {email.contact?.name ? `${email.contact.name} · ` : ''}{email.recipient_email}
+          {displayName ? `${displayName} · ` : ''}{email.recipient_email}
         </p>
         <p className="text-xs text-neutral-600">
           {email.sent_at ? fmtDate(email.sent_at) : fmtDate(email.created_at)}
@@ -854,14 +860,12 @@ export default function EmailQueue() {
           )) ?? agreementUrl
       }
 
-      const dealForRender = email.deal ? {
-        description: email.deal.description,
-        gross_amount: email.deal.gross_amount,
-        event_date: email.deal.event_date,
-        payment_due_date: email.deal.payment_due_date,
-        agreement_url: agreementUrl,
-        notes: email.deal.notes,
-      } : undefined
+      const dealForRender = email.deal
+        ? venueRenderDealFromDealFields({
+          ...(email.deal as Deal),
+          agreement_url: agreementUrl,
+        })
+        : undefined
 
       const venueForRender = email.venue ? {
         name: email.venue.name,
@@ -887,7 +891,13 @@ export default function EmailQueue() {
 
         const previewRecipient = row.audience === 'artist'
           ? { name: (profile.artist_name ?? '').split(/\s+/)[0] || 'Artist', email: email.recipient_email }
-          : { name: email.contact?.name || email.recipient_email, email: email.recipient_email }
+          : {
+            name: resolveVenueRecipientDisplayNameForPayload({
+              name: email.contact?.name ?? null,
+              email: email.recipient_email,
+            }),
+            email: email.recipient_email,
+          }
 
         let attachment: { url: string; fileName: string } | undefined
         if (row.attachment_generated_file_id) {
@@ -930,7 +940,10 @@ export default function EmailQueue() {
         setPreviewSubject(subject)
       } else {
         const recipientForRender = {
-          name: email.contact?.name || email.recipient_email,
+          name: resolveVenueRecipientDisplayNameForPayload({
+            name: email.contact?.name ?? null,
+            email: email.recipient_email,
+          }),
           email: email.recipient_email,
         }
 
@@ -1456,16 +1469,14 @@ export default function EmailQueue() {
           )) ?? agreementUrl
       }
 
-      const dealPayload = email.deal ? {
-        deal: {
-          description: email.deal.description,
-          gross_amount: email.deal.gross_amount,
-          event_date: email.deal.event_date,
-          payment_due_date: email.deal.payment_due_date,
-          agreement_url: agreementUrl,
-          notes: email.deal.notes,
-        },
-      } : {}
+      const dealPayload = email.deal
+        ? {
+          deal: venueRenderDealFromDealFields({
+            ...(email.deal as Deal),
+            agreement_url: agreementUrl,
+          }),
+        }
+        : {}
 
       const venuePayload = email.venue ? {
         venue: {
@@ -1476,7 +1487,10 @@ export default function EmailQueue() {
       } : {}
 
       const recipientPayload = {
-        name: email.contact?.name || email.recipient_email,
+        name: resolveVenueRecipientDisplayNameForPayload({
+          name: email.contact?.name ?? null,
+          email: email.recipient_email,
+        }),
         email: email.recipient_email,
       }
 

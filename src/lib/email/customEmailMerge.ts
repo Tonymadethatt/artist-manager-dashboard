@@ -1,4 +1,5 @@
 import type { VenueRenderDeal, VenueRenderProfile, VenueRenderRecipient, VenueRenderVenue } from './renderVenueEmail'
+import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
 import { formatPacificWeekdayMdYyFromYmd } from '../calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
@@ -9,6 +10,9 @@ export const VENUE_CUSTOM_MERGE_KEYS = [
   'deal.description',
   'deal.event_date',
   'deal.gross_amount',
+  'deal.amount_due_now',
+  'deal.total_paid_toward_gross',
+  'deal.remaining_client_balance',
   'deal.payment_due_date',
   'deal.agreement_url',
   'deal.notes',
@@ -22,6 +26,9 @@ export const ARTIST_CUSTOM_MERGE_KEYS = [
   'deal.description',
   'deal.event_date',
   'deal.gross_amount',
+  'deal.amount_due_now',
+  'deal.total_paid_toward_gross',
+  'deal.remaining_client_balance',
   'profile.artist_name',
   'profile.company_name',
 ] as const
@@ -70,7 +77,10 @@ export function resolveMergeKey(
 ): string {
   const k = canonicalMergeKey(key ?? '')
   if (!k || !KEY_SETS[audience].has(k)) return ''
-  const firstName = (ctx.recipient.name ?? '').split(/\s+/)[0] || ''
+  const firstName = resolveVenueRecipientSalutationFirstName({
+    name: ctx.recipient.name,
+    email: ctx.recipient.email,
+  })
   const venueName = ctx.venue?.name ?? ctx.deal?.description ?? ''
   switch (k) {
     case 'recipient.firstName':
@@ -83,6 +93,24 @@ export function resolveMergeKey(
       return ctx.deal?.event_date ? fmtDateYmdEmail(ctx.deal.event_date) : ''
     case 'deal.gross_amount':
       return ctx.deal != null && Number.isFinite(ctx.deal.gross_amount) ? money(ctx.deal.gross_amount) : ''
+    case 'deal.amount_due_now':
+      return ctx.deal != null &&
+        ctx.deal.amount_due_now != null &&
+        Number.isFinite(ctx.deal.amount_due_now)
+        ? money(ctx.deal.amount_due_now)
+        : ''
+    case 'deal.total_paid_toward_gross':
+      return ctx.deal != null &&
+        ctx.deal.total_paid_toward_gross != null &&
+        Number.isFinite(ctx.deal.total_paid_toward_gross)
+        ? money(ctx.deal.total_paid_toward_gross)
+        : ''
+    case 'deal.remaining_client_balance':
+      return ctx.deal != null &&
+        ctx.deal.remaining_client_balance != null &&
+        Number.isFinite(ctx.deal.remaining_client_balance)
+        ? money(ctx.deal.remaining_client_balance)
+        : ''
     case 'deal.payment_due_date':
       return ctx.deal?.payment_due_date ? fmtDateYmdEmail(ctx.deal.payment_due_date) : ''
     case 'deal.agreement_url':

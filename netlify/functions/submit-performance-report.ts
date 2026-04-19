@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { pickVenueContactForOutboundEmail } from '../../src/lib/email/pickVenueContactForOutboundEmail'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 import {
   formatFrictionTagsForNote,
@@ -27,6 +28,19 @@ import {
 } from '../../src/lib/dealGrossReconciliationTask'
 
 const FRICTION_IDS = new Set(PRODUCTION_FRICTION_OPTIONS.map(o => o.id))
+
+async function primaryVenueOutboundContact(
+  supabase: SupabaseClient,
+  venueId: string,
+) {
+  const { data } = await supabase
+    .from('contacts')
+    .select('id, name, email')
+    .eq('venue_id', venueId)
+    .not('email', 'is', null)
+    .order('created_at', { ascending: true })
+  return pickVenueContactForOutboundEmail(data ?? [])
+}
 
 const NIGHT_MOOD_KEYS = new Set<string>([
   'crushed',
@@ -660,21 +674,16 @@ const handler: Handler = async (event) => {
 
   if (body.venueInterest === 'yes') {
     try {
-      const { data: contact } = await supabase
-        .from('contacts')
-        .select('email')
-        .eq('venue_id', row.venue_id)
-        .not('email', 'is', null)
-        .limit(1)
-        .single()
+      const outbound = await primaryVenueOutboundContact(supabase, row.venue_id)
 
-      if (contact?.email) {
+      if (outbound?.email) {
         await supabase.from('venue_emails').insert({
           user_id: row.user_id,
           venue_id: row.venue_id,
           deal_id: row.deal_id ?? null,
+          contact_id: outbound.id,
           email_type: 'rebooking_inquiry',
-          recipient_email: contact.email,
+          recipient_email: outbound.email,
           subject: `Rebooking Inquiry - ${venueName}`,
           status: 'pending',
           notes: 'Auto-queued from performance report submission.',
@@ -723,20 +732,15 @@ const handler: Handler = async (event) => {
         completed: false,
       })
       if (row.deal_id) {
-        const { data: chaseContact } = await supabase
-          .from('contacts')
-          .select('email')
-          .eq('venue_id', row.venue_id)
-          .not('email', 'is', null)
-          .limit(1)
-          .maybeSingle()
-        if (chaseContact?.email) {
+        const chase = await primaryVenueOutboundContact(supabase, row.venue_id)
+        if (chase?.email) {
           await supabase.from('venue_emails').insert({
             user_id: row.user_id,
             venue_id: row.venue_id,
             deal_id: row.deal_id,
+            contact_id: chase.id,
             email_type: 'payment_reminder',
-            recipient_email: chaseContact.email,
+            recipient_email: chase.email,
             subject: `Payment Reminder — ${venueName}`,
             status: 'pending',
             notes: 'Auto-queued from performance report (payment not received).',

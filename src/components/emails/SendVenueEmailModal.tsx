@@ -41,6 +41,8 @@ import { appendEmailCaptureTokenNote } from '@/lib/emailCapture/tokenNotes'
 import { defaultEmailCaptureExpiresAt } from '@/lib/emailCapture/expiry'
 import { VENUE_EMAIL_TYPE_LABELS } from '@/types'
 import { dealRemainingClientBalance } from '@/lib/deals/dealPaymentTotals'
+import { resolveVenueRecipientDisplayNameForPayload } from '@/lib/email/resolveVenueRecipientGreeting'
+import { venueRenderDealFromDealFields } from '@/lib/email/venueRenderDealFromDeal'
 
 const CUSTOM_CAPTURE_KIND_OPTIONS: { value: EmailCaptureKind; label: string }[] = [
   { value: 'first_outreach',              label: EMAIL_CAPTURE_KIND_LABELS.first_outreach },
@@ -281,16 +283,18 @@ export function SendVenueEmailModal({
           social_handle: profile.social_handle,
           tagline: profile.tagline,
         },
-        recipient: { name: recipientName || recipientEmail, email: recipientEmail },
+        recipient: {
+          name: resolveVenueRecipientDisplayNameForPayload({
+            name: recipientName ?? null,
+            email: recipientEmail,
+          }),
+          email: recipientEmail,
+        },
         ...(deal ? {
-          deal: {
-            description: deal.description,
-            gross_amount: deal.gross_amount,
-            event_date: deal.event_date,
-            payment_due_date: deal.payment_due_date,
+          deal: venueRenderDealFromDealFields({
+            ...deal,
             agreement_url: agreementUrl,
-            notes: deal.notes,
-          },
+          }),
         } : {}),
         ...(venue ? {
           venue: { name: venue.name, city: venue.city ?? null, location: venue.location ?? null },

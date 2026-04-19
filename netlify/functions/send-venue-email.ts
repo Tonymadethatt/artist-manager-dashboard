@@ -51,6 +51,9 @@ interface DealData {
   payment_due_date: string | null
   agreement_url: string | null
   notes: string | null
+  amount_due_now?: number
+  total_paid_toward_gross?: number
+  remaining_client_balance?: number
 }
 
 interface VenueData {

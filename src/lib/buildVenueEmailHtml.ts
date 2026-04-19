@@ -76,6 +76,9 @@ export const PREVIEW_MOCK_VENUE: PreviewVenue = {
 export const PREVIEW_MOCK_DEAL: PreviewDeal = {
   description: 'DJ Set at Skyline Bar & Lounge',
   gross_amount: 500,
+  amount_due_now: 250,
+  total_paid_toward_gross: 250,
+  remaining_client_balance: 250,
   event_date: '2026-05-17',
   payment_due_date: '2026-05-10',
   agreement_url: 'https://docs.google.com/document/d/preview-agreement-link',

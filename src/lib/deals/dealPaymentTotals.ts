@@ -38,3 +38,21 @@ export function dealDepositSatisfied(deal: Deal): boolean {
   const paid = Number(deal.deposit_paid_amount ?? 0)
   return Number.isFinite(paid) && paid + 1e-6 >= due
 }
+
+/**
+ * Next dollar amount the client should pay toward the contract: deposit leg until satisfied, then remaining balance.
+ * Uses the same rounding as {@link dealRemainingClientBalance} / {@link depositDueFromDeal}.
+ */
+export function computeClientAmountDueNow(
+  deal: Pick<Deal, 'gross_amount' | 'deposit_paid_amount' | 'balance_paid_amount' | 'pricing_snapshot' | 'deposit_due_amount'>,
+): number {
+  const remaining = dealRemainingClientBalance(deal)
+  if (remaining <= 0) return 0
+  if (dealDepositSatisfied(deal as Deal)) {
+    return remaining
+  }
+  const due = depositDueFromDeal(deal as Deal)
+  const paid = Number(deal.deposit_paid_amount ?? 0)
+  const depositRemainder = Math.max(0, Math.round((due - paid) * 100) / 100)
+  return Math.min(remaining, depositRemainder)
+}

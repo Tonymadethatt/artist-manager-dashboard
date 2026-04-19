@@ -21,6 +21,7 @@ import {
 } from './venueClientEmailHeaderBrandHtml'
 import { formatPacificWeekdayMdYyFromYmd } from '../calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
+import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
 
 function hrefAttr(u: string): string {
   return u.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -58,7 +59,14 @@ export interface VenueRenderProfile {
 
 export interface VenueRenderDeal {
   description: string
+  /** Full contract total (client gross). */
   gross_amount: number
+  /** Next amount owed (deposit leg or remaining balance); omitted on legacy payloads. */
+  amount_due_now?: number
+  /** Sum recorded toward gross (deposit + balance legs). */
+  total_paid_toward_gross?: number
+  /** Gross minus total paid. */
+  remaining_client_balance?: number
   event_date: string | null
   payment_due_date: string | null
   agreement_url: string | null
@@ -166,7 +174,10 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
   const artistNameUpper = artistName.toUpperCase()
   const replyTo = profile.reply_to_email || profile.from_email
   const venueName = venue?.name || (deal?.description ? deal.description : 'your venue')
-  const firstName = (recipient.name ?? '').split(' ')[0]
+  const firstName = resolveVenueRecipientSalutationFirstName({
+    name: recipient.name,
+    email: recipient.email,
+  })
   const { logo: logoUrl, ig: igUrl } = logoUrls(logoBaseUrl)
 
   let subject = ''
@@ -204,7 +215,10 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       const receiptRows = [
         deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
-        deal?.gross_amount ? row('Amount received', money(deal.gross_amount), '#22c55e') : '',
+        deal?.gross_amount ? row('Contract total', money(deal.gross_amount), '#ffffff') : '',
+        deal?.total_paid_toward_gross != null && Number.isFinite(deal.total_paid_toward_gross)
+          ? row('Paid to date', money(deal.total_paid_toward_gross), '#22c55e')
+          : '',
         row('Status', 'Payment confirmed', '#22c55e'),
       ].filter(Boolean).join('')
       bodyCards = card('Payment Summary', receiptRows)
@@ -216,10 +230,20 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       subject = `Payment Reminder - ${artistNameUpper}`
       greeting = `Hi ${firstName},`
       intro = `Just a friendly reminder about the outstanding payment for the upcoming event. Please see the details below.`
+      const dueNow =
+        deal &&
+        deal.amount_due_now != null &&
+        Number.isFinite(deal.amount_due_now) &&
+        deal.amount_due_now > 0
+          ? deal.amount_due_now
+          : deal && deal.gross_amount > 0
+            ? deal.gross_amount
+            : null
       const reminderRows = [
         deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
-        deal?.gross_amount ? row('Amount due', money(deal.gross_amount), '#ef4444') : '',
+        dueNow != null ? row('Amount due now', money(dueNow), '#ef4444') : '',
+        deal?.gross_amount ? row('Contract total', money(deal.gross_amount), '#ffffff') : '',
         deal?.payment_due_date ? rowEmailYmd('Due date', deal.payment_due_date, '#ef4444') : '',
       ].filter(Boolean).join('')
       bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(decorateVenueProgrammaticSectionCardTitle('Payment Due'))}</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
@@ -277,7 +301,12 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       const preRows = [
         deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
-        deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
+        deal?.gross_amount ? row('Contract total', money(deal.gross_amount), '#22c55e') : '',
+        deal?.amount_due_now != null &&
+        Number.isFinite(deal.amount_due_now) &&
+        deal.amount_due_now > 0.009
+          ? row('Balance due now', money(deal.amount_due_now), '#fbbf24')
+          : '',
       ].filter(Boolean).join('')
       bodyCards = preRows ? card('Event summary', preRows) : ''
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;">Please confirm load-in or soundcheck window, settlement method, and the best onsite day-of contact. If there is a tech rider or parking note we should have, send it over and we will match it.</p></div>`
@@ -314,7 +343,12 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       bodyCards = card('Billing', invoiceContent)
       const invRows = [
         deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
-        deal?.gross_amount ? row('Amount', money(deal.gross_amount), '#ffffff') : '',
+        deal?.gross_amount ? row('Contract total', money(deal.gross_amount), '#ffffff') : '',
+        deal?.remaining_client_balance != null &&
+        Number.isFinite(deal.remaining_client_balance) &&
+        deal.remaining_client_balance > 0.009
+          ? row('Outstanding balance', money(deal.remaining_client_balance), '#ffffff')
+          : '',
       ].filter(Boolean).join('')
       if (invRows) bodyCards += card('Reference', invRows)
       closing = `If anything on the invoice needs to match your AP process, reply here and we will adjust.`
