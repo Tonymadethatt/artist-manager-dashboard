@@ -319,11 +319,14 @@ export default function ColdCallFormPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const cold = useColdCalls()
+  const { parseData, updateCallData, flushImmediate } = cold
   const booking = useBookingIntakes()
   const { venues, addVenue, refetch: refetchVenues } = useVenues()
   const { profile } = useArtistProfile()
 
   const callIdParam = searchParams.get('callId')
+  const prepParam = searchParams.get('prep')
+  const prepNavOnceRef = useRef(false)
   const [selectedId, setSelectedId] = useState<string | null>(callIdParam)
   const [precallError, setPrecallError] = useState<string | null>(null)
   const [savingUi, setSavingUi] = useState(false)
@@ -346,14 +349,14 @@ export default function ColdCallFormPage() {
     [cold.calls, selectedId],
   )
   const data = useMemo(
-    () => (selectedRow ? cold.parseData(selectedRow) : null),
-    [selectedRow, cold],
+    () => (selectedRow ? parseData(selectedRow) : null),
+    [selectedRow, parseData],
   )
 
   const patch = useCallback(
     (p: Partial<ColdCallDataV1>) => {
       if (!selectedId) return
-      cold.updateCallData(selectedId, d => {
+      updateCallData(selectedId, d => {
         const next: ColdCallDataV1 = { ...d, ...p }
         const opExplicit = Object.prototype.hasOwnProperty.call(p, 'operator_temperature')
         if (next.session_mode === 'live_call' && !next.temperature_manual_lock && !opExplicit) {
@@ -369,7 +372,7 @@ export default function ColdCallFormPage() {
         return next
       })
     },
-    [selectedId, cold],
+    [selectedId, updateCallData],
   )
 
   const patchAfterChip = useCallback(
@@ -379,6 +382,32 @@ export default function ColdCallFormPage() {
     },
     [patch],
   )
+
+  /** Cold calls hub: `?prep=1` opens the form in pre-call so research / essentials can be edited. */
+  useEffect(() => {
+    if (prepParam !== '1') {
+      prepNavOnceRef.current = false
+      return
+    }
+    if (!selectedId) return
+    if (cold.loading) return
+    if (!cold.calls.some(c => c.id === selectedId)) return
+    if (prepNavOnceRef.current) return
+    prepNavOnceRef.current = true
+
+    void (async () => {
+      patch({ session_mode: 'pre_call' })
+      await flushImmediate(selectedId)
+      setSearchParams(
+        prev => {
+          const n = new URLSearchParams(prev)
+          n.delete('prep')
+          return n
+        },
+        { replace: true },
+      )
+    })()
+  }, [prepParam, selectedId, cold.loading, cold.calls, patch, setSearchParams, flushImmediate])
 
   useEffect(() => {
     if (!selectedId || !data || data.session_mode !== 'post_call' || data.outcome_manual_lock) return
@@ -808,17 +837,23 @@ export default function ColdCallFormPage() {
             key={i}
             className={
               b.situational
-                ? 'mt-3 border-t border-white/[0.06] pt-3 text-sm italic text-yellow-100/75'
+                ? b.situationalChain
+                  ? 'mt-2 text-sm text-yellow-100/75'
+                  : 'mt-3 border-t border-white/[0.06] pt-3 text-sm italic text-yellow-100/75'
                 : undefined
             }
           >
             {b.situational ? (
-              <>
-                <span className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 not-italic">
-                  After they answer — if it fits
-                </span>
-                <span className="mt-1 block font-medium not-italic leading-relaxed text-yellow-100/90">{b.text}</span>
-              </>
+              b.situationalChain ? (
+                <span className="block font-medium not-italic leading-relaxed text-yellow-100/90">{b.text}</span>
+              ) : (
+                <>
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 not-italic">
+                    After they answer — if it fits
+                  </span>
+                  <span className="mt-1 block font-medium not-italic leading-relaxed text-yellow-100/90">{b.text}</span>
+                </>
+              )
             ) : (
               b.text
             )}
@@ -862,13 +897,16 @@ export default function ColdCallFormPage() {
                 </div>
                 {data.who_answered === 'right_person' ? (
                   <div className="space-y-3">
+                    <p className="text-[11px] text-neutral-500 leading-snug">
+                      Passive capture — if they say it during the call, type it here. Otherwise you can get it at the close.
+                    </p>
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Name</Label>
                       <Input
                         className="h-10 border-neutral-800 bg-neutral-950/80"
                         value={data.target_name}
                         onChange={e => patch({ target_name: e.target.value })}
-                        placeholder="Type their name if they gave it"
+                        placeholder="Type when they say it — don’t ask yet"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -877,7 +915,7 @@ export default function ColdCallFormPage() {
                         allowEmpty
                         value={data.target_title_key}
                         onValueChange={key => patch({ target_title_key: key })}
-                        placeholder="Select title"
+                        placeholder="When they mention their role"
                         triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
                       />
                     </div>
@@ -1051,7 +1089,12 @@ export default function ColdCallFormPage() {
                 <Label className="text-neutral-400 text-xs">How did they respond?</Label>
                 <SelectChipRow
                   value={data.initial_reaction}
-                  onChange={v => patchAfterChip({ initial_reaction: v })}
+                  onChange={v =>
+                    patchAfterChip({
+                      initial_reaction: v,
+                      pitch_tell_me_more_ack: false,
+                    })
+                  }
                   options={INITIAL_REACTION_OPTIONS}
                 />
               </div>
@@ -1907,7 +1950,23 @@ export default function ColdCallFormPage() {
               </div>
             </section>
 
-            <div className="flex justify-center pt-4">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-4">
+              {data.live_history.length > 0 ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  className="min-h-[52px] px-8 border-neutral-600 text-neutral-100 hover:bg-neutral-800"
+                  onClick={() =>
+                    patch({
+                      session_mode: 'live_call',
+                      view_card: bookmarkCard(data),
+                    })
+                  }
+                >
+                  Resume call
+                </Button>
+              ) : null}
               <Button
                 key={`begin-${continueShake}`}
                 type="button"
