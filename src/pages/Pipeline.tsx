@@ -711,10 +711,7 @@ export default function Pipeline() {
         panelOpen ? 'flex-row' : ''
       )}>
         {/* Board / List */}
-        <div className={cn(
-          'flex flex-col min-h-0',
-          panelOpen ? 'flex-1 min-w-0' : 'flex-1'
-        )}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
@@ -728,7 +725,7 @@ export default function Pipeline() {
               <Button variant="outline" size="sm" onClick={() => openAdd(null)}>Add a task</Button>
             </div>
           ) : (
-            <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-y-auto">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden">
               {viewMode === 'board' ? (
                 <>
                   {filteredTasks.length === 0 ? (
@@ -736,7 +733,7 @@ export default function Pipeline() {
                       No open tasks or items completed today for this filter. Older completions are below.
                     </p>
                   ) : (
-                    <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 min-h-0 shrink-0">
+                    <div className="flex min-h-0 min-w-0 w-full shrink-0 gap-3 overflow-x-auto pb-2 -mx-1 px-1">
                       {boardGroups.venueCards.map(({ venue, tasks: venueTasks }) => (
                         <VenueWorkCard
                           key={venue?.id ?? 'null'}
@@ -812,16 +809,16 @@ export default function Pipeline() {
                   <button
                     type="button"
                     onClick={() => setEarlierExpanded(e => !e)}
-                    className="flex items-center justify-between w-full px-3 py-2.5 text-left text-xs text-neutral-300 hover:bg-neutral-800/80 gap-2"
+                    className="flex w-full min-w-0 items-center justify-between gap-2 px-3 py-2.5 text-left text-xs text-neutral-300 hover:bg-neutral-800/80"
                   >
-                    <span>
+                    <span className="min-w-0">
                       Earlier completed{' '}
                       <span className="text-neutral-500">({earlierCompletedTasks.length})</span>
                     </span>
                     <span className={cn('text-neutral-500 transition-transform shrink-0', earlierExpanded && 'rotate-180')}>▾</span>
                   </button>
                   {earlierExpanded && (
-                    <div className="border-t border-neutral-800 max-h-[min(360px,40vh)] overflow-y-auto">
+                    <div className="border-t border-neutral-800">
                       {earlierCompletedTasks.map(task => (
                         <div key={task.id} className="px-2 border-b border-neutral-800/80 last:border-b-0">
                           <TaskItem
