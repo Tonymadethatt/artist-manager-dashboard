@@ -634,16 +634,23 @@ export default function ColdCallsHubPage() {
     }
   }, [selected])
 
-  const openWorkspace = useCallback(
+  const openCallWorkspace = useCallback(
     (id: string) => {
       navigate(`/forms/cold-call?callId=${encodeURIComponent(id)}`)
     },
     [navigate],
   )
 
+  const openPrepWorkspace = useCallback(
+    (id: string) => {
+      navigate(`/forms/cold-call?callId=${encodeURIComponent(id)}&prep=1`)
+    },
+    [navigate],
+  )
+
   const handleNew = async () => {
     const row = await cold.createColdCall()
-    if (row) openWorkspace(row.id)
+    if (row) openCallWorkspace(row.id)
   }
 
   const handleDelete = async (id: string) => {
@@ -743,9 +750,21 @@ export default function ColdCallsHubPage() {
                     <h2 className="text-lg font-semibold tracking-tight text-neutral-100 leading-snug">{selected.title || 'Untitled'}</h2>
                     <p className="text-sm text-neutral-400">{tempLabel(selected.temperature)}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2 shrink-0">
-                    <Button type="button" className="h-9" onClick={() => openWorkspace(selected.id)}>
-                      Open workspace
+                  <div className="flex flex-wrap gap-2 shrink-0 items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 min-w-[7.25rem] px-3 border-neutral-600 text-neutral-100 hover:bg-neutral-800"
+                      onClick={() => openPrepWorkspace(selected.id)}
+                    >
+                      Edit prep
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-9 min-w-[7.25rem] px-3 bg-neutral-100 text-neutral-950 hover:bg-white"
+                      onClick={() => openCallWorkspace(selected.id)}
+                    >
+                      Open call
                     </Button>
                     <Button
                       type="button"
@@ -777,9 +796,12 @@ export default function ColdCallsHubPage() {
           ) : (
             <div className="mx-auto max-w-2xl space-y-4">
               <p className="text-sm text-amber-400/90">Could not read call details for this record.</p>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={() => openWorkspace(selected.id)}>
-                  Open workspace
+              <div className="flex flex-wrap gap-2 items-center">
+                <Button type="button" variant="outline" className="border-neutral-600" onClick={() => openPrepWorkspace(selected.id)}>
+                  Edit prep
+                </Button>
+                <Button type="button" className="bg-neutral-100 text-neutral-950 hover:bg-white" onClick={() => openCallWorkspace(selected.id)}>
+                  Open call
                 </Button>
                 <Button
                   type="button"

@@ -1,11 +1,19 @@
 import type { ArtistProfile } from '@/types'
 import type { ColdCallDataV1, ColdCallLiveCardId } from '@/lib/coldCall/coldCallPayload'
-import { COLD_CALL_PITCH_REASON_CHIPS } from '@/lib/coldCall/coldCallPayload'
 
 export function coldCallFirstName(full: string): string {
   const t = full.trim()
   if (!t) return ''
   return t.split(/\s+/)[0] ?? ''
+}
+
+/** Spoken greeting from the operator’s local clock (browser time when the script renders). */
+export function coldCallTimeOfDayGreeting(): string {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 12) return 'Good morning'
+  if (h >= 12 && h < 17) return 'Good afternoon'
+  if (h >= 17 && h < 22) return 'Good evening'
+  return 'Good night'
 }
 
 export function liveCardStepTitle(card: ColdCallLiveCardId): string {
@@ -72,18 +80,12 @@ function nameOrHey(d: ColdCallDataV1): string {
   return coldCallFirstName(raw)
 }
 
-function pitchBecauseClause(d: ColdCallDataV1): string {
-  if (d.pitch_reason_custom.trim()) return d.pitch_reason_custom.trim()
-  if (d.pitch_reason_chip && COLD_CALL_PITCH_REASON_CHIPS[d.pitch_reason_chip]) {
-    return COLD_CALL_PITCH_REASON_CHIPS[d.pitch_reason_chip].clause({
-      venue: d.venue_name.trim() || 'your spot',
-      city: d.city.trim() || 'the area',
-    })
-  }
-  return ''
+export type ColdCallScriptBeat = {
+  text: string
+  situational?: boolean
+  /** Second+ line under the same “After they answer” block (no repeated label). */
+  situationalChain?: boolean
 }
-
-export type ColdCallScriptBeat = { text: string; situational?: boolean }
 
 /** Script lines for the live cold-call cards; `situational` beats are follow-ups after they answer the opening question. */
 export function coldCallLiveScriptBeats(
@@ -93,10 +95,8 @@ export function coldCallLiveScriptBeats(
 ): ColdCallScriptBeat[] {
   const vn = d.venue_name.trim() || 'your spot'
   const n = nameOrHey(d)
-  const events = d.known_events.trim()
   const phone = ctx.managerPhone.trim() || 'the number I’m calling from'
-  const because = pitchBecauseClause(d)
-  const { artistName, managerFirst } = ctx
+  const { artistName, managerFirst, credentialsLine } = ctx
 
   switch (card) {
     case 'p1': {
@@ -114,6 +114,11 @@ export function coldCallLiveScriptBeats(
             text: `Perfect — are you guys currently booking DJs for any upcoming events?`,
             situational: true,
           },
+          {
+            text: `Are you the one that handles entertainment?`,
+            situational: true,
+            situationalChain: true,
+          },
         ]
       }
       return [
@@ -121,6 +126,11 @@ export function coldCallLiveScriptBeats(
         {
           text: `Perfect — are you guys currently booking DJs for any upcoming events?`,
           situational: true,
+        },
+        {
+          text: `Are you the one that handles entertainment?`,
+          situational: true,
+          situationalChain: true,
         },
       ]
     }
@@ -143,26 +153,21 @@ export function coldCallLiveScriptBeats(
         { text: `I appreciate it.` },
       ]
     case 'p3': {
+      const greet = coldCallTimeOfDayGreeting()
       const lines: ColdCallScriptBeat[] = [
-        { text: `My name’s ${managerFirst} — I work with ${artistName}.` },
+        { text: `${greet} — my name’s ${managerFirst} — I work with ${artistName}.` },
         {
-          text: `He’s on the radio out here, Cali 93.9, and we’ve worked with brands like Jack Daniel’s and Golden Boy.`,
+          text: `We’ve done work with brands like Jack Daniel’s, Golden Boy, and he’s currently on air at Cali 93.9.`,
+        },
+        {
+          text: `I came across you guys on Instagram and wanted to reach out because I think there’s a good fit here. Let me ask you this: what is your typical DJ night like right now?`,
         },
       ]
-      if (because) {
-        lines.push({
-          text: `I came across you guys and honestly — ${because}.`,
-        })
-      } else {
-        lines.push({
-          text: `Honestly, I came across you guys and I think he’d be a great fit for what you’re doing.`,
-        })
-      }
-      if (events) {
-        lines.push({
-          text: `Acknowledge what they said — reflect why it’s valuable before you move on.`,
-          situational: true,
-        })
+      if (d.initial_reaction === 'pitch_tell_me_more' && d.pitch_tell_me_more_ack) {
+        const bio =
+          credentialsLine.trim()
+          || `${artistName} is an experienced club and event DJ — mixes and press kit on request.`
+        lines.push({ text: `Here’s the quick picture — ${bio}` })
       }
       return lines
     }
@@ -226,12 +231,19 @@ export function coldCallLiveScriptBeats(
           {
             text: `I appreciate your time. I’ll keep you guys on my radar and circle back when the timing’s better. Enjoy the rest of your day.`,
           },
+          { text: `I didn’t catch your name — what was it again?`, situational: true },
         ]
       }
       if (t === 'warm') {
         return [
           {
             text: `I’ll send everything your way. I’ll give you some time to look at it and check in soon. Thanks again, I appreciate you — enjoy the rest of your day.`,
+          },
+          { text: `Who am I sending this to?`, situational: true },
+          {
+            text: `I appreciate you — I didn’t catch your name?`,
+            situational: true,
+            situationalChain: true,
           },
         ]
       }
@@ -240,6 +252,7 @@ export function coldCallLiveScriptBeats(
           {
             text: `I’ll get everything together and send it over. I’ll check in in a few days to lock something in. Thanks again, I appreciate you — enjoy the rest of your day.`,
           },
+          { text: `Who am I sending this to?`, situational: true },
         ]
       }
       if (t === 'converting')
@@ -247,8 +260,12 @@ export function coldCallLiveScriptBeats(
           {
             text: `Perfect — I can actually get everything set up right now if you’ve got a couple more minutes.`,
           },
+          { text: `Who am I setting this up for?`, situational: true },
         ]
-      return [{ text: `Thanks again, I appreciate you — enjoy the rest of your day.` }]
+      return [
+        { text: `Thanks again, I appreciate you — enjoy the rest of your day.` },
+        { text: `I didn’t catch your name?`, situational: true },
+      ]
     }
     case 'p6_vm': {
       if (n) {

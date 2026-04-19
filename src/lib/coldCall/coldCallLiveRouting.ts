@@ -13,7 +13,6 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     case 'p1': {
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {
-        if (!d.target_name.trim()) return {}
         return withHistory(d, 'p3')
       }
       if (d.who_answered === 'gatekeeper') return withHistory(d, 'p2a')
@@ -54,16 +53,34 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p3': {
       if (!d.initial_reaction) return {}
-      if (d.initial_reaction === 'not_interested') {
+      if (d.initial_reaction === 'pitch_tell_me_more') {
+        if (!d.pitch_tell_me_more_ack) {
+          return { pitch_tell_me_more_ack: true }
+        }
+        return withHistory(d, 'p5')
+      }
+      if (d.initial_reaction === 'pitch_no_dj_nights' || d.initial_reaction === 'not_interested') {
         return {
           ...withHistory(d, 'p6'),
           operator_temperature: d.operator_temperature || 'dead',
         }
       }
       if (d.initial_reaction === 'not_right_now') return withHistory(d, 'p6')
-      if (d.initial_reaction === 'own_djs') return withHistory(d, 'p3b')
+      if (
+        d.initial_reaction === 'pitch_rotation_solid'
+        || d.initial_reaction === 'pitch_in_house'
+        || d.initial_reaction === 'own_djs'
+      ) {
+        return withHistory(d, 'p3b')
+      }
       if (d.initial_reaction === 'how_much') return withHistory(d, 'p4d')
-      if (d.initial_reaction === 'interested' || d.initial_reaction === 'maybe') return withHistory(d, 'p5')
+      if (
+        d.initial_reaction === 'pitch_looking'
+        || d.initial_reaction === 'interested'
+        || d.initial_reaction === 'maybe'
+      ) {
+        return withHistory(d, 'p5')
+      }
       return {}
     }
     case 'p3b': {

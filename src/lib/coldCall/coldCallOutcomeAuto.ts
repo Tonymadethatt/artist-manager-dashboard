@@ -12,7 +12,7 @@ export function computeColdCallOutcomeAuto(d: ColdCallDataV1): ColdCallOutcome {
   }
   if (d.gatekeeper_result === 'shut_down') return 'dead_not_fit'
   if (d.gatekeeper_result === 'gave_name' || d.gatekeeper_result === 'message') return 'gatekeeper_info'
-  if (d.initial_reaction === 'not_interested') return 'dead_not_fit'
+  if (d.initial_reaction === 'not_interested' || d.initial_reaction === 'pitch_no_dj_nights') return 'dead_not_fit'
   if (d.initial_reaction === 'not_right_now' && d.parking_result) return 'interested_followup'
   if (d.ask_response === 'send_info_first') return 'interested_sending'
   if (d.ask_response === 'check_back') return 'interested_followup'

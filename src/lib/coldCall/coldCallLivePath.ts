@@ -56,7 +56,9 @@ export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdC
     case 'p1':
       return d.who_answered === 'voicemail' || d.who_answered === 'no_answer'
     case 'p2a':
+      return true
     case 'p3':
+      return d.initial_reaction !== 'pitch_tell_me_more'
     case 'p3b':
     case 'p3c':
     case 'p4a':
@@ -163,9 +165,6 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
   switch (card) {
     case 'p1': {
       need('who_answered', !!d.who_answered, 'Pick who picked up.')
-      if (d.who_answered === 'right_person') {
-        need('target_name', !!d.target_name.trim(), 'Add their name (or what they gave you).')
-      }
       break
     }
     case 'p2a': {

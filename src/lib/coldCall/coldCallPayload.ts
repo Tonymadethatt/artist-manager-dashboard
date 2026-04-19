@@ -178,6 +178,13 @@ export const COLD_CALL_PITCH_REASON_CHIPS: Record<
 
 export type ColdCallInitialReaction =
   | ''
+  /** Response to “what does your typical DJ night look like?” */
+  | 'pitch_rotation_solid'
+  | 'pitch_looking'
+  | 'pitch_in_house'
+  | 'pitch_no_dj_nights'
+  | 'pitch_tell_me_more'
+  /** Legacy pitch reactions (older saved calls). */
   | 'interested'
   | 'maybe'
   | 'own_djs'
@@ -409,6 +416,8 @@ export interface ColdCallDataV1 {
   callback_expected: '' | 'yes' | 'no_retry'
 
   initial_reaction: ColdCallInitialReaction
+  /** After “Tell me more about him first”: first Continue shows bio on pitch card; second Continue → Ask. */
+  pitch_tell_me_more_ack: boolean
   pivot_response: ColdCallPivotResponse
   parking_result: ColdCallParkingResult
   send_to: ColdCallSendTo
@@ -517,6 +526,7 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     callback_expected: '',
 
     initial_reaction: '',
+    pitch_tell_me_more_ack: false,
     pivot_response: '',
     parking_result: '',
     send_to: '',
@@ -746,6 +756,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     callback_expected: asStr(o.callback_expected, '') as ColdCallDataV1['callback_expected'],
 
     initial_reaction: asStr(o.initial_reaction, '') as ColdCallInitialReaction,
+    pitch_tell_me_more_ack: asBool(o.pitch_tell_me_more_ack, base.pitch_tell_me_more_ack),
     pivot_response: asStr(o.pivot_response, '') as ColdCallPivotResponse,
     parking_result: asStr(o.parking_result, '') as ColdCallParkingResult,
     send_to: parseSendTo(asStr(o.send_to, '')),

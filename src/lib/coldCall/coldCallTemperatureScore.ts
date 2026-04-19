@@ -33,15 +33,21 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
   }
 
   switch (d.initial_reaction) {
+    case 'pitch_looking':
     case 'interested':
       s += 3
       break
     case 'maybe':
       s += 1
       break
+    case 'pitch_tell_me_more':
+      s += 2
+      break
     case 'how_much':
       s += 1
       break
+    case 'pitch_rotation_solid':
+    case 'pitch_in_house':
     case 'own_djs':
       if (d.pivot_response === 'sometimes') s += 2
       else if (d.pivot_response === 'not_really') s -= 1
@@ -50,6 +56,7 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
     case 'not_right_now':
       s -= 1
       break
+    case 'pitch_no_dj_nights':
     case 'not_interested':
       s -= 3
       break
