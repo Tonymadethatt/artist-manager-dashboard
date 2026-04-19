@@ -1,5 +1,5 @@
 /**
- * Optional leading emoji for dark email section card headers (dot + title).
+ * Optional leading emoji for dark email section card headers (title row).
  * Titles are matched after normalization; programmatic titles are uppercased elsewhere.
  * If a title already begins with an emoji, we do not prepend another.
  */
@@ -20,6 +20,17 @@ const EMOJI_BY_NORMALIZED_KEY: Record<string, string> = {
   'show details': '🎤',
   note: '📝',
   details: '📄',
+  'two-week schedule': '🗓️',
+  'day-before reminder': '⏰',
+  booked: '✅',
+  'day schedule': '📋',
+  'post-show check-in': '📝',
+  'retainer received in full': '✅',
+  'retainer balance': '💳',
+  'outreach activity': '📣',
+  'deals and revenue': '💼',
+  'monthly retainer': '📆',
+  'outstanding balance': '⚠️',
 }
 
 function normalizeSectionTitleKey(s: string): string {

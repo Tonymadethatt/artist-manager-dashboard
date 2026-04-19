@@ -10,11 +10,6 @@ import {
 import { RichBodyEditor } from '@/components/templates/RichBodyEditor'
 import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import type { CustomEmailBlock } from '@/lib/email/customEmailBlocks'
-import {
-  CUSTOM_EMAIL_ACCENT_PRESETS,
-  defaultAccentForBlockKind,
-  parseAccentColorHex,
-} from '@/lib/email/customEmailAccentPresets'
 import { cn } from '@/lib/utils'
 
 const CARD = 'rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1a1a1a]'
@@ -75,42 +70,16 @@ function BlockChrome(props: {
   )
 }
 
-type TitledBlockKind = 'prose' | 'bullet_list' | 'key_value' | 'table'
-
 function TitleHeaderStrip(props: {
-  blockKind: TitledBlockKind
-  accentColor: string | null | undefined
-  onAccentChange: (hex: string) => void
   title: string
   onTitleChange: (v: string) => void
   mergeKeyOptions: readonly string[]
   /** Shown in editor only; email omits the header row when this stays empty after merge. */
   titlePlaceholder: string
 }) {
-  const accentHex = parseAccentColorHex(props.accentColor) ?? defaultAccentForBlockKind(props.blockKind)
   return (
     <div className={cn(CARD_HEADER, 'flex-wrap gap-y-1')}>
-      <span
-        className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: accentHex }}
-        aria-hidden
-      />
-      <div className="flex items-center gap-1 shrink-0" title="Header accent">
-        {CUSTOM_EMAIL_ACCENT_PRESETS.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            className={cn(
-              'w-4 h-4 rounded-full border border-[#333] shrink-0 transition-transform',
-              accentHex.toLowerCase() === p.hex.toLowerCase() ? 'ring-1 ring-white ring-offset-1 ring-offset-[#161616] scale-110' : 'opacity-80 hover:opacity-100',
-            )}
-            style={{ background: p.hex }}
-            onClick={() => props.onAccentChange(p.hex)}
-            aria-label={`Accent ${p.label}`}
-          />
-        ))}
-      </div>
-      <div className="w-full min-w-[120px] sm:w-auto sm:flex-1 order-3 sm:order-none">
+      <div className="w-full min-w-[120px] sm:w-auto sm:flex-1">
         <VariableSlashTextarea
           value={props.title}
           onChange={props.onTitleChange}
@@ -140,9 +109,6 @@ function ProseEditor(props: {
       <BlockChrome label="Rich text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          blockKind="prose"
-          accentColor={block.accentColor}
-          onAccentChange={hex => onUpdate({ accentColor: hex })}
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
@@ -172,15 +138,11 @@ function BulletListEditor(props: {
   onRemove: () => void
 }) {
   const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
-  const accentHex = parseAccentColorHex(block.accentColor) ?? defaultAccentForBlockKind('bullet_list')
   return (
     <div className="min-w-0">
       <BlockChrome label="Bulleted list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          blockKind="bullet_list"
-          accentColor={block.accentColor}
-          onAccentChange={hex => onUpdate({ accentColor: hex })}
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
@@ -190,11 +152,7 @@ function BulletListEditor(props: {
           <ul className="list-none m-0 p-0 space-y-2 pl-0.5">
             {block.items.map((line, li) => (
               <li key={li} className="flex gap-2 items-start">
-                <span
-                  className="mt-2.5 text-[6px] leading-none select-none shrink-0"
-                  style={{ color: accentHex }}
-                  aria-hidden
-                >
+                <span className="mt-2.5 text-[6px] leading-none select-none shrink-0 text-neutral-500" aria-hidden>
                   ●
                 </span>
                 <div className="flex-1 min-w-0 flex gap-1">
@@ -251,9 +209,6 @@ function KeyValueEditor(props: {
       <BlockChrome label="Key / value" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          blockKind="key_value"
-          accentColor={block.accentColor}
-          onAccentChange={hex => onUpdate({ accentColor: hex })}
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}
@@ -378,9 +333,6 @@ function TableEditor(props: {
       <BlockChrome label="Table" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
-          blockKind="table"
-          accentColor={block.accentColor}
-          onAccentChange={hex => onUpdate({ accentColor: hex })}
           title={block.title ?? ''}
           onTitleChange={v => onUpdate({ title: v || null })}
           mergeKeyOptions={mergeKeyOptions}

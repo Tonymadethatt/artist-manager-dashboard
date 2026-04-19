@@ -12,7 +12,6 @@ import {
   emailFooterVenueSenderAttributionHtml,
 } from './emailFooterPersonaLines'
 import { buildProfileFooterLinksHtml, buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
-import { defaultAccentForBlockKind, parseAccentColorHex } from './customEmailAccentPresets'
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
 import { applyMergeToText, resolveMergeKey, type CustomEmailMergeContext, type CustomMergeAudience } from './customEmailMerge'
@@ -42,7 +41,6 @@ function nlToBr(s: string): string {
 function titledContentCard(
   sectionTitle: string,
   content: string,
-  accentColor: string,
   audience: CustomMergeAudience,
 ): string {
   const showHeader = sectionTitle.trim().length > 0
@@ -51,7 +49,7 @@ function titledContentCard(
       ? decorateMergedArtistCustomSectionTitle(sectionTitle.trim())
       : sectionTitle.trim()
   const header = showHeader
-    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(label)}</span></div>`
+    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(label)}</span></div>`
     : ''
   const bodyPad = showHeader ? 'padding:6px 18px 14px;' : 'padding:14px 18px;'
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;">${header}<div style="${bodyPad}">${content}</div></div>`
@@ -63,15 +61,6 @@ function mergedSectionTitle(
   audience: CustomMergeAudience,
 ): string {
   return applyMergeToText((raw ?? '').trim(), ctx, audience).trim()
-}
-
-function titledBlockAccent(b: { kind: string; accentColor?: string | null }): string {
-  const hex = b.accentColor ? parseAccentColorHex(b.accentColor) : null
-  if (hex) return hex
-  if (b.kind === 'bullet_list' || b.kind === 'prose' || b.kind === 'key_value' || b.kind === 'table') {
-    return defaultAccentForBlockKind(b.kind)
-  }
-  return defaultAccentForBlockKind('prose')
 }
 
 /** Injected once in email &lt;style&gt; — TipTap prose relies on this because *{margin:0;padding:0} strips list/table defaults. */
@@ -158,7 +147,7 @@ function renderBlocks(
         const inner = mergedBodyLooksLikeHtml(merged)
           ? `<div class="email-prose">${sanitizeMergedEmailHtml(merged)}</div>`
           : `<div class="email-prose"><p style="margin:0;">${nlToBr(merged)}</p></div>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
+        parts.push(titledContentCard(sectionTitle, inner, audience))
         break
       }
       case 'bullet_list': {
@@ -172,7 +161,7 @@ function renderBlocks(
           )
           .join('')
         const inner = `<ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.65;margin:6px 0;padding-left:28px;list-style-type:disc;list-style-position:outside;">${lis}</ul>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
+        parts.push(titledContentCard(sectionTitle, inner, audience))
         break
       }
       case 'key_value': {
@@ -186,7 +175,7 @@ function renderBlocks(
             return rowKv(label, v)
           })
           .join('')
-        parts.push(titledContentCard(sectionTitle, rows, titledBlockAccent(b), audience))
+        parts.push(titledContentCard(sectionTitle, rows, audience))
         break
       }
       case 'table': {
@@ -209,7 +198,7 @@ function renderBlocks(
           )
           .join('')
         const inner = `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border:1px solid #333333;margin:4px 0;">${b.headers.length ? `<thead><tr>${th}</tr></thead>` : ''}<tbody>${tr}</tbody></table>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
+        parts.push(titledContentCard(sectionTitle, inner, audience))
         break
       }
       case 'divider':

@@ -5,6 +5,7 @@ import { applyPerformanceReportPlaceholders } from '@/lib/performanceReportEmail
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { artistLayoutForSend } from '@/lib/emailLayout'
 import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
+import { decorateProgrammaticSectionCardTitle } from '@/lib/email/emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_FOOTER_MUTED,
@@ -52,8 +53,9 @@ function rows(items: Array<[string, string, string?]>): string {
   }).join('')
 }
 
-function sectionCard(title: string, content: string, accentColor = '#60a5fa'): string {
-  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
+function sectionCard(title: string, content: string): string {
+  const safeTitle = escapeHtmlPlain(decorateProgrammaticSectionCardTitle(title))
+  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:14px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${safeTitle}</span></div><div style="padding:2px 18px 4px;">${content}</div></div>`
 }
 
 const sharedHeader = `
@@ -119,23 +121,23 @@ export function buildManagementReportHtml(
     ['Venues engaged', '6', '#60a5fa'],
     ['Active discussions', '3', '#60a5fa'],
     ['Bookings confirmed', '1', '#22c55e'],
-  ]), '#60a5fa')
+  ]))
 
   const dealsSection = sectionCard('Deals and Revenue', rows([
     ['New deals logged', '2', '#60a5fa'],
     ['Total artist revenue', '$1,200.00', '#ffffff'],
     ['Commission earned', '$240.00', '#ffffff'],
     ['Commission received', '$240.00', '#22c55e'],
-  ]), '#22c55e')
+  ]))
 
   const retainerSection = sectionCard('Monthly Retainer', rows([
     ['Total invoiced', '$350.00', '#60a5fa'],
     ['Received so far', '$150.00', '#22c55e'],
-  ]), '#ef4444')
+  ]))
 
   const balanceCallout = `
 <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:20px 22px;margin-bottom:14px;">
-  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:10px;">Outstanding Balance</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:10px;">${escapeHtmlPlain(decorateProgrammaticSectionCardTitle('Outstanding Balance'))}</div>
   <div style="font-size:30px;font-weight:800;color:#ef4444;letter-spacing:-1px;line-height:1;margin-bottom:8px;">$200.00</div>
   <div style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.65;">Outstanding management balance, commission and retainer combined. Details are in the sections above.</div>
 </div>`
@@ -230,8 +232,7 @@ export function buildRetainerReminderHtml(
 
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;">
-        <span style="display:inline-block;width:6px;height:6px;background:#ef4444;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>
-        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">Retainer Balance</span>
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(decorateProgrammaticSectionCardTitle('Retainer Balance'))}</span>
       </div>
       <div style="padding:0 18px;">
         <table style="width:100%;border-collapse:collapse;">

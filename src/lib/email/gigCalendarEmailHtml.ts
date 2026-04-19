@@ -4,6 +4,7 @@ import {
   whenLineFriendlyFromDeal,
 } from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
+import { decorateProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 import { artistTransactionalGreetingFirstName } from './artistTransactionalEmailDocument'
 import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
@@ -43,14 +44,9 @@ export function buildGigCalendarTableRow(
   }
 }
 
-function roleBannerRgba(
-  bg: string,
-  border: string,
-  dot: string,
-  label: string,
-): string {
+function roleBannerRgba(bg: string, border: string, labelRaw: string): string {
+  const label = escapeHtmlPlain(decorateProgrammaticSectionCardTitle(labelRaw))
   return `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:11px 16px;margin-bottom:20px;">`
-    + `<span style="display:inline-block;width:6px;height:6px;background:${dot};border-radius:50%;margin-right:10px;vertical-align:middle;"></span>`
     + `<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">${label}</span>`
     + `</div>`
 }
@@ -94,18 +90,12 @@ export function buildGigCalendarShowDetailsBody(args: {
     + setBlock
 }
 
-function scheduleCardsFromRows(
-  rows: GigCalendarScheduleRow[],
-  emptyMsg: string,
-  accent: string,
-): string {
+function scheduleCardsFromRows(rows: GigCalendarScheduleRow[], emptyMsg: string): string {
   if (rows.length === 0) {
     return `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.6;">${escapeHtmlPlain(emptyMsg)}</p>`
   }
   return rows
-    .map((r, i) =>
-      emailSectionCardHtml(`Gig ${i + 1}`, showDetailsBodyFromScheduleRow(r), accent),
-    )
+    .map((r, i) => emailSectionCardHtml(`Gig ${i + 1}`, showDetailsBodyFromScheduleRow(r)))
     .join('')
 }
 
@@ -152,13 +142,11 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       roleBanner = roleBannerRgba(
         'rgba(251,191,36,0.08)',
         'rgba(251,191,36,0.25)',
-        '#fbbf24',
         'Two-week schedule',
       )
       middleHtml = scheduleCardsFromRows(
         args.digest?.rows ?? [],
         'No booked shows in this window.',
-        '#fbbf24',
       )
       defaultIntro =
         'Here are your <strong>confirmed</strong> gigs for the <strong>next two weeks</strong>.'
@@ -169,7 +157,6 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       roleBanner = roleBannerRgba(
         'rgba(249,115,22,0.08)',
         'rgba(249,115,22,0.25)',
-        '#f97316',
         'Day-before reminder',
       )
       const r = args.reminder!
@@ -181,7 +168,6 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
           whenLine: r.whenLine,
           setLine: r.setLine,
         }),
-        '#f97316',
       )
       defaultIntro = 'Quick heads-up — your show is <strong>coming up soon</strong>.'
       defaultClosing = 'Break a leg. Reply if you need anything from the team.'
@@ -191,7 +177,6 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       roleBanner = roleBannerRgba(
         'rgba(34,197,94,0.07)',
         'rgba(34,197,94,0.22)',
-        '#22c55e',
         'Booked',
       )
       middleHtml = args.icsBody!.middleSectionsHtml
@@ -205,11 +190,10 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       roleBanner = roleBannerRgba(
         'rgba(96,165,250,0.07)',
         'rgba(96,165,250,0.22)',
-        '#60a5fa',
         'Day schedule',
       )
       const d = args.daySummary!
-      middleHtml = scheduleCardsFromRows(d.rows, 'No booked shows on this day.', '#60a5fa')
+      middleHtml = scheduleCardsFromRows(d.rows, 'No booked shows on this day.')
       defaultIntro = `Here’s everything on your calendar for <strong>${escapeHtmlPlain(d.dayLabel)}</strong>.`
       defaultClosing = 'Reply if you want changes or a different snapshot.'
       break

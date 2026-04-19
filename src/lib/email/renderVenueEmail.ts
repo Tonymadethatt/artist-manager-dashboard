@@ -119,8 +119,9 @@ function rowStackedDate(label: string, ymd: string, valueColor = EMAIL_TEXT_PRIM
   return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:13px;color:${EMAIL_ROW_LABEL};border-bottom:1px solid #222222;vertical-align:top;">${label}</td><td style="padding:10px 0;text-align:right;padding-left:16px;border-bottom:1px solid #222222;vertical-align:top;">${inner}</td></tr></table>`
 }
 
-function card(title: string, content: string, accentColor = '#60a5fa'): string {
-  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${title}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
+function card(title: string, content: string): string {
+  const safeTitle = escapeHtmlPlain(title)
+  return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${safeTitle}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
 }
 
 function applyGreetingTemplate(greeting: string, firstName: string): string {
@@ -193,13 +194,13 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
         deal?.notes ? row('Notes', deal.notes, EMAIL_BODY_SECONDARY) : '',
       ].filter(Boolean).join('')
-      bodyCards = card('Booking Details', dealRows, '#22c55e')
+      bodyCards = card('Booking Details', dealRows)
       const nextSteps = [
         '<li style="margin-bottom:8px;">A signed agreement will be sent to you for review.</li>',
         '<li style="margin-bottom:8px;">Payment details and timeline will be outlined in the agreement.</li>',
         `<li>For any questions, reply to this email or contact us at <strong>${replyTo}</strong>.</li>`,
       ].join('')
-      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:12px;"><span style="display:inline-block;width:6px;height:6px;background:#60a5fa;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>Next Steps</p><ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;padding-left:16px;">${nextSteps}</ul></div>`
+      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:12px;">${escapeHtmlPlain('Next Steps')}</p><ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;padding-left:16px;">${nextSteps}</ul></div>`
       closing = `Looking forward to a great show. We will be in touch soon.`
       break
     }
@@ -214,7 +215,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         deal?.gross_amount ? row('Amount received', money(deal.gross_amount), '#22c55e') : '',
         row('Status', 'Payment confirmed', '#22c55e'),
       ].filter(Boolean).join('')
-      bodyCards = card('Payment Summary', receiptRows, '#22c55e')
+      bodyCards = card('Payment Summary', receiptRows)
       closing = `We appreciate you and look forward to continuing to work together.`
       break
     }
@@ -229,7 +230,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         deal?.gross_amount ? row('Amount due', money(deal.gross_amount), '#ef4444') : '',
         deal?.payment_due_date ? rowStackedDate('Due date', deal.payment_due_date, '#ef4444') : '',
       ].filter(Boolean).join('')
-      bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="display:inline-block;width:6px;height:6px;background:#ef4444;border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">Payment Due</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
+      bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain('Payment Due')}</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
       closing = `If you have already sent the payment, please disregard this message. If you have any questions or need to arrange a different timeline, reply to this email and we will work something out.`
       break
     }
@@ -239,7 +240,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `The agreement for your upcoming event with ${artistName} is ready for your review.`
       const agreementContent = `<div style="padding:14px 0;">${deal?.agreement_url ? `<a href="${deal.agreement_url}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open agreement</a>` : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">The agreement document will be shared with you directly.</p>`}</div>`
-      bodyCards = card('Agreement', agreementContent, '#22c55e')
+      bodyCards = card('Agreement', agreementContent)
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;">Please review and reply to this email with any questions or concerns. Once both parties have agreed to the terms, we will proceed with the booking confirmation.</p></div>`
       closing = `Thank you for your time. We look forward to working with you.`
       break
@@ -263,7 +264,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         deal?.event_date ? rowStackedDate('Previous event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
       ].filter(Boolean).join('')
-      if (rebookDetails) bodyCards += card('Previous Event', rebookDetails, '#60a5fa')
+      if (rebookDetails) bodyCards += card('Previous Event', rebookDetails)
       closing = `Please let us know your availability and we will make it work.`
       break
     }
@@ -286,7 +287,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
       ].filter(Boolean).join('')
-      bodyCards = preRows ? card('Event summary', preRows, '#60a5fa') : ''
+      bodyCards = preRows ? card('Event summary', preRows) : ''
       bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;">Please confirm load-in or soundcheck window, settlement method, and the best onsite day-of contact. If there is a tech rider or parking note we should have, send it over and we will match it.</p></div>`
       closing = `Thanks for hosting the show — we are looking forward to it.`
       break
@@ -307,7 +308,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       intro = `Circling back on the agreement for ${artistName}${venue ? ` at ${venueName}` : ''}. When you have a moment, a quick status on review or signature would help us keep the date on track.`
       const agreeUrl = deal?.agreement_url
       const agreementContent = `<div style="padding:14px 0;">${agreeUrl ? `<a href="${agreeUrl}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open agreement</a>` : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">If you need the document resent, reply to this email.</p>`}</div>`
-      bodyCards = card('Agreement', agreementContent, '#60a5fa')
+      bodyCards = card('Agreement', agreementContent)
       closing = `Happy to adjust language if anything needs clarification.`
       break
     }
@@ -318,12 +319,12 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       intro = `Please find the invoice / billing summary for ${artistName} for the engagement at ${venueName}.`
       const inv = invoiceUrlOpt?.trim()
       const invoiceContent = `<div style="padding:14px 0;">${inv ? `<a href="${inv}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open invoice</a><p style="font-size:12px;color:${EMAIL_FOOTER_MUTED};margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${inv}</span></p>` : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">The document will be shared separately if no link is on file yet.</p>`}</div>`
-      bodyCards = card('Billing', invoiceContent, '#22c55e')
+      bodyCards = card('Billing', invoiceContent)
       const invRows = [
         deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
         deal?.gross_amount ? row('Amount', money(deal.gross_amount), '#ffffff') : '',
       ].filter(Boolean).join('')
-      if (invRows) bodyCards += card('Reference', invRows, '#60a5fa')
+      if (invRows) bodyCards += card('Reference', invRows)
       closing = `If anything on the invoice needs to match your AP process, reply here and we will adjust.`
       break
     }
@@ -333,7 +334,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `Reaching out regarding the booking for ${artistName} at ${venueName}. We understand plans can shift and want to stay aligned on timing and next steps.`
       const noteBlock = deal?.notes?.trim()
-        ? card('Context', `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;white-space:pre-wrap;">${escapeHtmlPlain(deal.notes)}</p>`, '#f59e0b')
+        ? card('Context', `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;white-space:pre-wrap;">${escapeHtmlPlain(deal.notes)}</p>`)
         : ''
       bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;">Please confirm the revised plan on your side (new date, refund path, or mutual release) so our records stay accurate. We appreciate you keeping us in the loop.</p></div>${noteBlock}`
       closing = `Thank you for the partnership and clear communication.`

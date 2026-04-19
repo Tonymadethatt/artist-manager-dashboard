@@ -1,5 +1,6 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
-import { renderAppendBlocksHtml } from './appendBlocksHtml'
+import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import { decorateProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_LABEL,
@@ -51,8 +52,7 @@ export function buildRetainerReceivedEmailHtml(
     ? `
     <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;margin-bottom:20px;">
       <div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;">
-        <span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:8px;vertical-align:middle;"></span>
-        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">Retainer received in full</span>
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(decorateProgrammaticSectionCardTitle('Retainer received in full'))}</span>
       </div>
       <div style="padding:0 18px;">
         <table class="fee-table" style="width:100%;border-collapse:collapse;">

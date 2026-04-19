@@ -198,7 +198,6 @@ export function buildGigBookedEmailMiddleHtml(args: {
   const { deal, venue, onsiteContact, managerName: managerNameRaw } = args
   const managerName = managerNameRaw?.trim() || 'Management'
   const cards: string[] = []
-  let ai = 0
 
   const title = deal.description?.trim() || 'Gig'
   const venueName = venue?.name?.trim() || 'TBA'
@@ -210,7 +209,7 @@ export function buildGigBookedEmailMiddleHtml(args: {
     setLine: performanceWindowReadableFromDeal(deal),
   })
 
-  cards.push(emailSectionCardHtml('Schedule', scheduleBody, nextAccent(ai++)))
+  cards.push(emailSectionCardHtml('Schedule', scheduleBody))
 
   const postal = venue ? formatVenuePostalLine(venue) : undefined
   const locationBody = postal
@@ -218,21 +217,20 @@ export function buildGigBookedEmailMiddleHtml(args: {
     : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">${escapeHtmlPlain(
         [venue?.location, venue?.city].filter(Boolean).join(', ') || 'TBA',
       )}</p>`
-  cards.push(emailSectionCardHtml('Location', locationBody, nextAccent(ai++)))
+  cards.push(emailSectionCardHtml('Location', locationBody))
 
   const peopleBody = onsiteContact
     ? `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">${escapeHtmlPlain(
         formatArtistOnsiteContactLine(onsiteContact, { includePhone: true }),
       )}</p>`
     : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">On-site contact not set on this booking yet — ask your manager or the venue.</p>`
-  cards.push(emailSectionCardHtml('Venue contact', peopleBody, nextAccent(ai++)))
+  cards.push(emailSectionCardHtml('Venue contact', peopleBody))
 
-  const paymentAccent = nextAccent(ai++)
+  const paymentAccent = nextAccent(3)
   cards.push(
     emailSectionCardHtml(
       'Payment',
       paySectionHtml(deal, { managerName, paymentCardAccent: paymentAccent }),
-      paymentAccent,
     ),
   )
 
@@ -248,7 +246,7 @@ export function buildGigBookedEmailMiddleHtml(args: {
     gearBits.push(short)
   }
   if (gearBits.length) {
-    cards.push(emailSectionCardHtml('Gear & logistics', bulletListHtml(gearBits), nextAccent(ai++)))
+    cards.push(emailSectionCardHtml('Gear & logistics', bulletListHtml(gearBits)))
   }
 
   const exclude = new Set(logisticsLabels.map(s => s.toLowerCase()))
@@ -257,12 +255,12 @@ export function buildGigBookedEmailMiddleHtml(args: {
     const recordsBody =
       `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:0 0 10px;line-height:1.55;">Short snapshot of what’s on the contract checklist — not a substitute for the full agreement.</p>`
       + bulletListHtml(records)
-    cards.push(emailSectionCardHtml('Agreed terms (snapshot)', recordsBody, nextAccent(ai++)))
+    cards.push(emailSectionCardHtml('Agreed terms (snapshot)', recordsBody))
   }
 
   const pointer =
     `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">Your shared Google Calendar shows a short summary for this show. Keep this email for payment and contact details. Reply if anything looks wrong.</p>`
-  cards.push(emailSectionCardHtml('Reference', pointer, nextAccent(ai++)))
+  cards.push(emailSectionCardHtml('Reference', pointer))
 
   return cards.join('')
 }

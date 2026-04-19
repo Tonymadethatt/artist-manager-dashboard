@@ -1,5 +1,6 @@
 import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { escapeHtmlPlain } from './appendBlocksHtml'
+import { decorateProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import { EMAIL_LABEL } from './emailDarkSurfacePalette'
 import { buildArtistBrandedEmailHtml } from './artistBrandedEmailShell'
 
@@ -61,10 +62,10 @@ export function buildArtistTransactionalEmailHtml(
     ? escapeHtmlPlain(closingRaw).replace(/\n/g, '<br/>')
     : defaultClosing
 
+  const roleBannerLabel = escapeHtmlPlain(decorateProgrammaticSectionCardTitle('Post-show check-in'))
   const roleBanner =
     `<div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.22);border-radius:8px;padding:11px 16px;margin-bottom:20px;">`
-    + `<span style="display:inline-block;width:6px;height:6px;background:#22c55e;border-radius:50%;margin-right:10px;vertical-align:middle;"></span>`
-    + `<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">Post-show check-in</span></div>`
+    + `<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:${EMAIL_LABEL};vertical-align:middle;">${roleBannerLabel}</span></div>`
 
   return buildArtistBrandedEmailHtml({
     logoBaseUrl,
