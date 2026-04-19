@@ -108,6 +108,18 @@ function injectRequiredFacebookHeadTags(
   return html.replace(/<\/head>/iu, `    ${lines.join('\n    ')}\n</head>`)
 }
 
+/**
+ * Facebook rejects relative `og:image`. Catch every `content="/social-card.png"` variant after structured
+ * replaces so no crawler ever sees a path-only URL.
+ */
+function forceAbsoluteSocialCardPngEverywhere(html: string, origin: string): string {
+  const root = origin.replace(/\/$/u, '')
+  const abs = escAttr(`${root}/social-card.png`)
+  return html
+    .replace(/content="\/social-card\.png"/giu, `content="${abs}"`)
+    .replace(/content='\/social-card\.png'/giu, `content='${abs}'`)
+}
+
 function patchIndexHtmlHead(
   html: string,
   opts: {
@@ -180,10 +192,11 @@ function patchIndexHtmlHead(
     `<meta name="twitter:image" content="${imageEsc}" />`,
   )
 
-  return injectRequiredFacebookHeadTags(out, {
+  out = injectRequiredFacebookHeadTags(out, {
     canonicalUrl: opts.canonicalUrl,
     fbAppId: opts.fbAppId,
   })
+  return forceAbsoluteSocialCardPngEverywhere(out, opts.origin)
 }
 
 const handler: Handler = async (event) => {
