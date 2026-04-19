@@ -74,7 +74,7 @@ function staticIllustrativeManagerPieSvg(artistMajorityFill: string): string {
   const dArtist = `M ${cx} ${cy} L ${f(x2)} ${f(y2)} A ${r} ${r} 0 1 1 ${f(x1)} ${f(y1)} Z`
   const dMgr = `M ${cx} ${cy} L ${f(x1)} ${f(y1)} A ${r} ${r} 0 0 1 ${f(x2)} ${f(y2)} Z`
   return (
-    `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style="display:block;" role="img" aria-label="Illustration: manager keeps a small slice of the fee">`
+    `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style="display:block;" role="img" aria-label="Manager share of fee">`
     + `<path fill="${artistMajorityFill}" d="${dArtist}"/>`
     + `<path fill="${MANAGER_PIE_SLICE_GREEN}" d="${dMgr}"/>`
     + `</svg>`
@@ -168,7 +168,6 @@ function paySectionHtml(
         + `<td style="vertical-align:middle;padding:0;">`
         + `<p style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${EMAIL_LABEL};margin:0 0 6px;line-height:1.35;">${escapeHtmlPlain(subHead)}</p>`
         + `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;">${tierLine}</p>`
-        + `<p style="font-size:10px;color:#737373;margin:6px 0 0;line-height:1.45;">Illustration only (~15% wedge) — your tier, rate, and amount on this row are what apply.</p>`
         + `</td>`
         + `</tr>`
         + `</table>`
