@@ -13,6 +13,19 @@ function siteDefaultOgImageUrl(): string {
   return SOCIAL_CARD_PATH
 }
 
+function absoluteUrlForPublicAssetPath(path: string): string {
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  const env = (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim()
+  if (env) return `${env.replace(/\/$/, '')}${normalized}`
+  if (typeof window !== 'undefined') return `${window.location.origin}${normalized}`
+  return normalized
+}
+
+export type ApplySocialPreviewMetaOptions = {
+  ogImagePath?: string
+  ogImageAlt?: string
+}
+
 function setMeta(selectorAttr: 'property' | 'name', key: string, content: string) {
   let el = document.querySelector(`meta[${selectorAttr}="${key}"]`)
   if (!el) {
@@ -27,19 +40,24 @@ function setMeta(selectorAttr: 'property' | 'name', key: string, content: string
  * Sets Open Graph / Twitter description tags to match the active page.
  * Uses the current document.title (from Shell) for og:title. Cleanup on unmount.
  */
-export function applySocialPreviewMeta(description: string): () => void {
+export function applySocialPreviewMeta(
+  description: string,
+  options?: ApplySocialPreviewMetaOptions,
+): () => void {
   const title = document.title
-  const imageUrl = siteDefaultOgImageUrl()
+  const imagePath = options?.ogImagePath ?? SOCIAL_CARD_PATH
+  const imageAlt = options?.ogImageAlt ?? SOCIAL_CARD_ALT
+  const imageUrl = absoluteUrlForPublicAssetPath(imagePath)
   setMeta('property', 'og:title', title)
   setMeta('property', 'og:description', description)
   setMeta('property', 'og:type', 'website')
   setMeta('property', 'og:image', imageUrl)
-  setMeta('property', 'og:image:alt', SOCIAL_CARD_ALT)
+  setMeta('property', 'og:image:alt', imageAlt)
   setMeta('name', 'twitter:card', 'summary_large_image')
   setMeta('name', 'twitter:title', title)
   setMeta('name', 'twitter:description', description)
   setMeta('name', 'twitter:image', imageUrl)
-  setMeta('name', 'twitter:image:alt', SOCIAL_CARD_ALT)
+  setMeta('name', 'twitter:image:alt', imageAlt)
   setMeta('name', 'description', description)
 
   return () => {

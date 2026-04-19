@@ -1,5 +1,10 @@
 import { formatPacificWeekdayMdYyFromYmd } from './calendar/pacificWallTime'
 
+/** Public asset in `/public` — encoded path for URLs (Open Graph, WhatsApp). */
+export const SHOW_REPORT_SOCIAL_IMAGE_PATH = '/Show%20Report.jpg' as const
+
+export const SHOW_REPORT_SOCIAL_IMAGE_ALT = 'Show report' as const
+
 export type ShowReportShareFields = {
   dealDescription: string | null
   venueName: string | null

@@ -29,8 +29,15 @@ import {
   showReportGenericShareHead,
   showReportShareDescription,
   showReportSharePageTitle,
+  SHOW_REPORT_SOCIAL_IMAGE_ALT,
+  SHOW_REPORT_SOCIAL_IMAGE_PATH,
   type ShowReportShareFields,
 } from '@/lib/showReportShareMeta'
+
+const SHOW_REPORT_OG_IMAGE = {
+  ogImagePath: SHOW_REPORT_SOCIAL_IMAGE_PATH,
+  ogImageAlt: SHOW_REPORT_SOCIAL_IMAGE_ALT,
+} as const
 
 export interface ShowReportFormContext {
   venueName: string | null
@@ -383,7 +390,7 @@ export function ShowReportWizard({
       submitted: false,
     }
     document.title = showReportSharePageTitle(fields)
-    return applySocialPreviewMeta(showReportShareDescription(fields))
+    return applySocialPreviewMeta(showReportShareDescription(fields), SHOW_REPORT_OG_IMAGE)
   }, [
     preview,
     mockContext?.dealDescription,
@@ -397,10 +404,10 @@ export function ShowReportWizard({
     if (ui === 'invalid' || shareHeadFields === null) {
       const g = showReportGenericShareHead()
       document.title = g.title
-      return applySocialPreviewMeta(g.description)
+      return applySocialPreviewMeta(g.description, SHOW_REPORT_OG_IMAGE)
     }
     document.title = showReportSharePageTitle(shareHeadFields)
-    return applySocialPreviewMeta(showReportShareDescription(shareHeadFields))
+    return applySocialPreviewMeta(showReportShareDescription(shareHeadFields), SHOW_REPORT_OG_IMAGE)
   }, [preview, ui, shareHeadFields])
 
   useEffect(() => {

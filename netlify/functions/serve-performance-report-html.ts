@@ -7,6 +7,8 @@ import {
   showReportShareDescription,
   showReportGenericShareHead,
   showReportCanonicalPath,
+  SHOW_REPORT_SOCIAL_IMAGE_PATH,
+  SHOW_REPORT_SOCIAL_IMAGE_ALT,
 } from '../../src/lib/showReportShareMeta'
 
 const UUID_RE =
@@ -109,15 +111,15 @@ function injectRequiredFacebookHeadTags(
 }
 
 /**
- * Facebook rejects relative `og:image`. Catch every `content="/social-card.png"` variant after structured
- * replaces so no crawler ever sees a path-only URL.
+ * Shell HTML still references the site-wide card; swap any stragglers to the performance-report image.
  */
-function forceAbsoluteSocialCardPngEverywhere(html: string, origin: string): string {
-  const root = origin.replace(/\/$/u, '')
-  const abs = escAttr(`${root}/social-card.png`)
+function rewriteLegacySocialCardToPerformanceReportImage(
+  html: string,
+  imageContentEscaped: string,
+): string {
   return html
-    .replace(/content="\/social-card\.png"/giu, `content="${abs}"`)
-    .replace(/content='\/social-card\.png'/giu, `content='${abs}'`)
+    .replace(/content="\/social-card\.png"/giu, `content="${imageContentEscaped}"`)
+    .replace(/content='\/social-card\.png'/giu, `content='${imageContentEscaped}'`)
 }
 
 function patchIndexHtmlHead(
@@ -130,7 +132,7 @@ function patchIndexHtmlHead(
     fbAppId?: string | null
   },
 ): string {
-  const imageAbs = `${opts.origin}/social-card.png`
+  const imageAbs = `${opts.origin.replace(/\/$/u, '')}${SHOW_REPORT_SOCIAL_IMAGE_PATH}`
   const imageEsc = escAttr(imageAbs)
 
   let out = html.replace(/<title>[^<]*<\/title>/u, `<title>${escTitleText(opts.title)}</title>`)
@@ -180,6 +182,11 @@ function patchIndexHtmlHead(
   }
 
   out = out.replace(
+    new RegExp(`<meta property="og:image:alt" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta property="og:image:alt" content="${escAttr(SHOW_REPORT_SOCIAL_IMAGE_ALT)}" />`,
+  )
+
+  out = out.replace(
     new RegExp(`<meta name="twitter:title" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="twitter:title" content="${escAttr(opts.title)}" />`,
   )
@@ -191,12 +198,16 @@ function patchIndexHtmlHead(
     new RegExp(`<meta name="twitter:image" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="twitter:image" content="${imageEsc}" />`,
   )
+  out = out.replace(
+    new RegExp(`<meta name="twitter:image:alt" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta name="twitter:image:alt" content="${escAttr(SHOW_REPORT_SOCIAL_IMAGE_ALT)}" />`,
+  )
 
   out = injectRequiredFacebookHeadTags(out, {
     canonicalUrl: opts.canonicalUrl,
     fbAppId: opts.fbAppId,
   })
-  return forceAbsoluteSocialCardPngEverywhere(out, opts.origin)
+  return rewriteLegacySocialCardToPerformanceReportImage(out, imageEsc)
 }
 
 const handler: Handler = async (event) => {
