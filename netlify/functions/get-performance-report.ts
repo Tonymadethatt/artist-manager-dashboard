@@ -1,26 +1,7 @@
 import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
-import { brandingFromArtistProfileRow } from '../../src/lib/publicFormBranding'
-import {
-  resolveVenuePromiseLinesForDeal,
-  resolveArtistPromiseLinesForDeal,
-} from '../../src/lib/showReportCatalog'
-
-const ARTIST_PROFILE_SELECT =
-  'company_name, artist_name, tagline, manager_name, manager_title, website, social_handle, phone, reply_to_email, from_email, manager_email'
-
-async function brandingForUser(
-  supabase: ReturnType<typeof createClient>,
-  userId: string,
-) {
-  const { data: row } = await supabase
-    .from('artist_profile')
-    .select(ARTIST_PROFILE_SELECT)
-    .eq('user_id', userId)
-    .maybeSingle()
-  return brandingFromArtistProfileRow(row)
-}
+import { loadPerformanceReportPublicForToken } from './performanceReportPublicLoad'
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
@@ -38,16 +19,9 @@ const handler: Handler = async (event) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const loaded = await loadPerformanceReportPublicForToken(supabase, token)
 
-  const { data, error } = await supabase
-    .from('performance_reports')
-    .select(
-      'id, token, submitted, user_id, venues(name), deals(description, event_date, gross_amount, promise_lines)',
-    )
-    .eq('token', token)
-    .single()
-
-  if (error || !data) {
+  if (!loaded) {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -55,35 +29,12 @@ const handler: Handler = async (event) => {
     }
   }
 
-  const venue = data.venues as { name: string } | null
-  const deal = data.deals as {
-    description: string
-    event_date: string | null
-    gross_amount: number | null
-    promise_lines: unknown
-  } | null
-  const userId = data.user_id as string
-  const branding = await brandingForUser(supabase, userId)
-  const venuePromiseLines = resolveVenuePromiseLinesForDeal(deal?.promise_lines ?? null)
-  const artistPromiseLines = resolveArtistPromiseLinesForDeal(deal?.promise_lines ?? null)
-
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       valid: true,
-      submitted: data.submitted,
-      venueName: venue?.name ?? null,
-      eventDate: deal?.event_date ?? null,
-      dealDescription: deal?.description ?? null,
-      dealGrossAmount:
-        deal?.gross_amount != null && Number.isFinite(Number(deal.gross_amount))
-          ? Number(deal.gross_amount)
-          : null,
-      promiseLines: venuePromiseLines,
-      venuePromiseLines,
-      artistPromiseLines,
-      branding,
+      ...loaded,
     }),
   }
 }

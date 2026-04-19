@@ -16,6 +16,12 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/performance-report/*"
+  to = "/.netlify/functions/serve-performance-report-html?token=:splat"
+  status = 200
+  force = true
+
 [functions]
   node_bundler = "esbuild"
 

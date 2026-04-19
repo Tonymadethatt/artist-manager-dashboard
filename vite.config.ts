@@ -62,6 +62,15 @@ export default defineConfig(({ mode }) => {
           return `/.netlify/functions/public-agreement-pdf?slug=${encodeURIComponent(slug)}`
         },
       },
+      // Mirrors production: /performance-report/:token → serve-performance-report-html (needs `netlify dev`).
+      '/performance-report': {
+        target: process.env.VITE_NETLIFY_FUNCTIONS_URL ?? 'http://127.0.0.1:8888',
+        changeOrigin: true,
+        rewrite: p => {
+          const token = p.replace(/^\/performance-report\//, '').split('?')[0] ?? ''
+          return `/.netlify/functions/serve-performance-report-html?token=${encodeURIComponent(token)}`
+        },
+      },
     },
     },
   }

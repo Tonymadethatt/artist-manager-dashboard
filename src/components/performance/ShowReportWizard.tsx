@@ -24,6 +24,13 @@ import {
   type ProductionIssueLevel,
   type RebookingTimeline,
 } from '@/lib/performanceReportV1'
+import { applySocialPreviewMeta } from '@/lib/documentMeta'
+import {
+  showReportGenericShareHead,
+  showReportShareDescription,
+  showReportSharePageTitle,
+  type ShowReportShareFields,
+} from '@/lib/showReportShareMeta'
 
 export interface ShowReportFormContext {
   venueName: string | null
@@ -290,6 +297,7 @@ export function ShowReportWizard({
 
   const [successProgressPct, setSuccessProgressPct] = useState(0)
   const [successFlash, setSuccessFlash] = useState(false)
+  const [shareHeadFields, setShareHeadFields] = useState<ShowReportShareFields | null>(null)
 
   useEffect(() => {
     if (propsBranding) setBrandingIn(mergePublicFormBranding(propsBranding))
@@ -302,19 +310,29 @@ export function ShowReportWizard({
       return
     }
     if (!token) {
+      setShareHeadFields(null)
       setUi('invalid')
       return
     }
     let cancelled = false
+    setShareHeadFields(null)
     fetch(`/.netlify/functions/get-performance-report?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
         if (data.branding) setBrandingIn(mergePublicFormBranding(data.branding))
         if (!data.valid) {
+          setShareHeadFields(null)
           setUi('invalid')
           return
         }
+        const head: ShowReportShareFields = {
+          dealDescription: data.dealDescription ?? null,
+          venueName: data.venueName ?? null,
+          eventDate: data.eventDate ?? null,
+          submitted: Boolean(data.submitted),
+        }
+        setShareHeadFields(head)
         if (data.submitted) {
           setUi('success')
           return
@@ -346,12 +364,44 @@ export function ShowReportWizard({
         setUi('form')
       })
       .catch(() => {
-        if (!cancelled) setUi('invalid')
+        if (!cancelled) {
+          setShareHeadFields(null)
+          setUi('invalid')
+        }
       })
     return () => {
       cancelled = true
     }
   }, [token, preview, propsBranding])
+
+  useEffect(() => {
+    if (!preview) return
+    const fields: ShowReportShareFields = {
+      dealDescription: mockContext?.dealDescription ?? null,
+      venueName: mockContext?.venueName ?? null,
+      eventDate: mockContext?.eventDate ?? null,
+      submitted: false,
+    }
+    document.title = showReportSharePageTitle(fields)
+    return applySocialPreviewMeta(showReportShareDescription(fields))
+  }, [
+    preview,
+    mockContext?.dealDescription,
+    mockContext?.venueName,
+    mockContext?.eventDate,
+  ])
+
+  useEffect(() => {
+    if (preview) return
+    if (ui === 'loading') return
+    if (ui === 'invalid' || shareHeadFields === null) {
+      const g = showReportGenericShareHead()
+      document.title = g.title
+      return applySocialPreviewMeta(g.description)
+    }
+    document.title = showReportSharePageTitle(shareHeadFields)
+    return applySocialPreviewMeta(showReportShareDescription(shareHeadFields))
+  }, [preview, ui, shareHeadFields])
 
   useEffect(() => {
     if (ui !== 'success') return
@@ -1018,7 +1068,7 @@ export function ShowReportWizard({
 
         {currentStep === 'mood' ? (
           <div className="space-y-4">
-            <p className={STEP_QUESTION_CLASS}>How did tonight feel?</p>
+            <p className={STEP_QUESTION_CLASS}>How did the night feel?</p>
             <div className="grid grid-cols-2 gap-2">
             {nightMoodsForWizardGrid().map(m => (
               <Chip
