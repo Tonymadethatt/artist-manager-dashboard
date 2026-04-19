@@ -2389,7 +2389,7 @@ export default function Earnings() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="new_doors">New Doors — 20% (pipeline venue you sourced)</SelectItem>
-                      <SelectItem value="kept_doors">Kept Doors — 20% (rebooking from your intro)</SelectItem>
+                      <SelectItem value="kept_doors">Booked Doors — 20% (rebooking from your intro)</SelectItem>
                       <SelectItem value="bigger_doors">Bigger Doors — 10% (artist closed, new client)</SelectItem>
                       <SelectItem value="artist_network">Artist network — 0% (community venue; gross still tracked)</SelectItem>
                     </SelectContent>

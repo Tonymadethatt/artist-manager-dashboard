@@ -4893,7 +4893,7 @@ export default function BookingIntakePage() {
                           ) : null}
                           {data.commission_tier === 'kept_doors' && repeatBookingDiscountId(pricingCatalog) ? (
                             <p className="text-[11px] text-sky-200/85 rounded-md border border-sky-900/45 bg-sky-950/25 px-2 py-1.5 leading-snug">
-                              Kept doors — repeat booking discount is applied automatically (no need to toggle).
+                              Booked doors — repeat booking discount is applied automatically (no need to toggle).
                             </p>
                           ) : null}
                           {sd.event_schedule_type === 'recurring' &&

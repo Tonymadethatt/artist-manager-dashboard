@@ -223,12 +223,14 @@ export const TASK_RECURRENCE_LABELS: Record<TaskRecurrence, string> = {
 
 export const COMMISSION_TIER_LABELS: Record<CommissionTier, string> = {
   new_doors: 'New Doors',
-  kept_doors: 'Kept Doors',
+  /** Rebooking / relationship you already opened — same 20% as New Doors in product copy (“booked doors”). */
+  kept_doors: 'Booked Doors',
   bigger_doors: 'Bigger Doors',
   /** Community / artist existing network — gross tracked, no manager booking commission */
   artist_network: 'Artist network',
 }
 
+/** Fraction of gross (0.2 = 20%). Keep in sync with deal logging UI in Earnings. */
 export const COMMISSION_TIER_RATES: Record<CommissionTier, number> = {
   new_doors: 0.20,
   kept_doors: 0.20,

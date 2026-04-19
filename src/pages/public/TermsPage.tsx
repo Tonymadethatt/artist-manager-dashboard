@@ -98,7 +98,7 @@ export default function TermsPage() {
       <Section title="7. Commission">
         <p>
           The Manager is entitled to a commission on all bookings and deals secured during the management period, as agreed
-          in the separate management agreement. Commission rates vary by deal type (New Doors, Kept Doors, Bigger Doors)
+          in the separate management agreement. Commission rates vary by deal type (New Doors, Booked Doors, Bigger Doors)
           as outlined in that agreement.
         </p>
       </Section>

@@ -1,5 +1,6 @@
 import type { Contact, Deal, DealPricingSnapshot, Venue } from '../../types'
 import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, isDealPricingSnapshot } from '../../types'
+import { dealCommissionRateFromTier } from '../deals/dealCommissionFromTier'
 import { formatArtistOnsiteContactLine } from './artistOnsiteContactLine'
 import {
   artistGigLogisticsLabelsFromDeal,
@@ -106,7 +107,7 @@ function paySectionHtml(deal: GigBookedEmailDealInput): string {
       `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.65;">Artist network booking — no manager booking commission on this gig.</p>`,
     )
   } else {
-    const rateRaw = Number((d as Deal).commission_rate ?? COMMISSION_TIER_RATES[tier])
+    const rateRaw = dealCommissionRateFromTier(d)
     const pct = Number.isFinite(rateRaw) ? Math.round(rateRaw * 100) : 0
     const tierLabel = COMMISSION_TIER_LABELS[tier]
     const comm = Number(deal.commission_amount ?? 0)
@@ -291,7 +292,9 @@ export function buildGigBookedPreviewBundle(args: {
   }
 
   const gross = args.gross_amount
-  const commissionAmount = Math.round(gross * 0.2 * 100) / 100
+  const previewTier = 'new_doors' as const
+  const previewRate = COMMISSION_TIER_RATES[previewTier]
+  const commissionAmount = Math.round(gross * previewRate * 100) / 100
 
   const onsiteContact: Pick<Contact, 'name' | 'phone' | 'title_key' | 'role'> = {
     name: 'Alex Rivera',
@@ -309,8 +312,8 @@ export function buildGigBookedPreviewBundle(args: {
     performance_end_at: args.performance_end_at ?? null,
     gross_amount: args.gross_amount,
     payment_due_date: args.payment_due_date,
-    commission_tier: 'new_doors',
-    commission_rate: 0.2,
+    commission_tier: previewTier,
+    commission_rate: previewRate,
     promise_lines,
     pricing_snapshot: snapshot,
     deposit_due_amount: snapshot.depositDue,

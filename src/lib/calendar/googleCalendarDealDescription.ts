@@ -1,5 +1,6 @@
 import type { CommissionTier, Deal, DealTerms } from '../../types'
-import { COMMISSION_TIER_LABELS, COMMISSION_TIER_RATES, isDealPricingSnapshot } from '../../types'
+import { COMMISSION_TIER_LABELS, isDealPricingSnapshot } from '../../types'
+import { dealCommissionRateFromTier } from '../deals/dealCommissionFromTier'
 import { depositDueFromDeal, dealRemainingClientBalance } from '../deals/dealPaymentTotals'
 import { artistGigLogisticsLabelsFromDeal } from '../email/gigBookedLogisticsLines'
 import {
@@ -149,7 +150,10 @@ export function buildGoogleCalendarDealDescription(
   if (tier === 'artist_network') {
     payLines.push('Artist network — no manager booking commission.')
   } else if (tier) {
-    const rateRaw = Number(deal.commission_rate ?? COMMISSION_TIER_RATES[tier])
+    const rateRaw = dealCommissionRateFromTier({
+      commission_tier: tier,
+      commission_rate: deal.commission_rate ?? undefined,
+    })
     const pct = Number.isFinite(rateRaw) ? Math.round(rateRaw * 100) : 0
     const tierLabel = COMMISSION_TIER_LABELS[tier]
     const comm = Number(deal.commission_amount ?? 0)
