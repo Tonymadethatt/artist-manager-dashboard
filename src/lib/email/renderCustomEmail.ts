@@ -1,4 +1,5 @@
 import { escapeHtmlPlain } from './appendBlocksHtml'
+import { decorateMergedArtistCustomSectionTitle } from './emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_HINT,
@@ -38,10 +39,19 @@ function nlToBr(s: string): string {
 }
 
 /** Card shell; omit header row when section title is empty so recipients are not shown placeholder labels. */
-function titledContentCard(sectionTitle: string, content: string, accentColor: string): string {
+function titledContentCard(
+  sectionTitle: string,
+  content: string,
+  accentColor: string,
+  audience: CustomMergeAudience,
+): string {
   const showHeader = sectionTitle.trim().length > 0
+  const label =
+    showHeader && audience === 'artist'
+      ? decorateMergedArtistCustomSectionTitle(sectionTitle.trim())
+      : sectionTitle.trim()
   const header = showHeader
-    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(sectionTitle.trim())}</span></div>`
+    ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="display:inline-block;width:6px;height:6px;background:${accentColor};border-radius:50%;margin-right:8px;vertical-align:middle;"></span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(label)}</span></div>`
     : ''
   const bodyPad = showHeader ? 'padding:6px 18px 14px;' : 'padding:14px 18px;'
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;">${header}<div style="${bodyPad}">${content}</div></div>`
@@ -148,7 +158,7 @@ function renderBlocks(
         const inner = mergedBodyLooksLikeHtml(merged)
           ? `<div class="email-prose">${sanitizeMergedEmailHtml(merged)}</div>`
           : `<div class="email-prose"><p style="margin:0;">${nlToBr(merged)}</p></div>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
         break
       }
       case 'bullet_list': {
@@ -162,7 +172,7 @@ function renderBlocks(
           )
           .join('')
         const inner = `<ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.65;margin:6px 0;padding-left:28px;list-style-type:disc;list-style-position:outside;">${lis}</ul>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
         break
       }
       case 'key_value': {
@@ -176,7 +186,7 @@ function renderBlocks(
             return rowKv(label, v)
           })
           .join('')
-        parts.push(titledContentCard(sectionTitle, rows, titledBlockAccent(b)))
+        parts.push(titledContentCard(sectionTitle, rows, titledBlockAccent(b), audience))
         break
       }
       case 'table': {
@@ -199,7 +209,7 @@ function renderBlocks(
           )
           .join('')
         const inner = `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border:1px solid #333333;margin:4px 0;">${b.headers.length ? `<thead><tr>${th}</tr></thead>` : ''}<tbody>${tr}</tbody></table>`
-        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b)))
+        parts.push(titledContentCard(sectionTitle, inner, titledBlockAccent(b), audience))
         break
       }
       case 'divider':
