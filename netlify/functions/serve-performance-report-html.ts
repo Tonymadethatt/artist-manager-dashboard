@@ -88,9 +88,35 @@ function escAttr(s: string): string {
 /** Normalize void-meta closing: `/>` or `>` with optional whitespace. */
 const META_VOID_END = String.raw`\s*\/?>`
 
+const OG_URL_PROP = /property\s*=\s*["']og:url["']/iu
+const FB_APP_ID_PROP = /property\s*=\s*["']fb:app_id["']/iu
+
+/** Facebook Sharing Debugger expects `og:url`; inject if regex patches missed. Optional `fb:app_id` when env is set. */
+function injectRequiredFacebookHeadTags(
+  html: string,
+  opts: { canonicalUrl: string; fbAppId?: string | null },
+): string {
+  const lines: string[] = []
+  if (!OG_URL_PROP.test(html)) {
+    lines.push(`<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`)
+  }
+  const app = opts.fbAppId?.trim()
+  if (app && !FB_APP_ID_PROP.test(html)) {
+    lines.push(`<meta property="fb:app_id" content="${escAttr(app)}" />`)
+  }
+  if (!lines.length) return html
+  return html.replace(/<\/head>/iu, `    ${lines.join('\n    ')}\n</head>`)
+}
+
 function patchIndexHtmlHead(
   html: string,
-  opts: { title: string; description: string; canonicalUrl: string; origin: string },
+  opts: {
+    title: string
+    description: string
+    canonicalUrl: string
+    origin: string
+    fbAppId?: string | null
+  },
 ): string {
   const imageAbs = `${opts.origin}/social-card.png`
   const imageEsc = escAttr(imageAbs)
@@ -118,7 +144,7 @@ function patchIndexHtmlHead(
     `<meta property="og:description" content="${escAttr(opts.description)}" />`,
   )
 
-  if (/property="og:url"/u.test(out)) {
+  if (OG_URL_PROP.test(out)) {
     out = out.replace(
       new RegExp(`<meta property="og:url" content="[^"]*"${META_VOID_END}`, 'u'),
       `<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
@@ -154,7 +180,10 @@ function patchIndexHtmlHead(
     `<meta name="twitter:image" content="${imageEsc}" />`,
   )
 
-  return out
+  return injectRequiredFacebookHeadTags(out, {
+    canonicalUrl: opts.canonicalUrl,
+    fbAppId: opts.fbAppId,
+  })
 }
 
 const handler: Handler = async (event) => {
@@ -210,11 +239,17 @@ const handler: Handler = async (event) => {
     }
   }
 
+  const fbAppId =
+    process.env.FACEBOOK_APP_ID?.trim() ||
+    process.env.VITE_FACEBOOK_APP_ID?.trim() ||
+    null
+
   const body = patchIndexHtmlHead(htmlShell, {
     title,
     description,
     canonicalUrl,
     origin,
+    fbAppId,
   })
 
   const headers: Record<string, string> = {
