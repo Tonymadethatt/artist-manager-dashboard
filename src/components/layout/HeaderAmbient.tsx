@@ -14,12 +14,13 @@ export function HeaderAmbient({ zone }: HeaderAmbientProps) {
       aria-hidden
     >
       <div
-        className="header-ambient-orbs absolute inset-[-40%_-20%] mix-blend-plus-lighter"
+        className="header-ambient-orbs absolute -inset-[45%] min-h-[220%] min-w-[160%] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-plus-lighter"
         data-zone={zone}
       >
         <div className="header-orb header-orb-a" />
         <div className="header-orb header-orb-b" />
         <div className="header-orb header-orb-c" />
+        <div className="header-orb header-orb-d" />
       </div>
     </div>
   )
