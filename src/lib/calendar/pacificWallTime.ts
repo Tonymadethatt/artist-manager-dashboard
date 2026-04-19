@@ -419,17 +419,6 @@ export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null 
   }
 }
 
-/**
- * One-line Pacific date for merge fields / plain-text fallbacks — same pieces as stacked email cells,
- * e.g. "Wed · May 17, 2026 · All day".
- */
-export function formatPacificStackLineFromYmd(ymd: string): string {
-  const s = scheduleWhenStackFromYmd(ymd)
-  const t = (ymd ?? '').trim()
-  if (!s) return t
-  return `${s.dayLine} · ${s.dateLine} · ${s.timeLine}`
-}
-
 /** Deal instants or event_date → stack for gig digest / day-summary tables. */
 export function scheduleWhenStackFromDeal(d: DealWhenAndPerformanceInput): ScheduleWhenStack | null {
   const setTimeLine = performanceWindowReadableFromDeal(d)

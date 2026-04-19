@@ -26,7 +26,7 @@ export function useVenueEmails() {
     if (!silent) setLoading(true)
     const { data, error } = await supabase
       .from('venue_emails')
-      .select('*, venue:venues(id, name, city, location), deal:deals(id, description, event_date, event_start_at, event_end_at, performance_start_at, performance_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, notes, payment_due_date, artist_paid), contact:contacts(id, name, email)')
+      .select('*, venue:venues(id, name, city, location), deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, notes, payment_due_date, artist_paid), contact:contacts(id, name, email)')
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
     else setEmails((data ?? []) as VenueEmail[])

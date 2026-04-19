@@ -870,18 +870,6 @@ export interface VenueEmail {
   notes: string | null
   created_at: string
   venue?: Pick<Venue, 'id' | 'name' | 'city' | 'location'> | null
-  deal?: (Pick<
-    Deal,
-    | 'id'
-    | 'description'
-    | 'event_date'
-    | 'gross_amount'
-    | 'agreement_url'
-    | 'agreement_generated_file_id'
-    | 'notes'
-    | 'payment_due_date'
-    | 'artist_paid'
-  > &
-    Partial<Pick<Deal, 'event_start_at' | 'event_end_at' | 'performance_start_at' | 'performance_end_at'>>) | null
+  deal?: Pick<Deal, 'id' | 'description' | 'event_date' | 'gross_amount' | 'agreement_url' | 'agreement_generated_file_id' | 'notes' | 'payment_due_date' | 'artist_paid'> | null
   contact?: Pick<Contact, 'id' | 'name' | 'email'> | null
 }

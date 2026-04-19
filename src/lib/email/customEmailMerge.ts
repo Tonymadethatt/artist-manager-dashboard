@@ -1,5 +1,4 @@
 import type { VenueRenderDeal, VenueRenderProfile, VenueRenderRecipient, VenueRenderVenue } from './renderVenueEmail'
-import { formatPacificStackLineFromYmd } from '../calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 /** Allowed merge keys for custom template prose / static cells. Bound fields use valueKey separately. */
@@ -39,12 +38,13 @@ function money(n: number) {
   return formatUsdDisplayCeil(n)
 }
 
-/** YYYY-MM-DD merge values — match artist email Pacific stacked style (short weekday · date · All day). */
-function fmtDateYmdPacific(iso: string | null | undefined): string {
+function fmtDate(iso: string | null | undefined): string {
   if (!iso) return ''
-  const t = iso.trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
-  return formatPacificStackLineFromYmd(t)
+  const [y, m, d] = iso.split('-')
+  const months = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
+  if (!m || !d) return iso
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
 }
 
 const KEY_SETS: Record<CustomMergeAudience, ReadonlySet<string>> = {
@@ -81,11 +81,11 @@ export function resolveMergeKey(
     case 'deal.description':
       return ctx.deal?.description ?? ''
     case 'deal.event_date':
-      return ctx.deal?.event_date ? fmtDateYmdPacific(ctx.deal.event_date) : ''
+      return ctx.deal?.event_date ? fmtDate(ctx.deal.event_date) : ''
     case 'deal.gross_amount':
       return ctx.deal != null && Number.isFinite(ctx.deal.gross_amount) ? money(ctx.deal.gross_amount) : ''
     case 'deal.payment_due_date':
-      return ctx.deal?.payment_due_date ? fmtDateYmdPacific(ctx.deal.payment_due_date) : ''
+      return ctx.deal?.payment_due_date ? fmtDate(ctx.deal.payment_due_date) : ''
     case 'deal.agreement_url':
       return ctx.deal?.agreement_url ?? ''
     case 'deal.notes':

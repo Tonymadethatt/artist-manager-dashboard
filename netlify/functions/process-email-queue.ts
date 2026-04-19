@@ -178,7 +178,7 @@ const handler: Handler = async (event) => {
     .select(`
       *,
       venue:venues(id, name, city, location),
-      deal:deals(id, description, event_date, event_start_at, event_end_at, performance_start_at, performance_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date, ics_invite_sent_at),
+      deal:deals(id, description, event_date, event_start_at, event_end_at, gross_amount, agreement_url, agreement_generated_file_id, venue_id, user_id, notes, payment_due_date, ics_invite_sent_at),
       contact:contacts(id, name, email)
     `)
     .eq('status', 'pending')
@@ -996,10 +996,6 @@ const handler: Handler = async (event) => {
               payment_due_date: (dealForSend.payment_due_date as string | null) ?? null,
               agreement_url: (dealForSend.agreement_url as string | null) ?? null,
               notes: dealForSend.notes != null ? String(dealForSend.notes) : null,
-              event_start_at: (dealForSend.event_start_at as string | null | undefined) ?? null,
-              event_end_at: (dealForSend.event_end_at as string | null | undefined) ?? null,
-              performance_start_at: (dealForSend.performance_start_at as string | null | undefined) ?? null,
-              performance_end_at: (dealForSend.performance_end_at as string | null | undefined) ?? null,
             },
           }
           : {}),
