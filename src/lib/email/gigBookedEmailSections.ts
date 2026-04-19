@@ -41,8 +41,8 @@ const CARD_ACCENTS = ['#22c55e', '#60a5fa', '#fbbf24', '#a78bfa', '#f97316'] as 
 
 /** Manager’s slice in the illustrative pie (visual only; not tied to 10% vs 20%). */
 const MANAGER_PIE_SLICE_GREEN = '#22c55e'
-/** Angular fraction for the green wedge — keep small so it reads as a sliver, not a big slice. */
-const VISUAL_MANAGER_WEDGE_FRACTION = 0.055
+/** Angular fraction for the green wedge — small sliver (between ~5% and ~15% reads). */
+const VISUAL_MANAGER_WEDGE_FRACTION = 0.09
 
 function nextAccent(i: number): string {
   return CARD_ACCENTS[i % CARD_ACCENTS.length]!
