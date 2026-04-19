@@ -60,7 +60,7 @@ const EVENT_LABEL_HTML =
 
 /** One gig card body — delegates to the same HTML as `gig_reminder_24h` show-details card. */
 function showDetailsBodyFromScheduleRow(r: GigCalendarScheduleRow): string {
-  return showDetailsBodyFromReminder({
+  return buildGigCalendarShowDetailsBody({
     dealDescription: r.title,
     venueName: r.venue,
     whenLine: r.when,
@@ -68,7 +68,10 @@ function showDetailsBodyFromScheduleRow(r: GigCalendarScheduleRow): string {
   })
 }
 
-function showDetailsBodyFromReminder(args: {
+/**
+ * Shared “show details” block: title, venue, Event time line, optional Your set — same as reminder / digest / day summary cards.
+ */
+export function buildGigCalendarShowDetailsBody(args: {
   dealDescription: string
   venueName: string
   whenLine: string
@@ -172,7 +175,7 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
       const r = args.reminder!
       middleHtml = emailSectionCardHtml(
         'Show details',
-        showDetailsBodyFromReminder({
+        buildGigCalendarShowDetailsBody({
           dealDescription: r.dealDescription,
           venueName: r.venueName,
           whenLine: r.whenLine,

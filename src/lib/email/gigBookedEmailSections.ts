@@ -5,15 +5,11 @@ import {
   artistGigLogisticsLabelsFromDeal,
   artistGigRecordsVenueLabels,
 } from './gigBookedLogisticsLines'
-import { depositDueFromDeal, dealRemainingClientBalance, dealTotalPaidTowardGross } from '../deals/dealPaymentTotals'
+import { depositDueFromDeal, dealRemainingClientBalance } from '../deals/dealPaymentTotals'
 import { formatVenuePostalLine } from '../calendar/venueAddressForGoogle'
-import {
-  performanceWindowReadableFromDeal,
-  scheduleWhenStackFromDeal,
-  whenLineFriendlyFromDeal,
-} from '../calendar/pacificWallTime'
+import { performanceWindowReadableFromDeal, whenLineFriendlyFromDeal } from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
-import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
+import { buildGigCalendarShowDetailsBody } from './gigCalendarEmailHtml'
 import { EMAIL_BODY_SECONDARY } from './emailDarkSurfacePalette'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 import { normalizePricingCatalogDoc } from '../../types'
@@ -72,57 +68,41 @@ function paySectionHtml(deal: GigBookedEmailDealInput): string {
   const gross = Number(deal.gross_amount ?? 0)
   const grossFmt = formatUsdDisplayCeil(Number.isFinite(gross) ? gross : 0)
   const depDue = depositDueFromDeal(d)
-  const depPaid = Number(deal.deposit_paid_amount ?? 0)
-  const balPaid = Number(deal.balance_paid_amount ?? 0)
   const remainder = dealRemainingClientBalance(d)
-  const totalPaid = dealTotalPaidTowardGross(d)
+  const payBy = formatPaymentDueEmail(deal.payment_due_date)
   const snap = isDealPricingSnapshot(deal.pricing_snapshot) ? deal.pricing_snapshot : null
   const contractNote =
     snap && Number.isFinite(snap.total) && Math.round(snap.total) !== Math.round(gross)
-      ? `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:8px 0 0;line-height:1.55;">Quote total in calculator: ${escapeHtmlPlain(formatUsdDisplayCeil(snap.total))} — contract amount below is what this booking uses.</p>`
+      ? `<p style="font-size:12px;color:${EMAIL_BODY_SECONDARY};margin:10px 0 0;line-height:1.55;">Quote in calculator was ${escapeHtmlPlain(formatUsdDisplayCeil(snap.total))}; the contract total above is what this booking uses.</p>`
       : ''
 
   const lines: string[] = []
   lines.push(
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Your fee (contract):</strong> ${escapeHtmlPlain(grossFmt)}</p>`,
+    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Total gig fee:</strong> ${escapeHtmlPlain(grossFmt)}</p>`,
   )
 
   if (depDue > 0) {
     lines.push(
-      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Deposit due:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(depDue))}</p>`,
-    )
-    lines.push(
-      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Deposit received:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(depPaid))}</p>`,
+      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Deposit:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(depDue))}</p>`,
     )
   } else {
     lines.push(
-      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Deposit:</strong> No separate deposit on this deal.</p>`,
-    )
-  }
-
-  if (depDue > 0 && gross > depDue) {
-    const remainderTotal = Math.max(0, Math.round((gross - depDue) * 100) / 100)
-    lines.push(
-      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Balance (after deposit):</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(remainderTotal))}</p>`,
+      `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Deposit:</strong> No separate deposit on this booking.</p>`,
     )
   }
 
   lines.push(
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Paid toward balance:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(balPaid))}</p>`,
+    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Balance / final payment due by:</strong> ${escapeHtmlPlain(payBy)}</p>`,
   )
 
   lines.push(
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Still owed (total):</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(remainder))}</p>`,
-  )
-
-  lines.push(
-    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0;line-height:1.65;"><strong style="color:#ffffff;">Payment due date:</strong> ${escapeHtmlPlain(formatPaymentDueEmail(deal.payment_due_date))}</p>`,
+    `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 6px;line-height:1.65;"><strong style="color:#ffffff;">Still owed (from venue):</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(remainder))}</p>`,
   )
 
   const comm = Number(deal.commission_amount ?? 0)
   if (Number.isFinite(comm) && comm > 0 && deal.commission_tier !== 'artist_network') {
     lines.push(
-      `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.6;">Management fee (per agreement): ${escapeHtmlPlain(formatUsdDisplayCeil(comm))}</p>`,
+      `<p style="font-size:12px;color:#737373;margin:12px 0 0;line-height:1.6;"><strong style="color:#a3a3a3;">Your management fee:</strong> ${escapeHtmlPlain(formatUsdDisplayCeil(comm))}</p>`,
     )
   } else if (deal.commission_tier === 'artist_network') {
     lines.push(
@@ -130,7 +110,7 @@ function paySectionHtml(deal: GigBookedEmailDealInput): string {
     )
   }
 
-  return lines.join('') + contractNote + `<p style="font-size:11px;color:#737373;margin:10px 0 0;line-height:1.55;">Total paid (deposit + balance legs): ${escapeHtmlPlain(formatUsdDisplayCeil(totalPaid))}</p>`
+  return lines.join('') + contractNote
 }
 
 /**
@@ -152,25 +132,13 @@ export function buildGigBookedEmailMiddleHtml(args: {
 
   const title = deal.description?.trim() || 'Gig'
   const venueName = venue?.name?.trim() || 'TBA'
-  const stack = scheduleWhenStackFromDeal(deal)
-  const whenInner = stack
-    ? stackedScheduleWhenCellHtml(stack, '#ffffff', 'digest')
-    : `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(whenLineFriendlyFromDeal(deal) || deal.event_date?.trim() || '')}</p>`
-
-  const setLine = performanceWindowReadableFromDeal(deal)
-  const setBlock = setLine
-    ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);">`
-        + `<p style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#a3a3a3;margin:0 0 6px;">Your set</p>`
-        + `<p style="font-size:13px;font-weight:600;color:#ffffff;margin:0;line-height:1.5;">${escapeHtmlPlain(setLine)}</p>`
-        + `</div>`
-    : ''
-
-  const scheduleBody =
-    `<p style="font-size:11px;color:#a3a3a3;margin:0 0 8px;line-height:1.5;">Event times are the venue/show window (not necessarily doors). Times below are Pacific.</p>`
-    + `<p style="font-size:15px;font-weight:600;color:#ffffff;margin:0 0 8px;line-height:1.35;">${escapeHtmlPlain(title)}</p>`
-    + `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};margin:0 0 12px;line-height:1.6;">${escapeHtmlPlain(venueName)}</p>`
-    + `<div style="margin-top:4px;">${whenInner}</div>`
-    + setBlock
+  const whenLine = whenLineFriendlyFromDeal(deal) || deal.event_date?.trim() || ''
+  const scheduleBody = buildGigCalendarShowDetailsBody({
+    dealDescription: title,
+    venueName,
+    whenLine,
+    setLine: performanceWindowReadableFromDeal(deal),
+  })
 
   cards.push(emailSectionCardHtml('Schedule', scheduleBody, nextAccent(ai++)))
 
