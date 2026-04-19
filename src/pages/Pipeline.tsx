@@ -262,7 +262,7 @@ export default function Pipeline() {
   }, [customEmailRows])
 
   const [viewMode, setViewMode] = useState<ViewMode>('board')
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('today')
   const location = useLocation()
   const navigate = useNavigate()
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)

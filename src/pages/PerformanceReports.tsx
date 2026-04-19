@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Clock, ExternalLink, Send, Trash2, UserPen } from 'lucide-react'
+import { ClipboardList, Copy, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Clock, ExternalLink, Send, Star, Trash2, UserPen } from 'lucide-react'
 import { usePerformanceReports } from '@/hooks/usePerformanceReports'
 import { useVenues } from '@/hooks/useVenues'
 import { useDeals } from '@/hooks/useDeals'
@@ -26,12 +26,18 @@ function formatDate(iso: string) {
   return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`
 }
 
-function RatingDots({ rating }: { rating: number | null }) {
+function RatingStars({ rating }: { rating: number | null }) {
   if (!rating) return <span className="text-neutral-600 text-xs">-</span>
   return (
-    <span className="flex gap-0.5 items-center">
-      {[1,2,3,4,5].map(i => (
-        <span key={i} className={`w-2 h-2 rounded-full ${i <= rating ? 'bg-white' : 'bg-neutral-700'}`} />
+    <span className="inline-flex items-center gap-0.5" aria-label={`${rating} out of 5`}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i}
+          className={`h-3.5 w-3.5 shrink-0 ${
+            i <= rating ? 'fill-white text-white' : 'fill-transparent text-neutral-600'
+          }`}
+          strokeWidth={1.5}
+        />
       ))}
     </span>
   )
@@ -343,7 +349,7 @@ export default function PerformanceReports() {
                 <span className="text-xs text-neutral-400">{report.deal?.event_date ? formatDate(report.deal.event_date) : '-'}</span>
                 <span className="text-xs text-neutral-500">{formatDate(report.created_at)}</span>
                 <StatusPill submitted={report.submitted} />
-                <RatingDots rating={report.event_rating} />
+                <RatingStars rating={report.event_rating} />
                 <PaidStatusBadge status={report.artist_paid_status} />
                 <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                   {report.submitted ? (
