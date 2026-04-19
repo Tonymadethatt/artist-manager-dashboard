@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import type { Handler, HandlerEvent } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseServerEnv } from './supabaseServerEnv'
 import { loadPerformanceReportPublicForToken } from './performanceReportPublicLoad'
@@ -16,7 +16,7 @@ function isPerformanceReportTokenUuid(token: string): boolean {
   return UUID_RE.test(token.trim())
 }
 
-/** Origin only, no trailing slash — for fetch base and absolute URLs. */
+/** Origin only, no trailing slash — env fallback when `rawUrl` has no host. */
 function resolveNetlifyPublicOrigin(): string {
   const raw =
     process.env.URL?.trim() ||
@@ -26,6 +26,50 @@ function resolveNetlifyPublicOrigin(): string {
     ''
   if (raw) return raw.replace(/\/$/u, '')
   return 'https://localhost:8888'
+}
+
+/**
+ * Prefer the URL the crawler (or user) actually requested so og:url / og:image match the shared link
+ * (custom domain vs *.netlify.app). Critical for WhatsApp/Facebook rich previews.
+ */
+function originFromEvent(event: HandlerEvent): string | null {
+  const raw = event.rawUrl?.trim()
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    return u.origin
+  } catch {
+    return null
+  }
+}
+
+function resolveShellOrigin(event: HandlerEvent): string {
+  return originFromEvent(event) ?? resolveNetlifyPublicOrigin()
+}
+
+async function fetchPublishedIndexHtml(primaryOrigin: string): Promise<Response | null> {
+  const fallbacks = [
+    `${primaryOrigin}/index.html`,
+    `${primaryOrigin}/`,
+  ]
+  const envFallback = resolveNetlifyPublicOrigin()
+  if (envFallback !== primaryOrigin) {
+    fallbacks.push(`${envFallback}/index.html`, `${envFallback}/`)
+  }
+  const tried = new Set<string>()
+  for (const url of fallbacks) {
+    if (tried.has(url)) continue
+    tried.add(url)
+    try {
+      const res = await fetch(url, { redirect: 'follow' })
+      const ct = res.headers.get('content-type') ?? ''
+      if (res.ok && ct.includes('text/html')) return res
+    } catch {
+      /* try next */
+    }
+  }
+  return null
 }
 
 /** Escape text inside `<title>…</title>`. */
@@ -41,82 +85,92 @@ function escAttr(s: string): string {
     .replace(/>/gu, '&gt;')
 }
 
-function absolutizeSocialCardMeta(html: string, origin: string): string {
-  const abs = `${origin}/social-card.png`
-  return html
-    .replace(/content="\/social-card\.png"/gu, `content="${escAttr(abs)}"`)
-    .replace(/content='\/social-card\.png'/gu, `content='${escAttr(abs)}'`)
-}
+/** Normalize void-meta closing: `/>` or `>` with optional whitespace. */
+const META_VOID_END = String.raw`\s*\/?>`
 
 function patchIndexHtmlHead(
   html: string,
   opts: { title: string; description: string; canonicalUrl: string; origin: string },
 ): string {
+  const imageAbs = `${opts.origin}/social-card.png`
+  const imageEsc = escAttr(imageAbs)
+
   let out = html.replace(/<title>[^<]*<\/title>/u, `<title>${escTitleText(opts.title)}</title>`)
 
+  if (!/rel="canonical"/u.test(out)) {
+    out = out.replace(
+      /<link rel="icon"/u,
+      `<link rel="canonical" href="${escAttr(opts.canonicalUrl)}" />\n    <link rel="icon"`,
+    )
+  }
+
   out = out.replace(
-    /<meta name="description" content="[^"]*" \/>/u,
+    new RegExp(`<meta name="description" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="description" content="${escAttr(opts.description)}" />`,
   )
 
   out = out.replace(
-    /<meta property="og:title" content="[^"]*" \/>/u,
+    new RegExp(`<meta property="og:title" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta property="og:title" content="${escAttr(opts.title)}" />`,
   )
   out = out.replace(
-    /<meta property="og:description" content="[^"]*" \/>/u,
+    new RegExp(`<meta property="og:description" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta property="og:description" content="${escAttr(opts.description)}" />`,
   )
 
   if (/property="og:url"/u.test(out)) {
     out = out.replace(
-      /<meta property="og:url" content="[^"]*" \/>/u,
+      new RegExp(`<meta property="og:url" content="[^"]*"${META_VOID_END}`, 'u'),
       `<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
     )
   } else {
     out = out.replace(
-      /<meta property="og:type" content="website" \/>/u,
+      new RegExp(`<meta property="og:type" content="website"${META_VOID_END}`, 'u'),
       `<meta property="og:type" content="website" />\n    <meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
     )
   }
 
   out = out.replace(
-    /<meta name="twitter:title" content="[^"]*" \/>/u,
+    new RegExp(`<meta property="og:image" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta property="og:image" content="${imageEsc}" />`,
+  )
+  if (opts.origin.startsWith('https://') && !/property="og:image:secure_url"/u.test(out)) {
+    out = out.replace(
+      new RegExp(`<meta property="og:image" content="([^"]*)"${META_VOID_END}`, 'u'),
+      `<meta property="og:image" content="$1" />\n    <meta property="og:image:secure_url" content="$1" />`,
+    )
+  }
+
+  out = out.replace(
+    new RegExp(`<meta name="twitter:title" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="twitter:title" content="${escAttr(opts.title)}" />`,
   )
   out = out.replace(
-    /<meta name="twitter:description" content="[^"]*" \/>/u,
+    new RegExp(`<meta name="twitter:description" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="twitter:description" content="${escAttr(opts.description)}" />`,
   )
+  out = out.replace(
+    new RegExp(`<meta name="twitter:image" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta name="twitter:image" content="${imageEsc}" />`,
+  )
 
-  out = absolutizeSocialCardMeta(out, opts.origin)
   return out
 }
 
 const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'GET') {
+  if (event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD') {
     return { statusCode: 405, body: 'Method not allowed' }
   }
 
   const tokenRaw = event.queryStringParameters?.token?.trim() ?? ''
-  const origin = resolveNetlifyPublicOrigin()
+  const origin = resolveShellOrigin(event)
 
-  let indexRes: Response
-  try {
-    indexRes = await fetch(`${origin}/index.html`)
-  } catch {
+  const indexRes = await fetchPublishedIndexHtml(origin)
+  if (!indexRes) {
     return {
       statusCode: 502,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       body: 'Bad gateway: could not load app shell.',
-    }
-  }
-
-  if (!indexRes.ok || !indexRes.headers.get('content-type')?.includes('text/html')) {
-    return {
-      statusCode: 502,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      body: 'Bad gateway: app shell unavailable.',
     }
   }
 
@@ -163,12 +217,18 @@ const handler: Handler = async (event) => {
     origin,
   })
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'public, max-age=300',
+  }
+
+  if (event.httpMethod === 'HEAD') {
+    return { statusCode: 200, headers, body: '' }
+  }
+
   return {
     statusCode: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, max-age=300',
-    },
+    headers,
     body,
   }
 }
