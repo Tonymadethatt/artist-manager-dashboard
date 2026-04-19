@@ -192,9 +192,10 @@ export function buildBrandedGigCalendarEmail(args: BuildBrandedGigCalendarEmailA
         'Booked',
       )
       middleHtml = args.icsBody!.middleSectionsHtml
-      defaultIntro = 'You’ve got a new booking — details below.'
+      defaultIntro =
+        'Here’s your booking at a glance — schedule, location, who to call on site, and payment in one place.'
       defaultClosing =
-        'Your shared calendar shows a short summary; keep this message for the full breakdown. Reply if anything looks off.'
+        'Google Calendar keeps a short reminder for this show; this email is the full snapshot. Reply if anything looks wrong.'
       break
     }
     case 'gig_day_summary_manual': {

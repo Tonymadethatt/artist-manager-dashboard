@@ -624,7 +624,7 @@ export default function EmailTemplates() {
         const endIso = d0 ? pacificWallToUtcIso(d0, '23:00') : null
         const perfStartIso = d0 ? pacificWallToUtcIso(d0, '21:00') : null
         const perfEndIso = d0 ? pacificWallToUtcIso(d0, '22:30') : null
-        const { deal: bookedDeal, venue: bookedVenue, catalog: bookedCat } = buildGigBookedPreviewBundle({
+        const { deal: bookedDeal, venue: bookedVenue, onsiteContact: bookedOnsite } = buildGigBookedPreviewBundle({
           event_start_at: startIso,
           event_end_at: endIso,
           event_date: PREVIEW_MOCK_DEAL.event_date,
@@ -652,7 +652,7 @@ export default function EmailTemplates() {
         const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
           deal: bookedDeal,
           venue: bookedVenue,
-          catalog: bookedCat,
+          onsiteContact: bookedOnsite,
         })
         return buildBrandedGigCalendarEmail({
           kind: 'gig_booked_ics',

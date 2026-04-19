@@ -1,19 +1,15 @@
-import type { CommissionTier, DealTerms } from '../../types'
+import type { CommissionTier, Deal, DealTerms } from '../../types'
+import { isDealPricingSnapshot } from '../../types'
+import { depositDueFromDeal, dealRemainingClientBalance } from '../deals/dealPaymentTotals'
+import { artistGigLogisticsLabelsFromDeal } from '../email/gigBookedLogisticsLines'
 import {
-  COMMISSION_TIER_LABELS,
-  isDealPricingSnapshot,
-} from '../../types'
-import type { DealPromiseLine } from '../showReportCatalog'
-import {
-  SHOW_REPORT_PRESETS,
-  isLineMajor,
-  normalizePromiseLinesDoc,
-  resolvePromiseLineDisplayLabel,
-} from '../showReportCatalog'
+  performanceWindowReadableFromDeal,
+  whenLineFriendlyFromDeal,
+} from './pacificWallTime'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
-const FULL_DETAIL_FOOTER =
-  'For the full breakdown of venue commitments, pricing, and logistics, see the booking confirmation email your team sent for this show (search your inbox for the venue or show name).'
+const POINTER_LINE =
+  'Full agreement and invoice details are in your manager’s confirmation email for this show.'
 
 export type GoogleCalendarDealDescriptionInput = {
   notes: string | null
@@ -22,56 +18,30 @@ export type GoogleCalendarDealDescriptionInput = {
   commission_tier: CommissionTier | null | undefined
   promise_lines?: unknown | null
   pricing_snapshot?: unknown | null
+  event_start_at?: string | null
+  event_end_at?: string | null
+  performance_start_at?: string | null
+  performance_end_at?: string | null
+  event_date?: string | null
+  deposit_due_amount?: number | null
+  deposit_paid_amount?: number | null
+  balance_paid_amount?: number | null
+  commission_amount?: number | null
 }
 
-const PROTECTED_SECTION_TITLES = new Set(['PAY', 'PAYMENT', 'FULL DETAIL', 'SERVICE'])
-
-function sortVenueCommitmentLines(lines: DealPromiseLine[]): DealPromiseLine[] {
-  const presetIndex = (line: DealPromiseLine) => {
-    if (line.presetKey) {
-      const i = SHOW_REPORT_PRESETS.findIndex(p => p.id === line.presetKey)
-      return i >= 0 ? i : 500
-    }
-    return 1000
-  }
-  return [...lines].sort((a, b) => {
-    const ma = isLineMajor(a)
-    const mb = isLineMajor(b)
-    if (ma !== mb) return ma ? -1 : 1
-    const pa = presetIndex(a)
-    const pb = presetIndex(b)
-    if (pa !== pb) return pa - pb
-    return a.label.localeCompare(b.label)
-  })
-}
-
-export function topVenueCommitmentLabelsForCalendar(
-  promiseLinesDoc: unknown,
-  grossAmount: number,
-  max: number,
-): string[] {
-  const { venue } = normalizePromiseLinesDoc(promiseLinesDoc)
-  const sorted = sortVenueCommitmentLines(venue)
-  return sorted
-    .slice(0, max)
-    .map(l => resolvePromiseLineDisplayLabel(l, grossAmount))
-}
-
-function formatPaymentDue(iso: string | null): string {
-  if (!iso?.trim()) return 'Due: TBD'
-  const d = new Date(`${iso.trim()}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return `Due: ${iso.trim()}`
-  return `Due: ${new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(d)}`
-}
-
-function commissionLabel(tier: CommissionTier | null | undefined): string {
-  if (tier && tier in COMMISSION_TIER_LABELS) {
-    return COMMISSION_TIER_LABELS[tier as CommissionTier]
-  }
-  return 'Booking'
+export type GoogleCalendarDealDescriptionExtras = {
+  /** Venue display name (calendar description). */
+  venueName?: string | null
+  /** One-line postal address (no venue name). */
+  venueAddressLine?: string | null
+  /** Preformatted on-site contact; omit phone for privacy if desired. */
+  onsiteContactLine?: string | null
+  maxLength?: number
 }
 
 type DescSection = { title: string; body: string }
+
+const PROTECTED_SECTION_TITLES = new Set(['Schedule', 'Money', 'Details'])
 
 function renderSections(sections: DescSection[]): string {
   return sections.map(s => `${s.title}\n---\n${s.body}`).join('\n\n')
@@ -90,7 +60,7 @@ function trimCalendarDescription(sections: DescSection[], maxLen: number): strin
     if (removableIdx == null) break
 
     const sec = work[removableIdx]
-    if (sec.title === 'VENUE COMMITMENTS (TOP 5)') {
+    if (sec.title === 'Gear') {
       const lines = sec.body.split('\n').filter(Boolean)
       if (lines.length <= 1) work.splice(removableIdx, 1)
       else work[removableIdx] = { ...sec, body: lines.slice(0, -1).join('\n') }
@@ -109,65 +79,101 @@ function trimCalendarDescription(sections: DescSection[], maxLen: number): strin
   return out
 }
 
+function formatPaymentDue(iso: string | null): string {
+  if (!iso?.trim()) return 'TBD'
+  const d = new Date(`${iso.trim()}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return `Due: ${iso.trim()}`
+  return `Due: ${new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(d)}`
+}
+
 /**
- * Plain-text Google Calendar event description: compact sections + pointer to confirmation email.
+ * Plain-text Google Calendar event description: artist-first (schedule, place, contact, money, gear).
  */
 export function buildGoogleCalendarDealDescription(
   deal: GoogleCalendarDealDescriptionInput,
   venueDealTerms: DealTerms | null,
-  options?: { maxLength?: number },
+  extras?: GoogleCalendarDealDescriptionExtras,
 ): string | undefined {
-  const maxLen = options?.maxLength ?? 8000
+  const maxLen = extras?.maxLength ?? 8000
   const grossRaw = Number(deal.gross_amount)
   const gross = Number.isFinite(grossRaw) ? grossRaw : 0
-  const tier = deal.commission_tier ?? null
   const sections: DescSection[] = []
 
-  const payLines: string[] = [`Gross: ${formatUsdDisplayCeil(gross)}`]
+  const whenInput = {
+    event_start_at: deal.event_start_at,
+    event_end_at: deal.event_end_at,
+    event_date: deal.event_date,
+    performance_start_at: deal.performance_start_at,
+    performance_end_at: deal.performance_end_at,
+  }
+  const eventLine = whenLineFriendlyFromDeal(whenInput) || deal.event_date?.trim() || ''
+  const setLine = performanceWindowReadableFromDeal(whenInput)
+  const schedParts: string[] = []
+  if (eventLine) schedParts.push(`Event: ${eventLine}`)
+  if (setLine) schedParts.push(`Your set: ${setLine}`)
+  if (schedParts.length) {
+    sections.push({ title: 'Schedule', body: schedParts.join('\n') })
+  }
+
+  const vn = extras?.venueName?.trim()
+  const addr = extras?.venueAddressLine?.trim()
+  if (vn || addr) {
+    const whereParts: string[] = []
+    if (vn) whereParts.push(vn)
+    if (addr) whereParts.push(addr)
+    sections.push({ title: 'Where', body: whereParts.join('\n') })
+  }
+
+  const oc = extras?.onsiteContactLine?.trim()
+  if (oc) {
+    sections.push({ title: 'Contact', body: oc })
+  }
+
+  const payLines: string[] = []
+  payLines.push(`Contract: ${formatUsdDisplayCeil(gross)}`)
+
+  const d = deal as Deal
+  const depDue = depositDueFromDeal(d)
+  const depPaid = Number(deal.deposit_paid_amount ?? 0)
+  const remainder = dealRemainingClientBalance(d)
+
+  if (depDue > 0) {
+    payLines.push(`Deposit due: ${formatUsdDisplayCeil(depDue)}`)
+    payLines.push(`Deposit paid: ${formatUsdDisplayCeil(depPaid)}`)
+  }
+  payLines.push(`Still owed (total): ${formatUsdDisplayCeil(remainder)}`)
+  payLines.push(`Pay by: ${formatPaymentDue(deal.payment_due_date)}`)
+
+  const comm = Number(deal.commission_amount ?? 0)
+  if (Number.isFinite(comm) && comm > 0 && deal.commission_tier !== 'artist_network') {
+    payLines.push(`Management fee (per agreement): ${formatUsdDisplayCeil(comm)}`)
+  }
+
+  sections.push({ title: 'Money', body: payLines.join('\n') })
+
   const snap = isDealPricingSnapshot(deal.pricing_snapshot) ? deal.pricing_snapshot : null
   if (snap && Number.isFinite(snap.total) && Math.round(snap.total) !== Math.round(gross)) {
-    payLines.push(`Quote total: ${formatUsdDisplayCeil(snap.total)}`)
-  }
-  sections.push({ title: 'PAY', body: payLines.join('\n') })
-
-  const serviceLines: string[] = [commissionLabel(tier)]
-  if (snap) {
-    serviceLines.push(snap.baseMode === 'package' ? 'Basis: package' : 'Basis: hourly')
-    const hours = snap.performanceHours
-    if (Number.isFinite(hours) && hours > 0) {
-      serviceLines.push(`Performance hours: ${hours}`)
-    }
-  }
-  sections.push({ title: 'SERVICE', body: serviceLines.join('\n') })
-
-  sections.push({ title: 'PAYMENT', body: formatPaymentDue(deal.payment_due_date) })
-
-  const timeLines: string[] = []
-  const dt = venueDealTerms
-  if (snap && Number.isFinite(snap.performanceHours) && snap.performanceHours > 0) {
-    timeLines.push(`Performance: ${snap.performanceHours} hr`)
-  }
-  if (dt?.set_length?.trim()) timeLines.push(`Set length: ${dt.set_length.trim()}`)
-  if (dt?.load_in_time?.trim()) timeLines.push(`Load-in: ${dt.load_in_time.trim()}`)
-  if (timeLines.length) sections.push({ title: 'TIME', body: timeLines.join('\n') })
-
-  const commitments = topVenueCommitmentLabelsForCalendar(deal.promise_lines, gross, 5)
-  if (commitments.length) {
     sections.push({
-      title: 'VENUE COMMITMENTS (TOP 5)',
-      body: commitments.map(c => `- ${c}`).join('\n'),
+      title: 'Details',
+      body: `Calculator quote was ${formatUsdDisplayCeil(snap.total)}; contract amount above is binding.`,
     })
   }
 
-  const notesBlock = deal.notes?.trim()
-  if (notesBlock) sections.push({ title: 'NOTES', body: notesBlock })
-
-  const logisticsNotes = dt?.notes?.trim()
-  if (logisticsNotes) {
-    sections.push({ title: 'LOGISTICS', body: logisticsNotes })
+  const gearLabels = artistGigLogisticsLabelsFromDeal(deal.promise_lines ?? null, gross).slice(0, 5)
+  const dt = venueDealTerms
+  const gearExtra: string[] = [...gearLabels]
+  if (dt?.set_length?.trim()) gearExtra.push(`Set length: ${dt.set_length.trim()}`)
+  if (dt?.load_in_time?.trim()) gearExtra.push(`Load-in: ${dt.load_in_time.trim()}`)
+  const logNotes = dt?.notes?.trim()
+  if (logNotes) {
+    const short = logNotes.length > 280 ? `${logNotes.slice(0, 277)}…` : logNotes
+    gearExtra.push(short)
+  }
+  if (gearExtra.length) {
+    sections.push({ title: 'Gear', body: gearExtra.map(g => `- ${g}`).join('\n') })
   }
 
-  sections.push({ title: 'FULL DETAIL', body: FULL_DETAIL_FOOTER })
+  sections.push({ title: 'More', body: POINTER_LINE })
 
   const text = trimCalendarDescription(sections, maxLen).trim()
   return text.length ? text : undefined

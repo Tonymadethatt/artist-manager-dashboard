@@ -8,17 +8,26 @@ import { refreshAccessToken } from './googleCalendarOAuthShared'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { googleTimedEventFromUtcIso } from '../../src/lib/calendar/pacificWallTime'
 import type { CommissionTier, DealTerms, OutreachStatus } from '../../src/types/index'
-import { formatVenueAddressForGoogleCalendar } from '../../src/lib/calendar/venueAddressForGoogle'
+import {
+  formatVenueAddressForGoogleCalendar,
+  formatVenuePostalLine,
+} from '../../src/lib/calendar/venueAddressForGoogle'
 import { buildGoogleCalendarDealDescription } from '../../src/lib/calendar/googleCalendarDealDescription'
+import { formatArtistOnsiteContactLine } from '../../src/lib/email/artistOnsiteContactLine'
+import { loadOnsiteContactForGigBooked } from '../../src/lib/email/loadOnsiteContactForGigBooked'
 
 export type DealPushRow = {
   id: string
   user_id: string
   description: string
   venue_id: string | null
+  onsite_contact_id: string | null
   event_start_at: string | null
   event_end_at: string | null
   event_cancelled_at: string | null
+  event_date: string | null
+  performance_start_at: string | null
+  performance_end_at: string | null
   notes: string | null
   google_shared_calendar_event_id: string | null
   google_shared_calendar_event_etag: string | null
@@ -27,6 +36,10 @@ export type DealPushRow = {
   commission_tier: CommissionTier
   promise_lines: unknown | null
   pricing_snapshot: unknown | null
+  deposit_due_amount: number | null
+  deposit_paid_amount: number
+  balance_paid_amount: number
+  commission_amount: number | null
 }
 
 export type VenuePushRow = {
@@ -90,8 +103,18 @@ function normalizeEmbeddedVenue(raw: unknown): { status: OutreachStatus } | null
   return null
 }
 
-function buildGoogleEventDescription(deal: DealPushRow, venue: VenuePushRow | null): string | undefined {
-  const dt = venue?.deal_terms ?? null
+async function buildGoogleEventDescriptionAsync(args: {
+  supabase: SupabaseClient
+  userId: string
+  deal: DealPushRow
+  venue: VenuePushRow | null
+}): Promise<string | undefined> {
+  const { supabase, userId, deal, venue } = args
+  const contact = await loadOnsiteContactForGigBooked(supabase, userId, deal)
+  const onsiteLine = contact
+    ? formatArtistOnsiteContactLine(contact, { includePhone: false })
+    : null
+  const addressLine = venue ? formatVenuePostalLine(venue) : undefined
   return buildGoogleCalendarDealDescription(
     {
       notes: deal.notes,
@@ -100,9 +123,23 @@ function buildGoogleEventDescription(deal: DealPushRow, venue: VenuePushRow | nu
       commission_tier: deal.commission_tier,
       promise_lines: deal.promise_lines,
       pricing_snapshot: deal.pricing_snapshot,
+      event_start_at: deal.event_start_at,
+      event_end_at: deal.event_end_at,
+      performance_start_at: deal.performance_start_at,
+      performance_end_at: deal.performance_end_at,
+      event_date: deal.event_date,
+      deposit_due_amount: deal.deposit_due_amount,
+      deposit_paid_amount: deal.deposit_paid_amount,
+      balance_paid_amount: deal.balance_paid_amount,
+      commission_amount: deal.commission_amount,
     },
-    dt,
-    { maxLength: 8000 },
+    venue?.deal_terms ?? null,
+    {
+      maxLength: 8000,
+      venueName: venue?.name ?? null,
+      venueAddressLine: addressLine ?? null,
+      onsiteContactLine: onsiteLine,
+    },
   )
 }
 
@@ -276,7 +313,13 @@ async function googlePatchEventWithStaleEtagRetry(args: {
   }
 }
 
-function buildEventPayload(deal: DealPushRow, venue: VenuePushRow | null): Record<string, unknown> {
+async function buildEventPayload(args: {
+  supabase: SupabaseClient
+  userId: string
+  deal: DealPushRow
+  venue: VenuePushRow | null
+}): Promise<Record<string, unknown>> {
+  const { deal, venue } = args
   const start = deal.event_start_at ? googleTimedEventFromUtcIso(deal.event_start_at) : null
   const end = deal.event_end_at ? googleTimedEventFromUtcIso(deal.event_end_at) : null
   if (!start || !end) {
@@ -284,7 +327,7 @@ function buildEventPayload(deal: DealPushRow, venue: VenuePushRow | null): Recor
   }
   const base = deal.description.trim() || 'Gig'
   const summary = venue ? `${base} · ${venue.name}` : base
-  const description = buildGoogleEventDescription(deal, venue)
+  const description = await buildGoogleEventDescriptionAsync(args)
   const payload: Record<string, unknown> = {
     summary,
     description,
@@ -364,7 +407,7 @@ export async function performGoogleCalendarDealPush(args: {
     const { data: deal, error: dealErr } = await supabase
       .from('deals')
       .select(
-        'id, user_id, description, venue_id, event_start_at, event_end_at, event_cancelled_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag, gross_amount, payment_due_date, commission_tier, promise_lines, pricing_snapshot',
+        'id, user_id, description, venue_id, onsite_contact_id, event_start_at, event_end_at, event_cancelled_at, event_date, performance_start_at, performance_end_at, notes, google_shared_calendar_event_id, google_shared_calendar_event_etag, gross_amount, payment_due_date, commission_tier, promise_lines, pricing_snapshot, deposit_due_amount, deposit_paid_amount, balance_paid_amount, commission_amount',
       )
       .eq('id', dealId)
       .eq('user_id', userId)
@@ -377,11 +420,25 @@ export async function performGoogleCalendarDealPush(args: {
     const dr = deal as Record<string, unknown>
     const d: DealPushRow = {
       ...(deal as DealPushRow),
+      onsite_contact_id: (dr.onsite_contact_id as string | null | undefined) ?? null,
+      event_date: (dr.event_date as string | null | undefined) ?? null,
+      performance_start_at: (dr.performance_start_at as string | null | undefined) ?? null,
+      performance_end_at: (dr.performance_end_at as string | null | undefined) ?? null,
       gross_amount: Number(dr.gross_amount ?? 0) || 0,
       payment_due_date: (dr.payment_due_date as string | null | undefined) ?? null,
       commission_tier: (dr.commission_tier as CommissionTier | undefined) ?? 'artist_network',
       promise_lines: dr.promise_lines ?? null,
       pricing_snapshot: dr.pricing_snapshot ?? null,
+      deposit_due_amount:
+        dr.deposit_due_amount != null && dr.deposit_due_amount !== ''
+          ? Number(dr.deposit_due_amount)
+          : null,
+      deposit_paid_amount: Number(dr.deposit_paid_amount ?? 0) || 0,
+      balance_paid_amount: Number(dr.balance_paid_amount ?? 0) || 0,
+      commission_amount:
+        dr.commission_amount != null && dr.commission_amount !== ''
+          ? Number(dr.commission_amount)
+          : null,
     }
 
     /**
@@ -443,7 +500,7 @@ export async function performGoogleCalendarDealPush(args: {
       return { ok: true, action: 'noop' }
     }
 
-    const payload = buildEventPayload(d, venue)
+    const payload = await buildEventPayload({ supabase, userId, deal: d, venue })
 
     const { data: d2 } = await supabase
       .from('deals')

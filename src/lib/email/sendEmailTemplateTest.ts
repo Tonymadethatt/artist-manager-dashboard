@@ -363,7 +363,7 @@ export async function sendEmailTemplateTest(
     }
 
     if (params.selectedType === 'gig_booked_ics' && startIso && endIso) {
-      const { deal: bookedDeal, venue: bookedVenue, catalog: bookedCat } = buildGigBookedPreviewBundle({
+      const { deal: bookedDeal, venue: bookedVenue, onsiteContact: bookedOnsite } = buildGigBookedPreviewBundle({
         event_start_at: startIso,
         event_end_at: endIso,
         event_date: previewEventDay,
@@ -391,7 +391,7 @@ export async function sendEmailTemplateTest(
       const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
         deal: bookedDeal,
         venue: bookedVenue,
-        catalog: bookedCat,
+        onsiteContact: bookedOnsite,
       })
       const html = buildBrandedGigCalendarEmail({
         kind: 'gig_booked_ics',

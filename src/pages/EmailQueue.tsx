@@ -41,7 +41,8 @@ import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
-import { buildGigBookedEmailMiddleHtml, catalogDocFromSupabaseRow } from '@/lib/email/gigBookedEmailSections'
+import { buildGigBookedEmailMiddleHtml } from '@/lib/email/gigBookedEmailSections'
+import { loadOnsiteContactForGigBooked } from '@/lib/email/loadOnsiteContactForGigBooked'
 import { dealQualifiesForCalendar } from '@/lib/calendar/gigCalendarRules'
 import { shouldSendGigReminderNow } from '@/lib/calendar/gigReminderSchedule'
 import {
@@ -754,13 +755,8 @@ export default function EmailQueue() {
                 .eq('user_id', user.id)
                 .maybeSingle()
               const venue = venueRow as Venue | null
-              const { data: catRow } = await supabase
-                .from('user_pricing_catalog')
-                .select('doc')
-                .eq('user_id', user.id)
-                .maybeSingle()
-              const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
-              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({ deal, venue, catalog })
+              const onsiteContact = await loadOnsiteContactForGigBooked(supabase, user.id, deal)
+              const middleSectionsHtml = buildGigBookedEmailMiddleHtml({ deal, venue, onsiteContact })
               setPreviewHtml(buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',
                 L: Lg,
@@ -1302,16 +1298,11 @@ export default function EmailQueue() {
               if (!res.ok) throw new Error(await parseErr(res))
               resendMessageId = await parseResendMessageIdFromSendFunctionResponse(res)
             } else {
-              const { data: catRow } = await supabase
-                .from('user_pricing_catalog')
-                .select('doc')
-                .eq('user_id', user.id)
-                .maybeSingle()
-              const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
+              const onsiteContact = await loadOnsiteContactForGigBooked(supabase, user.id, deal)
               const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
                 deal,
                 venue,
-                catalog,
+                onsiteContact,
               })
               const html = buildBrandedGigCalendarEmail({
                 kind: 'gig_booked_ics',

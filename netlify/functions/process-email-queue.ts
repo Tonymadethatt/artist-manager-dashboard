@@ -42,7 +42,8 @@ import { ensureQueueCaptureUrl } from '../../src/lib/emailCapture/ensureQueueCap
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { parseGigCalendarQueueNotes } from '../../src/lib/email/gigCalendarQueueNotes'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '../../src/lib/email/gigCalendarEmailHtml'
-import { buildGigBookedEmailMiddleHtml, catalogDocFromSupabaseRow } from '../../src/lib/email/gigBookedEmailSections'
+import { buildGigBookedEmailMiddleHtml } from '../../src/lib/email/gigBookedEmailSections'
+import { loadOnsiteContactForGigBooked } from '../../src/lib/email/loadOnsiteContactForGigBooked'
 import { artistLayoutForSend } from '../../src/lib/emailLayout'
 import { dealQualifiesForCalendar } from '../../src/lib/calendar/gigCalendarRules'
 import { eventStartAtFromQueueDealEmbed, shouldSendGigReminderNow } from '../../src/lib/calendar/gigReminderSchedule'
@@ -729,17 +730,12 @@ const handler: Handler = async (event) => {
             continue
           }
 
-          const { data: catRow } = await supabase
-            .from('user_pricing_catalog')
-            .select('doc')
-            .eq('user_id', email.user_id)
-            .maybeSingle()
-          const catalog = catalogDocFromSupabaseRow(catRow?.doc ?? null)
+          const onsiteContact = await loadOnsiteContactForGigBooked(supabase, email.user_id as string, deal)
 
           const middleSectionsHtml = buildGigBookedEmailMiddleHtml({
             deal,
             venue,
-            catalog,
+            onsiteContact,
           })
           const html = buildBrandedGigCalendarEmail({
             kind: 'gig_booked_ics',
