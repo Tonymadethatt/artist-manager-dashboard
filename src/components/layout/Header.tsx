@@ -1,6 +1,8 @@
 import { Menu } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { HeaderAmbient } from './HeaderAmbient'
+import { resolveNavGroupFromPath } from './navCategory'
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Overview',
@@ -32,8 +34,9 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const location = useLocation()
+  const zone = resolveNavGroupFromPath(location.pathname)
 
-   const title =
+  const title =
     Object.entries(PAGE_TITLES)
       .sort((a, b) => b[0].length - a[0].length)
       .find(([path]) =>
@@ -45,19 +48,20 @@ export function Header({ onMenuClick }: HeaderProps) {
   return (
     <header
       className={cn(
-        'flex min-h-11 items-center gap-3 rounded-xl border border-neutral-800/90',
+        'relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl border border-neutral-800/90',
         'bg-neutral-900/55 px-3 py-2.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:px-4 sm:py-3',
       )}
     >
+      <HeaderAmbient zone={zone} />
       <button
         type="button"
-        className="shrink-0 rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800/80 hover:text-neutral-100 md:hidden"
+        className="relative z-10 shrink-0 rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-800/80 hover:text-neutral-100 md:hidden"
         onClick={onMenuClick}
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" aria-hidden />
       </button>
-      <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight text-neutral-100 sm:text-[15px]">
+      <h1 className="relative z-10 min-w-0 truncate text-sm font-semibold tracking-tight text-neutral-100 drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] sm:text-[15px]">
         {title}
       </h1>
     </header>

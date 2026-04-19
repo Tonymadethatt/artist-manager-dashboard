@@ -30,8 +30,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { useResendSendUsage } from '@/hooks/useResendSendUsage'
-
-type NavGroupId = 'workspace' | 'content' | 'forms' | 'email'
+import { CATEGORY_TITLE_STYLE, type NavGroupId } from './navCategory'
 
 /** Nested collapsible block under a nav group (e.g. Forms → Leads). */
 type SubsectionId = 'forms-leads'
@@ -151,33 +150,6 @@ function loadExpandedGroupsFromStorage(): Record<NavGroupId, boolean> {
   } catch {
     return { ...DEFAULT_EXPANDED }
   }
-}
-
-/** Vibrant gradient text (bg-clip) + chevron + vertical active-indicator stops (gradient-to-b) */
-const CATEGORY_TITLE_STYLE: Record<
-  NavGroupId,
-  { label: string; chevron: string; indicator: string }
-> = {
-  workspace: {
-    label: 'bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500',
-    chevron: 'text-cyan-300',
-    indicator: 'from-cyan-400 via-sky-400 to-blue-500',
-  },
-  content: {
-    label: 'bg-gradient-to-r from-fuchsia-400 via-purple-400 to-violet-500',
-    chevron: 'text-fuchsia-300',
-    indicator: 'from-fuchsia-400 via-purple-400 to-violet-500',
-  },
-  forms: {
-    label: 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500',
-    chevron: 'text-amber-300',
-    indicator: 'from-amber-400 via-orange-400 to-rose-500',
-  },
-  email: {
-    label: 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400',
-    chevron: 'text-emerald-300',
-    indicator: 'from-emerald-400 via-teal-400 to-cyan-400',
-  },
 }
 
 interface SidebarProps {
