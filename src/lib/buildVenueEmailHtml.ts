@@ -80,4 +80,9 @@ export const PREVIEW_MOCK_DEAL: PreviewDeal = {
   payment_due_date: '2026-05-10',
   agreement_url: 'https://docs.google.com/document/d/preview-agreement-link',
   notes: null,
+  /** Sample window so preview matches artist-style stacked “when” cells when instants exist. */
+  event_start_at: '2026-05-18T03:00:00.000Z',
+  event_end_at: '2026-05-18T07:00:00.000Z',
+  performance_start_at: '2026-05-18T04:00:00.000Z',
+  performance_end_at: '2026-05-18T06:30:00.000Z',
 }

@@ -290,6 +290,10 @@ export function SendVenueEmailModal({
             payment_due_date: deal.payment_due_date,
             agreement_url: agreementUrl,
             notes: deal.notes,
+            event_start_at: deal.event_start_at ?? null,
+            event_end_at: deal.event_end_at ?? null,
+            performance_start_at: deal.performance_start_at ?? null,
+            performance_end_at: deal.performance_end_at ?? null,
           },
         } : {}),
         ...(venue ? {

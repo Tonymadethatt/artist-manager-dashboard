@@ -835,6 +835,10 @@ export default function EmailQueue() {
         payment_due_date: email.deal.payment_due_date,
         agreement_url: agreementUrl,
         notes: email.deal.notes,
+        event_start_at: email.deal.event_start_at ?? null,
+        event_end_at: email.deal.event_end_at ?? null,
+        performance_start_at: email.deal.performance_start_at ?? null,
+        performance_end_at: email.deal.performance_end_at ?? null,
       } : undefined
 
       const venueForRender = email.venue ? {
@@ -1438,6 +1442,10 @@ export default function EmailQueue() {
           payment_due_date: email.deal.payment_due_date,
           agreement_url: agreementUrl,
           notes: email.deal.notes,
+          event_start_at: email.deal.event_start_at ?? null,
+          event_end_at: email.deal.event_end_at ?? null,
+          performance_start_at: email.deal.performance_start_at ?? null,
+          performance_end_at: email.deal.performance_end_at ?? null,
         },
       } : {}
 

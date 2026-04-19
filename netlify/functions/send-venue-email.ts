@@ -51,6 +51,10 @@ interface DealData {
   payment_due_date: string | null
   agreement_url: string | null
   notes: string | null
+  event_start_at?: string | null
+  event_end_at?: string | null
+  performance_start_at?: string | null
+  performance_end_at?: string | null
 }
 
 interface VenueData {
