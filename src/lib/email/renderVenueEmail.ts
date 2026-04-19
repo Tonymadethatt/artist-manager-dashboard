@@ -3,6 +3,7 @@ import type { EmailTemplateLayoutV1 } from '../emailLayout'
 import { effectiveTemplateLayout } from '../emailLayout'
 import { captureLinkLabel, venueEmailTypeToCaptureKind } from '../emailCapture/kinds'
 import { escapeHtmlPlain, renderAppendBlocksHtml } from './appendBlocksHtml'
+import { decorateVenueProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_FOOTER_MUTED,
@@ -120,7 +121,7 @@ function rowStackedDate(label: string, ymd: string, valueColor = EMAIL_TEXT_PRIM
 }
 
 function card(title: string, content: string): string {
-  const safeTitle = escapeHtmlPlain(title)
+  const safeTitle = escapeHtmlPlain(decorateVenueProgrammaticSectionCardTitle(title))
   return `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${safeTitle}</span></div><div style="padding:2px 18px 6px;">${content}</div></div>`
 }
 
@@ -200,7 +201,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         '<li style="margin-bottom:8px;">Payment details and timeline will be outlined in the agreement.</li>',
         `<li>For any questions, reply to this email or contact us at <strong>${replyTo}</strong>.</li>`,
       ].join('')
-      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:12px;">${escapeHtmlPlain('Next Steps')}</p><ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;padding-left:16px;">${nextSteps}</ul></div>`
+      bodyCards += `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};margin-bottom:12px;">${escapeHtmlPlain(decorateVenueProgrammaticSectionCardTitle('Next Steps'))}</p><ul style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;padding-left:16px;">${nextSteps}</ul></div>`
       closing = `Looking forward to a great show. We will be in touch soon.`
       break
     }
@@ -230,7 +231,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
         deal?.gross_amount ? row('Amount due', money(deal.gross_amount), '#ef4444') : '',
         deal?.payment_due_date ? rowStackedDate('Due date', deal.payment_due_date, '#ef4444') : '',
       ].filter(Boolean).join('')
-      bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain('Payment Due')}</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
+      bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(decorateVenueProgrammaticSectionCardTitle('Payment Due'))}</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
       closing = `If you have already sent the payment, please disregard this message. If you have any questions or need to arrange a different timeline, reply to this email and we will work something out.`
       break
     }

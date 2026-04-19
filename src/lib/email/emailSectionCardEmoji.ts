@@ -33,6 +33,25 @@ const EMOJI_BY_NORMALIZED_KEY: Record<string, string> = {
   'outstanding balance': '⚠️',
 }
 
+/**
+ * Venue / client-facing section headers: conservative, literal icons (document, time, receipt).
+ * Separate from artist map so tone stays appropriate for business correspondence.
+ */
+const VENUE_EMOJI_BY_NORMALIZED_KEY: Record<string, string> = {
+  'booking details': '📋',
+  'next steps': '🗂️',
+  'payment summary': '🧾',
+  payment: '🧾',
+  invoice: '🧾',
+  'payment due': '⏰',
+  agreement: '📄',
+  'previous event': '📅',
+  'event summary': '📊',
+  billing: '🧾',
+  reference: '📎',
+  context: 'ℹ️',
+}
+
 function normalizeSectionTitleKey(s: string): string {
   return s
     .trim()
@@ -61,6 +80,13 @@ function resolveSectionTitleEmoji(raw: string): string | null {
   return EMOJI_BY_NORMALIZED_KEY[key] ?? null
 }
 
+function resolveVenueSectionTitleEmoji(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const key = normalizeSectionTitleKey(trimmed)
+  return VENUE_EMOJI_BY_NORMALIZED_KEY[key] ?? null
+}
+
 /** Built-in cards (gig emails, append blocks): emoji + UPPERCASE label. */
 export function decorateProgrammaticSectionCardTitle(raw: string): string {
   const trimmed = raw.trim() || 'Details'
@@ -78,5 +104,25 @@ export function decorateMergedArtistCustomSectionTitle(raw: string): string {
   if (!trimmed) return ''
   if (sectionTitleAlreadyHasLeadingEmoji(trimmed)) return trimmed
   const emoji = resolveSectionTitleEmoji(trimmed)
+  return emoji ? `${emoji} ${trimmed}` : trimmed
+}
+
+/** Built-in venue/client catalog emails: emoji + UPPERCASE label (same shell as programmatic artist cards). */
+export function decorateVenueProgrammaticSectionCardTitle(raw: string): string {
+  const trimmed = raw.trim() || 'Details'
+  if (sectionTitleAlreadyHasLeadingEmoji(trimmed)) {
+    return trimmed.toUpperCase()
+  }
+  const emoji = resolveVenueSectionTitleEmoji(trimmed)
+  const upper = trimmed.toUpperCase()
+  return emoji ? `${emoji} ${upper}` : upper
+}
+
+/** Custom template merged for venue audience: preserve user casing; venue-only emoji map. */
+export function decorateMergedVenueCustomSectionTitle(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (sectionTitleAlreadyHasLeadingEmoji(trimmed)) return trimmed
+  const emoji = resolveVenueSectionTitleEmoji(trimmed)
   return emoji ? `${emoji} ${trimmed}` : trimmed
 }

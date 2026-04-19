@@ -1,5 +1,8 @@
 import { escapeHtmlPlain } from './appendBlocksHtml'
-import { decorateMergedArtistCustomSectionTitle } from './emailSectionCardEmoji'
+import {
+  decorateMergedArtistCustomSectionTitle,
+  decorateMergedVenueCustomSectionTitle,
+} from './emailSectionCardEmoji'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_HINT,
@@ -47,7 +50,9 @@ function titledContentCard(
   const label =
     showHeader && audience === 'artist'
       ? decorateMergedArtistCustomSectionTitle(sectionTitle.trim())
-      : sectionTitle.trim()
+      : showHeader && audience === 'venue'
+        ? decorateMergedVenueCustomSectionTitle(sectionTitle.trim())
+        : sectionTitle.trim()
   const header = showHeader
     ? `<div style="background:#161616;padding:10px 18px;border-bottom:1px solid #2a2a2a;"><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(label)}</span></div>`
     : ''
