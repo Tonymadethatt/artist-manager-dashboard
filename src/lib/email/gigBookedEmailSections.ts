@@ -41,6 +41,8 @@ const CARD_ACCENTS = ['#22c55e', '#60a5fa', '#fbbf24', '#a78bfa', '#f97316'] as 
 
 /** Manager’s slice in the illustrative pie (visual only; not tied to 10% vs 20%). */
 const MANAGER_PIE_SLICE_GREEN = '#22c55e'
+/** Angular fraction for the green wedge — keep small so it reads as a sliver, not a big slice. */
+const VISUAL_MANAGER_WEDGE_FRACTION = 0.055
 
 function nextAccent(i: number): string {
   return CARD_ACCENTS[i % CARD_ACCENTS.length]!
@@ -58,14 +60,14 @@ export function formatManagerCommissionSubsectionHeading(managerName: string): s
 }
 
 /**
- * Fixed ~15% wedge (green) vs remainder (Payment card accent) — illustration only for email clients that render SVG.
+ * Fixed thin green wedge vs remainder (Payment card accent) — decorative only for email clients that render SVG.
  */
 function staticIllustrativeManagerPieSvg(artistMajorityFill: string): string {
   const cx = 18
   const cy = 18
   const r = 14
   const t0 = -Math.PI / 2
-  const t1 = t0 + 0.15 * 2 * Math.PI
+  const t1 = t0 + VISUAL_MANAGER_WEDGE_FRACTION * 2 * Math.PI
   const x1 = cx + r * Math.cos(t0)
   const y1 = cy + r * Math.sin(t0)
   const x2 = cx + r * Math.cos(t1)
