@@ -18,7 +18,19 @@ function isPerformanceReportTokenUuid(token: string): boolean {
   return UUID_RE.test(token.trim())
 }
 
-/** Origin only, no trailing slash — env fallback when `rawUrl` has no host. */
+function headerGet(
+  headers: Record<string, string | undefined> | null | undefined,
+  name: string,
+): string | undefined {
+  if (!headers) return undefined
+  const want = name.toLowerCase()
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === want && typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return undefined
+}
+
+/** Origin only, no trailing slash — env fallback. */
 function resolveNetlifyPublicOrigin(): string {
   const raw =
     process.env.URL?.trim() ||
@@ -31,10 +43,26 @@ function resolveNetlifyPublicOrigin(): string {
 }
 
 /**
- * Prefer the URL the crawler (or user) actually requested so og:url / og:image match the shared link
- * (custom domain vs *.netlify.app). Critical for WhatsApp/Facebook rich previews.
+ * Public hostname for og:url / og:image. Netlify often sets `rawUrl` to the *function* URL; the browser
+ * Host / X-Forwarded-Host is the domain the user shared (custom domain, www, etc.).
  */
-function originFromEvent(event: HandlerEvent): string | null {
+function originFromForwardedHeaders(event: HandlerEvent): string | null {
+  const hostRaw =
+    headerGet(event.headers, 'x-forwarded-host') ?? headerGet(event.headers, 'host')
+  if (!hostRaw) return null
+  const host = hostRaw.split(',')[0].trim().split(':')[0]
+  if (!host) return null
+  let proto = (
+    headerGet(event.headers, 'x-forwarded-proto') ?? 'https'
+  )
+    .split(',')[0]
+    .trim()
+    .toLowerCase()
+  if (proto !== 'http' && proto !== 'https') proto = 'https'
+  return `${proto}://${host}`
+}
+
+function originFromRawUrl(event: HandlerEvent): string | null {
   const raw = event.rawUrl?.trim()
   if (!raw) return null
   try {
@@ -47,14 +75,15 @@ function originFromEvent(event: HandlerEvent): string | null {
 }
 
 function resolveShellOrigin(event: HandlerEvent): string {
-  return originFromEvent(event) ?? resolveNetlifyPublicOrigin()
+  return (
+    originFromForwardedHeaders(event) ??
+    originFromRawUrl(event) ??
+    resolveNetlifyPublicOrigin()
+  )
 }
 
 async function fetchPublishedIndexHtml(primaryOrigin: string): Promise<Response | null> {
-  const fallbacks = [
-    `${primaryOrigin}/index.html`,
-    `${primaryOrigin}/`,
-  ]
+  const fallbacks = [`${primaryOrigin}/index.html`, `${primaryOrigin}/`]
   const envFallback = resolveNetlifyPublicOrigin()
   if (envFallback !== primaryOrigin) {
     fallbacks.push(`${envFallback}/index.html`, `${envFallback}/`)
@@ -74,7 +103,6 @@ async function fetchPublishedIndexHtml(primaryOrigin: string): Promise<Response 
   return null
 }
 
-/** Escape text inside `<title>…</title>`. */
 function escTitleText(s: string): string {
   return s.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;')
 }
@@ -87,127 +115,88 @@ function escAttr(s: string): string {
     .replace(/>/gu, '&gt;')
 }
 
-/** Normalize void-meta closing: `/>` or `>` with optional whitespace. */
-const META_VOID_END = String.raw`\s*\/?>`
-
-const OG_URL_PROP = /property\s*=\s*["']og:url["']/iu
-const FB_APP_ID_PROP = /property\s*=\s*["']fb:app_id["']/iu
-
-/** Facebook Sharing Debugger expects `og:url`; inject if regex patches missed. Optional `fb:app_id` when env is set. */
-function injectRequiredFacebookHeadTags(
-  html: string,
-  opts: { canonicalUrl: string; fbAppId?: string | null },
-): string {
-  const lines: string[] = []
-  if (!OG_URL_PROP.test(html)) {
-    lines.push(`<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`)
-  }
-  const app = opts.fbAppId?.trim()
-  if (app && !FB_APP_ID_PROP.test(html)) {
-    lines.push(`<meta property="fb:app_id" content="${escAttr(app)}" />`)
-  }
-  if (!lines.length) return html
-  return html.replace(/<\/head>/iu, `    ${lines.join('\n    ')}\n</head>`)
+function extractOgSiteName(html: string): string | null {
+  const m1 = html.match(
+    /<meta\s[^>]*\bproperty\s*=\s*["']og:site_name["'][^>]*\bcontent\s*=\s*["']([^"']*)["'][^>]*>/iu,
+  )
+  if (m1?.[1]) return m1[1]
+  const m2 = html.match(
+    /<meta\s[^>]*\bcontent\s*=\s*["']([^"']*)["'][^>]*\bproperty\s*=\s*["']og:site_name["'][^>]*>/iu,
+  )
+  return m2?.[1] ?? null
 }
 
-/**
- * Shell HTML still references the site-wide card; swap any stragglers to the performance-report image.
- */
-function rewriteLegacySocialCardToPerformanceReportImage(
-  html: string,
-  imageContentEscaped: string,
-): string {
-  return html
-    .replace(/content="\/social-card\.png"/giu, `content="${imageContentEscaped}"`)
-    .replace(/content='\/social-card\.png'/giu, `content='${imageContentEscaped}'`)
+/** Remove default SPA social + description + canonical so we inject one authoritative block (Facebook-safe). */
+function stripConflictingHeadTags(html: string): string {
+  let out = html
+  const stripPatterns = [
+    /\s*<meta\s[^>]*\bproperty\s*=\s*["']og:[^"']+["'][^>]*>\s*/giu,
+    /\s*<meta\s[^>]*\bname\s*=\s*["']twitter:[^"']+["'][^>]*>\s*/giu,
+    /\s*<meta\s[^>]*\bname\s*=\s*["']description["'][^>]*>\s*/giu,
+    /\s*<link\s[^>]*\brel\s*=\s*["']canonical["'][^>]*>\s*/giu,
+  ]
+  for (const p of stripPatterns) {
+    out = out.replace(p, '\n')
+  }
+  return out
 }
 
-function patchIndexHtmlHead(
+function injectPerformanceReportSocialBlock(
   html: string,
   opts: {
     title: string
     description: string
     canonicalUrl: string
     origin: string
-    fbAppId?: string | null
+    siteName: string
+    fbAppId: string | null
   },
 ): string {
   const imageAbs = `${opts.origin.replace(/\/$/u, '')}${SHOW_REPORT_SOCIAL_IMAGE_PATH}`
-  const imageEsc = escAttr(imageAbs)
-
-  let out = html.replace(/<title>[^<]*<\/title>/u, `<title>${escTitleText(opts.title)}</title>`)
-
-  if (!/rel="canonical"/u.test(out)) {
-    out = out.replace(
-      /<link rel="icon"/u,
-      `<link rel="canonical" href="${escAttr(opts.canonicalUrl)}" />\n    <link rel="icon"`,
-    )
-  }
-
-  out = out.replace(
-    new RegExp(`<meta name="description" content="[^"]*"${META_VOID_END}`, 'u'),
+  const lines: string[] = [
+    `<link rel="canonical" href="${escAttr(opts.canonicalUrl)}" />`,
     `<meta name="description" content="${escAttr(opts.description)}" />`,
-  )
-
-  out = out.replace(
-    new RegExp(`<meta property="og:title" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:site_name" content="${escAttr(opts.siteName)}" />`,
     `<meta property="og:title" content="${escAttr(opts.title)}" />`,
-  )
-  out = out.replace(
-    new RegExp(`<meta property="og:description" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta property="og:description" content="${escAttr(opts.description)}" />`,
-  )
-
-  if (OG_URL_PROP.test(out)) {
-    out = out.replace(
-      new RegExp(`<meta property="og:url" content="[^"]*"${META_VOID_END}`, 'u'),
-      `<meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
-    )
-  } else {
-    out = out.replace(
-      new RegExp(`<meta property="og:type" content="website"${META_VOID_END}`, 'u'),
-      `<meta property="og:type" content="website" />\n    <meta property="og:url" content="${escAttr(opts.canonicalUrl)}" />`,
-    )
-  }
-
-  out = out.replace(
-    new RegExp(`<meta property="og:image" content="[^"]*"${META_VOID_END}`, 'u'),
-    `<meta property="og:image" content="${imageEsc}" />`,
-  )
-  if (opts.origin.startsWith('https://') && !/property="og:image:secure_url"/u.test(out)) {
-    out = out.replace(
-      new RegExp(`<meta property="og:image" content="([^"]*)"${META_VOID_END}`, 'u'),
-      `<meta property="og:image" content="$1" />\n    <meta property="og:image:secure_url" content="$1" />`,
-    )
-  }
-
-  out = out.replace(
-    new RegExp(`<meta property="og:image:alt" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta property="og:image" content="${escAttr(imageAbs)}" />`,
     `<meta property="og:image:alt" content="${escAttr(SHOW_REPORT_SOCIAL_IMAGE_ALT)}" />`,
-  )
-
-  out = out.replace(
-    new RegExp(`<meta name="twitter:title" content="[^"]*"${META_VOID_END}`, 'u'),
+  ]
+  if (imageAbs.startsWith('https://')) {
+    lines.push(`<meta property="og:image:secure_url" content="${escAttr(imageAbs)}" />`)
+  }
+  const fb = opts.fbAppId?.trim()
+  if (fb) {
+    lines.push(`<meta property="fb:app_id" content="${escAttr(fb)}" />`)
+  }
+  lines.push(
+    `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${escAttr(opts.title)}" />`,
-  )
-  out = out.replace(
-    new RegExp(`<meta name="twitter:description" content="[^"]*"${META_VOID_END}`, 'u'),
     `<meta name="twitter:description" content="${escAttr(opts.description)}" />`,
-  )
-  out = out.replace(
-    new RegExp(`<meta name="twitter:image" content="[^"]*"${META_VOID_END}`, 'u'),
-    `<meta name="twitter:image" content="${imageEsc}" />`,
-  )
-  out = out.replace(
-    new RegExp(`<meta name="twitter:image:alt" content="[^"]*"${META_VOID_END}`, 'u'),
+    `<meta name="twitter:image" content="${escAttr(imageAbs)}" />`,
     `<meta name="twitter:image:alt" content="${escAttr(SHOW_REPORT_SOCIAL_IMAGE_ALT)}" />`,
   )
+  const block = `    ${lines.join('\n    ')}\n`
+  if (!/<\/head>/iu.test(html)) return html + block
+  return html.replace(/<\/head>/iu, `${block}</head>`)
+}
 
-  out = injectRequiredFacebookHeadTags(out, {
-    canonicalUrl: opts.canonicalUrl,
-    fbAppId: opts.fbAppId,
-  })
-  return rewriteLegacySocialCardToPerformanceReportImage(out, imageEsc)
+function patchPerformanceReportHtml(
+  html: string,
+  opts: {
+    title: string
+    description: string
+    canonicalUrl: string
+    origin: string
+    fbAppId: string | null
+  },
+): string {
+  const siteName = extractOgSiteName(html) ?? 'The Office — Artist Management'
+  let out = stripConflictingHeadTags(html)
+  out = out.replace(/<title>[^<]*<\/title>/iu, `<title>${escTitleText(opts.title)}</title>`)
+  return injectPerformanceReportSocialBlock(out, { ...opts, siteName })
 }
 
 const handler: Handler = async (event) => {
@@ -268,7 +257,7 @@ const handler: Handler = async (event) => {
     process.env.VITE_FACEBOOK_APP_ID?.trim() ||
     null
 
-  const body = patchIndexHtmlHead(htmlShell, {
+  const body = patchPerformanceReportHtml(htmlShell, {
     title,
     description,
     canonicalUrl,
@@ -281,10 +270,7 @@ const handler: Handler = async (event) => {
     'Cache-Control': 'public, max-age=300',
   }
 
-  if (event.httpMethod === 'HEAD') {
-    return { statusCode: 200, headers, body: '' }
-  }
-
+  /** Some crawlers issue HEAD; return the same HTML as GET so Open Graph is never "empty". */
   return {
     statusCode: 200,
     headers,
