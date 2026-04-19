@@ -242,6 +242,23 @@ export async function sendEmailTemplateTest(
       return { ok: true }
     }
 
+    if (params.selectedType === 'booking_commission_reminder') {
+      const res = await fetch('/.netlify/functions/send-booking-commission-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: reportProfileForSend(profile),
+          custom_subject: layoutNorm.subject ?? null,
+          custom_intro: layoutNorm.intro ?? null,
+          layout: layoutNorm,
+          testOnly: true,
+          user_id: user.id,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
     if (params.selectedType === 'retainer_received') {
       const inputs = await fetchReportInputsForUser(supabase, user.id)
       const { settledFees, totalAcknowledged } = buildRetainerReceivedPayload(inputs.fees)

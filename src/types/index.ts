@@ -735,6 +735,8 @@ export type VenueEmailType =
 export type ArtistEmailType =
   | 'management_report'
   | 'retainer_reminder'
+  /** Per-show booking commission owed; template + manual test only until queued from product flows. */
+  | 'booking_commission_reminder'
   | 'retainer_received'
   | 'performance_report_request'
   | 'performance_report_received'
@@ -769,6 +771,7 @@ export const VENUE_EMAIL_TYPE_LABELS: Record<VenueEmailType, string> = {
 export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   management_report: 'Management Report',
   retainer_reminder: 'Retainer Reminder',
+  booking_commission_reminder: 'Booking commission reminder',
   retainer_received: 'Retainer payment received',
   performance_report_request: 'Performance Report Request',
   performance_report_received: 'Performance report received',

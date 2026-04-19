@@ -13,6 +13,10 @@ export function taskEmailAutomationHint(emailType: string): string | null {
     return 'Requires a linked venue or deal with a venue. Email goes to the venue contact (performance form link).'
   }
 
+  if (emailType === 'booking_commission_reminder') {
+    return 'Not auto-queued from tasks yet. Use Email Templates to edit, preview, and send a test.'
+  }
+
   if (
     emailType === 'management_report'
     || emailType === 'retainer_reminder'

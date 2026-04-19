@@ -51,6 +51,10 @@ import {
   buildPerformanceReportRequestHtml,
 } from '@/lib/buildArtistEmailHtml'
 import {
+  buildBookingCommissionReminderEmailHtml,
+  PREVIEW_BOOKING_COMMISSION_LINE_ITEMS,
+} from '@/lib/email/bookingCommissionReminderEmailDocument'
+import {
   artistTransactionalGreetingFirstName,
   buildArtistTransactionalEmailHtml,
 } from '@/lib/email/artistTransactionalEmailDocument'
@@ -239,6 +243,8 @@ const CLIENT_ORDER: VenueEmailType[] = [
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   management_report:          'Weekly or custom-range report sent to the artist. Shows outreach, deals, retainer, and impact.',
   retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
+  booking_commission_reminder:
+    'Friendly breakdown of per-show booking commission (gig fee, rate, amount owed). Not auto-sent yet—use preview and send test; automation can be wired later.',
   retainer_received:          'Confirmation to the artist when retainer / base fee is paid in full (queued from a completed task).',
   performance_report_request: 'Sent to the artist after a show. Links to the post-show report form.',
   performance_report_received: 'Confirmation after the post-show form is submitted (auto-queued on submit).',
@@ -252,6 +258,7 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   management_report:          'Management Update - {start} to {end}',
   retainer_reminder:          'Hey {firstName}, quick note from management',
+  booking_commission_reminder: 'Hey {firstName}, quick booking commission note',
   retainer_received:          '{firstName}, retainer received — thank you',
   performance_report_request: 'Quick check-in: How did the show go at {venue}?',
   performance_report_received: '{firstName}, we received your show check-in',
@@ -265,6 +272,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
 const ARTIST_ORDER: ArtistEmailType[] = [
   'management_report',
   'retainer_reminder',
+  'booking_commission_reminder',
   'retainer_received',
   'performance_report_request',
   'performance_report_received',
@@ -701,6 +709,16 @@ export default function EmailTemplates() {
             dayLabel: 'Sample show day',
             rows: [gigEmailPreviewTableRow()],
           },
+        })
+      }
+      if (selectedType === 'booking_commission_reminder') {
+        return buildBookingCommissionReminderEmailHtml({
+          artistName: artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
+          footer: artistPreviewFooter,
+          lineItems: PREVIEW_BOOKING_COMMISSION_LINE_ITEMS,
+          customSubject: layout.subject ?? null,
+          customIntro: layout.intro ?? null,
+          layout,
         })
       }
       return buildRetainerReminderHtml(
