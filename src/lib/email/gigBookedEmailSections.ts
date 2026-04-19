@@ -40,8 +40,8 @@ export type GigBookedEmailDealInput = Pick<
 const CARD_ACCENTS = ['#22c55e', '#60a5fa', '#fbbf24', '#a78bfa', '#f97316'] as const
 
 /** Manager’s slice in the illustrative pie (visual only; not tied to 10% vs 20%). */
-const MANAGER_PIE_SLICE_GREEN = '#22c55e'
-/** Angular fraction for the green wedge — small sliver (between ~5% and ~15% reads). */
+const MANAGER_PIE_SLICE_ORANGE = '#f97316'
+/** Angular fraction for the manager (orange) wedge — small sliver (between ~5% and ~15% reads). */
 const VISUAL_MANAGER_WEDGE_FRACTION = 0.09
 
 function nextAccent(i: number): string {
@@ -60,7 +60,7 @@ export function formatManagerCommissionSubsectionHeading(managerName: string): s
 }
 
 /**
- * Fixed thin green wedge vs remainder (Payment card accent) — decorative only for email clients that render SVG.
+ * Fixed thin orange wedge vs remainder (Payment card accent) — decorative only for email clients that render SVG.
  */
 function staticIllustrativeManagerPieSvg(artistMajorityFill: string): string {
   const cx = 18
@@ -78,7 +78,7 @@ function staticIllustrativeManagerPieSvg(artistMajorityFill: string): string {
   return (
     `<svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" style="display:block;" role="img" aria-label="Manager share of fee">`
     + `<path fill="${artistMajorityFill}" d="${dArtist}"/>`
-    + `<path fill="${MANAGER_PIE_SLICE_GREEN}" d="${dMgr}"/>`
+    + `<path fill="${MANAGER_PIE_SLICE_ORANGE}" d="${dMgr}"/>`
     + `</svg>`
   )
 }
