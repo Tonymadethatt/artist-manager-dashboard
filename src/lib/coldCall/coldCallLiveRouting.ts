@@ -1,5 +1,4 @@
 import type { ColdCallDataV1, ColdCallLiveCardId } from './coldCallPayload'
-import { coldCallShowBudgetCard } from './coldCallTemperatureScore'
 
 function withHistory(d: ColdCallDataV1, next: ColdCallLiveCardId): Partial<ColdCallDataV1> {
   const hist = d.live_history.includes(next) ? d.live_history : [...d.live_history, next]
@@ -8,14 +7,13 @@ function withHistory(d: ColdCallDataV1, next: ColdCallLiveCardId): Partial<ColdC
 
 /** After operator completes current card (all required fields set), move forward. */
 export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> | 'post' {
-  const showBudget = coldCallShowBudgetCard(d)
   const card = d.view_card || d.live_card
 
   switch (card) {
     case 'p1': {
       if (!d.who_answered) return {}
       if (d.who_answered === 'right_person') {
-        if (!d.target_title_key) return {}
+        if (!d.target_name.trim()) return {}
         return withHistory(d, 'p3')
       }
       if (d.who_answered === 'gatekeeper') return withHistory(d, 'p2a')
@@ -28,7 +26,7 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       if (d.gatekeeper_result === 'gave_name') return withHistory(d, 'p2a_detail')
       if (d.gatekeeper_result === 'transferred')
         return { ...withHistory(d, 'p3'), transferred_note: true }
-      if (d.gatekeeper_result === 'message') return withHistory(d, 'p2_msg')
+      if (d.gatekeeper_result === 'message') return withHistory(d, 'p6')
       if (d.gatekeeper_result === 'shut_down') {
         const patch: Partial<ColdCallDataV1> = {
           ...withHistory(d, 'p6'),
@@ -62,15 +60,17 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
           operator_temperature: d.operator_temperature || 'dead',
         }
       }
-      if (d.initial_reaction === 'not_right_now') return withHistory(d, 'p3c')
+      if (d.initial_reaction === 'not_right_now') return withHistory(d, 'p6')
       if (d.initial_reaction === 'own_djs') return withHistory(d, 'p3b')
-      if (d.initial_reaction === 'interested' || d.initial_reaction === 'maybe') return withHistory(d, 'p4a')
+      if (d.initial_reaction === 'how_much') return withHistory(d, 'p4d')
+      if (d.initial_reaction === 'interested' || d.initial_reaction === 'maybe') return withHistory(d, 'p5')
       return {}
     }
     case 'p3b': {
       if (!d.pivot_response) return {}
-      if (d.pivot_response === 'not_really') return withHistory(d, 'p3c')
-      return withHistory(d, 'p4a')
+      if (d.pivot_response === 'not_really' || d.pivot_response === 'special_events')
+        return withHistory(d, 'p6')
+      return withHistory(d, 'p5')
     }
     case 'p3c': {
       if (!d.parking_result) return {}
@@ -78,11 +78,10 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
       return withHistory(d, 'p6')
     }
     case 'p4a': {
-      if (d.event_nights.length === 0) return {}
-      return withHistory(d, 'p4b')
+      return withHistory(d, 'p5')
     }
     case 'p4b':
-      return withHistory(d, 'p4c')
+      return withHistory(d, 'p5')
     case 'p4c': {
       if (!d.booking_process) return {}
       if (d.booking_process === 'unsaid' && !d.decision_maker_same) return {}
@@ -95,11 +94,13 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
           if (!d.other_dm_email.trim()) return {}
         }
       }
-      if (showBudget) return withHistory(d, 'p4d')
-      return withHistory(d, 'p4e')
+      return withHistory(d, 'p5')
     }
-    case 'p4d':
-      return withHistory(d, 'p4e')
+    case 'p4d': {
+      if (!d.budget_range) return {}
+      if (d.budget_range !== 'no_say' && !d.rate_reaction) return {}
+      return withHistory(d, 'p5')
+    }
     case 'p4e':
       return withHistory(d, 'p5')
     case 'p5': {

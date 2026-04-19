@@ -20,8 +20,8 @@ import type {
 import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 
 export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] = [
-  { id: 'right_person', label: 'Right person' },
-  { id: 'gatekeeper', label: 'Gatekeeper / staff' },
+  { id: 'right_person', label: 'They book DJs' },
+  { id: 'gatekeeper', label: 'Not the right person' },
   { id: 'voicemail', label: 'Voicemail' },
   { id: 'no_answer', label: 'No answer' },
 ]
@@ -29,22 +29,23 @@ export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] 
 export const GATEKEEPER_RESULT_OPTIONS: { id: ColdCallGatekeeperResult; label: string }[] = [
   { id: 'gave_name', label: 'They gave me a name' },
   { id: 'transferred', label: 'They transferred me' },
-  { id: 'message', label: 'They took a message' },
+  { id: 'message', label: 'They took a message (ends call)' },
   { id: 'shut_down', label: 'They shut it down' },
 ]
 
 export const INITIAL_REACTION_OPTIONS: { id: ColdCallInitialReaction; label: string }[] = [
-  { id: 'interested', label: 'Interested — tell me more' },
+  { id: 'interested', label: 'Interested' },
   { id: 'maybe', label: 'Maybe — depends' },
-  { id: 'own_djs', label: 'We have our own DJs' },
+  { id: 'own_djs', label: 'We have our DJs' },
+  { id: 'how_much', label: 'How much?' },
   { id: 'not_right_now', label: 'Not right now' },
-  { id: 'not_interested', label: 'Not interested at all' },
+  { id: 'not_interested', label: 'Not interested' },
 ]
 
 export const PIVOT_OPTIONS: { id: ColdCallPivotResponse; label: string }[] = [
-  { id: 'sometimes', label: 'Actually yeah, sometimes' },
-  { id: 'not_really', label: 'Not really' },
-  { id: 'special_events', label: 'We might for special events' },
+  { id: 'sometimes', label: 'Actually yeah, that could work' },
+  { id: 'special_events', label: 'Maybe for a special event' },
+  { id: 'not_really', label: 'Nah, we’re good' },
 ]
 
 export const PARKING_OPTIONS: { id: ColdCallParkingResult; label: string }[] = [

@@ -103,10 +103,10 @@ import type { OutreachStatus } from '@/types'
 
 const LIVE_WAYPOINTS = [
   { id: 'opener', label: 'Opener' },
-  { id: 'gate', label: 'Gatekeeper' },
   { id: 'pitch', label: 'Pitch' },
-  { id: 'qual', label: 'Qualify' },
-  { id: 'ask', label: 'Ask' },
+  { id: 'redirect', label: 'Redirect' },
+  { id: 'ask', label: 'The Ask' },
+  { id: 'pivot', label: 'Pivot' },
   { id: 'close', label: 'Close' },
 ] as const
 
@@ -1861,10 +1861,6 @@ export default function ColdCallFormPage() {
                   onChange={e => patch({ pitch_reason_custom: e.target.value })}
                 />
               ) : null}
-              <div className="space-y-1.5">
-                <Label className="text-neutral-400 text-xs">Legacy free-text (optional)</Label>
-                <Textarea className="min-h-[52px] border-neutral-800 bg-neutral-950/80" value={data.pitch_angle} onChange={e => patch({ pitch_angle: e.target.value })} />
-              </div>
               {data.call_purpose === 'follow_up' ? (
                 <div className="space-y-1.5">
                   <Label className="text-neutral-400 text-xs">Previous cold call</Label>

@@ -61,7 +61,9 @@ export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdC
     case 'p3c':
     case 'p4a':
     case 'p4b':
+      return true
     case 'p4d':
+      return false
     case 'p5':
     case 'p6':
     case 'p6_vm':
@@ -81,17 +83,20 @@ export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdC
   }
 }
 
+/** Waypoint order: Opener → Pitch → Redirect → The Ask → Pivot → Close (final rewrite spec). */
 export function waypointIndex(card: ColdCallLiveCardId): number {
   if (card === 'p1') return 0
-  if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 1
-  if (card === 'p3' || card === 'p3b' || card === 'p3c') return 2
-  if (card === 'p4a' || card === 'p4b' || card === 'p4c' || card === 'p4d' || card === 'p4e') return 3
-  if (card === 'p5') return 4
-  return 5
+  if (card === 'p3' || card === 'p3c' || card === 'p4a' || card === 'p4b' || card === 'p4c' || card === 'p4e') return 1
+  if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 2
+  if (card === 'p5') return 3
+  if (card === 'p3b' || card === 'p4d') return 4
+  if (card === 'p6' || card === 'p6_vm' || card === 'p6_na') return 5
+  return 1
 }
 
-const PITCH_SET = new Set<ColdCallLiveCardId>(['p3', 'p3b', 'p3c'])
-const P4_SET = new Set<ColdCallLiveCardId>(['p4a', 'p4b', 'p4c', 'p4d', 'p4e'])
+const PITCH_SET = new Set<ColdCallLiveCardId>(['p3', 'p3c', 'p4a', 'p4b', 'p4c', 'p4e'])
+const REDIRECT_SET = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail', 'p2_msg'])
+const PIVOT_SET = new Set<ColdCallLiveCardId>(['p3b', 'p4d'])
 const CLOSE_SET = new Set<ColdCallLiveCardId>(['p6', 'p6_vm', 'p6_na'])
 
 /** Sidebar waypoint → first card to show for that phase on this call. */
@@ -101,12 +106,6 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
       return 'p1'
     case 1: {
       const w = d.who_answered
-      // Gatekeeper cards (p2a…) only apply when someone other than the DM answered.
-      // Right person / VM / no-answer skip this phase — anchoring to p2a showed the wrong script.
-      if (w === 'right_person') {
-        const pitch = d.live_history.find(c => PITCH_SET.has(c))
-        return pitch ?? 'p1'
-      }
       if (w === 'voicemail') {
         const vm = d.live_history.find(c => c === 'p6_vm')
         return vm ?? 'p1'
@@ -115,18 +114,24 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
         const na = d.live_history.find(c => c === 'p6_na')
         return na ?? 'p1'
       }
-      return 'p2a'
-    }
-    case 2: {
       const hit = d.live_history.find(c => PITCH_SET.has(c))
       return hit ?? 'p3'
     }
-    case 3: {
-      const hit = d.live_history.find(c => P4_SET.has(c))
-      return hit ?? 'p4a'
+    case 2: {
+      const w = d.who_answered
+      if (w === 'right_person' || w === 'voicemail' || w === 'no_answer') {
+        const hit = d.live_history.find(c => REDIRECT_SET.has(c))
+        return hit ?? 'p1'
+      }
+      const hit = d.live_history.find(c => REDIRECT_SET.has(c))
+      return hit ?? 'p2a'
     }
-    case 4:
-      return 'p5'
+    case 3:
+      return d.live_history.find(c => c === 'p5') ?? 'p5'
+    case 4: {
+      const hit = d.live_history.find(c => PIVOT_SET.has(c))
+      return hit ?? 'p3b'
+    }
     case 5: {
       const rev = [...d.live_history].reverse()
       const hit = rev.find(c => CLOSE_SET.has(c))
@@ -140,8 +145,8 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
 /** True when this phase is usually skipped on the current branch (still navigable). */
 export function coldCallPhaseSkipped(phaseIdx: number, d: ColdCallDataV1): boolean {
   const w = d.who_answered
-  if (phaseIdx === 1) return w === 'right_person' || w === 'voicemail' || w === 'no_answer'
-  if (phaseIdx >= 2 && phaseIdx <= 4) return w === 'voicemail' || w === 'no_answer'
+  if (phaseIdx === 2) return w === 'right_person' || w === 'voicemail' || w === 'no_answer'
+  if (phaseIdx === 1 || phaseIdx === 3 || phaseIdx === 4) return w === 'voicemail' || w === 'no_answer'
   return false
 }
 
@@ -159,7 +164,7 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
     case 'p1': {
       need('who_answered', !!d.who_answered, 'Pick who picked up.')
       if (d.who_answered === 'right_person') {
-        need('target_title_key', !!d.target_title_key, 'Pick their title.')
+        need('target_name', !!d.target_name.trim(), 'Add their name (or what they gave you).')
       }
       break
     }
@@ -199,8 +204,14 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       break
     }
     case 'p4a':
-      need('event_nights', d.event_nights.length > 0, 'Select at least one night.')
       break
+    case 'p4d': {
+      need('budget_range', !!d.budget_range, 'Pick a budget range or “didn’t say”.')
+      if (d.budget_range !== 'no_say') {
+        need('rate_reaction', !!d.rate_reaction, 'Pick how they reacted to the number.')
+      }
+      break
+    }
     case 'p4c': {
       need('booking_process', !!d.booking_process, 'Pick who handles booking.')
       if (d.booking_process === 'unsaid') {

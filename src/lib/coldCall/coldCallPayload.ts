@@ -151,15 +151,15 @@ export const COLD_CALL_PITCH_REASON_CHIPS: Record<
   },
   events_match: {
     label: 'Their events match',
-    clause: () => 'the events you run are right in line with what he does',
+    clause: () => 'the events you guys run are right in line with what he does',
   },
   location_fit: {
     label: 'Location fit',
-    clause: ({ city }) => `you’re in a great spot for his audience in ${city || 'the area'}`,
+    clause: () => 'you guys are in a great spot for his audience',
   },
   socials: {
     label: 'Saw their socials',
-    clause: () => 'I saw what you guys are doing on Instagram and the vibe matches perfectly',
+    clause: () => 'I saw what you guys are doing on Instagram and the vibe matches',
   },
   referral: {
     label: 'Referral',
@@ -168,6 +168,11 @@ export const COLD_CALL_PITCH_REASON_CHIPS: Record<
   need_djs: {
     label: 'They need DJs',
     clause: () => 'it looks like you’re actively booking DJs and I think he’d stand out',
+  },
+  complement_roster: {
+    label: 'Complement their roster',
+    clause: () =>
+      'I think he’d complement what you guys already have going — not replace it, just add to it',
   },
 }
 
@@ -178,6 +183,8 @@ export type ColdCallInitialReaction =
   | 'own_djs'
   | 'not_right_now'
   | 'not_interested'
+  /** “How much?” — route to price pivot (Card 5B). */
+  | 'how_much'
 
 export type ColdCallPivotResponse = '' | 'sometimes' | 'not_really' | 'special_events'
 

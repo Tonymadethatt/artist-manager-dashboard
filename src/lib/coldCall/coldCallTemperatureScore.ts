@@ -1,5 +1,4 @@
 import type { ColdCallDataV1 } from '@/lib/coldCall/coldCallPayload'
-import { genreMatchHint } from '@/lib/coldCall/coldCallPayload'
 
 /** Point thresholds → temperature (spec Problem 4). */
 export function coldCallTemperatureFromScore(score: number): ColdCallDataV1['operator_temperature'] {
@@ -40,6 +39,9 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
     case 'maybe':
       s += 1
       break
+    case 'how_much':
+      s += 1
+      break
     case 'own_djs':
       if (d.pivot_response === 'sometimes') s += 2
       else if (d.pivot_response === 'not_really') s -= 1
@@ -56,9 +58,6 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
   }
 
   if (d.event_nights.length > 0) s += 1
-  const hint = genreMatchHint(d.venue_vibes)
-  if (hint === 'match') s += 1
-  if (hint === 'caution' || hint === 'mismatch') s -= 1
 
   if (d.booking_process === 'this_person') s += 2
 
@@ -101,7 +100,7 @@ export function coldCallLiveAutoTemperature(d: ColdCallDataV1): ColdCallDataV1['
   return coldCallTemperatureFromScore(computeColdCallTemperatureScore(d))
 }
 
-/** Qualify / budget branch: show budget card when score ≥ 7 (spec) — uses same scorer mid-call. */
-export function coldCallShowBudgetCard(d: ColdCallDataV1): boolean {
-  return computeColdCallTemperatureScore(d) >= 7
+/** Legacy qualify path: budget card only when “How much?” routes to price pivot — not score-gated. */
+export function coldCallShowBudgetCard(_d: ColdCallDataV1): boolean {
+  return false
 }
