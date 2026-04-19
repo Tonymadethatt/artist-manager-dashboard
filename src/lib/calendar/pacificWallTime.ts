@@ -115,6 +115,54 @@ export function formatPacificDateLongFromYmd(ymd: string): string {
   return formatPacificDateLongFromIso(iso)
 }
 
+const WEEKDAY_SHORT_EMAIL = new Intl.DateTimeFormat('en-US', {
+  timeZone: LA,
+  weekday: 'short',
+})
+
+/** Pacific instant → `Wed 5/17/26` (short weekday + M/D/YY). */
+export function formatPacificWeekdayMdYyFromIso(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  return `${WEEKDAY_SHORT_EMAIL.format(new Date(ms))} ${MDY_NUM_LA.format(new Date(ms))}`
+}
+
+/** `YYYY-MM-DD` at noon LA → `Wed 5/17/26`; invalid shape returned trimmed. */
+export function formatPacificWeekdayMdYyFromYmd(ymd: string): string {
+  const trimmed = ymd.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const iso = pacificWallToUtcIso(trimmed, '12:00')
+  if (!iso) return trimmed
+  return formatPacificWeekdayMdYyFromIso(iso)
+}
+
+/** One instant, email line: `Wed 5/17/26 · 2 PM PT`. */
+function formatPacificInstantForEmail(iso: string): string {
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) return ''
+  const datePart = formatPacificWeekdayMdYyFromIso(iso)
+  const t = formatPacificTime12h(iso)
+  if (!datePart || !t) return ''
+  return `${datePart} · ${t} PT`
+}
+
+/**
+ * Email template time range (Pacific): same branching as {@link formatPacificTimeRangeReadable}
+ * but dates use weekday + M/D/YY.
+ */
+export function formatPacificTimeRangeForEmail(startIso: string, endIso: string): string {
+  const k0 = pacificDateKeyFromUtcIso(startIso)
+  const k1 = pacificDateKeyFromUtcIso(endIso)
+  if (!k0 || !k1) return formatPacificInstantForEmail(startIso)
+  if (k0 === k1) {
+    const dayPart = formatPacificWeekdayMdYyFromIso(startIso)
+    const tA = stripOnTheHourMinutes12h(FRIENDLY_TIME_ONLY.format(new Date(startIso)))
+    const tB = stripOnTheHourMinutes12h(FRIENDLY_TIME_ONLY.format(new Date(endIso)))
+    return `${dayPart} · ${tA} – ${tB} PT`
+  }
+  return `${formatPacificInstantForEmail(startIso)} – ${formatPacificInstantForEmail(endIso)}`
+}
+
 /** Time only, 12-hour in LA, e.g. "7:30 PM" (drops redundant :00 on the hour). */
 export function formatPacificTime12h(iso: string): string {
   const ms = new Date(iso).getTime()
@@ -339,31 +387,14 @@ export function whenLineFriendlyFromDeal(d: DealWhenAndPerformanceInput): string
   return /^\d{4}-\d{2}-\d{2}$/.test(ed) ? formatPacificDateLongFromYmd(ed) : ed
 }
 
-const WEEKDAY_SHORT_STACK = new Intl.DateTimeFormat('en-US', {
-  timeZone: LA,
-  weekday: 'short',
-})
-
-const MD_STACK = new Intl.DateTimeFormat('en-US', {
-  timeZone: LA,
-  month: 'short',
-  day: 'numeric',
-})
-
-const MDY_STACK = new Intl.DateTimeFormat('en-US', {
-  timeZone: LA,
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-})
-
-/** Stacked email “when” cell: weekday, calendar date, event time range (or all day), optional DJ/set window. */
-export type ScheduleWhenStack = {
-  dayLine: string
-  dateLine: string
-  timeLine: string
-  /** When present, rendered under the event window with a “Your set” label (Pacific). */
-  setTimeLine?: string | null
+/** Same as {@link whenLineFriendlyFromDeal} but weekday + M/D/YY for outbound email HTML (not Google Calendar). */
+export function whenLineEmailFromDeal(d: DealWhenAndPerformanceInput): string {
+  if (d.event_start_at && d.event_end_at) {
+    return formatPacificTimeRangeForEmail(d.event_start_at, d.event_end_at)
+  }
+  const ed = d.event_date?.trim()
+  if (!ed) return ''
+  return /^\d{4}-\d{2}-\d{2}$/.test(ed) ? formatPacificWeekdayMdYyFromYmd(ed) : ed
 }
 
 /**
@@ -400,69 +431,16 @@ export function performanceWindowReadableFromDeal(d: DealWhenAndPerformanceInput
   return null
 }
 
-/** Pacific wall date (YYYY-MM-DD) → three display lines for table cells. */
-export function scheduleWhenStackFromYmd(ymd: string): ScheduleWhenStack | null {
-  const trimmed = (ymd ?? '').trim()
-  if (!trimmed) return null
-  const iso = pacificWallToUtcIso(trimmed, '12:00')
-  if (!iso) return null
-  const ms = new Date(iso).getTime()
-  if (!Number.isFinite(ms)) return null
-  const k0 = pacificDateKeyFromUtcIso(iso)
-  if (!k0) return null
-  const yNow = pacificTodayYmd().slice(0, 4)
-  const yEv = k0.slice(0, 4)
-  return {
-    dayLine: WEEKDAY_SHORT_STACK.format(new Date(ms)),
-    dateLine: yEv === yNow ? MD_STACK.format(new Date(ms)) : MDY_STACK.format(new Date(ms)),
-    timeLine: 'All day',
+/** Same as {@link performanceWindowReadableFromDeal} but M/D/YY email style for artist gig HTML. */
+export function performanceWindowEmailFromDeal(d: DealWhenAndPerformanceInput): string | null {
+  const ps = d.performance_start_at?.trim()
+  const pe = d.performance_end_at?.trim()
+  if (ps && pe) {
+    const line = formatPacificTimeRangeForEmail(ps, pe)
+    return line || null
   }
-}
-
-/** Deal instants or event_date → stack for gig digest / day-summary tables. */
-export function scheduleWhenStackFromDeal(d: DealWhenAndPerformanceInput): ScheduleWhenStack | null {
-  const setTimeLine = performanceWindowReadableFromDeal(d)
-  const withSet = (base: ScheduleWhenStack): ScheduleWhenStack =>
-    setTimeLine ? { ...base, setTimeLine } : base
-
-  if (d.event_start_at && d.event_end_at) {
-    const ms0 = new Date(d.event_start_at).getTime()
-    const ms1 = new Date(d.event_end_at).getTime()
-    if (!Number.isFinite(ms0) || !Number.isFinite(ms1)) {
-      const ed = d.event_date?.trim()
-      const ymdStack = ed ? scheduleWhenStackFromYmd(ed) : null
-      return ymdStack ? withSet(ymdStack) : null
-    }
-    const k0 = pacificDateKeyFromUtcIso(d.event_start_at)
-    const k1 = pacificDateKeyFromUtcIso(d.event_end_at)
-    if (!k0 || !k1) {
-      const ed = d.event_date?.trim()
-      const ymdStack = ed ? scheduleWhenStackFromYmd(ed) : null
-      return ymdStack ? withSet(ymdStack) : null
-    }
-    const yNow = pacificTodayYmd().slice(0, 4)
-    const t0 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms0)))
-    const t1 = stripOnTheHourMinutes12h(COMPACT_TIME_12H.format(new Date(ms1)))
-    if (k0 === k1) {
-      const yEv = k0.slice(0, 4)
-      return withSet({
-        dayLine: WEEKDAY_SHORT_STACK.format(new Date(ms0)),
-        dateLine: yEv === yNow ? MD_STACK.format(new Date(ms0)) : MDY_STACK.format(new Date(ms0)),
-        timeLine: `${t0} – ${t1}`,
-      })
-    }
-    const dayLine =
-      `${WEEKDAY_SHORT_STACK.format(new Date(ms0))} – ${WEEKDAY_SHORT_STACK.format(new Date(ms1))}`
-    const y0 = k0.slice(0, 4)
-    const y1 = k1.slice(0, 4)
-    const dateLine =
-      y0 === y1
-        ? `${MD_STACK.format(new Date(ms0))} – ${MD_STACK.format(new Date(ms1))}, ${y0}`
-        : `${MDY_STACK.format(new Date(ms0))} – ${MDY_STACK.format(new Date(ms1))}`
-    const timeLine = `${t0} – ${t1}`
-    return withSet({ dayLine, dateLine, timeLine })
+  if (ps) {
+    return formatPacificInstantForEmail(ps) || null
   }
-  const ed = d.event_date?.trim()
-  const ymdOnly = ed ? scheduleWhenStackFromYmd(ed) : null
-  return ymdOnly ? withSet(ymdOnly) : null
+  return null
 }

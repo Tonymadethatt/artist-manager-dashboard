@@ -51,8 +51,8 @@ import {
   addCalendarDaysPacific,
   pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
-  performanceWindowReadableFromDeal,
-  whenLineFriendlyFromDeal,
+  performanceWindowEmailFromDeal,
+  whenLineEmailFromDeal,
 } from '../../src/lib/calendar/pacificWallTime'
 import { parseResendMessageIdFromSendFunctionResponse } from '../../src/lib/email/resendMessageId'
 import type { Deal, Venue } from '../../src/types'
@@ -821,8 +821,8 @@ const handler: Handler = async (event) => {
           reminder: {
             venueName,
             dealDescription: deal.description?.trim() || 'Gig',
-            whenLine: whenLineFriendlyFromDeal(deal) || '',
-            setLine: performanceWindowReadableFromDeal(deal),
+            whenLine: whenLineEmailFromDeal(deal) || '',
+            setLine: performanceWindowEmailFromDeal(deal),
           },
         })
         const subj = layoutMerged.subject?.trim() || email.subject || `Reminder: ${venueName}${isManualReminder ? '' : ' tomorrow'}`

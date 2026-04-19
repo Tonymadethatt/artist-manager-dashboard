@@ -50,9 +50,9 @@ import {
   formatPacificDateLongFromYmd,
   pacificDayEndExclusiveUtcIso,
   pacificWallToUtcIso,
-  performanceWindowReadableFromDeal,
+  performanceWindowEmailFromDeal,
   stripOnTheHourMinutes12h,
-  whenLineFriendlyFromDeal,
+  whenLineEmailFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import type { Deal, Venue } from '@/types'
 import { formatOutboundEmailNotes } from '@/lib/email/recordOutboundEmail'
@@ -743,8 +743,8 @@ export default function EmailQueue() {
                 reminder: {
                   venueName: vn,
                   dealDescription: deal.description?.trim() || 'Gig',
-                  whenLine: whenLineFriendlyFromDeal(deal),
-                  setLine: performanceWindowReadableFromDeal(deal),
+                  whenLine: whenLineEmailFromDeal(deal),
+                  setLine: performanceWindowEmailFromDeal(deal),
                 },
               }))
             } else {
@@ -1282,8 +1282,8 @@ export default function EmailQueue() {
                 reminder: {
                   venueName,
                   dealDescription: deal.description?.trim() || 'Gig',
-                  whenLine: whenLineFriendlyFromDeal(deal),
-                  setLine: performanceWindowReadableFromDeal(deal),
+                  whenLine: whenLineEmailFromDeal(deal),
+                  setLine: performanceWindowEmailFromDeal(deal),
                 },
               })
               const sendKind = gigN.kind === 'gig_reminder_manual' ? 'gig_reminder_manual' : 'gig_reminder_24h'

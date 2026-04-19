@@ -17,6 +17,7 @@ import {
 } from '@/lib/email/emailDarkSurfacePalette'
 import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmailFooterHtml'
 import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
+import { formatPacificWeekdayMdYyFromYmd } from '@/lib/calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 function escapeHtmlPlain(s: string): string {
@@ -36,13 +37,6 @@ const logoUrl = '/dj-luijay-logo-email.png'
 
 function money(n: number) {
   return formatUsdDisplayCeil(n)
-}
-
-function fmtDate(iso: string) {
-  const [y, m, d] = iso.split('-')
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December']
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
 }
 
 function rows(items: Array<[string, string, string?]>): string {
@@ -113,8 +107,8 @@ export function buildManagementReportHtml(
   layout?: EmailTemplateLayoutV1 | null,
 ): string {
   const L = artistLayoutForSend(layout ?? null, null, customIntro)
-  const startFmt = fmtDate('2026-03-28')
-  const endFmt = fmtDate('2026-04-04')
+  const startFmt = formatPacificWeekdayMdYyFromYmd('2026-03-28')
+  const endFmt = formatPacificWeekdayMdYyFromYmd('2026-04-04')
 
   const outreachSection = sectionCard('Outreach Activity', rows([
     ['New venues added', '4', '#60a5fa'],

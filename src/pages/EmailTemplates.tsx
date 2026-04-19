@@ -35,9 +35,9 @@ import {
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
 import {
-  formatPacificTimeRangeReadable,
+  formatPacificTimeRangeForEmail,
   pacificWallToUtcIso,
-  performanceWindowReadableFromDeal,
+  performanceWindowEmailFromDeal,
 } from '@/lib/calendar/pacificWallTime'
 import {
   EMAIL_CAPTURE_KIND_LABELS,
@@ -86,7 +86,7 @@ function gigEmailPreviewWhenLine(): string {
   if (!d) return ''
   const a = pacificWallToUtcIso(d, '20:00')
   const b = pacificWallToUtcIso(d, '23:00')
-  return a && b ? formatPacificTimeRangeReadable(a, b) : d
+  return a && b ? formatPacificTimeRangeForEmail(a, b) : d
 }
 
 /** Sample DJ set inside the preview event window (for reminder / booked / digest previews). */
@@ -95,7 +95,7 @@ function gigEmailPreviewSetLine(): string | null {
   if (!d) return null
   const a = pacificWallToUtcIso(d, '21:00')
   const b = pacificWallToUtcIso(d, '22:30')
-  return performanceWindowReadableFromDeal({ performance_start_at: a, performance_end_at: b })
+  return performanceWindowEmailFromDeal({ performance_start_at: a, performance_end_at: b })
 }
 
 function gigEmailPreviewTableRow() {

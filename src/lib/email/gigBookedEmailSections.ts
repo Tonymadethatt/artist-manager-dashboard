@@ -8,7 +8,11 @@ import {
 } from './gigBookedLogisticsLines'
 import { depositDueFromDeal, dealRemainingClientBalance } from '../deals/dealPaymentTotals'
 import { formatVenuePostalLine } from '../calendar/venueAddressForGoogle'
-import { performanceWindowReadableFromDeal, whenLineFriendlyFromDeal } from '../calendar/pacificWallTime'
+import {
+  formatPacificWeekdayMdYyFromYmd,
+  performanceWindowEmailFromDeal,
+  whenLineEmailFromDeal,
+} from '../calendar/pacificWallTime'
 import { emailSectionCardHtml, escapeHtmlPlain } from './appendBlocksHtml'
 import { buildGigCalendarShowDetailsBody } from './gigCalendarEmailHtml'
 import { EMAIL_BODY_SECONDARY, EMAIL_LABEL } from './emailDarkSurfacePalette'
@@ -100,9 +104,11 @@ function bulletListHtml(items: string[]): string {
 
 function formatPaymentDueEmail(iso: string | null | undefined): string {
   if (!iso?.trim()) return 'TBD'
-  const d = new Date(`${iso.trim()}T12:00:00`)
-  if (Number.isNaN(d.getTime())) return iso.trim()
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(d)
+  const t = iso.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return formatPacificWeekdayMdYyFromYmd(t)
+  const ymd = t.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return formatPacificWeekdayMdYyFromYmd(ymd)
+  return t
 }
 
 function paySectionHtml(
@@ -201,12 +207,12 @@ export function buildGigBookedEmailMiddleHtml(args: {
 
   const title = deal.description?.trim() || 'Gig'
   const venueName = venue?.name?.trim() || 'TBA'
-  const whenLine = whenLineFriendlyFromDeal(deal) || deal.event_date?.trim() || ''
+  const whenLine = whenLineEmailFromDeal(deal) || deal.event_date?.trim() || ''
   const scheduleBody = buildGigCalendarShowDetailsBody({
     dealDescription: title,
     venueName,
     whenLine,
-    setLine: performanceWindowReadableFromDeal(deal),
+    setLine: performanceWindowEmailFromDeal(deal),
   })
 
   cards.push(emailSectionCardHtml('Schedule', scheduleBody))

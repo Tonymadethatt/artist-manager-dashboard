@@ -19,8 +19,7 @@ import {
   buildVenueClientEmailHeaderBrandInnerHtml,
   venueClientEmailLogoAlt,
 } from './venueClientEmailHeaderBrandHtml'
-import { scheduleWhenStackFromYmd } from '../calendar/pacificWallTime'
-import { stackedScheduleWhenCellHtml } from './emailTableDateStack'
+import { formatPacificWeekdayMdYyFromYmd } from '../calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '../format/displayCurrency'
 
 function hrefAttr(u: string): string {
@@ -101,23 +100,15 @@ function money(n: number) {
   return formatUsdDisplayCeil(n)
 }
 
-function fmtDate(iso: string) {
-  const [y, m, d] = iso.split('-')
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December']
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
-}
-
 function row(label: string, value: string, valueColor = EMAIL_TEXT_PRIMARY): string {
   return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:13px;color:${EMAIL_ROW_LABEL};border-bottom:1px solid #222222;vertical-align:middle;">${label}</td><td style="padding:10px 0;font-size:13px;font-weight:600;color:${valueColor};text-align:right;padding-left:16px;border-bottom:1px solid #222222;vertical-align:middle;">${value}</td></tr></table>`
 }
 
-/** YYYY-MM-DD in key-value tables: weekday / date / all day, stacked for narrow inboxes. */
-function rowStackedDate(label: string, ymd: string, valueColor = EMAIL_TEXT_PRIMARY): string {
-  const stack = scheduleWhenStackFromYmd(ymd)
-  if (!stack) return row(label, fmtDate(ymd), valueColor)
-  const inner = stackedScheduleWhenCellHtml(stack, valueColor, 'compact')
-  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:13px;color:${EMAIL_ROW_LABEL};border-bottom:1px solid #222222;vertical-align:top;">${label}</td><td style="padding:10px 0;text-align:right;padding-left:16px;border-bottom:1px solid #222222;vertical-align:top;">${inner}</td></tr></table>`
+/** YYYY-MM-DD as one horizontal line: weekday + M/D/YY (Pacific). */
+function rowEmailYmd(label: string, ymd: string, valueColor = EMAIL_TEXT_PRIMARY): string {
+  const t = ymd.trim()
+  if (!t) return ''
+  return row(label, formatPacificWeekdayMdYyFromYmd(t), valueColor)
 }
 
 function card(title: string, content: string): string {
@@ -190,7 +181,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `We are excited to confirm the booking for ${artistName} at ${venueName}. Please review the summary below. A formal agreement will follow shortly.`
       const dealRows = [
-        deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
         deal?.notes ? row('Notes', deal.notes, EMAIL_BODY_SECONDARY) : '',
@@ -211,7 +202,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `We wanted to confirm that we have received your payment. Thank you for completing this promptly.`
       const receiptRows = [
-        deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Amount received', money(deal.gross_amount), '#22c55e') : '',
         row('Status', 'Payment confirmed', '#22c55e'),
@@ -226,10 +217,10 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `Just a friendly reminder about the outstanding payment for the upcoming event. Please see the details below.`
       const reminderRows = [
-        deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Amount due', money(deal.gross_amount), '#ef4444') : '',
-        deal?.payment_due_date ? rowStackedDate('Due date', deal.payment_due_date, '#ef4444') : '',
+        deal?.payment_due_date ? rowEmailYmd('Due date', deal.payment_due_date, '#ef4444') : '',
       ].filter(Boolean).join('')
       bodyCards = `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;margin-bottom:16px;overflow:hidden;"><div style="background:#161616;padding:9px 18px;border-bottom:1px solid rgba(239,68,68,0.2);"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:${EMAIL_LABEL};vertical-align:middle;">${escapeHtmlPlain(decorateVenueProgrammaticSectionCardTitle('Payment Due'))}</span></div><div style="padding:2px 18px 6px;">${reminderRows}</div></div>`
       closing = `If you have already sent the payment, please disregard this message. If you have any questions or need to arrange a different timeline, reply to this email and we will work something out.`
@@ -262,7 +253,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       intro = `We had a great experience at ${venueName} and wanted to reach out about the possibility of booking ${artistName} again.`
       bodyCards = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:16px 18px;margin-bottom:16px;"><p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};line-height:1.7;">Based on the positive reception from the previous event, we believe there is a strong opportunity to continue this partnership. We would love to discuss available dates and terms that work for your venue.</p></div>`
       const rebookDetails = [
-        deal?.event_date ? rowStackedDate('Previous event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Previous event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
       ].filter(Boolean).join('')
       if (rebookDetails) bodyCards += card('Previous Event', rebookDetails)
@@ -284,7 +275,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       greeting = `Hi ${firstName},`
       intro = `As the date approaches for ${artistName} at ${venueName}, we wanted to align on logistics and any open details.`
       const preRows = [
-        deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         row('Venue', venueName, '#ffffff'),
         deal?.gross_amount ? row('Agreed amount', money(deal.gross_amount), '#22c55e') : '',
       ].filter(Boolean).join('')
@@ -322,7 +313,7 @@ export function buildVenueEmailDocument(opts: BuildVenueEmailDocumentOptions): s
       const invoiceContent = `<div style="padding:14px 0;">${inv ? `<a href="${inv}" style="${VENUE_EMAIL_DOC_BUTTON_STYLE}">Open invoice</a><p style="font-size:12px;color:${EMAIL_FOOTER_MUTED};margin-top:10px;">Or copy this link: <span style="color:#60a5fa;">${inv}</span></p>` : `<p style="font-size:13px;color:${EMAIL_BODY_SECONDARY};">The document will be shared separately if no link is on file yet.</p>`}</div>`
       bodyCards = card('Billing', invoiceContent)
       const invRows = [
-        deal?.event_date ? rowStackedDate('Event date', deal.event_date, '#ffffff') : '',
+        deal?.event_date ? rowEmailYmd('Event date', deal.event_date, '#ffffff') : '',
         deal?.gross_amount ? row('Amount', money(deal.gross_amount), '#ffffff') : '',
       ].filter(Boolean).join('')
       if (invRows) bodyCards += card('Reference', invRows)

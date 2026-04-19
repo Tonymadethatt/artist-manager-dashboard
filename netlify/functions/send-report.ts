@@ -16,6 +16,7 @@ import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/emai
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
 import { formatUsdDisplayCeil } from '../../src/lib/format/displayCurrency'
+import { formatPacificWeekdayMdYyFromYmd } from '../../src/lib/calendar/pacificWallTime'
 
 function escapeHtmlEnt(s: string): string {
   return s
@@ -43,15 +44,6 @@ function money(n: number) {
   return formatUsdDisplayCeil(n)
 }
 
-function fmtDate(iso: string) {
-  const [y, m, d] = iso.split('-')
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ]
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
-}
-
 // third tuple element = value color, defaults to white
 function rows(items: Array<[string, string, string?]>): string {
   return items.map(([label, value, valueColor = EMAIL_TEXT_PRIMARY], i, arr) => {
@@ -72,8 +64,8 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const { outreach, artistEarnings, deals, retainer, metrics, tasks, performance } = report
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
-  const startFmt = fmtDate(dateRange.start)
-  const endFmt = fmtDate(dateRange.end)
+  const startFmt = formatPacificWeekdayMdYyFromYmd(dateRange.start)
+  const endFmt = formatPacificWeekdayMdYyFromYmd(dateRange.end)
 
   // Determine the hero win — show the most impactful positive metric
   let heroValue = ''
@@ -322,8 +314,8 @@ const handler: Handler = async (event) => {
   }
 
   const html = buildHtml(profile, report, dateRange, L)
-  const startFmt = fmtDate(dateRange.start)
-  const endFmt = fmtDate(dateRange.end)
+  const startFmt = formatPacificWeekdayMdYyFromYmd(dateRange.start)
+  const endFmt = formatPacificWeekdayMdYyFromYmd(dateRange.end)
   const defaultSubject = testOnly
     ? `[TEST] Management Update - ${startFmt} to ${endFmt}`
     : `Management Update - ${startFmt} to ${endFmt}`

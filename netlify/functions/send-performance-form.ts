@@ -12,6 +12,7 @@ import { buildArtistBrandedEmailFooterHtml } from '../../src/lib/email/artistBra
 import { resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
 import { fetchEmailTestModeRowForSend, logResendOutboundSendForUsage } from './supabaseAdmin'
+import { formatPacificWeekdayMdYyFromYmd } from '../../src/lib/calendar/pacificWallTime'
 
 interface RequestBody {
   token: string
@@ -103,14 +104,8 @@ const handler: Handler = async (event) => {
   const firstName = body.artistName.split(' ')[0]
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
 
-  function fmtDate(iso: string) {
-    const [y, m, d] = iso.split('-')
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December']
-    return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}, ${y}`
-  }
-
   const eventDateLine = body.eventDate
-    ? `<p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${fmtDate(body.eventDate)}</p>`
+    ? `<p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong> &mdash; ${formatPacificWeekdayMdYyFromYmd(body.eventDate)}</p>`
     : `<p style="font-size:13px;color:${EMAIL_ROW_LABEL};margin-bottom:24px;">Show at <strong style="color:#ffffff;">${body.venueName}</strong></p>`
 
   const L = artistLayoutForSend(body.layout, body.custom_subject, body.custom_intro)
