@@ -12,10 +12,16 @@ export function serializePerfFormQueueNotes(p: PerfFormQueuePayload): string {
 }
 
 export function parsePerfFormQueueNotes(notes: string | null | undefined): PerfFormQueuePayload | null {
-  if (!notes?.startsWith(PERF_FORM_PENDING_NOTES_PREFIX)) return null
-  try {
-    return JSON.parse(notes.slice(PERF_FORM_PENDING_NOTES_PREFIX.length)) as PerfFormQueuePayload
-  } catch {
-    return null
+  if (!notes?.trim()) return null
+  /** One line per record; after send we append `[src:…]` audit lines — find the payload line. */
+  for (const line of notes.split('\n')) {
+    const t = line.trim()
+    if (!t.startsWith(PERF_FORM_PENDING_NOTES_PREFIX)) continue
+    try {
+      return JSON.parse(t.slice(PERF_FORM_PENDING_NOTES_PREFIX.length)) as PerfFormQueuePayload
+    } catch {
+      return null
+    }
   }
+  return null
 }

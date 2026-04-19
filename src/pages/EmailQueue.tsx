@@ -36,7 +36,10 @@ import {
   DEFAULT_EMAIL_QUEUE_BUFFER_MINUTES,
 } from '@/lib/emailQueueBuffer'
 import { isQueuedBuiltinArtistEmailType, isQueueBufferZeroEmailType } from '@/lib/email/queuedBuiltinArtistEmail'
-import { parsePerfFormQueueNotes } from '@/lib/email/performanceFormQueuePayload'
+import {
+  parsePerfFormQueueNotes,
+  serializePerfFormQueueNotes,
+} from '@/lib/email/performanceFormQueuePayload'
 import { parseInvoiceQueueNotes } from '@/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '@/lib/email/artistTxnQueuePayload'
 import { parseGigCalendarQueueNotes } from '@/lib/email/gigCalendarQueueNotes'
@@ -781,7 +784,30 @@ export default function EmailQueue() {
       }
 
       if (email.email_type === 'performance_report_request') {
-        const perfPayload = parsePerfFormQueueNotes(email.notes)
+        let perfPayload = parsePerfFormQueueNotes(email.notes)
+        if (!perfPayload?.token && (email.deal_id || email.venue_id)) {
+          let prQ = supabase
+            .from('performance_reports')
+            .select('token, venue:venues(name), deal:deals(event_date)')
+            .eq('user_id', user.id)
+          if (email.deal_id) prQ = prQ.eq('deal_id', email.deal_id)
+          else prQ = prQ.eq('venue_id', email.venue_id as string)
+          const { data: prRow } = await prQ.order('created_at', { ascending: false }).limit(1).maybeSingle()
+          type PrFallback = {
+            token?: string
+            venue?: { name?: string } | null
+            deal?: { event_date?: string | null } | null
+          } | null
+          const row = prRow as PrFallback
+          const tok = row?.token
+          if (tok) {
+            perfPayload = {
+              token: tok,
+              venueName: row.venue?.name?.trim() || email.venue?.name?.trim() || 'Venue',
+              eventDate: row.deal?.event_date ?? email.deal?.event_date ?? null,
+            }
+          }
+        }
         if (!perfPayload) {
           setPreviewHtml('<div style="padding:40px;color:#f87171;text-align:center;">Missing performance form data on this row.</div>')
           setPreviewLoading(false)
@@ -1396,7 +1422,7 @@ export default function EmailQueue() {
         }
         const perfResendId = await parseResendMessageIdFromSendFunctionResponse(res)
         await updateEmailStatus(email.id, 'sent', {
-          notes: formatOutboundEmailNotes('email_queue_send_now', 'Performance form email'),
+          notes: `${serializePerfFormQueueNotes(perfPayload)}\n${formatOutboundEmailNotes('email_queue_send_now', 'Performance form email')}`,
           ...(perfResendId ? { resend_message_id: perfResendId } : {}),
         })
         return

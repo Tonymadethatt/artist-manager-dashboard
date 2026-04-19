@@ -22,7 +22,11 @@ import type { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 import { parseCustomTemplateId } from '../../src/lib/email/customTemplateId'
 import { isQueueBufferZeroEmailType, isQueuedBuiltinArtistEmailType } from '../../src/lib/email/queuedBuiltinArtistEmail'
-import { parsePerfFormQueueNotes } from '../../src/lib/email/performanceFormQueuePayload'
+import {
+  parsePerfFormQueueNotes,
+  serializePerfFormQueueNotes,
+} from '../../src/lib/email/performanceFormQueuePayload'
+import { formatOutboundEmailNotes } from '../../src/lib/email/recordOutboundEmail'
 import { parseInvoiceQueueNotes } from '../../src/lib/email/invoiceQueuePayload'
 import { parseArtistTxnQueueNotes } from '../../src/lib/email/artistTxnQueuePayload'
 import { fetchReportInputsForUser } from '../../src/lib/reports/fetchReportInputsForUser'
@@ -457,7 +461,7 @@ const handler: Handler = async (event) => {
             .update({
               status: 'sent',
               sent_at: new Date().toISOString(),
-              notes: '[src:queue_cron] Performance form email',
+              notes: `${serializePerfFormQueueNotes(perfPayload)}\n${formatOutboundEmailNotes('queue_cron', 'Performance form email')}`,
               ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
             })
             .eq('id', email.id)
