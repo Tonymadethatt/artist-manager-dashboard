@@ -7,7 +7,7 @@ export type ShowReportShareFields = {
   submitted: boolean
 }
 
-/** Human-readable show label for titles and descriptions (no "Show Report for" prefix). */
+/** Event / show line for the social title (deal title, or venue + date, etc.). */
 export function resolveShowReportShareLabel(fields: ShowReportShareFields): string {
   const desc = fields.dealDescription?.trim()
   if (desc) return desc
@@ -22,22 +22,26 @@ export function resolveShowReportShareLabel(fields: ShowReportShareFields): stri
   return 'this show'
 }
 
+/**
+ * One-line explanation for Open Graph / WhatsApp (same for every show).
+ * Describes what a show report is, not submission status.
+ */
+export const SHOW_REPORT_SOCIAL_DESCRIPTION =
+  'A short post-show check-in for your manager: crowd, payment, promises, and how the night went—all in one place.'
+
 export function showReportSharePageTitle(fields: ShowReportShareFields): string {
-  return `Show Report for ${resolveShowReportShareLabel(fields)}`
+  return `Show Report - ${resolveShowReportShareLabel(fields)}`
 }
 
-export function showReportShareDescription(fields: ShowReportShareFields): string {
-  const label = resolveShowReportShareLabel(fields)
-  if (fields.submitted) {
-    return `The performance report for ${label} has already been submitted.`
-  }
-  return `Use this link to complete and submit the performance report for ${label}.`
+/** Social preview description is intentionally static; `fields` kept for stable call sites. */
+export function showReportShareDescription(_fields: ShowReportShareFields): string {
+  return SHOW_REPORT_SOCIAL_DESCRIPTION
 }
 
 export function showReportGenericShareHead(): { title: string; description: string } {
   return {
-    title: 'Show Report',
-    description: 'Open this link to access a performance report form.',
+    title: 'Show Report - Check-in',
+    description: SHOW_REPORT_SOCIAL_DESCRIPTION,
   }
 }
 
