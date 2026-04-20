@@ -49,6 +49,15 @@ export type ColdCallScriptCtx = {
   credentialsLine: string
 }
 
+/** Local clock: opener line only (paired with name + artist on p1). */
+export function coldCallTimeOfDayGreeting(d = new Date()): string {
+  const h = d.getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  if (h < 22) return 'Good evening'
+  return 'Good night'
+}
+
 export function coldCallScriptContext(profile: ArtistProfile | null): ColdCallScriptCtx {
   const artistName = profile?.artist_name?.trim() || 'the artist'
   const managerFull = profile?.manager_name?.trim() || profile?.company_name?.trim() || ''
@@ -108,19 +117,23 @@ export function coldCallLiveScriptBeats(
 
   switch (card) {
     case 'p1': {
+      const g = coldCallTimeOfDayGreeting()
+      const introName = `${g} — my name’s ${managerFirst} — I work with ${artistName}.`
       if (d.call_purpose === 'follow_up' && n) {
         return [
-          { text: `Hey ${n}, it’s ${managerFirst} — we spoke a little while back about ${artistName}.` },
+          { text: `${g} — Hey ${n}, it’s ${managerFirst} — we spoke a little while back about ${artistName}.` },
           { text: `You mentioned to follow up around now, so I wanted to check in.` },
         ]
       }
       const venueLine = d.venue_name.trim()
       if (!venueLine) {
         return [
+          { text: introName },
           { text: `Hey, how’s it going — I’m trying to reach the right person about DJ bookings. Who am I speaking with?` },
         ]
       }
       return [
+        { text: introName },
         { text: `Hey, is this ${venueLine}?` },
         {
           text: `Perfect — are you guys currently booking DJs for any upcoming events?`,
@@ -140,7 +153,6 @@ export function coldCallLiveScriptBeats(
       const because = pitchBecauseClause(d)
       const hasReason = !!(d.pitch_reason_chip || d.pitch_reason_custom.trim())
       const lines: ColdCallScriptBeat[] = [
-        { text: `My name’s ${managerFirst} — I work with ${artistName}.` },
         {
           text: `We’ve done work with brands like Jack Daniel’s, Golden Boy, and he’s currently on air at Cali 93.9.`,
         },
