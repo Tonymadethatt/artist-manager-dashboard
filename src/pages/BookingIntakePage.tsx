@@ -874,6 +874,8 @@ export default function BookingIntakePage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const intakeIdParam = searchParams.get('intakeId')
   const booking = useBookingIntakes()
+  /** Stable ref — the hook return object is a new identity every render; pass these into deps instead of `booking`. */
+  const updateVenueData = booking.updateVenueData
   const { venues, addVenue, updateVenue, refetch: refetchVenues } = useVenues()
   const { deals, addDeal, refetch: refetchDeals } = useDeals()
   const { profile } = useArtistProfile()
@@ -934,6 +936,11 @@ export default function BookingIntakePage() {
     () => (selectedRow ? parseVenueDataV3(selectedRow.venue_data, selectedRow.schema_version) : null),
     [selectedRow],
   )
+
+  /** Primitives only — `selectedRow` / `data` change every keystroke; effects must not depend on those objects for unrelated fields. */
+  const intakeMultiShowFlag = Boolean(data?.multi_show)
+  const intakeShowCountTarget: 2 | 3 = data?.show_count === 3 ? 3 : 2
+  const selectedSchemaVersion = selectedRow?.schema_version ?? 0
 
   const showsSorted = useMemo(
     () =>
@@ -1027,11 +1034,11 @@ export default function BookingIntakePage() {
   }, [booking.loading, booking.intakes, intakeIdParam])
 
   useEffect(() => {
-    if (!selectedId || !data || !selectedRow) return
-    if (selectedRow.schema_version < INTAKE_SCHEMA_VERSION_V3) return
-    const target: 1 | 2 | 3 = data.multi_show ? data.show_count : 1
+    if (!selectedId || !selectedRow) return
+    if (selectedSchemaVersion < INTAKE_SCHEMA_VERSION_V3) return
+    const target: 1 | 2 | 3 = intakeMultiShowFlag ? intakeShowCountTarget : 1
     void booking.ensureShowCount(selectedId, target)
-  }, [selectedId, selectedRow, data?.multi_show, data?.show_count, booking.ensureShowCount])
+  }, [selectedId, selectedSchemaVersion, intakeMultiShowFlag, intakeShowCountTarget, booking.ensureShowCount])
 
   useEffect(() => {
     const vid = data?.existing_venue_id
@@ -1306,9 +1313,9 @@ export default function BookingIntakePage() {
       if (p.outreach_track === 'community') {
         next = { ...next, commission_tier: 'artist_network' }
       }
-      booking.updateVenueData(selectedId, next)
+      updateVenueData(selectedId, next)
     },
-    [selectedId, booking],
+    [selectedId, updateVenueData],
   )
 
   /** Drop billing link if it points at the main contact (no longer in picker list). */
@@ -2139,6 +2146,9 @@ export default function BookingIntakePage() {
     otherVenueContactsForMismatch.length,
   ])
 
+  const handleLiveNextRef = useRef(handleLiveNext)
+  handleLiveNextRef.current = handleLiveNext
+
   const handleLiveBack = useCallback(() => {
     if (!selectedId || !data) return
     const v = data.view_section
@@ -2184,15 +2194,14 @@ export default function BookingIntakePage() {
     if (!data || data.session_mode !== 'live_call') return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target
-      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        void handleLiveNext()
-      }
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key !== 'Enter') return
+      e.preventDefault()
+      void handleLiveNextRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [data?.session_mode, handleLiveNext])
+  }, [data?.session_mode])
 
   const handleNewIntake = async () => {
     const row = await booking.createIntake()
