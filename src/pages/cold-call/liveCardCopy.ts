@@ -49,7 +49,7 @@ export type ColdCallScriptCtx = {
   credentialsLine: string
 }
 
-/** Local clock: opener line only (paired with name + artist on p1). */
+/** Local clock for “Hey, good evening …” (sentence uses lowercase after Hey). */
 export function coldCallTimeOfDayGreeting(d = new Date()): string {
   const h = d.getHours()
   if (h < 12) return 'Good morning'
@@ -118,25 +118,29 @@ export function coldCallLiveScriptBeats(
   switch (card) {
     case 'p1': {
       const g = coldCallTimeOfDayGreeting()
-      const introName = `${g} — my name’s ${managerFirst} — I work with ${artistName}.`
+      const heyTime = `Hey, ${g.toLowerCase()}.`
+      const nameOnly = `My name’s ${managerFirst}.`
       if (d.call_purpose === 'follow_up' && n) {
         return [
-          { text: `${g} — Hey ${n}, it’s ${managerFirst} — we spoke a little while back about ${artistName}.` },
+          { text: heyTime },
+          { text: `Hey ${n}, it’s ${managerFirst} — we spoke a little while back about ${artistName}.` },
           { text: `You mentioned to follow up around now, so I wanted to check in.` },
         ]
       }
       const venueLine = d.venue_name.trim()
       if (!venueLine) {
         return [
-          { text: introName },
+          { text: heyTime },
+          { text: nameOnly },
           { text: `Hey, how’s it going — I’m trying to reach the right person about DJ bookings. Who am I speaking with?` },
         ]
       }
       return [
-        { text: introName },
+        { text: heyTime },
+        { text: nameOnly },
         { text: `Hey, is this ${venueLine}?` },
         {
-          text: `Perfect — are you guys currently booking DJs for any upcoming events?`,
+          text: `Perfect — I just had a few questions. Are you guys currently booking DJs for any upcoming events?`,
           situational: true,
         },
       ]
@@ -153,6 +157,7 @@ export function coldCallLiveScriptBeats(
       const because = pitchBecauseClause(d)
       const hasReason = !!(d.pitch_reason_chip || d.pitch_reason_custom.trim())
       const lines: ColdCallScriptBeat[] = [
+        { text: `My name’s ${managerFirst} — I work with ${artistName}.` },
         {
           text: `We’ve done work with brands like Jack Daniel’s, Golden Boy, and he’s currently on air at Cali 93.9.`,
         },
