@@ -12,7 +12,8 @@ import type {
   ColdCallInitialReaction,
   ColdCallParkingResult,
   ColdCallPivotResponse,
-  ColdCallRateReaction,
+  ColdCallPricePrimaryReaction,
+  ColdCallPriceTrialReaction,
   ColdCallSendTo,
   ColdCallVenueTypeConfirm,
   ColdCallWhoAnswered,
@@ -20,25 +21,27 @@ import type {
 import { VENUE_TYPE_LABELS, VENUE_TYPE_ORDER } from '@/types'
 
 export const WHO_ANSWERED_OPTIONS: { id: ColdCallWhoAnswered; label: string }[] = [
-  { id: 'right_person', label: 'They book DJs' },
-  { id: 'gatekeeper', label: 'Not the right person' },
+  { id: 'yes_booking', label: 'Yeah, we book DJs' },
+  { id: 'wrong_person', label: 'Not the right person' },
+  { id: 'not_booking', label: 'We don’t book outside DJs' },
   { id: 'voicemail', label: 'Voicemail' },
   { id: 'no_answer', label: 'No answer' },
 ]
 
 export const GATEKEEPER_RESULT_OPTIONS: { id: ColdCallGatekeeperResult; label: string }[] = [
-  { id: 'gave_name', label: 'They gave me a name' },
+  { id: 'gave_info', label: 'They gave me a name or contact' },
   { id: 'transferred', label: 'They transferred me' },
-  { id: 'message', label: 'They took a message (ends call)' },
+  { id: 'call_back', label: 'They said to call back' },
   { id: 'shut_down', label: 'They shut it down' },
 ]
 
 export const INITIAL_REACTION_OPTIONS: { id: ColdCallInitialReaction; label: string }[] = [
-  { id: 'pitch_rotation_solid', label: 'We have a solid rotation already' },
-  { id: 'pitch_looking', label: 'We’re actually looking for someone' },
-  { id: 'pitch_in_house', label: 'We do it in-house' },
-  { id: 'pitch_no_dj_nights', label: 'We don’t really do DJ nights' },
-  { id: 'pitch_tell_me_more', label: 'Tell me more about him first' },
+  { id: 'they_have_djs', label: 'We already have our DJs' },
+  { id: 'theyre_looking', label: 'We’re actually looking' },
+  { id: 'tell_me_more', label: 'Tell me more about him' },
+  { id: 'how_much', label: 'How much does he charge?' },
+  { id: 'not_right_now', label: 'Not right now' },
+  { id: 'not_interested', label: 'Not interested' },
 ]
 
 export const PIVOT_OPTIONS: { id: ColdCallPivotResponse; label: string }[] = [
@@ -48,16 +51,38 @@ export const PIVOT_OPTIONS: { id: ColdCallPivotResponse; label: string }[] = [
 ]
 
 export const PARKING_OPTIONS: { id: ColdCallParkingResult; label: string }[] = [
-  { id: 'send_info', label: 'Yes — send info' },
-  { id: 'no_bother', label: 'No — don’t bother' },
+  { id: 'send_info', label: 'Yeah, send his info over' },
   { id: 'try_later', label: 'Try again in a few months' },
+  { id: 'already_aware', label: 'They’re already aware of him' },
+  { id: 'not_interested', label: 'No thanks' },
 ]
 
+/** Shown only when parking_result === send_info */
 export const SEND_TO_OPTIONS: { id: ColdCallSendTo; label: string }[] = [
   { id: 'email', label: 'Email' },
   { id: 'text', label: 'Text' },
   { id: 'instagram', label: 'Instagram DM' },
-  { id: 'they_already_know', label: 'They already know about us' },
+]
+
+export const PRICE_PRIMARY_OPTIONS: { id: ColdCallPricePrimaryReaction; label: string }[] = [
+  { id: 'price_works', label: 'They’re good with that' },
+  { id: 'too_much', label: 'That’s more than we pay' },
+  { id: 'need_to_think', label: 'They want to think about it' },
+  { id: 'whats_reduced', label: 'What’s the reduced rate?' },
+]
+
+export const PRICE_TRIAL_OPTIONS: { id: ColdCallPriceTrialReaction; label: string }[] = [
+  { id: 'trial_yes', label: 'They’re open to a trial' },
+  { id: 'trial_no', label: 'Still not interested' },
+]
+
+/** p6 when operator marks the ask as converting */
+export const P6_CONVERT_MODE_OPTIONS: {
+  id: Exclude<ColdCallDataV1['p6_convert_mode'], ''>
+  label: string
+}[] = [
+  { id: 'setting_up_now', label: 'Setting up on this call' },
+  { id: 'theyll_do_later', label: 'They’ll follow up to lock it in' },
 ]
 
 export const BOOKING_PROCESS_OPTIONS: { id: ColdCallBookingProcess; label: string }[] = [
@@ -81,13 +106,6 @@ export const BUDGET_RANGE_OPTIONS: { id: ColdCallBudgetRange; label: string }[] 
   { id: '3000_plus', label: '$3,000+' },
   { id: 'no_say', label: 'They didn’t say' },
   { id: 'depends', label: 'Depends on the DJ' },
-]
-
-export const RATE_REACTION_OPTIONS: { id: ColdCallRateReaction; label: string }[] = [
-  { id: 'comfortable', label: 'Comfortable' },
-  { id: 'hesitant', label: 'Hesitant' },
-  { id: 'high', label: 'More than we usually pay' },
-  { id: 'skipped', label: 'Didn’t discuss' },
 ]
 
 export const CAPACITY_OPTIONS: { id: ColdCallCapacityBucket; label: string }[] = [

@@ -114,9 +114,15 @@ export const COLD_CALL_HOW_FOUND_LABELS: Record<Exclude<ColdCallHowFound, ''>, s
   other: 'Other',
 }
 
-export type ColdCallWhoAnswered = '' | 'right_person' | 'gatekeeper' | 'voicemail' | 'no_answer'
+export type ColdCallWhoAnswered =
+  | ''
+  | 'yes_booking'
+  | 'wrong_person'
+  | 'not_booking'
+  | 'voicemail'
+  | 'no_answer'
 
-export type ColdCallGatekeeperResult = '' | 'gave_name' | 'transferred' | 'message' | 'shut_down'
+export type ColdCallGatekeeperResult = '' | 'gave_info' | 'transferred' | 'call_back' | 'shut_down'
 
 export type ColdCallGatekeeperStaffRole =
   | ''
@@ -178,26 +184,26 @@ export const COLD_CALL_PITCH_REASON_CHIPS: Record<
 
 export type ColdCallInitialReaction =
   | ''
-  /** Response to “what does your typical DJ night look like?” */
-  | 'pitch_rotation_solid'
-  | 'pitch_looking'
-  | 'pitch_in_house'
-  | 'pitch_no_dj_nights'
-  | 'pitch_tell_me_more'
-  /** Legacy pitch reactions (older saved calls). */
-  | 'interested'
-  | 'maybe'
-  | 'own_djs'
+  | 'they_have_djs'
+  | 'theyre_looking'
+  | 'tell_me_more'
   | 'not_right_now'
   | 'not_interested'
-  /** “How much?” — route to price pivot (Card 5B). */
+  /** “How much?” — route to price pivot (p4d). */
   | 'how_much'
 
 export type ColdCallPivotResponse = '' | 'sometimes' | 'not_really' | 'special_events'
 
-export type ColdCallParkingResult = '' | 'send_info' | 'no_bother' | 'try_later'
+export type ColdCallParkingResult = '' | 'send_info' | 'try_later' | 'already_aware' | 'not_interested'
 
-export type ColdCallSendTo = '' | 'email' | 'text' | 'instagram' | 'they_already_know'
+/** p3c: when sending info, how it goes out (not “already aware” — that’s a parking chip). */
+export type ColdCallSendTo = '' | 'email' | 'text' | 'instagram'
+
+/** p4d Price Pivot — reaction after stating Luijay’s rate. */
+export type ColdCallPricePrimaryReaction = '' | 'price_works' | 'too_much' | 'need_to_think' | 'whats_reduced'
+
+/** p4d — after “trial night” beat when `too_much` was selected. */
+export type ColdCallPriceTrialReaction = '' | 'trial_yes' | 'trial_no'
 
 /** p2a_detail / p4c: inline contact capture — no "capture later". */
 export type ColdCallDmDirectLine = '' | 'no' | 'phone' | 'email' | 'both'
@@ -327,15 +333,10 @@ export type ColdCallLiveCardId =
   | 'p1'
   | 'p2a'
   | 'p2a_detail'
-  | 'p2_msg'
   | 'p3'
   | 'p3b'
   | 'p3c'
-  | 'p4a'
-  | 'p4b'
-  | 'p4c'
   | 'p4d'
-  | 'p4e'
   | 'p5'
   | 'p6'
   | 'p6_vm'
@@ -416,11 +417,18 @@ export interface ColdCallDataV1 {
   callback_expected: '' | 'yes' | 'no_retry'
 
   initial_reaction: ColdCallInitialReaction
-  /** After “Tell me more about him first”: first Continue shows bio on pitch card; second Continue → Ask. */
-  pitch_tell_me_more_ack: boolean
+  /** p3: inline bio visible after “Tell me more” chip (replaces legacy pitch_tell_me_more_ack). */
+  pitch_bio_expanded: boolean
   pivot_response: ColdCallPivotResponse
   parking_result: ColdCallParkingResult
+  /** p3c: best email when parking_result is send_info. */
+  parking_email: string
   send_to: ColdCallSendTo
+
+  /** p4d: reaction to stated rate. */
+  price_primary_reaction: ColdCallPricePrimaryReaction
+  /** p4d: after trial beat when primary was too_much. */
+  price_trial_reaction: ColdCallPriceTrialReaction
 
   event_nights: string[]
   night_details_note: string
@@ -448,6 +456,8 @@ export interface ColdCallDataV1 {
   call_ended_naturally: ColdCallEndedNaturally
   call_duration_feel: ColdCallDurationFeel
   transferred_note: boolean
+  /** p6: when temperature is converting — setup now vs follow up later. */
+  p6_convert_mode: '' | 'setting_up_now' | 'theyll_do_later'
 
   final_temperature: ColdCallTemperature
   outcome: ColdCallOutcome
@@ -526,10 +536,14 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     callback_expected: '',
 
     initial_reaction: '',
-    pitch_tell_me_more_ack: false,
+    pitch_bio_expanded: false,
     pivot_response: '',
     parking_result: '',
+    parking_email: '',
     send_to: '',
+
+    price_primary_reaction: '',
+    price_trial_reaction: '',
 
     event_nights: [],
     night_details_note: '',
@@ -557,6 +571,7 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
     call_ended_naturally: '',
     call_duration_feel: '',
     transferred_note: false,
+    p6_convert_mode: '',
 
     final_temperature: '',
     outcome: '',
@@ -618,9 +633,83 @@ function parseEndedNaturally(s: string): ColdCallEndedNaturally {
 }
 
 function parseSendTo(s: string): ColdCallSendTo {
-  if (s === 'they_find_us') return 'they_already_know'
-  if (s === 'they_already_know' || s === 'email' || s === 'text' || s === 'instagram') return s as ColdCallSendTo
+  if (s === 'email' || s === 'text' || s === 'instagram') return s
   return ''
+}
+
+const LIVE_CARD_IDS = new Set<ColdCallLiveCardId>([
+  'p1',
+  'p2a',
+  'p2a_detail',
+  'p3',
+  'p3b',
+  'p3c',
+  'p4d',
+  'p5',
+  'p6',
+  'p6_vm',
+  'p6_na',
+])
+
+function migrateLiveCardId(raw: string): ColdCallLiveCardId {
+  if (raw === 'p2_msg') return 'p6'
+  if (raw === 'p4a' || raw === 'p4b' || raw === 'p4c' || raw === 'p4e') return 'p5'
+  if (LIVE_CARD_IDS.has(raw as ColdCallLiveCardId)) return raw as ColdCallLiveCardId
+  return 'p1'
+}
+
+function migrateWhoAnswered(raw: string): ColdCallWhoAnswered {
+  if (raw === 'right_person') return 'yes_booking'
+  if (raw === 'gatekeeper') return 'wrong_person'
+  const ok: ColdCallWhoAnswered[] = ['', 'yes_booking', 'wrong_person', 'not_booking', 'voicemail', 'no_answer']
+  return ok.includes(raw as ColdCallWhoAnswered) ? (raw as ColdCallWhoAnswered) : ''
+}
+
+function migrateGatekeeperResult(raw: string): ColdCallGatekeeperResult {
+  if (raw === 'gave_name') return 'gave_info'
+  if (raw === 'message') return 'call_back'
+  const ok: ColdCallGatekeeperResult[] = ['', 'gave_info', 'transferred', 'call_back', 'shut_down']
+  return ok.includes(raw as ColdCallGatekeeperResult) ? (raw as ColdCallGatekeeperResult) : ''
+}
+
+function migrateInitialReaction(raw: string): ColdCallInitialReaction {
+  const legacy: Record<string, ColdCallInitialReaction> = {
+    pitch_rotation_solid: 'they_have_djs',
+    pitch_in_house: 'they_have_djs',
+    own_djs: 'they_have_djs',
+    pitch_looking: 'theyre_looking',
+    interested: 'theyre_looking',
+    pitch_tell_me_more: 'tell_me_more',
+    maybe: 'tell_me_more',
+    pitch_no_dj_nights: 'not_interested',
+  }
+  const v = legacy[raw] ?? raw
+  const ok: ColdCallInitialReaction[] = [
+    '',
+    'they_have_djs',
+    'theyre_looking',
+    'tell_me_more',
+    'not_right_now',
+    'not_interested',
+    'how_much',
+  ]
+  return ok.includes(v as ColdCallInitialReaction) ? (v as ColdCallInitialReaction) : ''
+}
+
+function migrateParkingResult(raw: string): ColdCallParkingResult {
+  if (raw === 'no_bother') return 'not_interested'
+  const ok: ColdCallParkingResult[] = ['', 'send_info', 'try_later', 'already_aware', 'not_interested']
+  return ok.includes(raw as ColdCallParkingResult) ? (raw as ColdCallParkingResult) : ''
+}
+
+function migratePricePrimary(raw: string): ColdCallPricePrimaryReaction {
+  const ok: ColdCallPricePrimaryReaction[] = ['', 'price_works', 'too_much', 'need_to_think', 'whats_reduced']
+  return ok.includes(raw as ColdCallPricePrimaryReaction) ? (raw as ColdCallPricePrimaryReaction) : ''
+}
+
+function migratePriceTrial(raw: string): ColdCallPriceTrialReaction {
+  const ok: ColdCallPriceTrialReaction[] = ['', 'trial_yes', 'trial_no']
+  return ok.includes(raw as ColdCallPriceTrialReaction) ? (raw as ColdCallPriceTrialReaction) : ''
 }
 
 function parseBestTime(s: string): ColdCallDataV1['best_time'] {
@@ -666,9 +755,9 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
   if (v !== COLD_CALL_DATA_VERSION && v !== undefined && v !== null) {
     /* migrate later */
   }
-  const liveCard = (asStr(o.live_card, base.live_card) as ColdCallLiveCardId) || base.live_card
-  const viewCardRaw = asStr(o.view_card, '') as ColdCallLiveCardId
-  const lastActiveRaw = asStr(o.last_active_card, '') as ColdCallLiveCardId
+  const liveCard = migrateLiveCardId(asStr(o.live_card, base.live_card))
+  const viewCardRaw = migrateLiveCardId(asStr(o.view_card, ''))
+  const lastActiveRaw = migrateLiveCardId(asStr(o.last_active_card, ''))
   return {
     ...base,
     session_mode:
@@ -676,7 +765,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
         ? o.session_mode
         : base.session_mode,
     live_card: liveCard,
-    live_history: asStrArr(o.live_history) as ColdCallLiveCardId[],
+    live_history: asStrArr(o.live_history).map(migrateLiveCardId),
     view_card: viewCardRaw || liveCard,
     last_active_card: lastActiveRaw || liveCard,
     operator_temperature: asStr(o.operator_temperature, '') as ColdCallTemperature,
@@ -716,7 +805,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     commission_tier: 'new_doors',
     priority: typeof o.priority === 'number' && o.priority >= 1 && o.priority <= 5 ? o.priority : base.priority,
 
-    who_answered: asStr(o.who_answered, '') as ColdCallWhoAnswered,
+    who_answered: migrateWhoAnswered(asStr(o.who_answered, '')),
     gatekeeper_name: asStr(o.gatekeeper_name),
     gatekeeper_title_key: ((): ContactTitleKey | '' => {
       const direct = asContactTitleKeyField(o.gatekeeper_title_key)
@@ -725,7 +814,7 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
       return staff ? legacyGatekeeperStaffToTitleKey(staff) : ''
     })(),
 
-    gatekeeper_result: asStr(o.gatekeeper_result, '') as ColdCallGatekeeperResult,
+    gatekeeper_result: migrateGatekeeperResult(asStr(o.gatekeeper_result, '')),
 
     voicemail_left: ((): ColdCallDataV1['voicemail_left'] => {
       const s = asStr(o.voicemail_left, '')
@@ -755,11 +844,15 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     message_taker_name: asStr(o.message_taker_name),
     callback_expected: asStr(o.callback_expected, '') as ColdCallDataV1['callback_expected'],
 
-    initial_reaction: asStr(o.initial_reaction, '') as ColdCallInitialReaction,
-    pitch_tell_me_more_ack: asBool(o.pitch_tell_me_more_ack, base.pitch_tell_me_more_ack),
+    initial_reaction: migrateInitialReaction(asStr(o.initial_reaction, '')),
+    pitch_bio_expanded: asBool(o.pitch_bio_expanded) || asBool(o.pitch_tell_me_more_ack),
     pivot_response: asStr(o.pivot_response, '') as ColdCallPivotResponse,
-    parking_result: asStr(o.parking_result, '') as ColdCallParkingResult,
+    parking_result: migrateParkingResult(asStr(o.parking_result, '')),
+    parking_email: asStr(o.parking_email),
     send_to: parseSendTo(asStr(o.send_to, '')),
+
+    price_primary_reaction: migratePricePrimary(asStr(o.price_primary_reaction, '')),
+    price_trial_reaction: migratePriceTrial(asStr(o.price_trial_reaction, '')),
 
     event_nights: asStrArr(o.event_nights),
     night_details_note: asStr(o.night_details_note),
@@ -787,6 +880,11 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     call_ended_naturally: parseEndedNaturally(asStr(o.call_ended_naturally, '')),
     call_duration_feel: asStr(o.call_duration_feel, '') as ColdCallDurationFeel,
     transferred_note: asBool(o.transferred_note),
+    p6_convert_mode: ((): ColdCallDataV1['p6_convert_mode'] => {
+      const s = asStr(o.p6_convert_mode, '')
+      if (s === 'setting_up_now' || s === 'theyll_do_later') return s
+      return ''
+    })(),
 
     final_temperature: asStr(o.final_temperature, '') as ColdCallTemperature,
     outcome: asStr(o.outcome, '') as ColdCallOutcome,

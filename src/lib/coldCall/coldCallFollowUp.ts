@@ -38,8 +38,8 @@ export function suggestColdCallFollowUpDate(d: ColdCallDataV1): string {
     if (d.no_answer_retry_timing === 'next_week') return addDays(now, 7)
     return ''
   }
-  if (d.gatekeeper_result === 'gave_name') return addDays(now, 2)
-  if (d.gatekeeper_result === 'message') return addDays(now, 3)
+  if (d.gatekeeper_result === 'gave_info') return addDays(now, 2)
+  if (d.gatekeeper_result === 'call_back') return addDays(now, 3)
   if (d.parking_result === 'try_later') return addDays(now, 30)
   if (d.ask_response === 'send_info_first') return addDays(now, 4)
   if (d.ask_response === 'check_back') {

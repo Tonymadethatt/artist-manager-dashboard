@@ -16,16 +16,16 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
   let s = 0
 
   switch (d.who_answered) {
-    case 'right_person':
+    case 'yes_booking':
       s += 2
       break
     case 'voicemail':
       s += 1
       break
-    case 'gatekeeper':
-      if (d.gatekeeper_result === 'gave_name') s += 1
+    case 'wrong_person':
+      if (d.gatekeeper_result === 'gave_info') s += 1
       if (d.gatekeeper_result === 'transferred') s += 2
-      if (d.gatekeeper_result === 'message') s += 0
+      if (d.gatekeeper_result === 'call_back') s += 0
       if (d.gatekeeper_result === 'shut_down') s -= 2
       break
     default:
@@ -33,22 +33,16 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
   }
 
   switch (d.initial_reaction) {
-    case 'pitch_looking':
-    case 'interested':
+    case 'theyre_looking':
       s += 3
       break
-    case 'maybe':
+    case 'tell_me_more':
       s += 1
-      break
-    case 'pitch_tell_me_more':
-      s += 2
       break
     case 'how_much':
       s += 1
       break
-    case 'pitch_rotation_solid':
-    case 'pitch_in_house':
-    case 'own_djs':
+    case 'they_have_djs':
       if (d.pivot_response === 'sometimes') s += 2
       else if (d.pivot_response === 'not_really') s -= 1
       else if (d.pivot_response === 'special_events') s += 1
@@ -56,7 +50,6 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
     case 'not_right_now':
       s -= 1
       break
-    case 'pitch_no_dj_nights':
     case 'not_interested':
       s -= 3
       break

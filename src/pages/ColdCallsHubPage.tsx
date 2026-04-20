@@ -43,7 +43,8 @@ import {
   INITIAL_REACTION_OPTIONS,
   PARKING_OPTIONS,
   PIVOT_OPTIONS,
-  RATE_REACTION_OPTIONS,
+  PRICE_PRIMARY_OPTIONS,
+  PRICE_TRIAL_OPTIONS,
   SEND_TO_OPTIONS,
   VENUE_TYPE_CONFIRM_OPTIONS,
   WHO_ANSWERED_OPTIONS,
@@ -213,6 +214,8 @@ function ColdCallHubPreview({ row, data }: { row: ColdCallRow; data: ColdCallDat
   const bookingProcess = data.booking_process?.trim()
   const budget = data.budget_range?.trim()
   const rateReact = data.rate_reaction?.trim()
+  const pricePrimary = data.price_primary_reaction?.trim()
+  const priceTrial = data.price_trial_reaction?.trim()
   const capacity = data.capacity_range?.trim()
   const venueTypeConfirm = data.venue_type_confirm?.trim()
   const bestTime = data.best_time?.trim()
@@ -229,7 +232,15 @@ function ColdCallHubPreview({ row, data }: { row: ColdCallRow; data: ColdCallDat
 
   const flagEntries = Object.entries(data.flag_captures ?? {}).filter(([, v]) => String(v ?? '').trim())
 
-  const dealSignals = Boolean(budget || rateReact || capacity || venueTypeConfirm || eventNights.length)
+  const dealSignals = Boolean(
+    budget ||
+      rateReact ||
+      pricePrimary ||
+      priceTrial ||
+      capacity ||
+      venueTypeConfirm ||
+      eventNights.length,
+  )
 
   const voicemailPlan =
     who === 'voicemail' && data.voicemail_followup_timing
@@ -386,7 +397,7 @@ function ColdCallHubPreview({ row, data }: { row: ColdCallRow; data: ColdCallDat
             </div>
           ) : null}
 
-          {who === 'gatekeeper' && (gatekeeperResult || data.gatekeeper_name?.trim()) ? (
+          {who === 'wrong_person' && (gatekeeperResult || data.gatekeeper_name?.trim()) ? (
             <div className="mt-4 border-t border-neutral-800/60 pt-4 text-sm text-neutral-300 space-y-1">
               <p className="text-[10px] uppercase tracking-[0.1em] text-neutral-500 mb-1">Gatekeeper</p>
               {data.gatekeeper_name?.trim() ? <p>{data.gatekeeper_name.trim()}</p> : null}
@@ -541,14 +552,24 @@ function ColdCallHubPreview({ row, data }: { row: ColdCallRow; data: ColdCallDat
                 Event nights: {eventNights.join(', ')}
               </span>
             ) : null}
-            {budget ? (
+            {pricePrimary ? (
+              <span className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2.5 py-1 text-xs text-neutral-300">
+                Rate reaction: {pickLabel(PRICE_PRIMARY_OPTIONS, pricePrimary)}
+              </span>
+            ) : null}
+            {priceTrial ? (
+              <span className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2.5 py-1 text-xs text-neutral-300">
+                Trial: {pickLabel(PRICE_TRIAL_OPTIONS, priceTrial)}
+              </span>
+            ) : null}
+            {budget && !pricePrimary ? (
               <span className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2.5 py-1 text-xs text-neutral-300">
                 Budget: {pickLabel(BUDGET_RANGE_OPTIONS, budget)}
               </span>
             ) : null}
-            {rateReact ? (
+            {rateReact && !pricePrimary ? (
               <span className="rounded-md border border-neutral-800 bg-neutral-950/40 px-2.5 py-1 text-xs text-neutral-300">
-                Rate: {pickLabel(RATE_REACTION_OPTIONS, rateReact)}
+                Rate (legacy): {rateReact}
               </span>
             ) : null}
             {capacity ? (

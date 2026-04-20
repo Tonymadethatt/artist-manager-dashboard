@@ -1,5 +1,9 @@
 import type { ColdCallDataV1, ColdCallLiveCardId } from '@/lib/coldCall/coldCallPayload'
 
+function coldCallHasContactLine(d: ColdCallDataV1): boolean {
+  return !!(d.target_name.trim() || d.decision_maker_name.trim() || d.gatekeeper_name.trim())
+}
+
 /** Furthest-forward card in the live flow (bookmark). */
 export function bookmarkCard(d: ColdCallDataV1): ColdCallLiveCardId {
   return d.last_active_card || d.live_card
@@ -10,8 +14,8 @@ export function displayCard(d: ColdCallDataV1): ColdCallLiveCardId {
   return d.view_card || bookmarkCard(d)
 }
 
-const GATEKEEPER_LIVE_CARDS = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail', 'p2_msg'])
-const PITCH_LIVE_CARDS = new Set<ColdCallLiveCardId>(['p3', 'p3b', 'p3c'])
+const GATEKEEPER_LIVE_CARDS = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail'])
+const PITCH_ENTRY_CARDS = new Set<ColdCallLiveCardId>(['p3', 'p3c'])
 
 /** Whether `from → to` is allowed on the live path for the current `who_answered` (guards stale history). */
 export function liveHistoryEdgeValid(
@@ -21,8 +25,9 @@ export function liveHistoryEdgeValid(
 ): boolean {
   if (from !== 'p1') return true
   const w = d.who_answered
-  if (GATEKEEPER_LIVE_CARDS.has(to)) return w === 'gatekeeper'
-  if (PITCH_LIVE_CARDS.has(to)) return w === 'right_person'
+  if (GATEKEEPER_LIVE_CARDS.has(to)) return w === 'wrong_person'
+  if (to === 'p3b') return w === 'not_booking'
+  if (PITCH_ENTRY_CARDS.has(to)) return w === 'yes_booking'
   if (to === 'p6_vm') return w === 'voicemail'
   if (to === 'p6_na') return w === 'no_answer'
   return true
@@ -58,47 +63,45 @@ export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdC
     case 'p2a':
       return true
     case 'p3':
-      return d.initial_reaction !== 'pitch_tell_me_more'
+      return d.initial_reaction !== '' && d.initial_reaction !== 'tell_me_more'
     case 'p3b':
     case 'p3c':
-    case 'p4a':
-    case 'p4b':
       return true
     case 'p4d':
       return false
     case 'p5':
+      return false
     case 'p6':
+      if (d.operator_temperature === 'converting') return false
+      if (!coldCallHasContactLine(d)) return false
+      return true
     case 'p6_vm':
     case 'p6_na':
       return true
-    case 'p4c': {
-      const bp = d.booking_process
-      if (!bp) return false
-      if (bp === 'someone_else' || bp === 'committee') return false
-      return true
-    }
     case 'p2a_detail':
-    case 'p2_msg':
-    case 'p4e':
     default:
       return false
   }
 }
 
-/** Waypoint order: Opener → Pitch → Redirect → The Ask → Pivot → Close (final rewrite spec). */
+/**
+ * Waypoint order (audit): Opener → Redirect → Pitch → Pivot → Price → Ask → Close.
+ * Indices 0..6 for sidebar.
+ */
 export function waypointIndex(card: ColdCallLiveCardId): number {
   if (card === 'p1') return 0
-  if (card === 'p3' || card === 'p3c' || card === 'p4a' || card === 'p4b' || card === 'p4c' || card === 'p4e') return 1
-  if (card === 'p2a' || card === 'p2a_detail' || card === 'p2_msg') return 2
-  if (card === 'p5') return 3
-  if (card === 'p3b' || card === 'p4d') return 4
-  if (card === 'p6' || card === 'p6_vm' || card === 'p6_na') return 5
-  return 1
+  if (card === 'p2a' || card === 'p2a_detail') return 1
+  if (card === 'p3') return 2
+  if (card === 'p3b' || card === 'p3c') return 3
+  if (card === 'p4d') return 4
+  if (card === 'p5') return 5
+  if (card === 'p6' || card === 'p6_vm' || card === 'p6_na') return 6
+  return 0
 }
 
-const PITCH_SET = new Set<ColdCallLiveCardId>(['p3', 'p3c', 'p4a', 'p4b', 'p4c', 'p4e'])
-const REDIRECT_SET = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail', 'p2_msg'])
-const PIVOT_SET = new Set<ColdCallLiveCardId>(['p3b', 'p4d'])
+const PITCH_SET = new Set<ColdCallLiveCardId>(['p3', 'p3c'])
+const REDIRECT_SET = new Set<ColdCallLiveCardId>(['p2a', 'p2a_detail'])
+const PIVOT_SET = new Set<ColdCallLiveCardId>(['p3b', 'p3c'])
 const CLOSE_SET = new Set<ColdCallLiveCardId>(['p6', 'p6_vm', 'p6_na'])
 
 /** Sidebar waypoint → first card to show for that phase on this call. */
@@ -116,25 +119,22 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
         const na = d.live_history.find(c => c === 'p6_na')
         return na ?? 'p1'
       }
-      const hit = d.live_history.find(c => PITCH_SET.has(c))
-      return hit ?? 'p3'
-    }
-    case 2: {
-      const w = d.who_answered
-      if (w === 'right_person' || w === 'voicemail' || w === 'no_answer') {
-        const hit = d.live_history.find(c => REDIRECT_SET.has(c))
-        return hit ?? 'p1'
-      }
       const hit = d.live_history.find(c => REDIRECT_SET.has(c))
       return hit ?? 'p2a'
     }
-    case 3:
-      return d.live_history.find(c => c === 'p5') ?? 'p5'
-    case 4: {
+    case 2: {
+      const hit = d.live_history.find(c => PITCH_SET.has(c))
+      return hit ?? 'p3'
+    }
+    case 3: {
       const hit = d.live_history.find(c => PIVOT_SET.has(c))
       return hit ?? 'p3b'
     }
-    case 5: {
+    case 4:
+      return d.live_history.find(c => c === 'p4d') ?? 'p4d'
+    case 5:
+      return d.live_history.find(c => c === 'p5') ?? 'p5'
+    case 6: {
       const rev = [...d.live_history].reverse()
       const hit = rev.find(c => CLOSE_SET.has(c))
       return hit ?? 'p6'
@@ -147,8 +147,9 @@ export function coldCallWaypointAnchor(phaseIdx: number, d: ColdCallDataV1): Col
 /** True when this phase is usually skipped on the current branch (still navigable). */
 export function coldCallPhaseSkipped(phaseIdx: number, d: ColdCallDataV1): boolean {
   const w = d.who_answered
-  if (phaseIdx === 2) return w === 'right_person' || w === 'voicemail' || w === 'no_answer'
-  if (phaseIdx === 1 || phaseIdx === 3 || phaseIdx === 4) return w === 'voicemail' || w === 'no_answer'
+  if (phaseIdx === 1) return w === 'yes_booking' || w === 'not_booking' || w === 'voicemail' || w === 'no_answer'
+  if (phaseIdx === 2) return w === 'not_booking' || w === 'voicemail' || w === 'no_answer'
+  if (phaseIdx === 3 || phaseIdx === 4 || phaseIdx === 5) return w === 'voicemail' || w === 'no_answer'
   return false
 }
 
@@ -185,12 +186,8 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       }
       break
     }
-    case 'p2_msg': {
-      need('callback_expected', !!d.callback_expected, 'Pick callback expectation.')
-      break
-    }
     case 'p3':
-      need('initial_reaction', !!d.initial_reaction, 'Pick how they responded.')
+      need('initial_reaction', !!d.initial_reaction && d.initial_reaction !== 'tell_me_more', 'Pick how they responded.')
       break
     case 'p3b':
       need('pivot_response', !!d.pivot_response, 'Pick one.')
@@ -198,32 +195,15 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
     case 'p3c': {
       need('parking_result', !!d.parking_result, 'Pick one.')
       if (d.parking_result === 'send_info') {
+        need('parking_email', !!d.parking_email.trim(), 'Add the best email.')
         need('send_to', !!d.send_to, 'Pick how to send info.')
       }
       break
     }
-    case 'p4a':
-      break
     case 'p4d': {
-      need('budget_range', !!d.budget_range, 'Pick a budget range or “didn’t say”.')
-      if (d.budget_range !== 'no_say') {
-        need('rate_reaction', !!d.rate_reaction, 'Pick how they reacted to the number.')
-      }
-      break
-    }
-    case 'p4c': {
-      need('booking_process', !!d.booking_process, 'Pick who handles booking.')
-      if (d.booking_process === 'unsaid') {
-        need('decision_maker_same', !!d.decision_maker_same, 'Pick one.')
-      }
-      if (d.booking_process === 'someone_else' || d.booking_process === 'committee') {
-        need('other_dm_line', !!d.other_dm_line, 'Pick contact info if any.')
-        if (d.other_dm_line === 'phone' || d.other_dm_line === 'both') {
-          need('other_dm_phone', !!d.other_dm_phone.trim(), 'Add their phone.')
-        }
-        if (d.other_dm_line === 'email' || d.other_dm_line === 'both') {
-          need('other_dm_email', !!d.other_dm_email.trim(), 'Add their email.')
-        }
+      need('price_primary_reaction', !!d.price_primary_reaction, 'Pick their reaction to the rate.')
+      if (d.price_primary_reaction === 'too_much') {
+        need('price_trial_reaction', !!d.price_trial_reaction, 'Pick how they felt about the trial option.')
       }
       break
     }
@@ -235,11 +215,19 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       if (d.ask_response === 'check_back') {
         need('ask_followup_when', !!d.ask_followup_when, 'Pick when to follow up.')
       }
+      if (d.ask_response === 'yes_setup') {
+        need('event_nights', d.event_nights.length > 0, 'Pick at least one night.')
+        need('venue_vibes', d.venue_vibes.length > 0, 'Pick at least one vibe.')
+      }
       break
     }
     case 'p6':
       need('call_ended_naturally', !!d.call_ended_naturally, 'Pick how the call ended.')
       need('call_duration_feel', !!d.call_duration_feel, 'Pick duration.')
+      if (d.operator_temperature === 'converting') {
+        need('p6_convert_mode', !!d.p6_convert_mode, 'Pick how you’re closing the booking.')
+        need('contact_line', coldCallHasContactLine(d), 'Add their name (who you’re setting up for).')
+      }
       break
     case 'p6_vm':
       need('voicemail_left', !!d.voicemail_left, 'Pick one.')

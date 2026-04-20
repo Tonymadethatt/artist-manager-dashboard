@@ -133,7 +133,7 @@ export function buildGatekeeperSecondContact(d: ColdCallDataV1): {
   title_key: ContactTitleKey | ''
   phone: string
 } | null {
-  if (d.who_answered !== 'gatekeeper') return null
+  if (d.who_answered !== 'wrong_person') return null
   const dm = d.decision_maker_name.trim()
   const gk = d.gatekeeper_name.trim()
   if (!dm || !gk) return null

@@ -52,7 +52,6 @@ import {
   type ColdCallDataV1,
   type ColdCallNextActionKey,
   type ColdCallTemperature,
-  type ColdCallVenueTypeConfirm,
 } from '@/lib/coldCall/coldCallPayload'
 import type { ContactTitleKey } from '@/lib/contacts/contactTitles'
 import { CONTACT_TITLE_LABELS } from '@/lib/contacts/contactTitles'
@@ -83,19 +82,18 @@ import {
   ASK_RESPONSE_OPTIONS,
   ASK_SEND_CHANNEL_OPTIONS,
   BEST_TIME_OPTIONS,
-  BOOKING_PROCESS_OPTIONS,
-  BUDGET_RANGE_OPTIONS,
   CALL_PURPOSE_TOGGLE,
   CAPACITY_OPTIONS,
-  DECISION_SAME_OPTIONS,
   DM_DIRECT_LINE_OPTIONS,
   DURATION_OPTIONS,
   ENDED_OPTIONS,
   GATEKEEPER_RESULT_OPTIONS,
   INITIAL_REACTION_OPTIONS,
+  P6_CONVERT_MODE_OPTIONS,
   PARKING_OPTIONS,
   PIVOT_OPTIONS,
-  RATE_REACTION_OPTIONS,
+  PRICE_PRIMARY_OPTIONS,
+  PRICE_TRIAL_OPTIONS,
   SEND_TO_OPTIONS,
   WHO_ANSWERED_OPTIONS,
 } from '@/pages/cold-call/liveFieldOptions'
@@ -103,10 +101,11 @@ import type { OutreachStatus } from '@/types'
 
 const LIVE_WAYPOINTS = [
   { id: 'opener', label: 'Opener' },
-  { id: 'pitch', label: 'Pitch' },
   { id: 'redirect', label: 'Redirect' },
-  { id: 'ask', label: 'The Ask' },
+  { id: 'pitch', label: 'Pitch' },
   { id: 'pivot', label: 'Pivot' },
+  { id: 'price', label: 'Price' },
+  { id: 'ask', label: 'The Ask' },
   { id: 'close', label: 'Close' },
 ] as const
 
@@ -415,31 +414,21 @@ export default function ColdCallFormPage() {
     if (auto !== data.outcome) patch({ outcome: auto })
   }, [selectedId, data, patch])
 
-  /** p4c: "This person decides" implies you're talking to the booker. */
-  useEffect(() => {
-    if (!selectedId || !data) return
-    if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4c') return
-    if (data.booking_process === 'this_person' && data.decision_maker_same !== 'yes') {
-      patch({ decision_maker_same: 'yes' })
-    }
-  }, [selectedId, data, patch])
-
   useEffect(() => {
     if (!selectedId || !data) return
     if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4d') return
-    if (data.budget_range === 'no_say' && data.rate_reaction !== 'skipped') {
-      patch({ rate_reaction: 'skipped' })
+    if (data.price_primary_reaction !== 'too_much' && data.price_trial_reaction) {
+      patch({ price_trial_reaction: '' })
     }
   }, [selectedId, data, patch])
 
   useEffect(() => {
     if (!selectedId || !data) return
-    if (data.session_mode !== 'live_call' || displayCard(data) !== 'p4e') return
-    const vt = data.venue_type.trim()
-    if (!data.venue_type_confirm && vt && (VENUE_TYPE_ORDER as string[]).includes(vt)) {
-      patch({ venue_type_confirm: vt as ColdCallVenueTypeConfirm })
+    if (data.session_mode !== 'live_call') return
+    if (data.operator_temperature !== 'converting' && data.p6_convert_mode) {
+      patch({ p6_convert_mode: '' })
     }
-  }, [selectedId, data, patch])
+  }, [selectedId, data?.session_mode, data?.operator_temperature, data?.p6_convert_mode, patch])
 
   const applyVenuePick = useCallback(
     async (venue: Venue) => {
@@ -818,8 +807,8 @@ export default function ColdCallFormPage() {
     const phase = waypointIndex(card)
     if (!coldCallPhaseSkipped(phase, data)) return null
     if (data.live_history.includes(card)) return null
-    if (phase === 1 && data.who_answered === 'right_person') {
-      return 'You skipped gatekeeper — open only if something changed.'
+    if (phase === 1 && data.who_answered === 'yes_booking') {
+      return 'You skipped redirect — open only if something changed.'
     }
     if (data.who_answered === 'voicemail' || data.who_answered === 'no_answer') {
       return 'This phase wasn’t on your voicemail/no-answer path — capture extra detail if needed.'
@@ -882,7 +871,7 @@ export default function ColdCallFormPage() {
                         last_active_card: 'p1',
                         view_card: 'p1',
                         transferred_note: false,
-                        ...(v === 'gatekeeper'
+                        ...(v === 'wrong_person'
                           ? {}
                           : {
                               gatekeeper_result: '',
@@ -895,7 +884,7 @@ export default function ColdCallFormPage() {
                   />
                   {liveFieldIssues.who_answered ? <p className="text-[11px] text-red-400">{liveFieldIssues.who_answered}</p> : null}
                 </div>
-                {data.who_answered === 'right_person' ? (
+                {data.who_answered === 'yes_booking' ? (
                   <div className="space-y-3">
                     <p className="text-[11px] text-neutral-500 leading-snug">
                       Passive capture — if they say it during the call, type it here. Otherwise you can get it at the close.
@@ -906,7 +895,7 @@ export default function ColdCallFormPage() {
                         className="h-10 border-neutral-800 bg-neutral-950/80"
                         value={data.target_name}
                         onChange={e => patch({ target_name: e.target.value })}
-                        placeholder="Type when they say it — don’t ask yet"
+                        placeholder="Type if they say it — don’t ask yet"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -921,7 +910,7 @@ export default function ColdCallFormPage() {
                     </div>
                   </div>
                 ) : null}
-                {data.who_answered === 'gatekeeper' ? (
+                {data.who_answered === 'wrong_person' ? (
                   <div className="space-y-3 border-t border-white/[0.06] pt-3">
                     <div className="space-y-1.5">
                       <Label className="text-neutral-400 text-xs">Gatekeeper name</Label>
@@ -1042,38 +1031,9 @@ export default function ColdCallFormPage() {
                     ) : null}
                   </div>
                 </div>
-              </div>
-            }
-          />
-        )
-      case 'p2_msg':
-        return (
-          <IntakeLiveScriptCaptureStack
-            scriptSize="compact"
-            stepTitle={liveCardStepTitle(card)}
-            script={script}
-            capture={
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Who took the message?</Label>
-                  <Input
-                    className="h-10 border-neutral-800 bg-neutral-950/80"
-                    placeholder="Name if they gave it"
-                    value={data.message_taker_name}
-                    onChange={e => patch({ message_taker_name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Callback expected?</Label>
-                  <SelectChipRow
-                    value={data.callback_expected}
-                    onChange={v => patch({ callback_expected: v })}
-                    options={[
-                      { id: 'yes', label: 'Yes — they’ll call back' },
-                      { id: 'no_retry', label: 'No — I’ll try again' },
-                    ]}
-                  />
-                </div>
+                <p className="text-sm text-yellow-100/85 border-t border-white/[0.06] pt-3 mt-1 leading-relaxed">
+                  I’ll reach out to them directly. Thanks again — enjoy the rest of your day.
+                </p>
               </div>
             }
           />
@@ -1092,7 +1052,7 @@ export default function ColdCallFormPage() {
                   onChange={v =>
                     patchAfterChip({
                       initial_reaction: v,
-                      pitch_tell_me_more_ack: false,
+                      pitch_bio_expanded: v === 'tell_me_more',
                     })
                   }
                   options={INITIAL_REACTION_OPTIONS}
@@ -1120,171 +1080,37 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <SelectChipRow value={data.parking_result} onChange={v => patchAfterChip({ parking_result: v })} options={PARKING_OPTIONS} />
-                <SelectChipRow value={data.send_to} onChange={v => patchAfterChip({ send_to: v })} options={SEND_TO_OPTIONS} />
-              </div>
-            }
-          />
-        )
-      case 'p4a': {
-        const dayLabels = Object.fromEntries([...COLD_CALL_WEEKDAY_LABELS].map(d => [d, d])) as Record<string, string>
-        return (
-          <IntakeLiveScriptCaptureStack
-            scriptSize="compact"
-            stepTitle={liveCardStepTitle(card)}
-            script={script}
-            capture={
-              <div className="space-y-3">
-                <IntakeCompactChipRow
-                  label="What nights?"
-                  selected={data.event_nights}
-                  ids={COLD_CALL_WEEKDAY_LABELS as unknown as string[]}
-                  labels={dayLabels}
-                  onChange={next => patchAfterChip({ event_nights: next })}
+                <SelectChipRow
+                  value={data.parking_result}
+                  onChange={v =>
+                    patchAfterChip({
+                      parking_result: v,
+                      send_to: v === 'send_info' ? data.send_to : '',
+                      parking_email: v === 'send_info' ? data.parking_email : '',
+                    })
+                  }
+                  options={PARKING_OPTIONS}
                 />
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Quick note (optional)</Label>
-                  <Input
-                    className="h-10 border-neutral-800 bg-neutral-950/80"
-                    placeholder="e.g., Latin Thursdays, hip-hop Saturdays"
-                    value={data.night_details_note}
-                    onChange={e => patch({ night_details_note: e.target.value })}
-                  />
-                </div>
-              </div>
-            }
-          />
-        )
-      }
-      case 'p4b': {
-        const ids = MUSIC_VIBE_PRESETS.map(p => p.id)
-        const labels = Object.fromEntries(MUSIC_VIBE_PRESETS.map(p => [p.id, p.label])) as Record<string, string>
-        const talkingPoints = profile?.tagline?.trim()
-        return (
-          <IntakeLiveScriptCaptureStack
-            scriptSize="compact"
-            stepTitle={liveCardStepTitle(card)}
-            script={script}
-            capture={
-              <div className="space-y-2">
-                <IntakeCompactChipRow label="Vibe" selected={data.venue_vibes} ids={ids} labels={labels} onChange={v => patchAfterChip({ venue_vibes: v })} />
-                {talkingPoints ? (
-                  <details className="rounded-lg border border-white/[0.08] bg-neutral-950/40 px-3 py-2 text-xs text-neutral-400">
-                    <summary className="cursor-pointer select-none text-[11px] font-medium text-neutral-300">
-                      If they ask who he is
-                    </summary>
-                    <p className="mt-2 leading-relaxed text-neutral-400">{talkingPoints}</p>
-                  </details>
-                ) : null}
-              </div>
-            }
-          />
-        )
-      }
-      case 'p4c':
-        return (
-          <IntakeLiveScriptCaptureStack
-            scriptSize="compact"
-            stepTitle={liveCardStepTitle(card)}
-            script={script}
-            capture={
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Who handles booking?</Label>
-                  <SelectChipRow
-                    value={data.booking_process}
-                    onChange={v => {
-                      if (v === 'this_person') {
-                        patchAfterChip({
-                          booking_process: v,
-                          decision_maker_same: 'yes',
-                          other_dm_name: '',
-                          other_dm_title_key: '',
-                          other_dm_line: '',
-                          other_dm_phone: '',
-                          other_dm_email: '',
-                        })
-                      } else if (v === 'someone_else' || v === 'committee') {
-                        patchAfterChip({ booking_process: v, decision_maker_same: '' })
-                      } else {
-                        patchAfterChip({
-                          booking_process: v,
-                          decision_maker_same: '',
-                          other_dm_name: '',
-                          other_dm_title_key: '',
-                          other_dm_line: '',
-                          other_dm_phone: '',
-                          other_dm_email: '',
-                        })
-                      }
-                    }}
-                    options={BOOKING_PROCESS_OPTIONS}
-                  />
-                </div>
-                {data.booking_process === 'unsaid' ? (
-                  <div className="space-y-1.5">
-                    <Label className="text-neutral-400 text-xs">Talking to the decision-maker?</Label>
-                    <SelectChipRow
-                      value={data.decision_maker_same}
-                      onChange={v => patchAfterChip({ decision_maker_same: v })}
-                      options={DECISION_SAME_OPTIONS}
-                    />
-                  </div>
-                ) : null}
-                {data.booking_process === 'someone_else' || data.booking_process === 'committee' ? (
+                {data.parking_result === 'send_info' ? (
                   <div className="space-y-3 border-t border-white/[0.06] pt-3">
                     <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Who should I talk to?</Label>
+                      <Label className="text-neutral-400 text-xs">What’s the best email?</Label>
                       <Input
                         className="h-10 border-neutral-800 bg-neutral-950/80"
-                        placeholder="Name if they gave it"
-                        value={data.other_dm_name}
-                        onChange={e => patch({ other_dm_name: e.target.value })}
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@venue.com"
+                        value={data.parking_email}
+                        onChange={e => patch({ parking_email: e.target.value })}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Their title</Label>
-                      <ContactTitleSelect
-                        allowEmpty
-                        value={data.other_dm_title_key}
-                        onValueChange={key => patch({ other_dm_title_key: key })}
-                        placeholder="Select title"
-                        triggerClassName="h-10 w-full min-w-0 border-neutral-800 bg-neutral-950/80 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-neutral-400 text-xs">Contact info?</Label>
+                      <Label className="text-neutral-400 text-xs">Send via</Label>
                       <SelectChipRow
-                        value={data.other_dm_line}
-                        onChange={v =>
-                          patch({
-                            other_dm_line: v,
-                            other_dm_phone: v === 'email' || v === 'no' ? '' : data.other_dm_phone,
-                            other_dm_email: v === 'phone' || v === 'no' ? '' : data.other_dm_email,
-                          })
-                        }
-                        options={DM_DIRECT_LINE_OPTIONS}
+                        value={data.send_to}
+                        onChange={v => patchAfterChip({ send_to: v })}
+                        options={SEND_TO_OPTIONS}
                       />
-                      <div className="flex flex-wrap gap-2 items-center">
-                        {data.other_dm_line === 'phone' || data.other_dm_line === 'both' ? (
-                          <Input
-                            className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
-                            type="tel"
-                            placeholder="Phone"
-                            value={data.other_dm_phone}
-                            onChange={e => patch({ other_dm_phone: e.target.value })}
-                          />
-                        ) : null}
-                        {data.other_dm_line === 'email' || data.other_dm_line === 'both' ? (
-                          <Input
-                            className="h-10 min-w-[12rem] flex-1 border-neutral-800 bg-neutral-950/80"
-                            type="email"
-                            placeholder="Email"
-                            value={data.other_dm_email}
-                            onChange={e => patch({ other_dm_email: e.target.value })}
-                          />
-                        ) : null}
-                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -1300,64 +1126,35 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Budget range</Label>
-                  <SelectChipRow
-                    value={data.budget_range}
-                    onChange={v =>
-                      patchAfterChip({ budget_range: v, rate_reaction: v === 'no_say' ? 'skipped' : data.rate_reaction })
-                    }
-                    options={BUDGET_RANGE_OPTIONS}
-                  />
-                </div>
-                {data.budget_range !== 'no_say' ? (
-                  <SelectChipRow
-                    value={data.rate_reaction}
-                    onChange={v => patchAfterChip({ rate_reaction: v })}
-                    options={RATE_REACTION_OPTIONS}
-                  />
+                <Label className="text-neutral-400 text-xs">After you shared the rate</Label>
+                <SelectChipRow
+                  value={data.price_primary_reaction}
+                  onChange={v =>
+                    patchAfterChip({
+                      price_primary_reaction: v,
+                      price_trial_reaction: v === 'too_much' ? data.price_trial_reaction : '',
+                    })
+                  }
+                  options={PRICE_PRIMARY_OPTIONS}
+                />
+                {data.price_primary_reaction === 'too_much' ? (
+                  <div className="space-y-2 border-t border-white/[0.06] pt-3">
+                    <Label className="text-neutral-400 text-xs">After the trial option</Label>
+                    <SelectChipRow
+                      value={data.price_trial_reaction}
+                      onChange={v => patchAfterChip({ price_trial_reaction: v })}
+                      options={PRICE_TRIAL_OPTIONS}
+                    />
+                  </div>
                 ) : null}
               </div>
             }
           />
         )
-      case 'p4e':
-        return (
-          <IntakeLiveScriptCaptureStack
-            scriptSize="compact"
-            stepTitle={liveCardStepTitle(card)}
-            script={script}
-            capture={
-              <div className="grid gap-3 sm:grid-cols-2">
-                {data.venue_type.trim() || data.capacity_range ? (
-                  <p className="text-[11px] text-neutral-500 sm:col-span-2">
-                    From your research when set — update if the call changed your read.
-                  </p>
-                ) : null}
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Capacity</Label>
-                  <SelectChipRow value={data.capacity_range} onChange={v => patch({ capacity_range: v })} options={CAPACITY_OPTIONS} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-neutral-400 text-xs">Entity type</Label>
-                  <EntityTypeSelect
-                    value={data.venue_type_confirm}
-                    onValueChange={v =>
-                      patch({
-                        venue_type_confirm:
-                          v && v !== 'all' ? (v as ColdCallVenueTypeConfirm) : ('' as ColdCallVenueTypeConfirm),
-                      })
-                    }
-                    allowEmpty
-                    placeholder="Confirm entity type"
-                    triggerClassName="min-h-9"
-                  />
-                </div>
-              </div>
-            }
-          />
-        )
-      case 'p5':
+      case 'p5': {
+        const dayLabels = Object.fromEntries([...COLD_CALL_WEEKDAY_LABELS].map(d => [d, d])) as Record<string, string>
+        const vibeIds = MUSIC_VIBE_PRESETS.map(p => p.id)
+        const vibeLabels = Object.fromEntries(MUSIC_VIBE_PRESETS.map(p => [p.id, p.label])) as Record<string, string>
         return (
           <IntakeLiveScriptCaptureStack
             scriptSize="compact"
@@ -1376,6 +1173,33 @@ export default function ColdCallFormPage() {
                   }
                   options={ASK_RESPONSE_OPTIONS}
                 />
+                {data.ask_response === 'yes_setup' ? (
+                  <div className="space-y-3 border-t border-white/[0.06] pt-3">
+                    <IntakeCompactChipRow
+                      label="What night(s) work?"
+                      selected={data.event_nights}
+                      ids={COLD_CALL_WEEKDAY_LABELS as unknown as string[]}
+                      labels={dayLabels}
+                      onChange={next => patchAfterChip({ event_nights: next })}
+                    />
+                    <div className="space-y-1.5">
+                      <Label className="text-neutral-400 text-xs">Note (optional)</Label>
+                      <Input
+                        className="h-10 border-neutral-800 bg-neutral-950/80"
+                        placeholder="e.g., Latin Thursdays, guest slot"
+                        value={data.night_details_note}
+                        onChange={e => patch({ night_details_note: e.target.value })}
+                      />
+                    </div>
+                    <IntakeCompactChipRow
+                      label="Room vibe"
+                      selected={data.venue_vibes}
+                      ids={vibeIds}
+                      labels={vibeLabels}
+                      onChange={next => patchAfterChip({ venue_vibes: next })}
+                    />
+                  </div>
+                ) : null}
                 {data.ask_response === 'send_info_first' ? (
                   <div className="space-y-1.5">
                     <Label className="text-neutral-400 text-xs">Send via</Label>
@@ -1400,7 +1224,13 @@ export default function ColdCallFormPage() {
             }
           />
         )
-      case 'p6':
+      }
+      case 'p6': {
+        const hasContactLine = !!(
+          data.target_name.trim() ||
+          data.decision_maker_name.trim() ||
+          data.gatekeeper_name.trim()
+        )
         return (
           <IntakeLiveScriptCaptureStack
             scriptSize="compact"
@@ -1408,6 +1238,27 @@ export default function ColdCallFormPage() {
             script={script}
             capture={
               <div className="space-y-3">
+                {data.operator_temperature === 'converting' ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Closing the booking</Label>
+                    <SelectChipRow
+                      value={data.p6_convert_mode}
+                      onChange={v => patchAfterChip({ p6_convert_mode: v })}
+                      options={P6_CONVERT_MODE_OPTIONS}
+                    />
+                  </div>
+                ) : null}
+                {!hasContactLine ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-neutral-400 text-xs">Their name</Label>
+                    <Input
+                      className="h-10 border-neutral-800 bg-neutral-950/80"
+                      placeholder="Who you’re speaking with"
+                      value={data.target_name}
+                      onChange={e => patch({ target_name: e.target.value })}
+                    />
+                  </div>
+                ) : null}
                 <SelectChipRow
                   value={data.call_ended_naturally}
                   onChange={v => patchAfterChip({ call_ended_naturally: v })}
@@ -1435,6 +1286,7 @@ export default function ColdCallFormPage() {
             }
           />
         )
+      }
       case 'p6_vm':
         return (
           <IntakeLiveScriptCaptureStack
