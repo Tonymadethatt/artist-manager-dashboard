@@ -157,7 +157,9 @@ export function coldCallLiveScriptBeats(
       const because = pitchBecauseClause(d)
       const hasReason = !!(d.pitch_reason_chip || d.pitch_reason_custom.trim())
       const lines: ColdCallScriptBeat[] = [
-        { text: `My name’s ${managerFirst} — I work with ${artistName}.` },
+        {
+          text: `Awesome, I just wanted to connect with you guys because I work with ${artistName}.`,
+        },
         {
           text: `We’ve done work with brands like Jack Daniel’s, Golden Boy, and he’s currently on air at Cali 93.9.`,
         },
