@@ -261,7 +261,7 @@ export default function Pipeline() {
     return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
   }, [customEmailRows])
 
-  const [viewMode, setViewMode] = useState<ViewMode>('board')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [filter, setFilter] = useState<Filter>('today')
   const location = useLocation()
   const navigate = useNavigate()
