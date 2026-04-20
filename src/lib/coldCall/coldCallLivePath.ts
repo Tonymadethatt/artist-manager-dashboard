@@ -1,4 +1,5 @@
 import type { ColdCallDataV1, ColdCallLiveCardId } from '@/lib/coldCall/coldCallPayload'
+import { coldCallInitialReactionIsTellMeMore } from '@/lib/coldCall/coldCallPayload'
 
 function coldCallHasContactLine(d: ColdCallDataV1): boolean {
   return !!(d.target_name.trim() || d.decision_maker_name.trim() || d.gatekeeper_name.trim())
@@ -63,7 +64,9 @@ export function liveCardAllowsChipAutoAdvance(card: ColdCallLiveCardId, d: ColdC
     case 'p2a':
       return true
     case 'p3':
-      return d.initial_reaction !== '' && d.initial_reaction !== 'tell_me_more'
+      return (
+        d.initial_reaction !== '' && !coldCallInitialReactionIsTellMeMore(d.initial_reaction)
+      )
     case 'p3b':
     case 'p3c':
       return true
@@ -187,7 +190,7 @@ export function liveCardAdvanceBlockersAtBookmark(d: ColdCallDataV1): LiveCardVa
       break
     }
     case 'p3':
-      need('initial_reaction', !!d.initial_reaction && d.initial_reaction !== 'tell_me_more', 'Pick how they responded.')
+      need('initial_reaction', !!d.initial_reaction, 'Pick how they responded.')
       break
     case 'p3b':
       need('pivot_response', !!d.pivot_response, 'Pick one.')

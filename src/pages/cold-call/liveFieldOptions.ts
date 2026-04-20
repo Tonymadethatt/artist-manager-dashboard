@@ -36,12 +36,13 @@ export const GATEKEEPER_RESULT_OPTIONS: { id: ColdCallGatekeeperResult; label: s
 ]
 
 export const INITIAL_REACTION_OPTIONS: { id: ColdCallInitialReaction; label: string }[] = [
-  { id: 'they_have_djs', label: 'We already have our DJs' },
-  { id: 'theyre_looking', label: 'We’re actually looking' },
-  { id: 'tell_me_more', label: 'Tell me more about him' },
+  { id: 'pitch_rotation_solid', label: 'We have a solid rotation already' },
+  { id: 'pitch_looking', label: 'We’re actually looking for someone' },
+  { id: 'pitch_in_house', label: 'We do it in-house' },
+  { id: 'pitch_no_dj_nights', label: 'We don’t really do DJ nights' },
+  { id: 'pitch_tell_me_more', label: 'Tell me more about him first' },
   { id: 'how_much', label: 'How much does he charge?' },
   { id: 'not_right_now', label: 'Not right now' },
-  { id: 'not_interested', label: 'Not interested' },
 ]
 
 export const PIVOT_OPTIONS: { id: ColdCallPivotResponse; label: string }[] = [

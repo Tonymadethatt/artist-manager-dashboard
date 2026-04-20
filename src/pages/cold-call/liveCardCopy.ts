@@ -1,6 +1,10 @@
 import type { ArtistProfile } from '@/types'
 import { COLD_CALL_PITCH_REASON_CHIPS } from '@/lib/coldCall/coldCallPayload'
-import type { ColdCallDataV1, ColdCallLiveCardId } from '@/lib/coldCall/coldCallPayload'
+import {
+  coldCallInitialReactionIsTellMeMore,
+  type ColdCallDataV1,
+  type ColdCallLiveCardId,
+} from '@/lib/coldCall/coldCallPayload'
 
 export function coldCallFirstName(full: string): string {
   const t = full.trim()
@@ -149,7 +153,7 @@ export function coldCallLiveScriptBeats(
           text: `Let me ask you this — what does a typical DJ night look like for you guys right now?`,
         },
       ]
-      if (d.initial_reaction === 'tell_me_more' && d.pitch_bio_expanded) {
+      if (coldCallInitialReactionIsTellMeMore(d.initial_reaction) && d.pitch_bio_expanded) {
         lines.push({
           text: PITCH_INLINE_BIO_LINES.join('\n'),
           situational: true,

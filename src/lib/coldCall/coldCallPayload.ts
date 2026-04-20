@@ -184,6 +184,13 @@ export const COLD_CALL_PITCH_REASON_CHIPS: Record<
 
 export type ColdCallInitialReaction =
   | ''
+  /** Ecosystem / pitch response chips (p3). */
+  | 'pitch_rotation_solid'
+  | 'pitch_looking'
+  | 'pitch_in_house'
+  | 'pitch_no_dj_nights'
+  | 'pitch_tell_me_more'
+  /** Legacy / collapsed ids (still read from older rows). */
   | 'they_have_djs'
   | 'theyre_looking'
   | 'tell_me_more'
@@ -191,6 +198,26 @@ export type ColdCallInitialReaction =
   | 'not_interested'
   /** “How much?” — route to price pivot (p4d). */
   | 'how_much'
+
+/** “Tell me more” path — same spoken beat for legacy `tell_me_more` and `pitch_tell_me_more`. */
+export function coldCallInitialReactionIsTellMeMore(r: ColdCallInitialReaction): boolean {
+  return r === 'tell_me_more' || r === 'pitch_tell_me_more'
+}
+
+/** Rotation / in-house — route to pivot (p3b). */
+export function coldCallInitialReactionRoutesToPivot(r: ColdCallInitialReaction): boolean {
+  return r === 'they_have_djs' || r === 'pitch_rotation_solid' || r === 'pitch_in_house'
+}
+
+/** Strong interest — skip pivot, go to the ask (p5). */
+export function coldCallInitialReactionRoutesToAsk(r: ColdCallInitialReaction): boolean {
+  return r === 'theyre_looking' || r === 'pitch_looking'
+}
+
+/** Hard no — close (p6). */
+export function coldCallInitialReactionRoutesToDeadClose(r: ColdCallInitialReaction): boolean {
+  return r === 'not_interested' || r === 'pitch_no_dj_nights'
+}
 
 export type ColdCallPivotResponse = '' | 'sometimes' | 'not_really' | 'special_events'
 
@@ -417,8 +444,10 @@ export interface ColdCallDataV1 {
   callback_expected: '' | 'yes' | 'no_retry'
 
   initial_reaction: ColdCallInitialReaction
-  /** p3: inline bio visible after “Tell me more” chip (replaces legacy pitch_tell_me_more_ack). */
+  /** p3: inline bio visible after “Tell me more” chip. */
   pitch_bio_expanded: boolean
+  /** p3: first Continue after tell-me-more acknowledges the bio; second Continue advances to p5. */
+  pitch_tell_me_more_ack: boolean
   pivot_response: ColdCallPivotResponse
   parking_result: ColdCallParkingResult
   /** p3c: best email when parking_result is send_info. */
@@ -537,6 +566,7 @@ export function emptyColdCallDataV1(): ColdCallDataV1 {
 
     initial_reaction: '',
     pitch_bio_expanded: false,
+    pitch_tell_me_more_ack: false,
     pivot_response: '',
     parking_result: '',
     parking_email: '',
@@ -674,18 +704,24 @@ function migrateGatekeeperResult(raw: string): ColdCallGatekeeperResult {
 
 function migrateInitialReaction(raw: string): ColdCallInitialReaction {
   const legacy: Record<string, ColdCallInitialReaction> = {
-    pitch_rotation_solid: 'they_have_djs',
-    pitch_in_house: 'they_have_djs',
     own_djs: 'they_have_djs',
-    pitch_looking: 'theyre_looking',
-    interested: 'theyre_looking',
-    pitch_tell_me_more: 'tell_me_more',
-    maybe: 'tell_me_more',
-    pitch_no_dj_nights: 'not_interested',
+    interested: 'pitch_looking',
+    maybe: 'pitch_tell_me_more',
+    /** Older single-id rows → canonical ecosystem ids */
+    pitch_rotation_solid: 'pitch_rotation_solid',
+    pitch_in_house: 'pitch_in_house',
+    pitch_looking: 'pitch_looking',
+    pitch_no_dj_nights: 'pitch_no_dj_nights',
+    pitch_tell_me_more: 'pitch_tell_me_more',
   }
   const v = legacy[raw] ?? raw
   const ok: ColdCallInitialReaction[] = [
     '',
+    'pitch_rotation_solid',
+    'pitch_looking',
+    'pitch_in_house',
+    'pitch_no_dj_nights',
+    'pitch_tell_me_more',
     'they_have_djs',
     'theyre_looking',
     'tell_me_more',
@@ -845,7 +881,8 @@ export function parseColdCallData(raw: unknown): ColdCallDataV1 {
     callback_expected: asStr(o.callback_expected, '') as ColdCallDataV1['callback_expected'],
 
     initial_reaction: migrateInitialReaction(asStr(o.initial_reaction, '')),
-    pitch_bio_expanded: asBool(o.pitch_bio_expanded) || asBool(o.pitch_tell_me_more_ack),
+    pitch_bio_expanded: asBool(o.pitch_bio_expanded),
+    pitch_tell_me_more_ack: asBool(o.pitch_tell_me_more_ack),
     pivot_response: asStr(o.pivot_response, '') as ColdCallPivotResponse,
     parking_result: migrateParkingResult(asStr(o.parking_result, '')),
     parking_email: asStr(o.parking_email),

@@ -50,6 +50,7 @@ import {
   COLD_CALL_WEEKDAY_LABELS,
   defaultColdCallTitle,
   type ColdCallDataV1,
+  coldCallInitialReactionIsTellMeMore,
   type ColdCallNextActionKey,
   type ColdCallTemperature,
 } from '@/lib/coldCall/coldCallPayload'
@@ -1052,7 +1053,8 @@ export default function ColdCallFormPage() {
                   onChange={v =>
                     patchAfterChip({
                       initial_reaction: v,
-                      pitch_bio_expanded: v === 'tell_me_more',
+                      pitch_bio_expanded: coldCallInitialReactionIsTellMeMore(v),
+                      pitch_tell_me_more_ack: false,
                     })
                   }
                   options={INITIAL_REACTION_OPTIONS}

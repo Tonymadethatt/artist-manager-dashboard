@@ -1,4 +1,10 @@
 import type { ColdCallDataV1, ColdCallLiveCardId } from './coldCallPayload'
+import {
+  coldCallInitialReactionIsTellMeMore,
+  coldCallInitialReactionRoutesToAsk,
+  coldCallInitialReactionRoutesToDeadClose,
+  coldCallInitialReactionRoutesToPivot,
+} from './coldCallPayload'
 
 function coldCallHasContactLine(d: ColdCallDataV1): boolean {
   return !!(d.target_name.trim() || d.decision_maker_name.trim() || d.gatekeeper_name.trim())
@@ -54,19 +60,22 @@ export function advanceFromLiveCard(d: ColdCallDataV1): Partial<ColdCallDataV1> 
     }
     case 'p3': {
       if (!d.initial_reaction) return {}
-      if (d.initial_reaction === 'tell_me_more') {
-        return {}
+      if (coldCallInitialReactionIsTellMeMore(d.initial_reaction)) {
+        if (!d.pitch_tell_me_more_ack) {
+          return { pitch_tell_me_more_ack: true }
+        }
+        return withHistory(d, 'p5')
       }
-      if (d.initial_reaction === 'not_interested') {
+      if (coldCallInitialReactionRoutesToDeadClose(d.initial_reaction)) {
         return {
           ...withHistory(d, 'p6'),
           operator_temperature: d.operator_temperature || 'dead',
         }
       }
       if (d.initial_reaction === 'not_right_now') return withHistory(d, 'p3c')
-      if (d.initial_reaction === 'they_have_djs') return withHistory(d, 'p3b')
+      if (coldCallInitialReactionRoutesToPivot(d.initial_reaction)) return withHistory(d, 'p3b')
       if (d.initial_reaction === 'how_much') return withHistory(d, 'p4d')
-      if (d.initial_reaction === 'theyre_looking') return withHistory(d, 'p5')
+      if (coldCallInitialReactionRoutesToAsk(d.initial_reaction)) return withHistory(d, 'p5')
       return {}
     }
     case 'p3b': {

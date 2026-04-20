@@ -1,4 +1,7 @@
-import type { ColdCallDataV1 } from '@/lib/coldCall/coldCallPayload'
+import {
+  coldCallInitialReactionRoutesToPivot,
+  type ColdCallDataV1,
+} from '@/lib/coldCall/coldCallPayload'
 
 /** Point thresholds → temperature (spec Problem 4). */
 export function coldCallTemperatureFromScore(score: number): ColdCallDataV1['operator_temperature'] {
@@ -34,23 +37,30 @@ export function computeColdCallTemperatureScore(d: ColdCallDataV1): number {
 
   switch (d.initial_reaction) {
     case 'theyre_looking':
+    case 'pitch_looking':
       s += 3
       break
     case 'tell_me_more':
+    case 'pitch_tell_me_more':
       s += 1
       break
     case 'how_much':
       s += 1
       break
-    case 'they_have_djs':
-      if (d.pivot_response === 'sometimes') s += 2
-      else if (d.pivot_response === 'not_really') s -= 1
-      else if (d.pivot_response === 'special_events') s += 1
+    default:
+      if (coldCallInitialReactionRoutesToPivot(d.initial_reaction)) {
+        if (d.pivot_response === 'sometimes') s += 2
+        else if (d.pivot_response === 'not_really') s -= 1
+        else if (d.pivot_response === 'special_events') s += 1
+      }
       break
+  }
+  switch (d.initial_reaction) {
     case 'not_right_now':
       s -= 1
       break
     case 'not_interested':
+    case 'pitch_no_dj_nights':
       s -= 3
       break
     default:
