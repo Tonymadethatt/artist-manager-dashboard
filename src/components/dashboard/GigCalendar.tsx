@@ -417,8 +417,8 @@ export function GigCalendar({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900 overflow-hidden">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-3 py-3 border-b border-neutral-800">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
+      <div className="flex shrink-0 flex-col gap-3 border-b border-neutral-800 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <CalendarIcon className="h-5 w-5 text-neutral-500 shrink-0" aria-hidden />
           <div className="min-w-0">
@@ -537,7 +537,7 @@ export function GigCalendar({
       </div>
 
       {calendarNotice && (
-        <div className="px-3 py-2 border-b border-neutral-800 flex items-start justify-between gap-2 bg-amber-950/20">
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-neutral-800 bg-amber-950/20 px-3 py-2">
           <p className="text-xs text-amber-200/95">{calendarNotice}</p>
           <button
             type="button"
@@ -550,12 +550,12 @@ export function GigCalendar({
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-5 h-5 border-2 border-neutral-700 border-t-neutral-300 rounded-full animate-spin" />
+        <div className="flex min-h-[12rem] flex-1 items-center justify-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
         </div>
       ) : view === 'month' ? (
-        <div className="p-2 sm:p-3">
-          <div className="grid grid-cols-7 gap-px bg-neutral-800 rounded-md overflow-hidden border border-neutral-800">
+        <div className="flex min-h-0 flex-1 flex-col p-2 sm:p-3">
+          <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(3.25rem,1fr))] gap-px overflow-hidden rounded-md border border-neutral-800 bg-neutral-800">
             {WEEKDAYS.map(d => (
               <div key={d} className="bg-neutral-950 text-[10px] font-medium text-neutral-500 text-center py-1.5">
                 {d}
@@ -594,7 +594,7 @@ export function GigCalendar({
                   }}
                   onClick={() => c.key && setDayActionsFor(c.key)}
                   className={cn(
-                    'min-h-[76px] sm:min-h-[92px] p-1 sm:p-1.5 text-left align-top relative cursor-pointer flex flex-col',
+                    'relative flex h-full min-h-0 cursor-pointer flex-col overflow-hidden p-1 text-left align-top sm:p-1.5',
                     isPastDay
                       ? 'bg-[#060606] hover:bg-[#0a0a0a] saturate-[0.55]'
                       : 'bg-neutral-900 hover:bg-neutral-900/95',
@@ -623,7 +623,10 @@ export function GigCalendar({
                         )}
                       </div>
                       <div
-                        className={cn('space-y-0.5 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
+                        className={cn(
+                          'min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-y-contain',
+                          isPastDay && 'opacity-[0.88]',
+                        )}
                         onClick={e => e.stopPropagation()}
                       >
                         {chips.map((ch, i) =>
@@ -668,8 +671,8 @@ export function GigCalendar({
           </div>
         </div>
       ) : view === 'week' ? (
-        <div className="p-2 sm:p-3 overflow-x-auto">
-          <div className="grid grid-cols-7 gap-1 sm:gap-2 min-w-[36rem] md:min-w-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden p-2 sm:p-3">
+          <div className="grid h-full min-h-0 min-w-[36rem] grid-cols-7 grid-rows-1 gap-1 sm:gap-2 md:min-w-0">
             {weekKeys.map(key => {
               const dealList = dealsByDay.get(key) ?? []
               const syncList = syncByDay.get(key) ?? []
@@ -689,7 +692,7 @@ export function GigCalendar({
                   }}
                   onClick={() => setDayActionsFor(key)}
                   className={cn(
-                    'rounded-md border p-1.5 sm:p-2 min-h-[128px] sm:min-h-[148px] min-w-[4.5rem] cursor-pointer flex flex-col',
+                    'flex h-full min-h-[7.5rem] min-w-[4.5rem] cursor-pointer flex-col overflow-hidden rounded-md border p-1.5 sm:p-2',
                     isPastDay
                       ? 'border-neutral-900 bg-[#060606]/95 hover:bg-[#0a0a0a] saturate-[0.55]'
                       : 'border-neutral-800 bg-neutral-900/80 hover:bg-neutral-900/90',
@@ -714,7 +717,10 @@ export function GigCalendar({
                     )}
                   </div>
                   <div
-                    className={cn('space-y-1 flex-1 min-h-0', isPastDay && 'opacity-[0.88]')}
+                    className={cn(
+                      'min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-y-contain',
+                      isPastDay && 'opacity-[0.88]',
+                    )}
                     onClick={e => e.stopPropagation()}
                   >
                     {dealList.map(deal => (
@@ -744,14 +750,14 @@ export function GigCalendar({
           </div>
         </div>
       ) : (
-        <div className="p-3 sm:p-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 sm:p-4">
           <div
             className={cn(
-              'rounded-lg border p-3 border-neutral-800 bg-neutral-950/40',
+              'flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40 p-3',
               dayIsPastForPanel && 'border-neutral-900 bg-[#060606]/90 saturate-[0.55]',
             )}
           >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-2">
+            <div className="mb-2 flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p
                   className={cn(
@@ -768,7 +774,7 @@ export function GigCalendar({
               </Button>
             </div>
             {dayList.length === 0 && daySyncList.length === 0 ? (
-              <div className="py-10 text-center rounded-md border border-dashed border-neutral-700">
+              <div className="flex min-h-[8rem] flex-1 flex-col justify-center rounded-md border border-dashed border-neutral-700 py-10 text-center">
                 <p className={cn('text-sm', dayIsPastForPanel ? 'text-neutral-500' : 'text-neutral-400')}>
                   No booked gigs or calendar imports on this day.
                 </p>
@@ -777,7 +783,12 @@ export function GigCalendar({
                 </p>
               </div>
             ) : (
-              <ul className={cn('space-y-2', dayIsPastForPanel && 'opacity-[0.9]')}>
+              <ul
+                className={cn(
+                  'min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain pr-0.5',
+                  dayIsPastForPanel && 'opacity-[0.9]',
+                )}
+              >
                 {dayList.map(deal => (
                   <li key={deal.id}>
                     <button

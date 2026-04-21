@@ -223,7 +223,7 @@ export default function GigCalendarPage() {
   }, [googleConnected, loadSync, showGcalToast])
 
   return (
-    <div className="w-full min-w-0 space-y-4 relative">
+    <div className="relative flex h-[calc(100dvh-7rem)] min-h-[18rem] min-w-0 flex-col gap-4">
       {gcalToast && (
         <div
           className={`fixed top-4 right-4 z-50 max-w-[min(20rem,calc(100vw-2rem))] px-3 py-2 rounded-lg text-xs font-medium shadow-lg border ${
@@ -236,21 +236,23 @@ export default function GigCalendarPage() {
           {gcalToast.msg}
         </div>
       )}
-      <GigCalendar
-        deals={deals}
-        venues={venues}
-        calendarSyncEvents={calendarSyncEvents}
-        loading={loading}
-        deleteCalendarSyncEvent={deleteCalendarSyncEvent}
-        googleCalendarToolbar={{
-          onSync: () => void handleGoogleToolbarSync(),
-          onDedup: () => void handleGoogleToolbarDedup(),
-          syncing: googleSyncing,
-          dedupScanning: googleDedupScanning,
-          syncDisabled: gcalConnLoading || !googleConnected || !sourceCalReady,
-          dedupDisabled: gcalConnLoading || !googleConnected,
-        }}
-      />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <GigCalendar
+          deals={deals}
+          venues={venues}
+          calendarSyncEvents={calendarSyncEvents}
+          loading={loading}
+          deleteCalendarSyncEvent={deleteCalendarSyncEvent}
+          googleCalendarToolbar={{
+            onSync: () => void handleGoogleToolbarSync(),
+            onDedup: () => void handleGoogleToolbarDedup(),
+            syncing: googleSyncing,
+            dedupScanning: googleDedupScanning,
+            syncDisabled: gcalConnLoading || !googleConnected || !sourceCalReady,
+            dedupDisabled: gcalConnLoading || !googleConnected,
+          }}
+        />
+      </div>
     </div>
   )
 }
