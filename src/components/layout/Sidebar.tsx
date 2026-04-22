@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   BookOpenCheck,
   PhoneForwarded,
+  ContactRound,
   ListChecks,
   ChevronDown,
   FlaskConical,
@@ -91,6 +92,7 @@ const NAV_GROUPS: Array<{ id: NavGroupId; label: string; items: NavRow[] }> = [
         items: [
           { to: '/forms/intakes', label: 'Booking', icon: BookOpenCheck, end: false, badgeKey: null },
           { to: '/forms/cold-calls', label: 'Cold calls', icon: PhoneForwarded, end: false, badgeKey: null },
+          { to: '/forms/lead-intake', label: 'Lead Intake', icon: ContactRound, end: false, badgeKey: null },
         ],
       },
     ],

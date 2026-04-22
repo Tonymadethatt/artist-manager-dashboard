@@ -1,0 +1,767 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
+import {
+  ArrowLeft,
+  Calendar,
+  ContactRound,
+  FolderPlus,
+  Loader2,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { useLeadFolders } from '@/hooks/useLeadFolders'
+import { useLeads } from '@/hooks/useLeads'
+import { useLeadEmailEvents } from '@/hooks/useLeadEmailEvents'
+import { parseLeadResearchImportText, type LeadImportPickedFields } from '@/lib/leadIntake/parseLeadResearchImport'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
+
+type DateFilter = 'all' | '7d' | '30d'
+
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function emptyPicked(): LeadImportPickedFields {
+  return {
+    venue_name: '',
+    instagram_handle: '',
+    genre: '',
+    event_name: '',
+    crowd_type: '',
+    resident_dj: '',
+    city: '',
+    contact_email: '',
+    contact_phone: '',
+    website: '',
+    research_notes: '',
+  }
+}
+
+export default function LeadIntakeHubPage() {
+  const { user, loading: authLoading } = useAuth()
+  const { folders, loading: foldersLoading, error: foldersError, createFolder, notContactedFolderId, refetch: refetchFolders } =
+    useLeadFolders()
+  const folderNameById = useMemo(() => new Map(folders.map(f => [f.id, f.name])), [folders])
+  const { leads, loading: leadsLoading, error: leadsError, insertLeads, addLead, updateLead, deleteLead } =
+    useLeads(folderNameById)
+
+  const [search, setSearch] = useState('')
+  const [filterFolder, setFilterFolder] = useState<string | 'all'>('all')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const [filterCity, setFilterCity] = useState('')
+  const [filterGenre, setFilterGenre] = useState('')
+
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { rows: emailEvents, loading: emailLogLoading, refetch: refetchEmailLog } = useLeadEmailEvents(selectedId)
+
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importMessage, setImportMessage] = useState<string | null>(null)
+
+  const [addOpen, setAddOpen] = useState(false)
+  const [addForm, setAddForm] = useState<LeadImportPickedFields>(() => emptyPicked())
+  const [addFolderId, setAddFolderId] = useState<string>('')
+  const [addBusy, setAddBusy] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+
+  const [newFolderOpen, setNewFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [newFolderBusy, setNewFolderBusy] = useState(false)
+
+  const [editForm, setEditForm] = useState<LeadImportPickedFields | null>(null)
+  const [editFolderId, setEditFolderId] = useState<string>('')
+  const [editDirty, setEditDirty] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
+
+  useEffect(() => {
+    if (folders.length && !addFolderId) {
+      setAddFolderId(notContactedFolderId ?? folders[0]!.id)
+    }
+  }, [folders, addFolderId, notContactedFolderId])
+
+  const selected = useMemo(() => leads.find(l => l.id === selectedId) ?? null, [leads, selectedId])
+
+  useEffect(() => {
+    if (selected) {
+      setEditForm({
+        venue_name: selected.venue_name ?? '',
+        instagram_handle: selected.instagram_handle ?? '',
+        genre: selected.genre ?? '',
+        event_name: selected.event_name ?? '',
+        crowd_type: selected.crowd_type ?? '',
+        resident_dj: selected.resident_dj ?? '',
+        city: selected.city ?? '',
+        contact_email: selected.contact_email ?? '',
+        contact_phone: selected.contact_phone ?? '',
+        website: selected.website ?? '',
+        research_notes: selected.research_notes ?? '',
+      })
+      setEditFolderId(selected.folder_id)
+    } else {
+      setEditForm(null)
+    }
+    setEditDirty(false)
+  }, [selected?.id, selectedId])
+
+  useEffect(() => {
+    if (leadsLoading) return
+    if (leads.length === 0) {
+      setSelectedId(null)
+      return
+    }
+    setSelectedId(prev => {
+      if (prev && leads.some(l => l.id === prev)) return prev
+      return leads[0]!.id
+    })
+  }, [leadsLoading, leads])
+
+  const dateCutoff = useMemo(() => {
+    if (dateFilter === 'all') return null
+    const d = new Date()
+    if (dateFilter === '7d') d.setDate(d.getDate() - 7)
+    if (dateFilter === '30d') d.setDate(d.getDate() - 30)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [dateFilter])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    const c = filterCity.toLowerCase().trim()
+    const g = filterGenre.toLowerCase().trim()
+    return leads.filter(lead => {
+      if (filterFolder !== 'all' && lead.folder_id !== filterFolder) return false
+      if (dateCutoff) {
+        const created = new Date(lead.created_at)
+        if (Number.isNaN(created.getTime()) || created < dateCutoff) return false
+      }
+      if (c) {
+        const city = (lead.city ?? '').toLowerCase()
+        if (!city.includes(c)) return false
+      }
+      if (g) {
+        const genre = (lead.genre ?? '').toLowerCase()
+        if (!genre.includes(g)) return false
+      }
+      if (!q) return true
+      return (
+        (lead.venue_name ?? '').toLowerCase().includes(q) ||
+        (lead.city ?? '').toLowerCase().includes(q) ||
+        (lead.genre ?? '').toLowerCase().includes(q) ||
+        (lead.instagram_handle ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [leads, search, filterFolder, dateCutoff, filterCity, filterGenre])
+
+  const importPreview = useMemo(() => {
+    if (!importText.trim()) return []
+    return parseLeadResearchImportText(importText)
+  }, [importText])
+
+  const handleOpenAdd = useCallback(() => {
+    setAddForm(emptyPicked())
+    setAddFolderId(notContactedFolderId ?? folders[0]?.id ?? '')
+    setAddError(null)
+    setAddOpen(true)
+  }, [notContactedFolderId, folders])
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!selected || !editForm) return
+    setSaveBusy(true)
+    const { error } = await updateLead(selected.id, {
+      folder_id: editFolderId,
+      venue_name: editForm.venue_name || null,
+      instagram_handle: editForm.instagram_handle || null,
+      genre: editForm.genre || null,
+      event_name: editForm.event_name || null,
+      crowd_type: editForm.crowd_type || null,
+      resident_dj: editForm.resident_dj || null,
+      city: editForm.city || null,
+      contact_email: editForm.contact_email || null,
+      contact_phone: editForm.contact_phone || null,
+      website: editForm.website || null,
+      research_notes: editForm.research_notes || null,
+    })
+    setSaveBusy(false)
+    if (!error) {
+      setEditDirty(false)
+      void refetchEmailLog()
+    }
+  }, [selected, editForm, editFolderId, updateLead, refetchEmailLog])
+
+  const handleDelete = useCallback(async () => {
+    if (!selected) return
+    if (!window.confirm('Delete this lead? This cannot be undone.')) return
+    const id = selected.id
+    await deleteLead(id)
+    setSelectedId(null)
+  }, [selected, deleteLead])
+
+  const runImport = useCallback(async () => {
+    const folderId = notContactedFolderId ?? folders[0]?.id
+    if (!folderId) {
+      setImportMessage('No folder available — try refreshing.')
+      return
+    }
+    const toImport = importPreview.filter(p => p.importable).map(p => p.row)
+    if (toImport.length === 0) {
+      setImportMessage('Nothing to import — fix vital fields (venue, Instagram, genre) for at least one row.')
+      return
+    }
+    setImportBusy(true)
+    setImportMessage(null)
+    const { error } = await insertLeads(toImport, folderId)
+    setImportBusy(false)
+    if (error) {
+      setImportMessage(error.message)
+      return
+    }
+    setImportText('')
+    setImportOpen(false)
+    setImportMessage(null)
+  }, [importPreview, notContactedFolderId, folders, insertLeads])
+
+  const runAdd = useCallback(async () => {
+    if (!addFolderId) return
+    setAddBusy(true)
+    setAddError(null)
+    const { error } = await addLead(addForm, addFolderId)
+    setAddBusy(false)
+    if (error) {
+      setAddError(error.message)
+      return
+    }
+    setAddOpen(false)
+    setAddForm(emptyPicked())
+  }, [addForm, addFolderId, addLead])
+
+  const runNewFolder = useCallback(async () => {
+    setNewFolderBusy(true)
+    const { error } = await createFolder(newFolderName)
+    setNewFolderBusy(false)
+    if (!error) {
+      setNewFolderName('')
+      setNewFolderOpen(false)
+      void refetchFolders()
+    }
+  }, [newFolderName, createFolder, refetchFolders])
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-500" />
+      </div>
+    )
+  }
+  if (!user) return <Navigate to="/login" replace />
+  if (foldersLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-500" />
+      </div>
+    )
+  }
+
+  const skipped = importPreview.filter(p => !p.importable)
+  const importable = importPreview.filter(p => p.importable)
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
+      <header className="h-14 border-b border-neutral-800 flex items-center gap-4 px-4 sm:px-6 shrink-0 bg-neutral-950/95 backdrop-blur-sm z-10">
+        <Button variant="ghost" size="sm" className="gap-2 text-neutral-400 -ml-1 shrink-0" asChild>
+          <Link to="/">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </Link>
+        </Button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-semibold text-neutral-100 tracking-tight">Lead Intake</h1>
+          <p className="text-[11px] text-neutral-500 truncate">Research, import, and track venues before the pipeline</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 border-neutral-600 text-neutral-200"
+            onClick={() => setNewFolderOpen(true)}
+          >
+            <FolderPlus className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">New folder</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 border-neutral-600"
+            onClick={() => {
+              setImportText('')
+              setImportMessage(null)
+              setImportOpen(true)
+            }}
+          >
+            <Upload className="h-3.5 w-3.5 mr-1" />
+            Import
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1.5 shrink-0 bg-neutral-100 text-neutral-950 hover:bg-white"
+            onClick={handleOpenAdd}
+          >
+            <Plus className="h-4 w-4" />
+            Add lead
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+        <aside className="lg:w-[min(100%,400px)] lg:min-w-[300px] lg:max-w-[440px] border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col min-h-0 bg-neutral-950">
+          <div className="p-3 sm:p-4 border-b border-neutral-800/80 shrink-0 space-y-2">
+            {foldersError || leadsError ? (
+              <p className="text-xs text-red-400">{foldersError ?? leadsError}</p>
+            ) : null}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
+              <Input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search leads…"
+                className="h-9 pl-9 text-sm border-neutral-700 bg-neutral-950/80"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-neutral-500">Folder</Label>
+                <Select value={filterFolder} onValueChange={v => setFilterFolder(v as typeof filterFolder)}>
+                  <SelectTrigger className="h-9 text-xs border-neutral-700 bg-neutral-950/80">
+                    <SelectValue placeholder="All folders" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All folders</SelectItem>
+                    {folders.map(f => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-neutral-500">Added</Label>
+                <Select value={dateFilter} onValueChange={v => setDateFilter(v as DateFilter)}>
+                  <SelectTrigger className="h-9 text-xs border-neutral-700 bg-neutral-950/80">
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <SlidersHorizontal className="h-3 w-3 opacity-50 shrink-0" />
+                      <SelectValue />
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Any time</SelectItem>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] text-neutral-500">City</Label>
+                <Input
+                  value={filterCity}
+                  onChange={e => setFilterCity(e.target.value)}
+                  placeholder="Filter"
+                  className="h-8 text-xs border-neutral-700 bg-neutral-950/80"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-neutral-500">Genre</Label>
+                <Input
+                  value={filterGenre}
+                  onChange={e => setFilterGenre(e.target.value)}
+                  placeholder="Filter"
+                  className="h-8 text-xs border-neutral-700 bg-neutral-950/80"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 min-h-0">
+            {leadsLoading && leads.length === 0 ? (
+              <div className="flex justify-center py-12 text-neutral-500">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-neutral-700 p-6 text-center">
+                <ContactRound className="h-8 w-8 text-neutral-600 mx-auto mb-2" />
+                <p className="text-sm text-neutral-400 mb-2">No leads match the current filters.</p>
+                {leads.length === 0 && (
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <Button type="button" size="sm" variant="outline" className="border-neutral-600" onClick={handleOpenAdd}>
+                      Add a lead
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-neutral-100 text-neutral-950"
+                      onClick={() => {
+                        setImportText('')
+                        setImportMessage(null)
+                        setImportOpen(true)
+                      }}
+                    >
+                      Import
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              filtered.map(lead => {
+                const active = lead.id === selectedId
+                const noEmail = !lead.contact_email?.trim()
+                return (
+                  <button
+                    key={lead.id}
+                    type="button"
+                    onClick={() => setSelectedId(lead.id)}
+                    className={cn(
+                      'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
+                      active
+                        ? 'border-neutral-200 bg-neutral-900/80 shadow-sm'
+                        : 'border-white/[0.06] bg-neutral-900/20 hover:border-white/10 hover:bg-neutral-900/40',
+                    )}
+                  >
+                    <div className="text-sm font-medium text-neutral-100 line-clamp-2 leading-snug">
+                      {lead.venue_name?.trim() || 'Untitled lead'}
+                    </div>
+                    <div className="mt-1 text-[11px] text-neutral-500 space-y-0.5">
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        {(lead.city || lead.genre) && (
+                          <span>
+                            {[lead.city, lead.genre].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
+                        {noEmail && (
+                          <span className="rounded border border-amber-900/50 bg-amber-950/30 px-1.5 text-[10px] text-amber-200/90">
+                            No email
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex justify-between gap-2 text-neutral-600">
+                        <span>{lead.folder_name ?? '—'}</span>
+                        <span className="shrink-0 flex items-center gap-1" title="Last email sent">
+                          <Calendar className="h-3 w-3 opacity-70" />
+                          {fmtDate(lead.last_contacted_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </aside>
+
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+          {!selected || !editForm ? (
+            <p className="text-sm text-neutral-500">Select a lead, import, or add one to get started.</p>
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-5">
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/35 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-tight text-neutral-100 leading-snug">
+                      {editForm.venue_name.trim() || 'Lead'}
+                    </h2>
+                    <p className="text-sm text-neutral-500 mt-1">Created {fmtDate(selected.created_at)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 bg-neutral-100 text-neutral-950 hover:bg-white"
+                      disabled={saveBusy || !editDirty}
+                      onClick={() => void handleSaveEdit()}
+                    >
+                      {saveBusy ? 'Saving…' : 'Save changes'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-red-900/50 text-red-300 hover:bg-red-950/40"
+                      onClick={() => void handleDelete()}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Folder</Label>
+                  <Select
+                    value={editFolderId}
+                    onValueChange={v => {
+                      setEditFolderId(v)
+                      setEditDirty(true)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {folders.map(f => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(
+                  [
+                    ['venue_name', 'Venue / brand name'],
+                    ['instagram_handle', 'Instagram handle (no @)'],
+                    ['genre', 'Genre(s)'],
+                    ['event_name', 'Event name'],
+                    ['crowd_type', 'Crowd type'],
+                    ['resident_dj', 'Resident DJ'],
+                    ['city', 'City'],
+                    ['contact_email', 'Contact email'],
+                    ['contact_phone', 'Contact phone'],
+                    ['website', 'Website'],
+                  ] as const
+                ).map(([key, lab]) => (
+                  <div key={key} className="space-y-1">
+                    <Label>{lab}</Label>
+                    <Input
+                      value={editForm[key]}
+                      onChange={e => {
+                        setEditForm(f => (f ? { ...f, [key]: e.target.value } : f))
+                        setEditDirty(true)
+                      }}
+                    />
+                  </div>
+                ))}
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Research notes</Label>
+                  <Textarea
+                    rows={4}
+                    value={editForm.research_notes}
+                    onChange={e => {
+                      setEditForm(f => (f ? { ...f, research_notes: e.target.value } : f))
+                      setEditDirty(true)
+                    }}
+                    className="border-neutral-700 bg-neutral-950/80"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-neutral-800/90 bg-neutral-900/20 p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3">Email history</h3>
+                {emailLogLoading ? (
+                  <p className="text-sm text-neutral-500">Loading…</p>
+                ) : emailEvents.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No emails logged yet for this lead.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm text-neutral-300">
+                    {emailEvents.map(ev => (
+                      <li
+                        key={ev.id}
+                        className="border-b border-neutral-800/80 pb-2 last:border-0 last:pb-0"
+                      >
+                        <div className="flex flex-wrap justify-between gap-2 text-neutral-200">
+                          <span className="font-medium">
+                            {ev.template_name || ev.email_type}
+                          </span>
+                          <span className="text-xs text-neutral-500">{fmtDate(ev.sent_at ?? ev.created_at)}</span>
+                        </div>
+                        {ev.status !== 'sent' && (
+                          <p className="text-[11px] text-amber-400/90 mt-0.5">Status: {ev.status}</p>
+                        )}
+                        <p className="text-xs text-neutral-500 mt-0.5 truncate" title={ev.subject}>
+                          {ev.subject}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>Import leads</DialogTitle>
+            <DialogDescription className="text-neutral-500">
+              Paste research output (key: value) or JSON. Rows missing venue name, Instagram handle, or genre are skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              type="file"
+              accept=".txt,.json,.md,.text,text/plain,application/json"
+              className="h-9 text-xs file:mr-2 file:text-xs file:text-neutral-400 border-neutral-800 bg-neutral-900/30"
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (!f) return
+                const r = new FileReader()
+                r.onload = () => {
+                  setImportText(String(r.result ?? ''))
+                  e.target.value = ''
+                }
+                r.readAsText(f, 'utf-8')
+              }}
+            />
+            <Textarea
+              className="min-h-[200px] font-mono text-xs border-neutral-700 bg-neutral-900/50"
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder="venue_name: … or paste JSON / array"
+            />
+          </div>
+          {importPreview.length > 0 && (
+            <div className="text-xs space-y-2 max-h-40 overflow-y-auto pr-1">
+              <p className="text-neutral-400">Ready: {importable.length} · Skipped: {skipped.length}</p>
+              {skipped.length > 0 && (
+                <p className="text-amber-400/90">Skipped rows need venue, Instagram, and genre before import.</p>
+              )}
+            </div>
+          )}
+          {importMessage && <p className="text-xs text-red-400">{importMessage}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportOpen(false)} className="border-neutral-600">
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-neutral-100 text-neutral-950"
+              onClick={() => void runImport()}
+              disabled={importBusy || importable.length === 0}
+            >
+              {importBusy ? 'Importing…' : `Import ${importable.length || ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>Add lead</DialogTitle>
+            <DialogDescription className="text-neutral-500">Enter what you have; you can complete fields later.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-1">
+              <Label>Folder</Label>
+              <Select value={addFolderId} onValueChange={setAddFolderId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {folders.map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {(
+              [
+                ['venue_name', 'Venue / brand name'],
+                ['instagram_handle', 'Instagram handle'],
+                ['genre', 'Genre(s)'],
+                ['city', 'City'],
+                ['contact_email', 'Contact email'],
+              ] as const
+            ).map(([k, lab]) => (
+              <div key={k} className="space-y-1">
+                <Label>{lab}</Label>
+                <Input
+                  value={addForm[k]}
+                  onChange={e => setAddForm(f => ({ ...f, [k]: e.target.value }))}
+                />
+              </div>
+            ))}
+            <div className="space-y-1">
+              <Label>Research notes</Label>
+              <Textarea
+                rows={3}
+                value={addForm.research_notes}
+                onChange={e => setAddForm(f => ({ ...f, research_notes: e.target.value }))}
+                className="border-neutral-700 bg-neutral-900/50"
+              />
+            </div>
+            {addError && <p className="text-xs text-red-400">{addError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddOpen(false)} className="border-neutral-600">
+              Cancel
+            </Button>
+            <Button type="button" className="bg-neutral-100 text-neutral-950" onClick={() => void runAdd()} disabled={!addFolderId || addBusy}>
+              {addBusy ? 'Saving…' : 'Save lead'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={newFolderOpen} onOpenChange={setNewFolderOpen}>
+        <DialogContent className="max-w-sm border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>New folder</DialogTitle>
+            <DialogDescription className="text-neutral-500">Create a custom folder to organize leads.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1">
+            <Label>Name</Label>
+            <Input value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="border-neutral-700" />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewFolderOpen(false)} className="border-neutral-600">
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-neutral-100 text-neutral-950"
+              onClick={() => void runNewFolder()}
+              disabled={!newFolderName.trim() || newFolderBusy}
+            >
+              {newFolderBusy ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

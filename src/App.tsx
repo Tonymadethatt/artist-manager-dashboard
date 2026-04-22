@@ -27,6 +27,7 @@ import BookingIntakePage from '@/pages/BookingIntakePage'
 import BookingIntakesHubPage from '@/pages/BookingIntakesHubPage'
 import ColdCallFormPage from '@/pages/ColdCallFormPage'
 import ColdCallsHubPage from '@/pages/ColdCallsHubPage'
+import LeadIntakeHubPage from '@/pages/LeadIntakeHubPage'
 import PartnershipRollAdminPage from '@/pages/PartnershipRollAdminPage'
 import PublicPreviousClientsPage from '@/pages/public/PublicPreviousClientsPage'
 import { supabaseConfigured } from '@/lib/supabase'
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/forms/intakes" element={<BookingIntakesHubPage />} />
         <Route path="/forms/intake" element={<BookingIntakePage />} />
         <Route path="/forms/cold-calls" element={<ColdCallsHubPage />} />
+        <Route path="/forms/lead-intake" element={<LeadIntakeHubPage />} />
         <Route path="/forms/cold-call" element={<ColdCallFormPage />} />
         <Route path={PREVIOUS_CLIENTS_FORM_PATH} element={<PublicPreviousClientsPage />} />
         <Route path="/forms/partnerships" element={<Navigate to={PREVIOUS_CLIENTS_FORM_PATH} replace />} />
