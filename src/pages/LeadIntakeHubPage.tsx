@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
 import {
-  ArrowLeft,
   Calendar,
   ContactRound,
   FolderPlus,
@@ -12,7 +10,6 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
 import { useLeadFolders } from '@/hooks/useLeadFolders'
 import { useLeads } from '@/hooks/useLeads'
 import { useLeadEmailEvents } from '@/hooks/useLeadEmailEvents'
@@ -64,7 +61,6 @@ function emptyPicked(): LeadImportPickedFields {
 }
 
 export default function LeadIntakeHubPage() {
-  const { user, loading: authLoading } = useAuth()
   const { folders, loading: foldersLoading, error: foldersError, createFolder, notContactedFolderId, refetch: refetchFolders } =
     useLeadFolders()
   const folderNameById = useMemo(() => new Map(folders.map(f => [f.id, f.name])), [folders])
@@ -272,17 +268,9 @@ export default function LeadIntakeHubPage() {
     }
   }, [newFolderName, createFolder, refetchFolders])
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-neutral-500" />
-      </div>
-    )
-  }
-  if (!user) return <Navigate to="/login" replace />
   if (foldersLoading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+      <div className="flex min-h-[min(50vh,20rem)] w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-neutral-500" />
       </div>
     )
@@ -292,19 +280,10 @@ export default function LeadIntakeHubPage() {
   const importable = importPreview.filter(p => p.importable)
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
-      <header className="h-14 border-b border-neutral-800 flex items-center gap-4 px-4 sm:px-6 shrink-0 bg-neutral-950/95 backdrop-blur-sm z-10">
-        <Button variant="ghost" size="sm" className="gap-2 text-neutral-400 -ml-1 shrink-0" asChild>
-          <Link to="/">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Dashboard</span>
-          </Link>
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold text-neutral-100 tracking-tight">Lead Intake</h1>
-          <p className="text-[11px] text-neutral-500 truncate">Research, import, and track venues before the pipeline</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 text-neutral-100 md:min-h-[calc(100dvh-7.5rem)]">
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <p className="text-sm text-neutral-500">Research, import, and track venues before the pipeline.</p>
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"
@@ -339,10 +318,10 @@ export default function LeadIntakeHubPage() {
             Add lead
           </Button>
         </div>
-      </header>
+      </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-        <aside className="lg:w-[min(100%,400px)] lg:min-w-[300px] lg:max-w-[440px] border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col min-h-0 bg-neutral-950">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40 lg:flex-row">
+        <aside className="lg:w-[min(100%,400px)] lg:min-w-[300px] lg:max-w-[440px] border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col min-h-0 bg-neutral-950/60">
           <div className="p-3 sm:p-4 border-b border-neutral-800/80 shrink-0 space-y-2">
             {foldersError || leadsError ? (
               <p className="text-xs text-red-400">{foldersError ?? leadsError}</p>

@@ -65,7 +65,6 @@ export default function App() {
         <Route path="/forms/intakes" element={<BookingIntakesHubPage />} />
         <Route path="/forms/intake" element={<BookingIntakePage />} />
         <Route path="/forms/cold-calls" element={<ColdCallsHubPage />} />
-        <Route path="/forms/lead-intake" element={<LeadIntakeHubPage />} />
         <Route path="/forms/cold-call" element={<ColdCallFormPage />} />
         <Route path={PREVIOUS_CLIENTS_FORM_PATH} element={<PublicPreviousClientsPage />} />
         <Route path="/forms/partnerships" element={<Navigate to={PREVIOUS_CLIENTS_FORM_PATH} replace />} />
@@ -89,6 +88,7 @@ export default function App() {
           <Route path="/performance-reports" element={<PerformanceReports />} />
           <Route path="/performance-reports/manual" element={<ManualShowReport />} />
           <Route path="/forms/preview" element={<FormPreviews />} />
+          <Route path="/forms/lead-intake" element={<LeadIntakeHubPage />} />
           <Route path="/workspace/partnerships" element={<PartnershipRollAdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

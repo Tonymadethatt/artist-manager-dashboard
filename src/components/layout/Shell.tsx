@@ -28,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/forms/intakes':       'Booking',
   '/forms/intake':        'Booking intake',
   '/forms/cold-calls':    'Cold calls',
+  '/forms/lead-intake':   'Lead Intake',
   '/forms/cold-call':     'Cold call',
   '/workspace/partnerships': 'Previous Clients — Workspace',
 }
