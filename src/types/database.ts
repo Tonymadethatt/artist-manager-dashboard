@@ -811,6 +811,167 @@ export interface Database {
         }
         Relationships: []
       }
+      lead_folders: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          sort_order: number
+          is_system: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          sort_order?: number
+          is_system?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          sort_order?: number
+          is_system?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lead_email_events: {
+        Row: {
+          id: string
+          user_id: string
+          lead_id: string
+          custom_email_template_id: string | null
+          email_type: string
+          recipient_email: string
+          subject: string
+          status: VenueEmailStatus
+          sent_at: string | null
+          resend_message_id: string | null
+          notes: string | null
+          task_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          lead_id: string
+          custom_email_template_id?: string | null
+          email_type: string
+          recipient_email: string
+          subject: string
+          status?: VenueEmailStatus
+          sent_at?: string | null
+          resend_message_id?: string | null
+          notes?: string | null
+          task_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          lead_id?: string
+          custom_email_template_id?: string | null
+          email_type?: string
+          recipient_email?: string
+          subject?: string
+          status?: VenueEmailStatus
+          sent_at?: string | null
+          resend_message_id?: string | null
+          notes?: string | null
+          task_id?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lead_email_events_lead_fkey'
+            columns: ['lead_id']
+            referencedRelation: 'leads'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_email_events_custom_email_template_id_fkey'
+            columns: ['custom_email_template_id']
+            referencedRelation: 'custom_email_templates'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_email_events_task_id_fkey'
+            columns: ['task_id']
+            referencedRelation: 'tasks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          id: string
+          user_id: string
+          folder_id: string
+          venue_name: string | null
+          instagram_handle: string | null
+          genre: string | null
+          event_name: string | null
+          crowd_type: string | null
+          resident_dj: string | null
+          city: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          website: string | null
+          research_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          folder_id: string
+          venue_name?: string | null
+          instagram_handle?: string | null
+          genre?: string | null
+          event_name?: string | null
+          crowd_type?: string | null
+          resident_dj?: string | null
+          city?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          website?: string | null
+          research_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          folder_id?: string
+          venue_name?: string | null
+          instagram_handle?: string | null
+          genre?: string | null
+          event_name?: string | null
+          crowd_type?: string | null
+          resident_dj?: string | null
+          city?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          website?: string | null
+          research_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'leads_user_folder_fkey'
+            columns: ['folder_id']
+            referencedRelation: 'lead_folders'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       venue_emails: {
         Row: {
           id: string
@@ -1347,7 +1508,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          audience: 'venue' | 'artist'
+          audience: 'venue' | 'artist' | 'lead'
           name: string
           subject_template: string
           blocks: unknown
@@ -1358,7 +1519,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
-          audience: 'venue' | 'artist'
+          audience: 'venue' | 'artist' | 'lead'
           name: string
           subject_template?: string
           blocks?: unknown
@@ -1369,7 +1530,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
-          audience?: 'venue' | 'artist'
+          audience?: 'venue' | 'artist' | 'lead'
           name?: string
           subject_template?: string
           blocks?: unknown
