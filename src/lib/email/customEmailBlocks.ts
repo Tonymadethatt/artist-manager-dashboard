@@ -111,9 +111,12 @@ export function defaultCustomBlocksDoc(): CustomEmailBlocksDoc {
 }
 
 /** Defaults when inserting a new row: opening line includes merge-safe recipient / artist greeting. */
-export function defaultCustomBlocksDocForAudience(audience: 'venue' | 'artist'): CustomEmailBlocksDoc {
+export function defaultCustomBlocksDocForAudience(audience: 'venue' | 'artist' | 'lead'): CustomEmailBlocksDoc {
   const base = defaultCustomBlocksDoc()
   if (audience === 'venue') {
+    return { ...base, greeting: 'Hi {{recipient.firstName}},' }
+  }
+  if (audience === 'lead') {
     return { ...base, greeting: 'Hi {{recipient.firstName}},' }
   }
   return { ...base, greeting: 'Hey {{profile.artist_name}},' }

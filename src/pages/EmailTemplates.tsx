@@ -81,7 +81,12 @@ import { VariableSlashTextarea } from '@/components/templates/VariableSlashTexta
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
 
 const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
-import { ARTIST_CUSTOM_MERGE_KEYS, VENUE_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
+import {
+  ARTIST_CUSTOM_MERGE_KEYS,
+  LEAD_CUSTOM_MERGE_KEYS,
+  PREVIEW_MOCK_LEAD,
+  VENUE_CUSTOM_MERGE_KEYS,
+} from '@/lib/email/customEmailMerge'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
 
@@ -283,7 +288,7 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'gig_day_summary_manual',
 ]
 
-type Group = 'client' | 'artist'
+type Group = 'client' | 'artist' | 'leads'
 
 type SidebarMode = 'browse' | 'edit' | 'edit-custom'
 
@@ -353,7 +358,8 @@ export default function EmailTemplates() {
   }, [generatedFilesForTemplates])
 
   const filteredCustomRows = useMemo(() => {
-    const want: 'venue' | 'artist' = activeGroup === 'client' ? 'venue' : 'artist'
+    const want: 'venue' | 'artist' | 'lead' =
+      activeGroup === 'client' ? 'venue' : activeGroup === 'leads' ? 'lead' : 'artist'
     const q = templateSearch.trim().toLowerCase()
     return customRows.filter(r => {
       if (r.audience !== want) return false
@@ -417,7 +423,7 @@ export default function EmailTemplates() {
     tryExitEdit(() => {
       setActiveGroup(g)
       setTemplateSearch('')
-      setSelectedType(g === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
+      setSelectedType(g === 'artist' ? ARTIST_ORDER[0] : CLIENT_ORDER[0])
       setSelectedCustomId(null)
       setSaved(false)
       setSidebarMode('browse')
@@ -451,6 +457,9 @@ export default function EmailTemplates() {
   }
 
   const defaultSubject = useMemo(() => {
+    if (activeGroup === 'leads') {
+      return 'Quick note re: {{lead.venue_name}}'
+    }
     if (activeGroup === 'client') {
       return CLIENT_DEFAULT_SUBJECTS[selectedType as VenueEmailType]
     }
@@ -465,9 +474,11 @@ export default function EmailTemplates() {
 
   const typeLabel = selectedCustomRow
     ? selectedCustomRow.name
-    : activeGroup === 'client'
-      ? VENUE_EMAIL_TYPE_LABELS[selectedType as VenueEmailType]
-      : ARTIST_EMAIL_TYPE_LABELS[selectedType as ArtistEmailType]
+    : activeGroup === 'leads'
+      ? 'Leads'
+      : activeGroup === 'client'
+        ? VENUE_EMAIL_TYPE_LABELS[selectedType as VenueEmailType]
+        : ARTIST_EMAIL_TYPE_LABELS[selectedType as ArtistEmailType]
 
   useEffect(() => {
     if (sidebarMode === 'browse') {
@@ -494,6 +505,10 @@ export default function EmailTemplates() {
     : draftFromSaved(getTemplate(selectedType))
 
   const previewHtml = useMemo(() => {
+    if (activeGroup === 'leads' && !selectedCustomId) {
+      return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Leads</title></head><body style="margin:0;background:#0d0d0d;color:#a3a3a3;font-family:system-ui,sans-serif;padding:32px 28px;font-size:14px;line-height:1.5;max-width:600px">Select a custom lead template on the left, or create one with <b style="color:#e5e5e5">New custom template</b>, to preview how it will look. Merge fields use the <b style="color:#e5e5e5">lead.*</b> namespace (e.g. <code style="color:#d4d4d4">lead.venue_name</code>).</body></html>`
+    }
+
     const customPreviewProfile: PreviewProfile = artistProfile
       ? {
         artist_name: artistProfile.artist_name ?? '',
@@ -517,7 +532,8 @@ export default function EmailTemplates() {
       const subj = sidebarMode === 'edit-custom'
         ? customSubjectDraft
         : (row?.subject_template ?? '')
-      const aud = row?.audience ?? (activeGroup === 'client' ? 'venue' : 'artist')
+      const aud = row?.audience
+        ?? (activeGroup === 'client' ? 'venue' : activeGroup === 'leads' ? 'lead' : 'artist')
       const attachId = sidebarMode === 'edit-custom'
         ? customAttachmentFileIdDraft
         : (row?.attachment_generated_file_id ?? null)
@@ -527,9 +543,12 @@ export default function EmailTemplates() {
       const attachment = attachUrl && attachFile?.name?.trim()
         ? { url: attachUrl, fileName: attachFile.name.trim() }
         : undefined
-      const previewRecipient = aud === 'artist'
-        ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
-        : PREVIEW_MOCK_RECIPIENT
+      const previewRecipient =
+        aud === 'artist'
+          ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
+          : aud === 'lead'
+            ? { name: 'Jamie', email: 'bookings@skylinebar.com' }
+            : PREVIEW_MOCK_RECIPIENT
       const previewCaptureCustom =
         aud === 'venue' && doc.captureKind ? 'https://preview.example.com/venue-email-ack/mock-preview-token' : undefined
       const { html } = buildCustomEmailDocument({
@@ -538,11 +557,12 @@ export default function EmailTemplates() {
         blocksRaw: doc,
         profile: customPreviewProfile,
         recipient: previewRecipient,
-        deal: PREVIEW_MOCK_DEAL,
-        venue: PREVIEW_MOCK_VENUE,
+        ...(aud === 'lead'
+          ? { lead: PREVIEW_MOCK_LEAD }
+          : { deal: PREVIEW_MOCK_DEAL, venue: PREVIEW_MOCK_VENUE }),
         logoBaseUrl: publicSiteOrigin(),
         responsiveClasses: true,
-        showReplyButton: aud === 'venue',
+        showReplyButton: aud === 'venue' || aud === 'lead',
         ...(attachment ? { attachment } : {}),
         ...(previewCaptureCustom ? { captureUrl: previewCaptureCustom } : {}),
       })
@@ -804,6 +824,7 @@ export default function EmailTemplates() {
   const testSendDisabled = !artistProfile?.manager_email?.trim()
     || !artistProfile?.from_email?.trim()
     || testSendLoading
+    || (activeGroup === 'leads' && !selectedCustomId)
 
   const isDirty = !layoutsEqual(editorLayoutComparable, savedLayoutNormalized)
   const hasCustom = !!(savedTmpl && layoutHasAnyCustomization(artistLayoutForSend(
@@ -868,7 +889,11 @@ export default function EmailTemplates() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const mergeKeyOptions = (activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS) as readonly string[]
+  const mergeKeyOptions = (activeGroup === 'client'
+    ? VENUE_CUSTOM_MERGE_KEYS
+    : activeGroup === 'leads'
+      ? LEAD_CUSTOM_MERGE_KEYS
+      : ARTIST_CUSTOM_MERGE_KEYS) as readonly string[]
 
   const updateCustomBlock = (index: number, patch: Partial<CustomEmailBlock>) => {
     setCustomBlocksDraft(prev => {
@@ -1028,7 +1053,7 @@ export default function EmailTemplates() {
             <>
               <div className="shrink-0 flex flex-col gap-2">
                 <div className="flex rounded-lg border border-neutral-800 overflow-hidden">
-                  {(['client', 'artist'] as Group[]).map(g => (
+                  {(['client', 'artist', 'leads'] as Group[]).map(g => (
                     <button
                       key={g}
                       type="button"
@@ -1040,7 +1065,7 @@ export default function EmailTemplates() {
                           : 'bg-neutral-900 text-neutral-500 hover:text-neutral-300',
                       )}
                     >
-                      {g === 'client' ? 'Client' : 'Artist'}
+                      {g === 'client' ? 'Client' : g === 'artist' ? 'Artist' : 'Leads'}
                     </button>
                   ))}
                 </div>
@@ -1063,6 +1088,7 @@ export default function EmailTemplates() {
                   '[&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0',
                 )}
               >
+                {activeGroup !== 'leads' && (
                 <div>
                   <p className={EYEBROW}>Standard</p>
                   <div className="flex flex-col gap-2 mt-2">
@@ -1179,6 +1205,7 @@ export default function EmailTemplates() {
                     )}
                   </div>
                 </div>
+                )}
 
                 <div>
                   <p className={EYEBROW}>My templates</p>
@@ -1212,7 +1239,7 @@ export default function EmailTemplates() {
                                 {row.name}
                               </span>
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-500 border border-neutral-700 shrink-0">
-                                {row.audience === 'venue' ? 'Client' : 'Artist'}
+                                {row.audience === 'venue' ? 'Client' : row.audience === 'lead' ? 'Lead' : 'Artist'}
                               </span>
                             </div>
                             <p className="text-[11px] text-neutral-600 mt-0.5 font-mono truncate">
@@ -1275,7 +1302,9 @@ export default function EmailTemplates() {
                     })}
                     {filteredCustomRows.length === 0 && (
                       <p className="text-[11px] text-neutral-600 leading-snug px-1 py-3">
-                        No custom templates yet. Use New to create one for {activeGroup === 'client' ? 'client' : 'artist'} emails.
+                        {activeGroup === 'leads'
+                          ? 'No custom lead templates yet. Use New to add one (merge keys use lead.venue_name, lead.city, …).'
+                          : `No custom templates yet. Use New to create one for ${activeGroup === 'client' ? 'client' : 'artist'} emails.`}
                       </p>
                     )}
                   </div>
@@ -1297,7 +1326,7 @@ export default function EmailTemplates() {
                   <div className="flex-1 min-w-0 text-right flex flex-col items-end gap-1.5">
                     <span className="text-sm font-medium text-white truncate max-w-full">{customNameDraft || 'Untitled'}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-500">
-                      Custom · {selectedCustomRow.audience === 'venue' ? 'Client' : 'Artist'}
+                      Custom · {selectedCustomRow.audience === 'venue' ? 'Client' : selectedCustomRow.audience === 'lead' ? 'Lead' : 'Artist'}
                     </span>
                     <div className="flex flex-wrap gap-1.5 justify-end">
                       <Button
@@ -1340,7 +1369,13 @@ export default function EmailTemplates() {
                     className="mt-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 shadow-none focus-visible:ring-1 focus-visible:ring-neutral-500"
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
-                    Type / for the variable menu. Allowed: {(activeGroup === 'client' ? VENUE_CUSTOM_MERGE_KEYS : ARTIST_CUSTOM_MERGE_KEYS).join(', ')}.
+                    Type / for the variable menu. Allowed:{' '}
+                    {(activeGroup === 'client'
+                      ? VENUE_CUSTOM_MERGE_KEYS
+                      : activeGroup === 'leads'
+                        ? LEAD_CUSTOM_MERGE_KEYS
+                        : ARTIST_CUSTOM_MERGE_KEYS
+                    ).join(', ')}.
                     Shortcuts also work: {'{{firstName}}'}, {'{{client_name}}'} → recipient first name.
                   </p>
                 </div>
@@ -1356,7 +1391,7 @@ export default function EmailTemplates() {
                     }}
                     variableKeys={[...mergeKeyOptions]}
                     placeholder={
-                      activeGroup === 'client'
+                      activeGroup === 'client' || activeGroup === 'leads'
                         ? 'Hi {{recipient.firstName}},'
                         : 'Hey {{profile.artist_name}},'
                     }
@@ -1365,7 +1400,7 @@ export default function EmailTemplates() {
                     className="mt-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 shadow-none focus-visible:ring-1 focus-visible:ring-neutral-500"
                   />
                   <p className="text-[10px] text-neutral-600 mt-1">
-                    Optional. Type / to insert. Leave empty to use the built-in default (client: Hi + first name). For an explicit merge, use {'{{recipient.firstName}}'} (or {'{{firstName}}'} / {'{{client_name}}'}).
+                    Optional. Type / to insert. Leave empty to use the default greeting (client and lead: Hi + recipient first name). For an explicit merge, use {'{{recipient.firstName}}'} (or {'{{firstName}}'} / {'{{client_name}}'}). Lead copy also supports {'{{lead.venue_name}}'} etc.
                   </p>
                 </div>
                 {selectedCustomRow.audience === 'venue' && (
@@ -1836,7 +1871,9 @@ export default function EmailTemplates() {
                 if (pendingGroup !== null) {
                   setActiveGroup(pendingGroup)
                   setTemplateSearch('')
-                  setSelectedType(pendingGroup === 'client' ? CLIENT_ORDER[0] : ARTIST_ORDER[0])
+                  setSelectedType(
+                    pendingGroup === 'artist' ? ARTIST_ORDER[0] : CLIENT_ORDER[0],
+                  )
                   setSelectedCustomId(null)
                   setSidebarMode('browse')
                   setPendingGroup(null)
@@ -1961,7 +1998,9 @@ export default function EmailTemplates() {
             <p className="text-xs text-neutral-500">
               {activeGroup === 'client'
                 ? 'Audience: venues (client emails). You can use this template from Pipeline, the email queue, and manual sends.'
-                : 'Audience: your artist profile email. You can attach it to pipeline tasks that complete with this template.'}
+                : activeGroup === 'leads'
+                  ? 'Audience: lead / research records (pre–pipeline). Merge with lead.* fields; use from Lead Intake when send flow is connected.'
+                  : 'Audience: your artist profile email. You can attach it to pipeline tasks that complete with this template.'}
             </p>
             <Input
               value={newCustomName}
@@ -1995,7 +2034,7 @@ export default function EmailTemplates() {
                 setNewCustomError(null)
                 setNewCustomSubmitting(true)
                 const res = await insertCustomRow({
-                  audience: activeGroup === 'client' ? 'venue' : 'artist',
+                  audience: activeGroup === 'client' ? 'venue' : activeGroup === 'leads' ? 'lead' : 'artist',
                   name: newCustomName.trim(),
                 })
                 setNewCustomSubmitting(false)

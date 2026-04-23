@@ -17,7 +17,13 @@ import {
 import { buildProfileFooterLinksHtml, buildProfileFooterLinksRowHtml } from './profileFooterLinksHtml'
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
-import { applyMergeToText, resolveMergeKey, type CustomEmailMergeContext, type CustomMergeAudience } from './customEmailMerge'
+import {
+  applyMergeToText,
+  resolveMergeKey,
+  type CustomEmailMergeContext,
+  type CustomMergeAudience,
+  type LeadMergeFields,
+} from './customEmailMerge'
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
 import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
@@ -51,7 +57,7 @@ function titledContentCard(
   const label =
     showHeader && audience === 'artist'
       ? decorateMergedArtistCustomSectionTitle(sectionTitle.trim())
-      : showHeader && audience === 'venue'
+      : showHeader && (audience === 'venue' || audience === 'lead')
         ? decorateMergedVenueCustomSectionTitle(sectionTitle.trim())
         : sectionTitle.trim()
   const header = showHeader
@@ -134,6 +140,7 @@ function renderCustomOpeningLine(
     if (!merged) return ''
     return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
   }
+  // venue + lead: greeting to recipient (booker / contact)
   const firstName = resolveVenueRecipientSalutationFirstName({
     name: recipient.name,
     email: recipient.email,
@@ -232,6 +239,8 @@ export interface BuildCustomEmailOptions {
   recipient: VenueRenderRecipient
   deal?: VenueRenderDeal
   venue?: VenueRenderVenue
+  /** When `audience` is `lead` — e.g. Lead Intake row mapped to merge fields. */
+  lead?: LeadMergeFields | null
   logoBaseUrl: string
   responsiveClasses?: boolean
   /** Venue audience only */
@@ -294,6 +303,7 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     recipient: opts.recipient,
     deal: opts.deal,
     venue: opts.venue,
+    lead: opts.audience === 'lead' ? (opts.lead ?? null) : undefined,
   }
   const subject = applyMergeToText(
     String(opts.subjectTemplate ?? '').trim() || 'Message from {{profile.artist_name}}',
@@ -326,7 +336,8 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     <div style="border-top:1px solid #2a2a2a;margin-top:20px;"></div>
   </div>`
 
-  const captureTrim = opts.audience === 'venue' ? (opts.captureUrl?.trim() || '') : ''
+  const captureTrim =
+    opts.audience === 'venue' ? (opts.captureUrl?.trim() || '') : ''
   const captureCtaLabel = opts.captureCTALabel?.trim() || 'Respond'
   const captureCtaHtml = captureTrim
     ? `<div style="text-align:center;margin-bottom:24px;margin-top:4px;">
@@ -345,9 +356,9 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     </div>`
 
   let footerHtml: string
-  if (opts.audience === 'venue') {
+  if (opts.audience === 'venue' || opts.audience === 'lead') {
     const hasCaptureCta = Boolean(captureTrim)
-    const showReply = opts.showReplyButton !== false && !hasCaptureCta
+    const showReply = opts.audience === 'venue' && opts.showReplyButton !== false && !hasCaptureCta
     const replyLabel = opts.replyButtonLabel?.trim() || 'Reply'
     footerHtml = venueFooter(opts.profile, subject, showReply, replyLabel, igUrl)
   } else {

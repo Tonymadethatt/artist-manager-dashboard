@@ -4,6 +4,7 @@ import { normalizeEmailTemplateLayout } from '../../src/lib/emailLayout'
 import { sanitizeEmailAttachmentPayload } from '../../src/lib/email/validateAttachmentUrl'
 import { buildVenueEmailDocument } from '../../src/lib/email/renderVenueEmail'
 import { buildCustomEmailDocument } from '../../src/lib/email/renderCustomEmail'
+import { PREVIEW_MOCK_LEAD, type LeadMergeFields } from '../../src/lib/email/customEmailMerge'
 import { loadCustomEmailBlocksDoc } from '../../src/lib/email/customEmailBlocks'
 import { captureLinkLabel } from '../../src/lib/emailCapture/kinds'
 import {
@@ -80,11 +81,18 @@ interface CustomArtistTemplatePayload {
   blocks: unknown
 }
 
+interface CustomLeadTemplatePayload {
+  subject_template: string
+  blocks: unknown
+}
+
 interface RequestBody {
   type?: VenueEmailType
   custom_venue_template?: CustomVenueTemplatePayload
   /** Artist-targeted custom template (same pipeline as venue custom; avoids a separate function bundle). */
   custom_artist_template?: CustomArtistTemplatePayload
+  /** Lead / research outreach (Lead Intake); merge namespace `lead.*`. */
+  custom_lead_template?: CustomLeadTemplatePayload
   attachment?: unknown
   profile: ArtistProfile
   recipient: Recipient
@@ -97,6 +105,8 @@ interface RequestBody {
   capture_url?: string | null
   /** Authenticated user — used to load email_test_mode from DB (service role). */
   user_id?: string
+  /** Optional `lead.*` merge payload for `custom_lead_template` sends. */
+  lead?: unknown
 }
 
 const VENUE_TYPES = new Set<string>([
@@ -114,6 +124,28 @@ const VENUE_TYPES = new Set<string>([
   'show_cancelled_or_postponed',
   'pass_for_now',
 ])
+
+function leadPayloadFromBody(raw: unknown): LeadMergeFields {
+  if (!raw || typeof raw !== 'object') return PREVIEW_MOCK_LEAD
+  const o = raw as Record<string, unknown>
+  const s = (k: keyof LeadMergeFields): string => {
+    const v = o[k as string]
+    return typeof v === 'string' ? v : ''
+  }
+  return {
+    venue_name: s('venue_name') || PREVIEW_MOCK_LEAD.venue_name,
+    instagram_handle: s('instagram_handle') || PREVIEW_MOCK_LEAD.instagram_handle,
+    genre: s('genre') || PREVIEW_MOCK_LEAD.genre,
+    event_name: s('event_name') || PREVIEW_MOCK_LEAD.event_name,
+    crowd_type: s('crowd_type') || PREVIEW_MOCK_LEAD.crowd_type,
+    resident_dj: s('resident_dj') || PREVIEW_MOCK_LEAD.resident_dj,
+    city: s('city') || PREVIEW_MOCK_LEAD.city,
+    contact_email: s('contact_email') || PREVIEW_MOCK_LEAD.contact_email,
+    contact_phone: s('contact_phone') || PREVIEW_MOCK_LEAD.contact_phone,
+    website: s('website') || PREVIEW_MOCK_LEAD.website,
+    research_notes: s('research_notes') || PREVIEW_MOCK_LEAD.research_notes,
+  }
+}
 
 const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -141,12 +173,14 @@ const handler: Handler = async (event) => {
     custom_subject,
     custom_intro,
     layout: rawLayout,
-    custom_venue_template,
-    custom_artist_template,
-    attachment: rawAttachment,
+  custom_venue_template,
+  custom_artist_template,
+  custom_lead_template,
+  attachment: rawAttachment,
     invoice_url: rawInvoiceUrl,
     capture_url: rawCaptureUrl,
     user_id: rawUserId,
+    lead: rawLead,
   } = body
 
   const userId = typeof rawUserId === 'string' ? rawUserId.trim() || undefined : undefined
@@ -166,11 +200,13 @@ const handler: Handler = async (event) => {
 
   const hasArtistCustom = !!custom_artist_template
   const hasVenueCustom = !!custom_venue_template
-  if (hasArtistCustom && hasVenueCustom) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Provide only one of custom_artist_template or custom_venue_template' }) }
+  const hasLeadCustom = !!custom_lead_template
+  const customCount = [hasArtistCustom, hasVenueCustom, hasLeadCustom].filter(Boolean).length
+  if (customCount > 1) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Provide only one of custom_venue_template, custom_artist_template, or custom_lead_template' }) }
   }
-  if (!hasArtistCustom && !hasVenueCustom && (!type || !VENUE_TYPES.has(type))) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Missing or invalid type (or provide custom_venue_template / custom_artist_template)' }) }
+  if (!hasArtistCustom && !hasVenueCustom && !hasLeadCustom && (!type || !VENUE_TYPES.has(type))) {
+    return { statusCode: 400, body: JSON.stringify({ message: 'Missing or invalid type (or provide a custom_*_template)' }) }
   }
 
   const siteUrl = process.env.URL || ''
@@ -198,6 +234,29 @@ const handler: Handler = async (event) => {
         venue,
         logoBaseUrl: siteUrl,
         responsiveClasses: true,
+        ...(attachment ? { attachment } : {}),
+      })
+      html = built.html
+      subject = built.subject
+    } else if (custom_lead_template) {
+      const supabaseUrl = process.env.SUPABASE_URL || ''
+      const attachment = sanitizeEmailAttachmentPayload(rawAttachment, { supabaseUrl, siteUrl })
+      const leadData = leadPayloadFromBody(rawLead)
+      const built = buildCustomEmailDocument({
+        audience: 'lead',
+        subjectTemplate: custom_lead_template.subject_template ?? '',
+        blocksRaw: custom_lead_template.blocks,
+        profile: {
+          ...profile,
+          artist_name: profile.artist_name ?? '',
+          company_name: profile.company_name ?? null,
+          manager_name: profile.manager_name ?? null,
+        },
+        recipient,
+        lead: leadData,
+        logoBaseUrl: siteUrl,
+        responsiveClasses: true,
+        showReplyButton: true,
         ...(attachment ? { attachment } : {}),
       })
       html = built.html

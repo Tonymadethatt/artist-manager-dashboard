@@ -33,13 +33,62 @@ export const ARTIST_CUSTOM_MERGE_KEYS = [
   'profile.company_name',
 ] as const
 
-export type CustomMergeAudience = 'venue' | 'artist'
+/** Pre–pipeline lead research records; used with custom templates `audience: lead` (namespace `lead.*`). */
+export const LEAD_CUSTOM_MERGE_KEYS = [
+  'recipient.firstName',
+  'profile.artist_name',
+  'profile.company_name',
+  'lead.venue_name',
+  'lead.instagram_handle',
+  'lead.genre',
+  'lead.event_name',
+  'lead.crowd_type',
+  'lead.resident_dj',
+  'lead.city',
+  'lead.contact_email',
+  'lead.contact_phone',
+  'lead.website',
+  'lead.research_notes',
+] as const
+
+export type CustomMergeAudience = 'venue' | 'artist' | 'lead'
+
+/** All string fields; empty string when missing (merge shows blank). */
+export type LeadMergeFields = {
+  venue_name: string
+  instagram_handle: string
+  genre: string
+  event_name: string
+  crowd_type: string
+  resident_dj: string
+  city: string
+  contact_email: string
+  contact_phone: string
+  website: string
+  research_notes: string
+}
+
+export const PREVIEW_MOCK_LEAD: LeadMergeFields = {
+  venue_name: 'Skyline Bar & Lounge',
+  instagram_handle: 'skyline.lounge.mia',
+  genre: 'House / open format',
+  event_name: 'Saturday Night Vibes',
+  crowd_type: '25–40',
+  resident_dj: 'DJ Pat',
+  city: 'Miami',
+  contact_email: 'bookings@skylinebar.com',
+  contact_phone: '(305) 555-0142',
+  website: 'https://skylinebar.com',
+  research_notes: 'Great room, asked about tech rider. Follow up on guest list limits.',
+}
 
 export interface CustomEmailMergeContext {
   profile: VenueRenderProfile
   recipient: VenueRenderRecipient
   deal?: VenueRenderDeal
   venue?: VenueRenderVenue
+  /** Set when `audience === 'lead'` for pre-client outreach templates. */
+  lead?: LeadMergeFields | null
 }
 
 function money(n: number) {
@@ -56,6 +105,7 @@ function fmtDateYmdEmail(iso: string | null | undefined): string {
 const KEY_SETS: Record<CustomMergeAudience, ReadonlySet<string>> = {
   venue: new Set(VENUE_CUSTOM_MERGE_KEYS),
   artist: new Set(ARTIST_CUSTOM_MERGE_KEYS),
+  lead: new Set(LEAD_CUSTOM_MERGE_KEYS),
 }
 
 /** Map common shorthand / legacy tokens to canonical whitelist keys (subject, greeting, prose, etc.). */
@@ -121,6 +171,28 @@ export function resolveMergeKey(
       return ctx.profile.artist_name ?? ''
     case 'profile.company_name':
       return ctx.profile.company_name || ctx.profile.artist_name || ''
+    case 'lead.venue_name':
+      return ctx.lead?.venue_name ?? ''
+    case 'lead.instagram_handle':
+      return ctx.lead?.instagram_handle ?? ''
+    case 'lead.genre':
+      return ctx.lead?.genre ?? ''
+    case 'lead.event_name':
+      return ctx.lead?.event_name ?? ''
+    case 'lead.crowd_type':
+      return ctx.lead?.crowd_type ?? ''
+    case 'lead.resident_dj':
+      return ctx.lead?.resident_dj ?? ''
+    case 'lead.city':
+      return ctx.lead?.city ?? ''
+    case 'lead.contact_email':
+      return ctx.lead?.contact_email ?? ''
+    case 'lead.contact_phone':
+      return ctx.lead?.contact_phone ?? ''
+    case 'lead.website':
+      return ctx.lead?.website ?? ''
+    case 'lead.research_notes':
+      return ctx.lead?.research_notes ?? ''
     default:
       return ''
   }

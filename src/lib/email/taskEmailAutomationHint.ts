@@ -37,7 +37,7 @@ export function taskEmailAutomationHint(emailType: string): string | null {
 /** Include custom template audience when `email_type` is `custom:…`. */
 export function taskEmailAutomationHintWithCustom(
   emailType: string,
-  customAudience: 'venue' | 'artist' | null | undefined,
+  customAudience: 'venue' | 'artist' | 'lead' | null | undefined,
 ): string | null {
   if (!emailType || emailType === '__none__') return null
   if (parseCustomTemplateId(emailType)) {
@@ -46,6 +46,9 @@ export function taskEmailAutomationHintWithCustom(
     }
     if (customAudience === 'venue') {
       return 'Requires a venue with a contact email when you complete the task.'
+    }
+    if (customAudience === 'lead') {
+      return 'Lead template: not auto-queued from tasks until a lead is linked on the task. Send from Lead Intake when that flow is connected.'
     }
     return null
   }

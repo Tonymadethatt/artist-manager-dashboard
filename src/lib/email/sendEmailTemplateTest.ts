@@ -21,6 +21,7 @@ import {
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
+import { PREVIEW_MOCK_LEAD } from '@/lib/email/customEmailMerge'
 import { buildBrandedGigCalendarEmail, buildGigCalendarTableRow } from '@/lib/email/gigCalendarEmailHtml'
 import { buildGigBookedEmailMiddleHtml, buildGigBookedPreviewBundle } from '@/lib/email/gigBookedEmailSections'
 import {
@@ -91,7 +92,7 @@ export type SendEmailTemplateTestParams = {
   supabase: SupabaseClient
   profile: ArtistProfile
   previewLayout: EmailTemplateLayoutV1
-  activeGroup: 'client' | 'artist'
+  activeGroup: 'client' | 'artist' | 'leads'
   selectedType: AnyEmailType
   selectedCustomId: string | null
   sidebarMode: 'browse' | 'edit' | 'edit-custom'
@@ -153,6 +154,13 @@ export async function sendEmailTemplateTest(
         subject_template: subj.trim() || ' ',
         blocks: doc,
       }
+    } else if (row.audience === 'lead') {
+      payload.recipient = managerRecipient
+      payload.lead = PREVIEW_MOCK_LEAD
+      payload.custom_lead_template = {
+        subject_template: subj.trim() || ' ',
+        blocks: doc,
+      }
     } else {
       const first = (profile.manager_name || 'You').split(/\s+/)[0] || 'You'
       payload.recipient = { name: first, email: managerRecipient.email }
@@ -196,6 +204,10 @@ export async function sendEmailTemplateTest(
     })
     if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
     return { ok: true }
+  }
+
+  if (params.activeGroup === 'leads') {
+    return { ok: false, message: 'Select a lead template to send a test email.' }
   }
 
   if (params.activeGroup === 'artist') {

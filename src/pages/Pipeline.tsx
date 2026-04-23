@@ -256,7 +256,9 @@ export default function Pipeline() {
     const builtinArtist = Object.entries(ARTIST_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: `${l} (artist)` }))
     const customs = customEmailRows.map(r => ({
       value: customEmailTypeValue(r.id),
-      label: `${r.name} (${r.audience === 'venue' ? 'custom · client' : 'custom · artist'})`,
+      label: `${r.name} (${
+        r.audience === 'venue' ? 'custom · client' : r.audience === 'lead' ? 'custom · lead' : 'custom · artist'
+      })`,
     }))
     return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
   }, [customEmailRows])

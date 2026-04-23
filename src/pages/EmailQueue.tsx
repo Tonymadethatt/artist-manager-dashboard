@@ -1549,6 +1549,8 @@ export default function EmailQueue() {
             )
             if (capUrl) payload.capture_url = capUrl
           }
+        } else if (row.audience === 'lead') {
+          throw new Error('Lead custom templates are not sent from the email queue. Use a future Lead Intake send or test from Email Templates.')
         } else {
           throw new Error('Custom template not found')
         }

@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { defaultCustomBlocksDoc, defaultCustomBlocksDocForAudience } from '@/lib/email/customEmailBlocks'
 
-export type CustomEmailAudience = 'venue' | 'artist'
+export type CustomEmailAudience = 'venue' | 'artist' | 'lead'
 
 export interface CustomEmailTemplateRow {
   id: string
