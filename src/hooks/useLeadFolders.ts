@@ -95,12 +95,65 @@ export function useLeadFolders() {
 
   const notContactedFolderId = folders.find(f => f.name === 'Not Contacted')?.id ?? null
 
+  /**
+   * Removes a user-created folder. Leads in that folder are moved to the built-in
+   * "Not Contacted" folder (never deleted). System folders cannot be removed.
+   */
+  const deleteFolder = useCallback(
+    async (folderId: string) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return { error: new Error('Not signed in') as Error, movedLeadCount: 0 }
+      const folder = folders.find(f => f.id === folderId)
+      if (!folder) return { error: new Error('Folder not found'), movedLeadCount: 0 }
+      if (folder.is_system) {
+        return { error: new Error('Built-in folders cannot be deleted.'), movedLeadCount: 0 }
+      }
+      const fallback = folders.find(f => f.name === 'Not Contacted')?.id ?? null
+      if (!fallback) {
+        return {
+          error: new Error('Default folder “Not Contacted” is missing — try refreshing the page.'),
+          movedLeadCount: 0,
+        }
+      }
+      if (folderId === fallback) {
+        return { error: new Error('Cannot delete the default intake folder.'), movedLeadCount: 0 }
+      }
+
+      const { count, error: countErr } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('folder_id', folderId)
+      if (countErr) return { error: new Error(countErr.message), movedLeadCount: 0 }
+      const movedLeadCount = count ?? 0
+
+      const { error: uErr } = await supabase
+        .from('leads')
+        .update({ folder_id: fallback })
+        .eq('user_id', user.id)
+        .eq('folder_id', folderId)
+      if (uErr) return { error: new Error(uErr.message), movedLeadCount: 0 }
+
+      const { error: dErr } = await supabase
+        .from('lead_folders')
+        .delete()
+        .eq('id', folderId)
+        .eq('user_id', user.id)
+      if (dErr) return { error: new Error(dErr.message), movedLeadCount: 0 }
+
+      setFolders(prev => prev.filter(f => f.id !== folderId))
+      return { error: null as null, movedLeadCount, fallbackFolderId: fallback }
+    },
+    [folders],
+  )
+
   return {
     folders,
     loading,
     error,
     refetch: load,
     createFolder,
+    deleteFolder,
     notContactedFolderId,
   }
 }

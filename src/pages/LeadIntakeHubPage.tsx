@@ -3,6 +3,7 @@ import {
   Calendar,
   ContactRound,
   FolderPlus,
+  Folders,
   Loader2,
   Plus,
   Search,
@@ -61,10 +62,17 @@ function emptyPicked(): LeadImportPickedFields {
 }
 
 export default function LeadIntakeHubPage() {
-  const { folders, loading: foldersLoading, error: foldersError, createFolder, notContactedFolderId, refetch: refetchFolders } =
-    useLeadFolders()
+  const {
+    folders,
+    loading: foldersLoading,
+    error: foldersError,
+    createFolder,
+    deleteFolder,
+    notContactedFolderId,
+    refetch: refetchFolders,
+  } = useLeadFolders()
   const folderNameById = useMemo(() => new Map(folders.map(f => [f.id, f.name])), [folders])
-  const { leads, loading: leadsLoading, error: leadsError, insertLeads, addLead, updateLead, deleteLead } =
+  const { leads, loading: leadsLoading, error: leadsError, refetch: refetchLeads, insertLeads, addLead, updateLead, deleteLead } =
     useLeads(folderNameById)
 
   const [search, setSearch] = useState('')
@@ -91,16 +99,33 @@ export default function LeadIntakeHubPage() {
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderBusy, setNewFolderBusy] = useState(false)
 
+  const [manageFoldersOpen, setManageFoldersOpen] = useState(false)
+  const [folderDeleteConfirm, setFolderDeleteConfirm] = useState<{
+    id: string
+    name: string
+    leadCount: number
+  } | null>(null)
+  const [deleteFolderBusy, setDeleteFolderBusy] = useState(false)
+  const [manageFoldersError, setManageFoldersError] = useState<string | null>(null)
+
   const [editForm, setEditForm] = useState<LeadImportPickedFields | null>(null)
   const [editFolderId, setEditFolderId] = useState<string>('')
   const [editDirty, setEditDirty] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
 
   useEffect(() => {
-    if (folders.length && !addFolderId) {
+    if (folders.length === 0) return
+    if (!addFolderId || !folders.some(f => f.id === addFolderId)) {
       setAddFolderId(notContactedFolderId ?? folders[0]!.id)
     }
   }, [folders, addFolderId, notContactedFolderId])
+
+  useEffect(() => {
+    if (filterFolder === 'all') return
+    if (!folders.some(f => f.id === filterFolder)) {
+      setFilterFolder('all')
+    }
+  }, [folders, filterFolder])
 
   const selected = useMemo(() => leads.find(l => l.id === selectedId) ?? null, [leads, selectedId])
 
@@ -268,6 +293,20 @@ export default function LeadIntakeHubPage() {
     }
   }, [newFolderName, createFolder, refetchFolders])
 
+  const runConfirmDeleteFolder = useCallback(async () => {
+    if (!folderDeleteConfirm) return
+    setDeleteFolderBusy(true)
+    setManageFoldersError(null)
+    const res = await deleteFolder(folderDeleteConfirm.id)
+    setDeleteFolderBusy(false)
+    if (res.error) {
+      setManageFoldersError(res.error.message)
+      return
+    }
+    setFolderDeleteConfirm(null)
+    void refetchLeads()
+  }, [folderDeleteConfirm, deleteFolder, refetchLeads])
+
   if (foldersLoading) {
     return (
       <div className="flex min-h-[min(50vh,20rem)] w-full items-center justify-center">
@@ -293,6 +332,20 @@ export default function LeadIntakeHubPage() {
           >
             <FolderPlus className="h-3.5 w-3.5 mr-1" />
             <span className="hidden sm:inline">New folder</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 border-neutral-600 text-neutral-200"
+            onClick={() => {
+              setManageFoldersError(null)
+              setFolderDeleteConfirm(null)
+              setManageFoldersOpen(true)
+            }}
+          >
+            <Folders className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">Manage folders</span>
           </Button>
           <Button
             type="button"
@@ -739,6 +792,105 @@ export default function LeadIntakeHubPage() {
               {newFolderBusy ? 'Creating…' : 'Create'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={manageFoldersOpen}
+        onOpenChange={o => {
+          setManageFoldersOpen(o)
+          if (!o) {
+            setFolderDeleteConfirm(null)
+            setManageFoldersError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100 max-h-[85vh] flex flex-col">
+          {folderDeleteConfirm ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Delete folder?</DialogTitle>
+                <DialogDescription className="text-neutral-500">
+                  This removes the folder only. Leads are kept and moved to your default pipeline folder,{' '}
+                  <span className="text-neutral-300">Not Contacted</span>, so you can re-sort them later.
+                </DialogDescription>
+              </DialogHeader>
+              <p className="text-sm text-neutral-300">
+                <span className="font-medium text-neutral-200">{folderDeleteConfirm.name}</span>
+                {folderDeleteConfirm.leadCount === 0
+                  ? ' has no leads in it right now.'
+                  : ` has ${folderDeleteConfirm.leadCount} lead${folderDeleteConfirm.leadCount === 1 ? '' : 's'} that will move to Not Contacted.`}
+              </p>
+              {manageFoldersError ? <p className="text-xs text-red-400">{manageFoldersError}</p> : null}
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFolderDeleteConfirm(null)
+                    setManageFoldersError(null)
+                  }}
+                  className="border-neutral-600"
+                >
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-red-600 text-white hover:bg-red-500"
+                  onClick={() => void runConfirmDeleteFolder()}
+                  disabled={deleteFolderBusy}
+                >
+                  {deleteFolderBusy ? 'Removing…' : 'Delete folder'}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Manage folders</DialogTitle>
+                <DialogDescription className="text-neutral-500">
+                  Built-in folders are always part of your pipeline. You can remove custom folders; leads in a removed folder
+                  are moved to <span className="text-neutral-300">Not Contacted</span> (nothing is deleted).
+                </DialogDescription>
+              </DialogHeader>
+              {manageFoldersError ? <p className="text-xs text-red-400">{manageFoldersError}</p> : null}
+              <ul className="min-h-0 flex-1 overflow-y-auto space-y-2 pr-0.5 text-sm" aria-label="Folders">
+                {folders.map(f => {
+                  const isBuiltIn = f.is_system
+                  const n = leads.filter(l => l.folder_id === f.id).length
+                  return (
+                    <li
+                      key={f.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800/90 bg-neutral-900/30 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-neutral-100 truncate">{f.name}</div>
+                        <div className="text-[11px] text-neutral-500">
+                          {isBuiltIn ? 'Built-in · ' : null}
+                          {n === 0 ? 'No leads' : `${n} lead${n === 1 ? '' : 's'}`}
+                          {f.name === 'Not Contacted' ? ' · default bucket for new / reassigned leads' : ''}
+                        </div>
+                      </div>
+                      {!isBuiltIn ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-red-400 hover:text-red-300 hover:bg-red-950/50"
+                          title="Delete folder"
+                          onClick={() =>
+                            setFolderDeleteConfirm({ id: f.id, name: f.name, leadCount: n })
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
