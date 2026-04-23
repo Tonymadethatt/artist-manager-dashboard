@@ -49,8 +49,8 @@ export function Header({ onMenuClick }: HeaderProps) {
   return (
     <header
       className={cn(
-        'relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl border border-neutral-800/90',
-        'bg-neutral-900/55 px-3 py-2.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)] sm:px-4 sm:py-3',
+        'relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl border border-neutral-600/90',
+        'bg-neutral-950/92 px-3 py-2.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12)] sm:px-4 sm:py-3',
       )}
     >
       <HeaderAmbient zone={zone} />

@@ -166,8 +166,8 @@
 .header-ambient-orbs .header-orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(40px);
-  -webkit-filter: blur(40px);
+  filter: blur(34px) saturate(1.2);
+  -webkit-filter: blur(34px) saturate(1.2);
   will-change: transform;
   opacity: 1;
   pointer-events: none;
@@ -208,37 +208,41 @@
   animation-delay: -11s;
 }
 
-/* Workspace — cyan / sky / blue (high vibrancy) */
+/* Workspace — cyan / sky / blue (saturated, full-strength cores) */
 .header-ambient-orbs[data-zone="workspace"] .header-orb-a {
   background: radial-gradient(
     ellipse 78% 72% at 48% 52%,
-    hsla(187, 96%, 58%, 0.62) 0%,
-    hsla(198, 90%, 52%, 0.32) 42%,
-    transparent 70%
+    hsl(188, 100%, 52%) 0%,
+    hsla(198, 100%, 50%, 0.88) 28%,
+    hsla(205, 96%, 46%, 0.55) 52%,
+    transparent 78%
   );
 }
 .header-ambient-orbs[data-zone="workspace"] .header-orb-b {
   background: radial-gradient(
     ellipse 75% 70% at 55% 48%,
-    hsla(204, 96%, 58%, 0.58) 0%,
-    hsla(213, 88%, 52%, 0.26) 48%,
-    transparent 72%
+    hsl(204, 100%, 56%) 0%,
+    hsla(213, 100%, 52%, 0.82) 30%,
+    hsla(220, 92%, 44%, 0.5) 54%,
+    transparent 80%
   );
 }
 .header-ambient-orbs[data-zone="workspace"] .header-orb-c {
   background: radial-gradient(
     ellipse 80% 74% at 50% 50%,
-    hsla(217, 92%, 60%, 0.52) 0%,
-    hsla(222, 78%, 48%, 0.22) 45%,
-    transparent 68%
+    hsl(217, 100%, 62%) 0%,
+    hsla(225, 96%, 54%, 0.78) 26%,
+    hsla(230, 88%, 42%, 0.48) 50%,
+    transparent 76%
   );
 }
 .header-ambient-orbs[data-zone="workspace"] .header-orb-d {
   background: radial-gradient(
     ellipse 76% 72% at 58% 45%,
-    hsla(200, 95%, 58%, 0.5) 0%,
-    hsla(210, 85%, 50%, 0.2) 48%,
-    transparent 72%
+    hsl(199, 100%, 54%) 0%,
+    hsla(208, 100%, 48%, 0.8) 32%,
+    hsla(215, 90%, 40%, 0.46) 56%,
+    transparent 78%
   );
 }
 
@@ -246,33 +250,37 @@
 .header-ambient-orbs[data-zone="content"] .header-orb-a {
   background: radial-gradient(
     ellipse 78% 72% at 50% 50%,
-    hsla(292, 92%, 62%, 0.6) 0%,
-    hsla(280, 82%, 54%, 0.3) 44%,
-    transparent 70%
+    hsl(292, 100%, 62%) 0%,
+    hsla(285, 100%, 52%, 0.86) 28%,
+    hsla(278, 92%, 44%, 0.52) 52%,
+    transparent 78%
   );
 }
 .header-ambient-orbs[data-zone="content"] .header-orb-b {
   background: radial-gradient(
     ellipse 76% 70% at 52% 48%,
-    hsla(271, 90%, 60%, 0.56) 0%,
-    hsla(263, 78%, 52%, 0.26) 46%,
-    transparent 72%
+    hsl(271, 100%, 60%) 0%,
+    hsla(268, 98%, 52%, 0.82) 30%,
+    hsla(262, 90%, 42%, 0.5) 54%,
+    transparent 80%
   );
 }
 .header-ambient-orbs[data-zone="content"] .header-orb-c {
   background: radial-gradient(
     ellipse 78% 74% at 48% 52%,
-    hsla(258, 92%, 64%, 0.52) 0%,
-    hsla(250, 80%, 56%, 0.22) 48%,
-    transparent 70%
+    hsl(258, 100%, 66%) 0%,
+    hsla(255, 96%, 56%, 0.78) 26%,
+    hsla(248, 88%, 46%, 0.48) 50%,
+    transparent 76%
   );
 }
 .header-ambient-orbs[data-zone="content"] .header-orb-d {
   background: radial-gradient(
     ellipse 76% 72% at 55% 48%,
-    hsla(280, 88%, 58%, 0.54) 0%,
-    hsla(265, 72%, 50%, 0.24) 48%,
-    transparent 72%
+    hsl(280, 100%, 58%) 0%,
+    hsla(275, 100%, 50%, 0.84) 30%,
+    hsla(268, 88%, 42%, 0.5) 54%,
+    transparent 78%
   );
 }
 
@@ -280,33 +288,37 @@
 .header-ambient-orbs[data-zone="forms"] .header-orb-a {
   background: radial-gradient(
     ellipse 78% 72% at 50% 50%,
-    hsla(38, 98%, 62%, 0.62) 0%,
-    hsla(28, 92%, 54%, 0.32) 44%,
-    transparent 70%
+    hsl(38, 100%, 58%) 0%,
+    hsla(32, 100%, 52%, 0.88) 28%,
+    hsla(24, 96%, 44%, 0.52) 52%,
+    transparent 78%
   );
 }
 .header-ambient-orbs[data-zone="forms"] .header-orb-b {
   background: radial-gradient(
     ellipse 76% 70% at 52% 48%,
-    hsla(24, 96%, 58%, 0.58) 0%,
-    hsla(16, 88%, 52%, 0.28) 46%,
-    transparent 72%
+    hsl(24, 100%, 56%) 0%,
+    hsla(18, 100%, 50%, 0.84) 30%,
+    hsla(12, 92%, 42%, 0.5) 54%,
+    transparent 80%
   );
 }
 .header-ambient-orbs[data-zone="forms"] .header-orb-c {
   background: radial-gradient(
     ellipse 78% 74% at 48% 52%,
-    hsla(350, 88%, 62%, 0.54) 0%,
-    hsla(340, 72%, 54%, 0.24) 48%,
-    transparent 70%
+    hsl(350, 100%, 62%) 0%,
+    hsla(345, 98%, 54%, 0.8) 28%,
+    hsla(338, 90%, 44%, 0.48) 50%,
+    transparent 76%
   );
 }
 .header-ambient-orbs[data-zone="forms"] .header-orb-d {
   background: radial-gradient(
     ellipse 76% 72% at 52% 50%,
-    hsla(15, 92%, 58%, 0.56) 0%,
-    hsla(32, 85%, 52%, 0.26) 48%,
-    transparent 72%
+    hsl(16, 100%, 56%) 0%,
+    hsla(28, 100%, 50%, 0.82) 30%,
+    hsla(36, 92%, 44%, 0.5) 54%,
+    transparent 78%
   );
 }
 
@@ -314,67 +326,75 @@
 .header-ambient-orbs[data-zone="email"] .header-orb-a {
   background: radial-gradient(
     ellipse 78% 72% at 50% 50%,
-    hsla(158, 88%, 52%, 0.58) 0%,
-    hsla(168, 82%, 46%, 0.3) 44%,
-    transparent 70%
+    hsl(158, 100%, 50%) 0%,
+    hsla(168, 100%, 46%, 0.9) 26%,
+    hsla(175, 94%, 38%, 0.55) 50%,
+    transparent 78%
   );
 }
 .header-ambient-orbs[data-zone="email"] .header-orb-b {
   background: radial-gradient(
     ellipse 76% 70% at 52% 48%,
-    hsla(172, 90%, 50%, 0.56) 0%,
-    hsla(180, 78%, 46%, 0.26) 46%,
-    transparent 72%
+    hsl(172, 100%, 48%) 0%,
+    hsla(182, 100%, 44%, 0.86) 28%,
+    hsla(188, 92%, 38%, 0.52) 52%,
+    transparent 80%
   );
 }
 .header-ambient-orbs[data-zone="email"] .header-orb-c {
   background: radial-gradient(
     ellipse 78% 74% at 48% 52%,
-    hsla(187, 84%, 56%, 0.52) 0%,
-    hsla(192, 72%, 48%, 0.22) 48%,
-    transparent 70%
+    hsl(187, 100%, 54%) 0%,
+    hsla(192, 100%, 48%, 0.82) 28%,
+    hsla(198, 90%, 40%, 0.5) 52%,
+    transparent 76%
   );
 }
 .header-ambient-orbs[data-zone="email"] .header-orb-d {
   background: radial-gradient(
     ellipse 76% 72% at 54% 46%,
-    hsla(165, 86%, 50%, 0.54) 0%,
-    hsla(178, 80%, 46%, 0.24) 48%,
-    transparent 72%
+    hsl(165, 100%, 48%) 0%,
+    hsla(172, 98%, 44%, 0.88) 28%,
+    hsla(178, 92%, 36%, 0.52) 52%,
+    transparent 78%
   );
 }
 
-/* Settings — cool slate (readable contrast, still visible) */
+/* Settings — cool indigo / periwinkle (saturated, not grayed out) */
 .header-ambient-orbs[data-zone="neutral"] .header-orb-a {
   background: radial-gradient(
     ellipse 78% 72% at 50% 50%,
-    hsla(215, 32%, 58%, 0.45) 0%,
-    hsla(220, 24%, 42%, 0.2) 46%,
-    transparent 72%
+    hsl(226, 90%, 62%) 0%,
+    hsla(230, 88%, 52%, 0.82) 30%,
+    hsla(235, 80%, 40%, 0.48) 54%,
+    transparent 80%
   );
 }
 .header-ambient-orbs[data-zone="neutral"] .header-orb-b {
   background: radial-gradient(
     ellipse 76% 70% at 52% 48%,
-    hsla(210, 26%, 52%, 0.4) 0%,
-    hsla(218, 18%, 38%, 0.18) 48%,
-    transparent 72%
+    hsl(248, 85%, 64%) 0%,
+    hsla(252, 82%, 54%, 0.78) 28%,
+    hsla(258, 72%, 42%, 0.46) 52%,
+    transparent 78%
   );
 }
 .header-ambient-orbs[data-zone="neutral"] .header-orb-c {
   background: radial-gradient(
     ellipse 78% 74% at 48% 52%,
-    hsla(225, 28%, 50%, 0.38) 0%,
-    hsla(230, 20%, 36%, 0.16) 48%,
-    transparent 70%
+    hsl(210, 95%, 58%) 0%,
+    hsla(218, 92%, 48%, 0.8) 28%,
+    hsla(222, 84%, 38%, 0.48) 52%,
+    transparent 76%
   );
 }
 .header-ambient-orbs[data-zone="neutral"] .header-orb-d {
   background: radial-gradient(
     ellipse 76% 72% at 56% 44%,
-    hsla(218, 22%, 54%, 0.42) 0%,
-    hsla(212, 16%, 40%, 0.18) 48%,
-    transparent 72%
+    hsl(238, 88%, 60%) 0%,
+    hsla(242, 86%, 50%, 0.82) 30%,
+    hsla(248, 78%, 40%, 0.46) 54%,
+    transparent 78%
   );
 }
 
