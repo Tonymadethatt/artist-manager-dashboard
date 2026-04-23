@@ -608,28 +608,32 @@ export default function LeadIntakeHubPage() {
               <p className="text-xs text-red-400 mb-2">{foldersError ?? leadsError}</p>
             ) : null}
             <div
-              className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]"
+              className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin] sm:gap-2"
               title="Search and filters (scroll horizontally on narrow screens)"
             >
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      'h-8 shrink-0 gap-1.5 border-neutral-700 bg-neutral-950/80 px-2.5 text-xs',
-                      search.trim() && 'border-neutral-500/70',
-                    )}
-                    aria-label={search.trim() ? `Search: ${search}` : 'Open search'}
-                  >
-                    <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" aria-hidden />
-                    {search.trim() ? (
-                      <span className="max-w-[4.5rem] truncate text-neutral-200">{search}</span>
-                    ) : (
-                      <span className="text-neutral-500">Search</span>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
+              <div
+                className="min-w-[35%] max-w-full grow-[2] basis-0"
+                title="Search leads (opens query field)"
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        'h-8 w-full min-w-0 justify-start gap-1.5 border-neutral-700 bg-neutral-950/80 px-2.5 text-xs',
+                        search.trim() && 'border-neutral-500/70',
+                      )}
+                      aria-label={search.trim() ? `Search: ${search}` : 'Open search'}
+                    >
+                      <Search className="h-3.5 w-3.5 shrink-0 text-neutral-500" aria-hidden />
+                      {search.trim() ? (
+                        <span className="min-w-0 flex-1 truncate text-left text-neutral-200">{search}</span>
+                      ) : (
+                        <span className="text-neutral-500">Search</span>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
                   className="w-[min(20rem,calc(100vw-1.5rem))] p-0 border-neutral-800 bg-neutral-900"
@@ -650,11 +654,12 @@ export default function LeadIntakeHubPage() {
                     </div>
                   </div>
                 </DropdownMenuContent>
-              </DropdownMenu>
+                </DropdownMenu>
+              </div>
 
               <Select value={filterFolder} onValueChange={v => setFilterFolder(v as typeof filterFolder)}>
                 <SelectTrigger
-                  className="h-8 w-[4.75rem] sm:w-28 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
+                  className="h-8 w-[4.75rem] sm:min-w-[6.5rem] sm:w-32 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
                   aria-label="Filter by folder"
                 >
                   <SelectValue placeholder="All" />
@@ -671,7 +676,7 @@ export default function LeadIntakeHubPage() {
 
               <Select value={dateFilter} onValueChange={v => setDateFilter(v as DateFilter)}>
                 <SelectTrigger
-                  className="h-8 w-[3.5rem] sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
+                  className="h-8 w-[3.5rem] sm:min-w-[4.5rem] sm:w-24 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
                   aria-label="Date added"
                 >
                   <SelectValue />
@@ -687,14 +692,14 @@ export default function LeadIntakeHubPage() {
                 value={filterCity}
                 onChange={e => setFilterCity(e.target.value)}
                 placeholder="City"
-                className="h-8 w-16 sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80"
+                className="h-8 min-w-[4.5rem] flex-1 basis-0 text-xs border-neutral-700 bg-neutral-950/80"
                 aria-label="Filter by city"
               />
               <Input
                 value={filterGenre}
                 onChange={e => setFilterGenre(e.target.value)}
                 placeholder="Genre"
-                className="h-8 w-16 sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80"
+                className="h-8 min-w-[4.5rem] flex-1 basis-0 text-xs border-neutral-700 bg-neutral-950/80"
                 aria-label="Filter by genre"
               />
             </div>
