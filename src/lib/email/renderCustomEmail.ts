@@ -60,12 +60,19 @@ function leadCtaIconPaths(base: string) {
 /** Rounded-rect lead link row (not pill-shaped) — matches website / press / Instagram. */
 const LEAD_CTA_LINK_RADIUS = '8px'
 
-/** Prefilled `mailto` body for the reply CTA; merge keys supported. */
+/** Mailto "Re:" line — not the outbound email subject (e.g. event-specific). */
+const LEAD_REPLY_MAILTO_SUBJECT_TEMPLATE = 'Re: {{profile.artist_name}} — following up to connect'
+
+/** Prefilled `mailto` body; merge keys supported; short blanks the sender can fill or delete. */
 const LEAD_REPLY_MAILTO_BODY_TEMPLATE = `Hi {{recipient.firstName}},
 
-I'd like to continue our conversation.
+Thanks for your interest in {{profile.artist_name}}. I would like to set up a short call to connect and discuss next steps.
 
-Thanks,`
+A few good days for me: _________________________________
+Good times (and time zone): _________________________________
+Best way to reach me: _________________________________
+
+— {{profile.manager_name}}`
 
 function nlToBr(s: string): string {
   return escapeHtmlPlain(s).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
@@ -307,7 +314,7 @@ function renderBlocks(
       case 'lead_cta_pills': {
         const { website: leadW, pressKit: pressW, instagram: igHref } = leadCtaPillHrefs(ctx)
         const pillBase =
-          `display:inline-block;margin:4px 8px 4px 0;padding:9px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:12px;font-weight:600;text-decoration:none;`
+          `display:inline-block;padding:9px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:12px;font-weight:600;text-decoration:none;`
         const pillBlack = `${pillBase}border:1px solid #262626;background:#000000;color:#ffffff;`
         const pills: string[] = []
         if (leadW) {
@@ -326,8 +333,14 @@ function renderBlocks(
           )
         }
         if (pills.length === 0) break
+        const row = pills
+          .map(
+            c =>
+              `<td style="padding:0 10px 8px 0;vertical-align:top;" valign="top">${c}</td>`,
+          )
+          .join('')
         parts.push(
-          `<div style="margin:12px 0 8px;">${pills.join('')}</div>`,
+          `<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:12px 0 8px;"><tr>${row}</tr></table>`,
         )
         break
       }
@@ -484,28 +497,35 @@ function renderLeadBlocks(
         const globe = iconUrls.globe
         const docIcon = iconUrls.document
         const igIcon = iconUrls.instagram
-        const baseFlex =
-          `display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;`
-        const pillBlackFlex = `${baseFlex}background:#000000;color:#ffffff;border:1px solid #262626;`
+        const pillA =
+          `display:inline-block;vertical-align:middle;padding:10px 16px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;background:#000000;color:#ffffff;border:1px solid #262626;line-height:1.2;`
+        const iconStyle = 'display:inline-block;vertical-align:middle;border:0;margin:0 8px 0 0;'
+        const textStyle = 'display:inline-block;vertical-align:middle;'
         const pills: string[] = []
         if (leadW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(leadW)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Website</span></a>`,
+            `<a href="${escapeHtmlPlain(leadW)}" style="${pillA}"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Website</span></a>`,
           )
         }
         if (pressW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(pressW)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Press kit</span></a>`,
+            `<a href="${escapeHtmlPlain(pressW)}" style="${pillA}"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Press kit</span></a>`,
           )
         }
         if (igHref) {
           pills.push(
-            `<a href="${escapeHtmlPlain(igHref)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Instagram</span></a>`,
+            `<a href="${escapeHtmlPlain(igHref)}" style="${pillA}"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Instagram</span></a>`,
           )
         }
         if (pills.length === 0) break
+        const row = pills
+          .map(
+            c =>
+              `<td style="padding:0 10px 8px 0;vertical-align:middle;" valign="middle">${c}</td>`,
+          )
+          .join('')
         parts.push(
-          `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 8px;">${pills.join('')}</div>`,
+          `<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:12px 0 8px;"><tr>${row}</tr></table>`,
         )
         break
       }
@@ -517,17 +537,19 @@ function renderLeadBlocks(
 function buildLeadReplyMailtoBlock(
   profile: VenueRenderProfile,
   ctx: CustomEmailMergeContext,
-  subject: string,
+  mailtoSubject: string,
   logoBaseUrl: string,
 ): string {
   const replyTo = (profile.reply_to_email || profile.from_email || '').trim()
   if (!replyTo) return ''
   const body = applyMergeToText(LEAD_REPLY_MAILTO_BODY_TEMPLATE, ctx, 'lead')
-  const href = `mailto:${replyTo}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  const href = `mailto:${replyTo}?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(body)}`
   const replyIcon = leadCtaIconPaths(logoBaseUrl).reply
-  const btn = `display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;background:#2563eb;color:#ffffff;border:1px solid #1e40af;`
+  const iconStyle = 'display:inline-block;vertical-align:middle;border:0;margin:0 8px 0 0;'
+  const textStyle = 'display:inline-block;vertical-align:middle;'
+  const btn = `display:inline-block;vertical-align:middle;padding:12px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;background:#2563eb;color:#ffffff;border:1px solid #1e40af;line-height:1.2;`
   return `<div style="padding:20px 32px 12px 32px;border-top:1px solid #e5e5e5;">
-    <a href="${escapeHtmlPlain(href)}" style="${btn}"><img src="${escapeHtmlPlain(replyIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Reply by email</span></a>
+    <a href="${escapeHtmlPlain(href)}" style="${btn}"><img src="${escapeHtmlPlain(replyIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Reply by email</span></a>
   </div>`
 }
 
@@ -535,9 +557,9 @@ function buildLeadEmailFooterHtml(
   profile: VenueRenderProfile,
   logoUrl: string,
   logoAlt: string,
-  replyMailto: { ctx: CustomEmailMergeContext; subject: string; logoBaseUrl: string } | null,
+  replyMailto: { ctx: CustomEmailMergeContext; mailtoSubject: string; logoBaseUrl: string } | null,
 ): string {
-  const replyBlock = replyMailto ? buildLeadReplyMailtoBlock(profile, replyMailto.ctx, replyMailto.subject, replyMailto.logoBaseUrl) : ''
+  const replyBlock = replyMailto ? buildLeadReplyMailtoBlock(profile, replyMailto.ctx, replyMailto.mailtoSubject, replyMailto.logoBaseUrl) : ''
   const footerTopBorder = replyBlock ? '' : 'border-top:1px solid #e5e5e5;'
   const name = profile.manager_name?.trim() || ''
   const title = profile.manager_title?.trim() || ''
@@ -574,9 +596,10 @@ function buildLeadCustomEmailDocument(
     ? leadPlainAttachmentLink(opts.attachment.url, opts.attachment.fileName)
     : ''
   const logoAlt = venueClientEmailLogoAlt(opts.profile)
+  const mailtoSubject = applyMergeToText(LEAD_REPLY_MAILTO_SUBJECT_TEMPLATE, ctx, 'lead')
   const footerHtml = buildLeadEmailFooterHtml(opts.profile, logoUrl, logoAlt, {
     ctx,
-    subject,
+    mailtoSubject,
     logoBaseUrl: opts.logoBaseUrl,
   })
   const responsiveClasses = opts.responsiveClasses ?? false

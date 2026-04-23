@@ -37,6 +37,7 @@ export const ARTIST_CUSTOM_MERGE_KEYS = [
 export const LEAD_CUSTOM_MERGE_KEYS = [
   'recipient.firstName',
   'profile.artist_name',
+  'profile.manager_name',
   'profile.company_name',
   'profile.website',
   'lead.venue_name',
@@ -253,6 +254,11 @@ export function resolveMergeKey(
       return ctx.deal?.notes ?? ''
     case 'profile.artist_name':
       return ctx.profile.artist_name ?? ''
+    case 'profile.manager_name': {
+      const m = ctx.profile.manager_name?.trim()
+      if (m) return m
+      return ctx.profile.artist_name?.trim() ?? ''
+    }
     case 'profile.company_name':
       return ctx.profile.company_name || ctx.profile.artist_name || ''
     case 'profile.website':
@@ -285,12 +291,22 @@ export function resolveMergeKey(
 }
 
 /**
+ * If HTML or a bad edit splits `{{key}}` tokens, merge can leave a lone `{` before punctuation (e.g. "Miami, FL{ .").
+ * Strip that artifact without touching legitimate braces.
+ */
+function stripStrayLoneOpenBraceBeforePunct(s: string): string {
+  return s.replace(/([\w)])\s*\{(\s*[.!?,;])/g, '$1$2')
+}
+
+/**
  * Replace {{key}} in user text with resolved values. Unknown keys stay empty.
  */
 export function applyMergeToText(template: string, ctx: CustomEmailMergeContext, audience: CustomMergeAudience): string {
-  return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey: string) => {
+  let out = template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey: string) => {
     return resolveMergeKey(rawKey, ctx, audience)
   })
+  out = stripStrayLoneOpenBraceBeforePunct(out)
+  return out
 }
 
 /** For lead template blocks: if `key` is set, the block is shown only when that merge value is non-empty after trim. */

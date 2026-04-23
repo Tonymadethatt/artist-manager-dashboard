@@ -119,12 +119,22 @@ const handler: Handler = async event => {
     }
   }
 
-  const layoutRaw = (body.layout ?? null) as EmailTemplateLayoutV1 | null
-  const L = makeLayoutForBrandDigest(
-    layoutRaw,
-    body.custom_subject ?? null,
-    body.custom_intro ?? null,
-  )
+  const { data: brandTmpl } = await supabase
+    .from('email_templates')
+    .select('layout, custom_subject, custom_intro')
+    .eq('user_id', userId)
+    .eq('email_type', 'brand_outreach_digest')
+    .maybeSingle()
+
+  const layoutFromBody = body.layout as EmailTemplateLayoutV1 | null | undefined
+  const layoutRaw =
+    (layoutFromBody !== undefined && layoutFromBody !== null
+      ? layoutFromBody
+      : (brandTmpl?.layout as EmailTemplateLayoutV1 | null)) ?? null
+  const customSubject =
+    body.custom_subject !== undefined ? body.custom_subject : brandTmpl?.custom_subject ?? null
+  const customIntro = body.custom_intro !== undefined ? body.custom_intro : brandTmpl?.custom_intro ?? null
+  const L = makeLayoutForBrandDigest(layoutRaw, customSubject, customIntro)
   const siteUrl = process.env.URL || ''
   const footer = {
     logoBaseUrl: siteUrl,

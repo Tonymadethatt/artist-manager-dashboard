@@ -75,13 +75,12 @@ export function useEmailTemplates() {
       base.custom_intro = legacy.custom_intro
     }
 
-    const { data: rows, error } = await supabase
+    const { error: upsertErr } = await supabase
       .from('email_templates')
       .upsert(base as never, { onConflict: 'user_id, email_type' })
-      .select()
 
-    if (error) {
-      const raw = [error.message, (error as { details?: string }).details, (error as { hint?: string }).hint]
+    if (upsertErr) {
+      const raw = [upsertErr.message, (upsertErr as { details?: string }).details, (upsertErr as { hint?: string }).hint]
         .filter(Boolean)
         .join(' — ')
       const msg = raw || 'email_templates upsert failed'
@@ -94,9 +93,19 @@ export function useEmailTemplates() {
         ),
       }
     }
-    const tmpl = (Array.isArray(rows) ? rows[0] : null) as EmailTemplate | null
+    // Re-read row so `layout` jsonb (e.g. closing) always matches what Postgres stored — avoids rare partial `select` payloads after upsert.
+    const { data: fresh, error: readErr } = await supabase
+      .from('email_templates')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('email_type', email_type)
+      .maybeSingle()
+    if (readErr) {
+      return { error: new Error(readErr.message) }
+    }
+    const tmpl = fresh as EmailTemplate | null
     if (!tmpl) {
-      return { error: new Error('Save returned no row (check RLS and email_templates unique on user_id, email_type).') }
+      return { error: new Error('Save succeeded but re-fetch returned no row (check RLS).') }
     }
     setTemplates(prev => {
       const exists = prev.find(t => t.email_type === email_type)
