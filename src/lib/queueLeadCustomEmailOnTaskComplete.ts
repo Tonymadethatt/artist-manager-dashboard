@@ -242,6 +242,10 @@ async function loadLeadTemplate(
   }
 }
 
+type QueueLeadOptions = {
+  onBulkLeadProgress?: (p: { processed: number; total: number }) => void
+}
+
 /**
  * Send lead custom template email immediately and log to `lead_email_events` (task completion automation).
  * Supports single lead, all leads in a folder, or all leads (bulk).
@@ -249,6 +253,7 @@ async function loadLeadTemplate(
 export async function queueLeadCustomEmailOnTaskComplete(
   task: Task,
   userId: string,
+  queueOptions?: QueueLeadOptions,
 ): Promise<TaskEmailAutomationResult> {
   const cid = parseCustomTemplateId(task.email_type)
   if (!cid) {
@@ -317,11 +322,13 @@ export async function queueLeadCustomEmailOnTaskComplete(
       if (String(list[i].contact_email ?? '').trim()) indicesWithEmail.push(i)
     }
     const skippedNoEmail = list.length - indicesWithEmail.length
+    const total = indicesWithEmail.length
+    queueOptions?.onBulkLeadProgress?.({ processed: 0, total })
 
     let sent = 0
     let failed = 0
     let skipped = skippedNoEmail
-    for (let k = 0; k < indicesWithEmail.length; k += 1) {
+    for (let k = 0; k < total; k += 1) {
       const leadRow = list[indicesWithEmail[k]]
       const r = await sendLeadTemplateToOneLead({
         userId,
@@ -337,7 +344,8 @@ export async function queueLeadCustomEmailOnTaskComplete(
       } else {
         failed += 1
       }
-      if (k < indicesWithEmail.length - 1) {
+      queueOptions?.onBulkLeadProgress?.({ processed: k + 1, total })
+      if (k < total - 1) {
         await sleepMs(BULK_LEAD_INTER_SEND_MS)
       }
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   queueEmailAutomationForCompletedTask,
@@ -15,6 +15,7 @@ import {
   ensureDealCalendarEmailsQueued,
 } from '@/lib/calendar/queueGigCalendarEmails'
 import { TASK_LIST_SELECT } from '@/lib/tasks/taskListSelect'
+import type { BulkLeadSendOverlayState } from '@/components/BulkLeadEmailProgressOverlay'
 
 export type EmailAutomationFeedback =
   | { kind: 'error'; message: string }
@@ -47,6 +48,8 @@ export function useTasks() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [emailAutomationFeedback, setEmailAutomationFeedback] = useState<EmailAutomationFeedback | null>(null)
+  const [bulkLeadSendOverlay, setBulkLeadSendOverlay] = useState<BulkLeadSendOverlayState | null>(null)
+  const bulkOverlayDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -61,6 +64,15 @@ export function useTasks() {
   }, [])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  useEffect(() => {
+    return () => {
+      if (bulkOverlayDismissRef.current) {
+        clearTimeout(bulkOverlayDismissRef.current)
+        bulkOverlayDismissRef.current = null
+      }
+    }
+  }, [])
 
   const addTask = async (task: {
     title: string
@@ -186,14 +198,20 @@ export function useTasks() {
       .single()
 
     const completedTaskRow = (freshTask ?? task) as Task
-    if (completedTaskRow.email_type && isBulkLeadCustomEmailTask(completedTaskRow)) {
-      setEmailAutomationFeedback({
-        kind: 'info',
-        message:
-          'Sending lead emails. Keep this page open while we send — large lists can take a minute.',
-      })
+    const isBulkLead = !!(completedTaskRow.email_type && isBulkLeadCustomEmailTask(completedTaskRow))
+    if (isBulkLead) {
+      setBulkLeadSendOverlay({ kind: 'sending', processed: 0, total: 0 })
     }
-    const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, emailOptions ?? {})
+    const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, {
+      ...(emailOptions ?? {}),
+      ...(isBulkLead
+        ? {
+            onBulkLeadProgress: (p: { processed: number; total: number }) => {
+              setBulkLeadSendOverlay({ kind: 'sending', ...p })
+            },
+          }
+        : {}),
+    })
 
     if (completedTaskRow.deal_id) {
       // Backfill show instants inside ensureDealCalendarEmailsQueued; run before stamp so RPC sees a qualified deal.
@@ -242,6 +260,37 @@ export function useTasks() {
           setEmailAutomationFeedback({ kind: 'info', message: info })
         }
       }
+    }
+
+    if (isBulkLead) {
+      if (bulkOverlayDismissRef.current) {
+        clearTimeout(bulkOverlayDismissRef.current)
+        bulkOverlayDismissRef.current = null
+      }
+      let short = 'All set — emails are on their way.'
+      if (!autoResult.ok) {
+        short = 'Could not finish — see the message below.'
+      } else if (autoResult.leadBulkStats) {
+        const b = autoResult.leadBulkStats
+        if (b.failed > 0) {
+          short = 'Finished — some sends failed (see below).'
+        } else if (b.sent === 0 && b.skipped > 0) {
+          short = 'Finished — no new emails sent (see below).'
+        }
+      }
+      const st = autoResult.leadBulkStats
+      const lookGood
+        = autoResult.ok
+          && (st ? st.failed === 0 && st.sent > 0 : true)
+      setBulkLeadSendOverlay({
+        kind: 'result',
+        ok: lookGood,
+        message: short,
+      })
+      bulkOverlayDismissRef.current = setTimeout(() => {
+        setBulkLeadSendOverlay(null)
+        bulkOverlayDismissRef.current = null
+      }, 2200)
     }
 
     return { automation: autoResult }
@@ -310,6 +359,7 @@ export function useTasks() {
     loading,
     error,
     emailAutomationFeedback,
+    bulkLeadSendOverlay,
     dismissEmailAutomationFeedback,
     refetch: fetchTasks,
     addTask,

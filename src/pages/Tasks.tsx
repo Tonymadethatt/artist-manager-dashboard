@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { BulkLeadEmailProgressOverlay } from '@/components/BulkLeadEmailProgressOverlay'
 import { AgreementPdfPicker } from '@/components/pipeline/AgreementPdfPicker'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { useNavBadges } from '@/context/NavBadgesContext'
@@ -103,6 +104,7 @@ export default function Tasks() {
     completeTask,
     uncompleteTask,
     emailAutomationFeedback,
+    bulkLeadSendOverlay,
     dismissEmailAutomationFeedback,
     refetch: refetchTasks,
   } = useTasks()
@@ -315,6 +317,7 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5 w-full min-w-0">
+      <BulkLeadEmailProgressOverlay state={bulkLeadSendOverlay} />
       {emailAutomationFeedback && (
         <div
           role="status"

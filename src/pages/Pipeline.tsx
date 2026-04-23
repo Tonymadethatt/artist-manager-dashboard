@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { BulkLeadEmailProgressOverlay } from '@/components/BulkLeadEmailProgressOverlay'
 import { Plus, LayoutGrid, List, Settings2 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTasks } from '@/hooks/useTasks'
@@ -255,6 +256,7 @@ export default function Pipeline() {
     uncompleteTask,
     snoozeTask,
     emailAutomationFeedback,
+    bulkLeadSendOverlay,
     dismissEmailAutomationFeedback,
   } = useTasks()
   const { venues, updateVenue } = useVenues()
@@ -613,6 +615,7 @@ export default function Pipeline() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      <BulkLeadEmailProgressOverlay state={bulkLeadSendOverlay} />
       {toast && (
         <div className="fixed top-4 right-4 z-50 bg-neutral-800 border border-neutral-700 text-neutral-100 text-sm px-4 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
           {toast}

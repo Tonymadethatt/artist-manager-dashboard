@@ -26,6 +26,8 @@ export type { TaskEmailAutomationResult } from '@/lib/taskEmailAutomationResult'
 export type QueueEmailOnTaskCompleteOptions = {
   /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
   agreementUrl?: string | null
+  /** Lead bulk send only: after each lead attempt (and total once known) for in-browser progress UI. */
+  onBulkLeadProgress?: (p: { processed: number; total: number }) => void
 }
 
 async function loadGeneratedFileRow(id: string | null | undefined): Promise<GeneratedFile | null> {
@@ -243,7 +245,9 @@ export async function queueEmailAutomationForCompletedTask(
   }
 
   if (audience.kind === 'lead') {
-    return queueLeadCustomEmailOnTaskComplete(task, user.id)
+    return queueLeadCustomEmailOnTaskComplete(task, user.id, {
+      onBulkLeadProgress: options?.onBulkLeadProgress,
+    })
   }
 
   /** Task may omit venue while still linking a deal — resolve venue from the deal for email + merge context. */
