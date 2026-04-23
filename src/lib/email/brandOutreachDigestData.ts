@@ -1,5 +1,5 @@
-import { FIRST_OUTREACH_LEAD_NAME } from '@/lib/email/firstOutreachLeadTemplate'
-import type { Database } from '@/types/database'
+import type { Database } from '../../types/database'
+import { FIRST_OUTREACH_LEAD_NAME } from './firstOutreachLeadTemplate'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type LeadRow = Database['public']['Tables']['leads']['Row']

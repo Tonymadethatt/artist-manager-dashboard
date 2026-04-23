@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions'
 import type { EmailTemplateLayoutV1 } from '../../src/lib/emailLayout'
-import { sharedStyles } from '../../src/lib/buildArtistEmailHtml'
+import { sharedStyles } from '../../src/lib/email/artistEmailSharedStyles'
 import {
   buildBrandOutreachDigestDocumentHtml,
   makeLayoutForBrandDigest,

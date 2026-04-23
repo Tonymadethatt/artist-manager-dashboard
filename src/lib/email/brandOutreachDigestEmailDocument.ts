@@ -1,14 +1,14 @@
-import { renderAppendBlocksHtml } from '@/lib/email/appendBlocksHtml'
-import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmailFooterHtml'
+import type { EmailTemplateLayoutV1 } from '../emailLayout'
+import { artistLayoutForSend } from '../emailLayout'
+import { renderAppendBlocksHtml } from './appendBlocksHtml'
+import { buildArtistBrandedEmailFooterHtml } from './artistBrandedEmailFooterHtml'
 import {
   EMAIL_BODY_SECONDARY,
   EMAIL_FOOTER_MUTED,
   EMAIL_LABEL,
-} from '@/lib/email/emailDarkSurfacePalette'
-import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
-import { artistLayoutForSend } from '@/lib/emailLayout'
+} from './emailDarkSurfacePalette'
+import { decorateProgrammaticSectionCardTitle } from './emailSectionCardEmoji'
 import type { BrandOutreachDigestPayload } from './brandOutreachDigestData'
-import { decorateProgrammaticSectionCardTitle } from '@/lib/email/emailSectionCardEmoji'
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
