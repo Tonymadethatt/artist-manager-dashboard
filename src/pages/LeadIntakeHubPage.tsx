@@ -11,6 +11,8 @@ import {
   Loader2,
   Plus,
   Search,
+  FileText,
+  Download,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -58,6 +60,28 @@ function fmtDate(iso: string | null | undefined) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function publicReferenceUrl(pathFromReferenceFolder: string): string {
+  const base = import.meta.env.BASE_URL
+  const trimmedBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const path = pathFromReferenceFolder.startsWith('/') ? pathFromReferenceFolder : `/${pathFromReferenceFolder}`
+  return `${trimmedBase}${path}`.replace(/([^:]\/)\/+/g, '$1')
+}
+
+async function fetchPublicReferenceAsDownload(
+  pathFromReferenceFolder: string,
+  downloadAs: string,
+): Promise<void> {
+  const res = await fetch(publicReferenceUrl(pathFromReferenceFolder))
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const a = document.createElement('a')
+  const href = URL.createObjectURL(blob)
+  a.href = href
+  a.download = downloadAs
+  a.click()
+  URL.revokeObjectURL(href)
 }
 
 function emptyPicked(): LeadImportPickedFields {
@@ -108,6 +132,7 @@ export default function LeadIntakeHubPage() {
   const [importText, setImportText] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [importDownloadError, setImportDownloadError] = useState<string | null>(null)
 
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState<LeadImportPickedFields>(() => emptyPicked())
@@ -277,6 +302,30 @@ export default function LeadIntakeHubPage() {
     if (!importText.trim()) return []
     return parseLeadResearchImportText(importText)
   }, [importText])
+
+  const downloadLeadImportSpec = useCallback(async () => {
+    setImportDownloadError(null)
+    try {
+      await fetchPublicReferenceAsDownload(
+        '/reference/lead-intake-mass-import-spec.md',
+        'lead-intake-mass-import-spec.md',
+      )
+    } catch {
+      setImportDownloadError('Could not download the spec file. Check your connection or try again.')
+    }
+  }, [])
+
+  const downloadLeadImportExample = useCallback(async () => {
+    setImportDownloadError(null)
+    try {
+      await fetchPublicReferenceAsDownload(
+        '/reference/lead-intake-mass-import.example.json',
+        'lead-intake-mass-import.example.json',
+      )
+    } catch {
+      setImportDownloadError('Could not download the example JSON. Check your connection or try again.')
+    }
+  }, [])
 
   const handleOpenAdd = useCallback(() => {
     setAddForm(emptyPicked())
@@ -1036,36 +1085,78 @@ export default function LeadIntakeHubPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col border-neutral-800 bg-neutral-950 text-neutral-100">
+      <Dialog
+        open={importOpen}
+        onOpenChange={open => {
+          setImportOpen(open)
+          if (!open) {
+            setImportMessage(null)
+            setImportDownloadError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 border-neutral-800 bg-neutral-950 text-neutral-100">
           <DialogHeader>
             <DialogTitle>Import leads</DialogTitle>
             <DialogDescription className="text-neutral-500">
-              Paste research output (key: value) or JSON. Rows missing venue name, Instagram handle, or genre are skipped.
+              Paste research output, a JSON array, or a single object. Rows missing venue name, Instagram handle, or
+              genre are skipped. Use the spec and example so bulk JSON matches the parser exactly.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Input
-              type="file"
-              accept=".txt,.json,.md,.text,text/plain,application/json"
-              className="h-9 text-xs file:mr-2 file:text-xs file:text-neutral-400 border-neutral-800 bg-neutral-900/30"
-              onChange={e => {
-                const f = e.target.files?.[0]
-                if (!f) return
-                const r = new FileReader()
-                r.onload = () => {
-                  setImportText(String(r.result ?? ''))
-                  e.target.value = ''
-                }
-                r.readAsText(f, 'utf-8')
-              }}
-            />
-            <Textarea
-              className="min-h-[200px] font-mono text-xs border-neutral-700 bg-neutral-900/50"
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-              placeholder="venue_name: … or paste JSON / array"
-            />
+          <div className="space-y-3 py-2 overflow-y-auto flex-1 min-h-0">
+            <div className="rounded-md border border-neutral-800 bg-neutral-950/60 px-3 py-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2 justify-between">
+                <span className="text-[11px] text-neutral-500">AI / tooling templates</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => void downloadLeadImportSpec()}
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Spec (.md)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => void downloadLeadImportExample()}
+                  >
+                    <Download className="h-3.5 w-3.5" /> Example (.json)
+                  </Button>
+                </div>
+              </div>
+              {importDownloadError ? <p className="text-xs text-red-400">{importDownloadError}</p> : null}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label className="text-neutral-400">Paste or load file</Label>
+              <Textarea
+                className="min-h-[200px] font-mono text-sm border border-neutral-700 bg-neutral-950 px-2 py-1.5"
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder='[ { "venue_name": "…", "instagram_handle": "…", "genre": "…" }, … ]  or  venue_name: …'
+                spellCheck={false}
+              />
+            </div>
+            <div>
+              <Input
+                type="file"
+                accept=".txt,.json,.md,.text,text/plain,application/json"
+                className="h-9 text-xs file:mr-2 file:text-xs file:text-neutral-400 border-neutral-800 bg-neutral-900/30"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (!f) return
+                  const r = new FileReader()
+                  r.onload = () => {
+                    setImportText(String(r.result ?? ''))
+                    e.target.value = ''
+                  }
+                  r.readAsText(f, 'utf-8')
+                }}
+              />
+            </div>
           </div>
           {importPreview.length > 0 && (
             <div className="text-xs space-y-2 max-h-40 overflow-y-auto pr-1">

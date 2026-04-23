@@ -1,0 +1,34 @@
+[
+  {
+    "venue_name": "Skyline Bar & Lounge",
+    "instagram_handle": "skyline.lounge.mia",
+    "genre": "House / open format",
+    "event_name": "Saturday Night Vibes",
+    "crowd_type": "25–40",
+    "resident_dj": "DJ Pat",
+    "city": "Miami",
+    "contact_email": "bookings@skylinebar.com",
+    "contact_phone": "(305) 555-0142",
+    "website": "https://skylinebar.com",
+    "notes": "Strong room fit. Asked about guest list limits for album release week."
+  },
+  {
+    "venue_name": "The Cellar",
+    "instagram_handle": "cellar_live",
+    "genre": "Indie / alt",
+    "event_name": "Thursday locals night",
+    "city": "Portland",
+    "contact_email": "bookings@cellarportland.example",
+    "website": "https://cellarportland.example",
+    "research_notes": "Backline listed on site. Prefer email before DM."
+  },
+  {
+    "venue_name": "Riverside Patio",
+    "instagram_handle": "riverside_patio",
+    "genre": "Jazz & soul",
+    "city": "Chicago",
+    "contact_phone": "(312) 555-0100",
+    "website": "https://riversidepatio.example",
+    "notes": "No public email on site yet — import for research; add contact when sourced."
+  }
+]
