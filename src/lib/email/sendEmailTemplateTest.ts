@@ -2,7 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ArtistProfile, AnyEmailType, VenueEmailType, GeneratedFile } from '@/types'
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
-import { EMAIL_TEMPLATE_PREVIEW_INVOICE_URL, PREVIEW_MOCK_DEAL, PREVIEW_MOCK_VENUE } from '@/lib/buildVenueEmailHtml'
+import {
+  buildPreviewProfileForCustomTemplate,
+  EMAIL_TEMPLATE_PREVIEW_INVOICE_URL,
+  PREVIEW_MOCK_DEAL,
+  PREVIEW_MOCK_VENUE,
+} from '@/lib/buildVenueEmailHtml'
 import {
   venueEmailTypeToCaptureKind,
   isVenueEmailOneTapAckKind,
@@ -88,6 +93,23 @@ function venueProfilePayload(p: ArtistProfile) {
   }
 }
 
+/** Fills null/empty profile fields with preview mocks so “Send test to myself” matches iframe preview. */
+function venueProfilePayloadForCustomTemplateTest(artist: ArtistProfile) {
+  const m = buildPreviewProfileForCustomTemplate(artist)
+  return {
+    artist_name: m.artist_name,
+    company_name: m.company_name,
+    from_email: m.from_email,
+    reply_to_email: m.reply_to_email,
+    manager_name: m.manager_name ?? null,
+    manager_title: m.manager_title ?? null,
+    website: m.website,
+    phone: m.phone,
+    social_handle: m.social_handle,
+    tagline: m.tagline,
+  }
+}
+
 export type SendEmailTemplateTestParams = {
   supabase: SupabaseClient
   profile: ArtistProfile
@@ -142,8 +164,9 @@ export async function sendEmailTemplateTest(
       ? params.customAttachmentFileIdDraft
       : (row.attachment_generated_file_id ?? null)
 
+    const merged = venueProfilePayloadForCustomTemplateTest(profile)
     const payload: Record<string, unknown> = {
-      profile: venueProfilePayload(profile),
+      profile: merged,
       deal: PREVIEW_MOCK_DEAL,
       venue: PREVIEW_MOCK_VENUE,
     }
@@ -155,15 +178,19 @@ export async function sendEmailTemplateTest(
         blocks: doc,
       }
     } else if (row.audience === 'lead') {
-      payload.recipient = managerRecipient
+      // Same inbox as a live lead send, but salutation/merge use a mock booker so body matches the iframe preview.
+      payload.recipient = {
+        name: 'Mock Firstname Bookings',
+        email: managerRecipient.email,
+      }
       payload.lead = PREVIEW_MOCK_LEAD
       payload.custom_lead_template = {
         subject_template: subj.trim() || ' ',
         blocks: doc,
       }
     } else {
-      const first = (profile.manager_name || 'You').split(/\s+/)[0] || 'You'
-      payload.recipient = { name: first, email: managerRecipient.email }
+      const mergedArtist = (merged.artist_name || 'Artist').split(/\s+/)[0] || 'Artist'
+      payload.recipient = { name: mergedArtist, email: managerRecipient.email }
       payload.custom_artist_template = {
         subject_template: subj.trim() || ' ',
         blocks: doc,

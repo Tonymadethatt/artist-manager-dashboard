@@ -2,6 +2,7 @@
 
 import type { EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
+import type { ArtistProfile } from '@/types'
 import {
   buildVenueEmailDocument,
   type VenueRenderEmailType,
@@ -55,16 +56,22 @@ export const PREVIEW_MOCK_PROFILE: PreviewProfile = {
   manager_title: 'Artist Manager',
   from_email: 'management@updates.djluijay.live',
   reply_to_email: 'management@djluijay.live',
-  website: 'https://djluijay.com',
+  /** Distinct press-kit style URL for merge previews and tests */
+  website: 'https://press.mock.djluijay.example/press-kit',
   phone: '(305) 555-0182',
   social_handle: '@djluijay',
-  /** Null so client email header preview uses default descriptor line. */
-  tagline: null,
+  tagline: 'Mock tagline (preview only)',
 }
 
 export const PREVIEW_MOCK_RECIPIENT: PreviewRecipient = {
-  name: 'Alex Johnson',
+  name: 'Mock Client Alex',
   email: 'alex@skylinebar.com',
+}
+
+/** Lead / venue-booker stand-in for `recipient.*` in custom lead template preview (iframe). */
+export const PREVIEW_MOCK_RECIPIENT_LEAD: PreviewRecipient = {
+  name: 'Mock Firstname Bookings',
+  email: 'bookings.preview+mock@example.com',
 }
 
 export const PREVIEW_MOCK_VENUE: PreviewVenue = {
@@ -82,5 +89,41 @@ export const PREVIEW_MOCK_DEAL: PreviewDeal = {
   event_date: '2026-05-17',
   payment_due_date: '2026-05-10',
   agreement_url: 'https://docs.google.com/document/d/preview-agreement-link',
-  notes: null,
+  notes: 'Mock deal notes (preview only)',
+}
+
+/**
+ * Merges live Settings profile with {@link PREVIEW_MOCK_PROFILE} for any null/empty field
+ * so Email Templates preview and “Send test to myself” always show non-empty `profile.*` merge output.
+ */
+export function buildPreviewProfileForCustomTemplate(artist: ArtistProfile | null | undefined): PreviewProfile {
+  const m = PREVIEW_MOCK_PROFILE
+  if (!artist) {
+    return { ...m }
+  }
+  const strOr = (v: string | null | undefined, fallback: string) => {
+    const t = (v ?? '').trim()
+    return t.length > 0 ? t : fallback
+  }
+  const strOrNull = (v: string | null | undefined, fallback: string | null) => {
+    const t = (v ?? '').trim()
+    return t.length > 0 ? t : (fallback && fallback.length > 0 ? fallback : null)
+  }
+  return {
+    artist_name: strOr(artist.artist_name, m.artist_name ?? ''),
+    company_name: strOr(artist.company_name, m.company_name ?? '') || null,
+    from_email: strOr(artist.from_email, m.from_email ?? ''),
+    reply_to_email: (() => {
+      const a = (artist.reply_to_email ?? '').trim()
+      if (a) return a
+      const b = (m.reply_to_email ?? '').trim()
+      return b || null
+    })(),
+    website: strOr(artist.website, m.website ?? ''),
+    phone: strOr(artist.phone, m.phone ?? ''),
+    social_handle: strOr(artist.social_handle, m.social_handle ?? ''),
+    tagline: strOrNull(artist.tagline, m.tagline),
+    manager_name: strOr(artist.manager_name, m.manager_name ?? ''),
+    manager_title: strOr(artist.manager_title, m.manager_title ?? ''),
+  }
 }

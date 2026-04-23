@@ -44,6 +44,17 @@ function logoUrls(base: string) {
   }
 }
 
+/** Absolute public paths for lead CTA pill icons; same base resolution as `logoUrls`. */
+function leadCtaIconPaths(base: string) {
+  const prefix = base.replace(/\/$/, '')
+  const path = (name: string) => (prefix ? `${prefix}/icons/${name}` : `/icons/${name}`)
+  return {
+    globe: path('lead-email-cta-globe.svg'),
+    document: path('lead-email-cta-doc.svg'),
+    instagram: path('lead-email-cta-ig.svg'),
+  }
+}
+
 function nlToBr(s: string): string {
   return escapeHtmlPlain(s).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
 }
@@ -124,6 +135,8 @@ function rowKv(label: string, value: string, valueColor = EMAIL_TEXT_PRIMARY): s
 
 const OPENING_LINE_P_STYLE = 'font-size:15px;color:#ffffff;line-height:1.8;margin-bottom:6px;'
 
+const OPENING_LEAD_P_STYLE = 'font-size:15px;color:#1a1a1a;line-height:1.65;margin:0 0 16px;'
+
 function renderCustomOpeningLine(
   audience: CustomMergeAudience,
   doc: CustomEmailBlocksDoc,
@@ -150,11 +163,47 @@ function renderCustomOpeningLine(
   return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(line)}</p>`
 }
 
+/** Lead-only opening: plain paragraph, dark text on white (no dark-theme opening styles). */
+function renderLeadOpeningLine(
+  doc: CustomEmailBlocksDoc,
+  ctx: CustomEmailMergeContext,
+  recipient: VenueRenderRecipient,
+): string {
+  const custom = doc.greeting?.trim()
+  if (custom) {
+    const merged = applyMergeToText(custom, ctx, 'lead').trim()
+    if (!merged) return ''
+    return `<p style="${OPENING_LEAD_P_STYLE}">${escapeHtmlPlain(merged)}</p>`
+  }
+  const firstName = resolveVenueRecipientSalutationFirstName({
+    name: recipient.name,
+    email: recipient.email,
+  })
+  const line = `Hi ${firstName},`
+  return `<p style="${OPENING_LEAD_P_STYLE}">${escapeHtmlPlain(line)}</p>`
+}
+
 function normalizeExternalHref(raw: string): string {
   const t = raw.trim()
   if (!t) return ''
   if (/^https?:\/\//i.test(t)) return t
   return `https://${t}`
+}
+
+/** Lead: show when `showIfKey` is set and that merge value is non-empty, or when `showIfKeyEmpty` is set and that value is empty. */
+function leadBlockPassesVisibility(
+  b: { showIfKey?: string | null; showIfKeyEmpty?: string | null },
+  ctx: CustomEmailMergeContext,
+): boolean {
+  const sk = b.showIfKey?.trim()
+  if (sk) {
+    return leadMergeKeyHasContent(ctx, sk)
+  }
+  const se = b.showIfKeyEmpty?.trim()
+  if (se) {
+    return !leadMergeKeyHasContent(ctx, se)
+  }
+  return true
 }
 
 function renderBlocks(
@@ -164,12 +213,7 @@ function renderBlocks(
 ): string {
   const parts: string[] = []
   for (const b of doc.blocks) {
-    if (
-      audience === 'lead'
-      && 'showIfKey' in b
-      && b.showIfKey
-      && !leadMergeKeyHasContent(ctx, b.showIfKey)
-    ) {
+    if (audience === 'lead' && !leadBlockPassesVisibility(b, ctx)) {
       continue
     }
     switch (b.kind) {
@@ -276,6 +320,254 @@ function customAttachmentDownloadHtml(url: string, fileName: string): string {
   return `<div style="margin-top:16px;"><a href="${safeUrl}" title="${safeTitle}" style="display:inline-block;background:#ffffff;color:#000000;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;text-decoration:none;">Download</a></div>`
 }
 
+function leadPlainAttachmentLink(url: string, fileName: string): string {
+  const safeUrl = escapeHtmlPlain(url)
+  const safeTitle = escapeHtmlPlain(fileName)
+  return `<p style="margin-top:16px;font-size:14px;line-height:1.5;"><a href="${safeUrl}" style="color:#1a1a1a;text-decoration:underline;">${safeTitle}</a></p>`
+}
+
+/** Injected in lead &lt;style&gt; for TipTap / merged HTML on a white background. */
+const EMAIL_PROSE_LEAD_SCOPED_CSS = `
+  .email-prose-lead { font-size: 14px; color: #2a2a2a; line-height: 1.65; }
+  .email-prose-lead p { margin: 0 0 10px; color: #1a1a1a; }
+  .email-prose-lead p:last-child { margin-bottom: 0; }
+  .email-prose-lead h1, .email-prose-lead h2, .email-prose-lead h3 {
+    font-size: 15px; font-weight: 600; color: #111111; margin: 14px 0 6px; line-height: 1.35;
+  }
+  .email-prose-lead h1:first-child, .email-prose-lead h2:first-child, .email-prose-lead h3:first-child { margin-top: 0; }
+  .email-prose-lead ul, .email-prose-lead ol {
+    margin: 10px 0;
+    padding-left: 28px;
+    list-style-position: outside;
+  }
+  .email-prose-lead ul { list-style-type: disc; }
+  .email-prose-lead ol { list-style-type: decimal; }
+  .email-prose-lead li {
+    margin: 6px 0;
+    padding-left: 2px;
+    display: list-item;
+  }
+  .email-prose-lead table {
+    width: 100% !important;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 14px;
+    border: 1px solid #d4d4d4;
+  }
+  .email-prose-lead th, .email-prose-lead td {
+    border: 1px solid #d4d4d4;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .email-prose-lead th {
+    background: #f5f5f5;
+    font-size: 11px;
+    font-weight: 600;
+    color: #404040;
+  }
+`
+
+function leadRowKv(label: string, value: string): string {
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:14px;color:#525252;border-bottom:1px solid #e5e5e5;vertical-align:middle;">${escapeHtmlPlain(label)}</td><td style="padding:10px 0;font-size:14px;font-weight:600;color:#111111;text-align:right;padding-left:16px;border-bottom:1px solid #e5e5e5;vertical-align:middle;">${escapeHtmlPlain(value)}</td></tr></table>`
+}
+
+function leadTitledBlock(sectionTitle: string, content: string): string {
+  if (!sectionTitle.trim()) {
+    return `<div style="margin-bottom:20px;">${content}</div>`
+  }
+  const label = decorateMergedVenueCustomSectionTitle(sectionTitle.trim())
+  return `<div style="margin-bottom:20px;">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.04em;color:#666666;margin-bottom:8px;">${escapeHtmlPlain(label)}</div>
+    <div>${content}</div>
+  </div>`
+}
+
+function renderLeadBlocks(
+  doc: CustomEmailBlocksDoc,
+  ctx: CustomEmailMergeContext,
+  iconUrls: ReturnType<typeof leadCtaIconPaths>,
+): string {
+  const parts: string[] = []
+  for (const b of doc.blocks) {
+    if (!leadBlockPassesVisibility(b, ctx)) {
+      continue
+    }
+    switch (b.kind) {
+      case 'prose': {
+        const sectionTitle = mergedSectionTitle(b.title, ctx, 'lead')
+        const merged = applyMergeToText(b.body, ctx, 'lead')
+        const inner = mergedBodyLooksLikeHtml(merged)
+          ? `<div class="email-prose-lead">${sanitizeMergedEmailHtml(merged)}</div>`
+          : `<div class="email-prose-lead"><p style="margin:0;">${nlToBr(merged)}</p></div>`
+        parts.push(leadTitledBlock(sectionTitle, inner))
+        break
+      }
+      case 'bullet_list': {
+        const sectionTitle = mergedSectionTitle(b.title, ctx, 'lead')
+        const lis = b.items
+          .map(t => applyMergeToText(t, ctx, 'lead'))
+          .filter(t => t.trim())
+          .map(
+            t =>
+              `<li style="margin:0 0 8px 0;display:list-item;list-style-position:outside;padding-left:4px;color:#1a1a1a;">${nlToBr(t)}</li>`,
+          )
+          .join('')
+        const inner = `<ul style="font-size:14px;color:#1a1a1a;line-height:1.65;margin:0;padding-left:24px;list-style-type:disc;list-style-position:outside;">${lis}</ul>`
+        parts.push(leadTitledBlock(sectionTitle, inner))
+        break
+      }
+      case 'key_value': {
+        const sectionTitle = mergedSectionTitle(b.title, ctx, 'lead')
+        const rows = b.rows
+          .map(r => {
+            const v = r.valueKey
+              ? resolveMergeKey(r.valueKey, ctx, 'lead')
+              : applyMergeToText(r.value ?? '', ctx, 'lead')
+            const label = applyMergeToText(r.label, ctx, 'lead')
+            return leadRowKv(label, v)
+          })
+          .join('')
+        parts.push(leadTitledBlock(sectionTitle, rows))
+        break
+      }
+      case 'table': {
+        const sectionTitle = mergedSectionTitle(b.title, ctx, 'lead')
+        const th = b.headers
+          .map(
+            h =>
+              `<th style="text-align:left;font-size:11px;font-weight:600;color:#404040;padding:9px 10px;border:1px solid #d4d4d4;background:#f5f5f5;">${escapeHtmlPlain(applyMergeToText(h, ctx, 'lead'))}</th>`,
+          )
+          .join('')
+        const tr = b.rows
+          .map(
+            cells =>
+              `<tr>${cells
+                .map(
+                  c =>
+                    `<td style="font-size:14px;color:#1a1a1a;padding:9px 10px;border:1px solid #d4d4d4;vertical-align:top;">${nlToBr(applyMergeToText(c, ctx, 'lead'))}</td>`,
+                )
+                .join('')}</tr>`,
+          )
+          .join('')
+        const inner = `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;border:1px solid #d4d4d4;margin:4px 0;">${b.headers.length ? `<thead><tr>${th}</tr></thead>` : ''}<tbody>${tr}</tbody></table>`
+        parts.push(leadTitledBlock(sectionTitle, inner))
+        break
+      }
+      case 'divider':
+        parts.push('<div style="border-top:1px solid #e5e5e5;margin:18px 0;"></div>')
+        break
+      case 'lead_cta_pills': {
+        const leadW = normalizeExternalHref(resolveMergeKey('lead.website', ctx, 'lead'))
+        const pressW = normalizeExternalHref(resolveMergeKey('profile.website', ctx, 'lead'))
+        const igHandle = resolveMergeKey('lead.instagram_handle', ctx, 'lead').trim().replace(/^@+/, '')
+        const igHref = igHandle ? `https://instagram.com/${encodeURIComponent(igHandle)}` : ''
+        const globe = iconUrls.globe
+        const docIcon = iconUrls.document
+        const igIcon = iconUrls.instagram
+        const baseFlex =
+          'display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:9999px;font-size:13px;font-weight:600;text-decoration:none;'
+        const pills: string[] = []
+        if (leadW) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(leadW)}" style="${baseFlex}background:#4a4a4a;color:#ffffff;border:none;"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Website</span></a>`,
+          )
+        }
+        if (pressW) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(pressW)}" style="${baseFlex}background:#000000;color:#22c55e;border:none;"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Press Kit</span></a>`,
+          )
+        }
+        if (igHref) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(igHref)}" style="${baseFlex}background:linear-gradient(90deg,#833ab4 0%,#e1306c 50%,#f77737 100%);color:#ffffff;border:none;"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Instagram</span></a>`,
+          )
+        }
+        if (pills.length === 0) break
+        parts.push(
+          `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 8px;">${pills.join('')}</div>`,
+        )
+        break
+      }
+    }
+  }
+  return parts.join('')
+}
+
+function buildLeadEmailFooterHtml(profile: VenueRenderProfile, logoUrl: string, logoAlt: string): string {
+  const name = profile.manager_name?.trim() || ''
+  const title = profile.manager_title?.trim() || ''
+  const email = (profile.reply_to_email || profile.from_email || '').trim()
+  const nameLine = name
+    ? `<div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-top:12px;line-height:1.4;">${escapeHtmlPlain(name)}</div>`
+    : ''
+  const titleLine = title
+    ? `<div style="font-size:13px;color:#333333;margin-top:4px;line-height:1.4;">${escapeHtmlPlain(title)}</div>`
+    : ''
+  const emailLine = email
+    ? `<div style="font-size:13px;color:#1a1a1a;margin-top:6px;line-height:1.4;">${escapeHtmlPlain(email)}</div>`
+    : ''
+  return `
+  <div class="email-footer-lead" style="padding:24px 32px 32px 32px;border-top:1px solid #e5e5e5;">
+    <img src="${logoUrl}" alt="${escapeHtmlPlain(logoAlt)}" width="100" style="display:block;max-width:100px;height:auto;" />
+    ${nameLine}
+    ${titleLine}
+    ${emailLine}
+  </div>`
+}
+
+function buildLeadCustomEmailDocument(
+  opts: BuildCustomEmailOptions,
+  doc: CustomEmailBlocksDoc,
+  ctx: CustomEmailMergeContext,
+  subject: string,
+): { html: string; subject: string } {
+  const { logo: logoUrl } = logoUrls(opts.logoBaseUrl)
+  const ctaIconUrls = leadCtaIconPaths(opts.logoBaseUrl)
+  const openingHtml = renderLeadOpeningLine(doc, ctx, opts.recipient)
+  const bodyInner = renderLeadBlocks(doc, ctx, ctaIconUrls)
+  const attachmentBlock = opts.attachment
+    ? leadPlainAttachmentLink(opts.attachment.url, opts.attachment.fileName)
+    : ''
+  const logoAlt = venueClientEmailLogoAlt(opts.profile)
+  const footerHtml = buildLeadEmailFooterHtml(opts.profile, logoUrl, logoAlt)
+  const responsiveClasses = opts.responsiveClasses ?? false
+  const mobileStyles = responsiveClasses
+    ? `
+  @media only screen and (max-width: 600px) {
+    .email-body-lead { padding: 22px 18px !important; }
+    .email-footer-lead { padding: 20px 18px 24px 18px !important; }
+  }`
+    : ''
+  const bodyClass = responsiveClasses ? ' class="email-body-lead"' : ''
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtmlPlain(subject)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ffffff; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+${EMAIL_PROSE_LEAD_SCOPED_CSS}
+${mobileStyles}
+</style>
+</head>
+<body>
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+  <div${bodyClass} style="padding:28px 32px;">
+    ${openingHtml}
+    ${bodyInner}
+    ${attachmentBlock}
+  </div>
+  ${footerHtml}
+</div>
+</body>
+</html>`
+
+  return { html, subject }
+}
+
 export interface BuildCustomEmailOptions {
   audience: CustomMergeAudience
   subjectTemplate: string
@@ -350,11 +642,17 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     venue: opts.venue,
     lead: opts.audience === 'lead' ? (opts.lead ?? null) : undefined,
   }
-  const subject = applyMergeToText(
-    String(opts.subjectTemplate ?? '').trim() || 'Message from {{profile.artist_name}}',
-    ctx,
-    opts.audience,
-  )
+  const baseSubjectTpl = String(opts.subjectTemplate ?? '').trim() || 'Message from {{profile.artist_name}}'
+  let subject = applyMergeToText(baseSubjectTpl, ctx, opts.audience)
+  if (opts.audience === 'lead' && doc.leadSubjectIfEventName?.trim()) {
+    const eventEv = (ctx.lead?.event_name ?? '').trim()
+    if (eventEv) {
+      subject = applyMergeToText(doc.leadSubjectIfEventName.trim(), ctx, 'lead')
+    }
+  }
+  if (opts.audience === 'lead') {
+    return buildLeadCustomEmailDocument(opts, doc, ctx, subject)
+  }
   const bodyInner = renderBlocks(doc, ctx, opts.audience)
   const attachmentBlock = opts.attachment
     ? customAttachmentDownloadHtml(opts.attachment.url, opts.attachment.fileName)
@@ -401,9 +699,9 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
     </div>`
 
   let footerHtml: string
-  if (opts.audience === 'venue' || opts.audience === 'lead') {
+  if (opts.audience === 'venue') {
     const hasCaptureCta = Boolean(captureTrim)
-    const showReply = opts.audience === 'venue' && opts.showReplyButton !== false && !hasCaptureCta
+    const showReply = opts.showReplyButton !== false && !hasCaptureCta
     const replyLabel = opts.replyButtonLabel?.trim() || 'Reply'
     footerHtml = venueFooter(opts.profile, subject, showReply, replyLabel, igUrl)
   } else {

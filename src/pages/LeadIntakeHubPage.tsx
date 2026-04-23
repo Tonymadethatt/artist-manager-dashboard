@@ -228,10 +228,7 @@ export default function LeadIntakeHubPage() {
       setSelectedId(null)
       return
     }
-    setSelectedId(prev => {
-      if (prev && leads.some(l => l.id === prev)) return prev
-      return leads[0]!.id
-    })
+    setSelectedId(prev => (prev && leads.some(l => l.id === prev) ? prev : null))
   }, [leadsLoading, leads])
 
   const dateCutoff = useMemo(() => {
@@ -604,8 +601,8 @@ export default function LeadIntakeHubPage() {
         </Button>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40 lg:flex-row">
-        <aside className="lg:w-[min(100%,400px)] lg:min-w-[300px] lg:max-w-[440px] border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col min-h-0 bg-neutral-950/60">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40">
+        <div className="flex flex-col min-h-0 bg-neutral-950/60 w-full min-w-0">
           <div className="p-2 sm:p-3 border-b border-neutral-800/80 shrink-0">
             {foldersError || leadsError ? (
               <p className="text-xs text-red-400 mb-2">{foldersError ?? leadsError}</p>
@@ -795,73 +792,92 @@ export default function LeadIntakeHubPage() {
               </div>
             ) : null}
           </div>
-        </aside>
+        </div>
+        {filtered.length === 0 && !leadsLoading ? (
+          <p className="shrink-0 p-4 sm:p-6 text-sm text-neutral-500 text-center sm:text-left">
+            {leads.length === 0
+              ? 'No leads yet — import, add one, or clear filters to see the list here. Click a lead when it appears to open details.'
+              : 'No matches — adjust search or filters. Click a lead in the list to open details in a pop-up.'}
+          </p>
+        ) : null}
+      </div>
 
-        <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-          {!selected || !editForm ? (
-            <p className="text-sm text-neutral-500">Select a lead, import, or add one to get started.</p>
-          ) : (
-            <div className="mx-auto max-w-3xl space-y-5">
-              <div className="rounded-xl border border-neutral-800 bg-neutral-900/35 p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold tracking-tight text-neutral-100 leading-snug">
-                      {editForm.venue_name.trim() || 'Lead'}
-                    </h2>
-                    <p className="text-sm text-neutral-500 mt-1">Created {fmtDate(selected.created_at)}</p>
-                    {selected.promoted_venue_id && (
-                      <p className="text-sm text-neutral-400 mt-2">
-                        <Link to="/outreach" className="inline-flex items-center gap-1.5 font-medium text-neutral-200 hover:text-white underline-offset-2 hover:underline">
-                          <Building2 className="h-4 w-4 shrink-0" />
-                          Client pipeline: {selected.promoted_venue_name?.trim() || 'Venue'}
-                        </Link>
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selected.promoted_venue_id ? null : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-9 border-neutral-600"
-                        onClick={openPromoteDialog}
-                      >
-                        <Building2 className="h-4 w-4 mr-1" />
-                        Add to client pipeline
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-neutral-600"
-                      onClick={openFollowUpTask}
+      <Dialog
+        open={Boolean(selectedId && selected && editForm)}
+        onOpenChange={open => {
+          if (open) return
+          if (editDirty) {
+            if (!window.confirm('You have unsaved changes. Close without saving?')) return
+          }
+          setSelectedId(null)
+        }}
+      >
+        <DialogContent
+          className="max-h-[min(90dvh,900px)] w-full max-w-2xl overflow-y-auto border-neutral-800 bg-neutral-950 p-0 gap-0 text-neutral-100"
+        >
+          {selected && editForm ? (
+            <div className="p-4 sm:p-5 space-y-5">
+              <DialogHeader className="text-left space-y-1.5 p-0">
+                <DialogTitle className="text-lg font-semibold tracking-tight text-neutral-100 leading-snug pr-8">
+                  {editForm.venue_name.trim() || 'Lead'}
+                </DialogTitle>
+                <DialogDescription asChild>
+                  <p className="text-sm text-neutral-500">Created {fmtDate(selected.created_at)}</p>
+                </DialogDescription>
+                {selected.promoted_venue_id ? (
+                  <p className="text-sm text-neutral-400 pt-1">
+                    <Link
+                      to="/outreach"
+                      className="inline-flex items-center gap-1.5 font-medium text-neutral-200 hover:text-white underline-offset-2 hover:underline"
                     >
-                      <ListTodo className="h-4 w-4 mr-1" />
-                      Follow-up task
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-9 bg-neutral-100 text-neutral-950 hover:bg-white"
-                      disabled={saveBusy || !editDirty}
-                      onClick={() => void handleSaveEdit()}
-                    >
-                      {saveBusy ? 'Saving…' : 'Save changes'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-red-900/50 text-red-300 hover:bg-red-950/40"
-                      onClick={() => void handleDelete()}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      Client pipeline: {selected.promoted_venue_name?.trim() || 'Venue'}
+                    </Link>
+                  </p>
+                ) : null}
+              </DialogHeader>
+              <div className="flex flex-wrap gap-2">
+                {selected.promoted_venue_id ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-neutral-600"
+                    onClick={openPromoteDialog}
+                  >
+                    <Building2 className="h-4 w-4 mr-1" />
+                    Add to client pipeline
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-neutral-600"
+                  onClick={openFollowUpTask}
+                >
+                  <ListTodo className="h-4 w-4 mr-1" />
+                  Follow-up task
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 bg-neutral-100 text-neutral-950 hover:bg-white"
+                  disabled={saveBusy || !editDirty}
+                  onClick={() => void handleSaveEdit()}
+                >
+                  {saveBusy ? 'Saving…' : 'Save changes'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-red-900/50 text-red-300 hover:bg-red-950/40"
+                  onClick={() => void handleDelete()}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -962,9 +978,9 @@ export default function LeadIntakeHubPage() {
                 )}
               </div>
             </div>
-          )}
-        </main>
-      </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={promoteOpen} onOpenChange={v => { if (!v) setPromoteOpen(false) }}>
         <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100">

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown, Pencil, Copy, Send,
@@ -27,9 +27,11 @@ import type { VenueEmailType, ArtistEmailType, AnyEmailType, EmailTemplate } fro
 import { VENUE_EMAIL_TYPE_LABELS, ARTIST_EMAIL_TYPE_LABELS } from '@/types'
 import {
   buildVenueEmailHtml,
+  buildPreviewProfileForCustomTemplate,
   EMAIL_TEMPLATE_PREVIEW_INVOICE_URL,
   PREVIEW_MOCK_PROFILE,
   PREVIEW_MOCK_RECIPIENT,
+  PREVIEW_MOCK_RECIPIENT_LEAD,
   PREVIEW_MOCK_VENUE,
   PREVIEW_MOCK_DEAL,
   type PreviewEmailType,
@@ -82,7 +84,11 @@ import {
 import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
 import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
-import { COLD_OUTREACH_DEFAULT_SUBJECT, coldOutreachDefaultLeadBlocks } from '@/lib/email/coldOutreachDefaultLeadTemplate'
+import {
+  FIRST_OUTREACH_LEAD_NAME,
+  FIRST_OUTREACH_SUBJECT_DEFAULT,
+  firstOutreachLeadBlocks,
+} from '@/lib/email/firstOutreachLeadTemplate'
 
 const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
 import {
@@ -385,6 +391,25 @@ export default function EmailTemplates() {
     })
   }, [activeGroup, customRows, templateSearch])
 
+  const firstOutreachSeedAttempted = useRef(false)
+  useEffect(() => {
+    if (customLoading) return
+    if (customRows.some(r => r.audience === 'lead')) return
+    if (firstOutreachSeedAttempted.current) return
+    firstOutreachSeedAttempted.current = true
+    void (async () => {
+      const res = await insertCustomRow({
+        audience: 'lead',
+        name: FIRST_OUTREACH_LEAD_NAME,
+        subject_template: FIRST_OUTREACH_SUBJECT_DEFAULT,
+        blocks: firstOutreachLeadBlocks(),
+      })
+      if (res.error) {
+        firstOutreachSeedAttempted.current = false
+      }
+    })()
+  }, [customLoading, customRows, insertCustomRow])
+
   useEffect(() => {
     if (filteredEmailTypes.length === 0) return
     if (!filteredEmailTypes.includes(selectedType)) {
@@ -529,20 +554,7 @@ export default function EmailTemplates() {
       return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Leads</title></head><body style="margin:0;background:#0d0d0d;color:#a3a3a3;font-family:system-ui,sans-serif;padding:32px 28px;font-size:14px;line-height:1.5;max-width:600px">Select a custom lead template on the left, or create one with <b style="color:#e5e5e5">New custom template</b>, to preview how it will look. Merge fields use the <b style="color:#e5e5e5">lead.*</b> namespace (e.g. <code style="color:#d4d4d4">lead.venue_name</code>).</body></html>`
     }
 
-    const customPreviewProfile: PreviewProfile = artistProfile
-      ? {
-        artist_name: artistProfile.artist_name ?? '',
-        company_name: artistProfile.company_name ?? null,
-        from_email: artistProfile.from_email,
-        reply_to_email: artistProfile.reply_to_email ?? null,
-        manager_name: artistProfile.manager_name ?? null,
-        manager_title: artistProfile.manager_title ?? null,
-        website: artistProfile.website ?? null,
-        phone: artistProfile.phone ?? null,
-        social_handle: artistProfile.social_handle ?? null,
-        tagline: artistProfile.tagline ?? null,
-      }
-      : PREVIEW_MOCK_PROFILE
+    const customPreviewProfile: PreviewProfile = buildPreviewProfileForCustomTemplate(artistProfile ?? undefined)
 
     if (selectedCustomId) {
       const row = customRows.find(r => r.id === selectedCustomId)
@@ -565,9 +577,9 @@ export default function EmailTemplates() {
         : undefined
       const previewRecipient =
         aud === 'artist'
-          ? { name: PREVIEW_MOCK_PROFILE.artist_name, email: 'artist@preview.local' }
+          ? { name: customPreviewProfile.artist_name, email: 'artist@preview.local' }
           : aud === 'lead'
-            ? { name: 'Jamie', email: 'bookings@skylinebar.com' }
+            ? PREVIEW_MOCK_RECIPIENT_LEAD
             : PREVIEW_MOCK_RECIPIENT
       const previewCaptureCustom =
         aud === 'venue' && doc.captureKind ? 'https://preview.example.com/venue-email-ack/mock-preview-token' : undefined
@@ -1406,6 +1418,32 @@ export default function EmailTemplates() {
                     Shortcuts also work: {'{{firstName}}'}, {'{{client_name}}'} → recipient first name.
                   </p>
                 </div>
+                {activeGroup === 'leads' && selectedCustomRow.audience === 'lead' && (
+                  <div>
+                    <p className={EYEBROW}>Subject when `lead.event_name` is set</p>
+                    <VariableSlashTextarea
+                      value={customBlocksDraft.leadSubjectIfEventName ?? ''}
+                      onChange={v => {
+                        const t = v.trim()
+                        setCustomBlocksDraft(prev => {
+                          if (!t) {
+                            const { leadSubjectIfEventName: _x, ...rest } = prev
+                            return rest
+                          }
+                          return { ...prev, leadSubjectIfEventName: t }
+                        })
+                      }}
+                      variableKeys={[...mergeKeyOptions]}
+                      placeholder="e.g. {{profile.artist_name}} — {{lead.event_name}} — used only when the lead has an event name"
+                      rows={2}
+                      minHeightClass="min-h-[2.75rem]"
+                      className="mt-1 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 shadow-none focus-visible:ring-1 focus-visible:ring-neutral-500"
+                    />
+                    <p className="text-[10px] text-neutral-600 mt-1">
+                      Optional. If set, this becomes the email subject when <code className="text-neutral-500">lead.event_name</code> is non-empty; otherwise the main subject line above is used.
+                    </p>
+                  </div>
+                )}
                 {activeGroup === 'leads' && selectedCustomRow.audience === 'lead' && leadFoldersForTemplates.length > 0 && (
                   <div>
                     <Label className={EYEBROW}>After send, move lead to (optional)</Label>
@@ -1443,18 +1481,18 @@ export default function EmailTemplates() {
                       size="sm"
                       className="h-8 text-xs"
                       onClick={() => {
-                        if (!window.confirm('Replace the subject, greeting, and blocks with the cold outreach starter? You can still cancel without saving.')) {
+                        if (!window.confirm('Replace the subject, opening line, and blocks with the First Outreach template? You can still cancel without saving.')) {
                           return
                         }
-                        setCustomSubjectDraft(COLD_OUTREACH_DEFAULT_SUBJECT)
-                        setCustomBlocksDraft(coldOutreachDefaultLeadBlocks())
+                        setCustomSubjectDraft(FIRST_OUTREACH_SUBJECT_DEFAULT)
+                        setCustomBlocksDraft(firstOutreachLeadBlocks())
                         setBlockMenuOpen(false)
                       }}
                     >
-                      Insert cold outreach starter
+                      Insert &quot;First Outreach&quot; template
                     </Button>
                     <p className="text-[10px] text-neutral-600 mt-1.5">
-                      One-click starter: default subject, greeting, prose blocks, link pills, and conditional research notes.
+                      Restores the default first lead sequence: event-based subject, opening variants, link pills, and visibility rules. Edit after inserting if needed.
                     </p>
                   </div>
                 )}

@@ -69,18 +69,23 @@ export type LeadMergeFields = {
   research_notes: string
 }
 
+/**
+ * Non-empty sample values for every `lead.*` merge key in template preview and test sends.
+ * Labels make it obvious which field is which when blocks use many variables.
+ */
 export const PREVIEW_MOCK_LEAD: LeadMergeFields = {
-  venue_name: 'Skyline Bar & Lounge',
+  venue_name: 'Skyline Bar & Lounge (mock venue)',
   instagram_handle: 'skyline.lounge.mia',
-  genre: 'House / open format',
-  event_name: 'Saturday Night Vibes',
-  crowd_type: '25–40',
-  resident_dj: 'DJ Pat',
-  city: 'Miami',
-  contact_email: 'bookings@skylinebar.com',
-  contact_phone: '(305) 555-0142',
-  website: 'https://skylinebar.com',
-  research_notes: 'Great room, asked about tech rider. Follow up on guest list limits.',
+  genre: 'House / open format (mock genre)',
+  event_name: 'Saturday Night Vibes (mock event)',
+  crowd_type: '25–40 (mock crowd)',
+  resident_dj: 'DJ Pat (mock resident)',
+  city: 'Miami, FL (mock city)',
+  contact_email: 'bookings.mock@skylinebar.example.com',
+  contact_phone: '(305) 555-0142 (mock phone)',
+  website: 'https://venue-website.mock.example.com',
+  research_notes:
+    '[Preview sample] Great room, asked about tech rider. Follow up on guest list limits. (mock research_notes)',
 }
 
 /** Map a `leads` row to merge fields for `send-venue-email` (`lead.*` keys). */
@@ -147,15 +152,55 @@ const KEY_SETS: Record<CustomMergeAudience, ReadonlySet<string>> = {
   lead: new Set(LEAD_CUSTOM_MERGE_KEYS),
 }
 
-/** Map common shorthand / legacy tokens to canonical whitelist keys (subject, greeting, prose, etc.). */
-function canonicalMergeKey(raw: string): string {
-  const k = raw.trim()
-  const aliases: Record<string, string> = {
-    firstName: 'recipient.firstName',
-    client_name: 'recipient.firstName',
-    CLIENT_NAME: 'recipient.firstName',
+/** Optional snake_case / spaced mistakes for lead.* (normalized to lower + underscores). */
+const LEAD_KEY_SNAKE_ALIASES: Record<string, string> = {
+  lead_city: 'lead.city',
+  lead_venue_name: 'lead.venue_name',
+  lead_instagram_handle: 'lead.instagram_handle',
+  lead_genre: 'lead.genre',
+  lead_event_name: 'lead.event_name',
+  lead_crowd_type: 'lead.crowd_type',
+  lead_resident_dj: 'lead.resident_dj',
+  lead_contact_email: 'lead.contact_email',
+  lead_contact_phone: 'lead.contact_phone',
+  lead_website: 'lead.website',
+  lead_research_notes: 'lead.research_notes',
+}
+
+const STATIC_FIRST_NAME_ALIASES = new Set(['firstname', 'client_name', 'clientname'])
+const LEGACY_RECIPIENT_NAME_ALIASES: Record<string, string> = {
+  firstName: 'recipient.firstName',
+  client_name: 'recipient.firstName',
+  CLIENT_NAME: 'recipient.firstName',
+}
+
+/**
+ * Map user-entered keys to canonical whitelist keys: legacy aliases, case-insensitive match,
+ * and optional lead snake_case forms so preview / test / sends resolve the same as exact keys.
+ */
+function normalizeMergeKey(raw: string, audience: CustomMergeAudience): string {
+  const t0 = raw.trim()
+  if (!t0) return ''
+  const set = KEY_SETS[audience]
+  const low0 = t0.toLowerCase()
+  if (STATIC_FIRST_NAME_ALIASES.has(low0) && set.has('recipient.firstName')) {
+    return 'recipient.firstName'
   }
-  return aliases[k] ?? k
+  const tFromLegacy = LEGACY_RECIPIENT_NAME_ALIASES[t0] ?? t0
+  if (set.has(tFromLegacy)) return tFromLegacy
+  if (set.has(t0)) return t0
+  if (audience === 'lead') {
+    const norm = t0.replace(/\s+/g, '_').toLowerCase()
+    const fromSnake = LEAD_KEY_SNAKE_ALIASES[low0] ?? LEAD_KEY_SNAKE_ALIASES[norm]
+    if (fromSnake && set.has(fromSnake)) return fromSnake
+  }
+  for (const k of set) {
+    if (k.toLowerCase() === tFromLegacy.toLowerCase()) return k
+  }
+  for (const k of set) {
+    if (k.toLowerCase() === t0.toLowerCase()) return k
+  }
+  return t0
 }
 
 /** Resolve a whitelisted merge key from context (for key_value rows). */
@@ -164,7 +209,7 @@ export function resolveMergeKey(
   ctx: CustomEmailMergeContext,
   audience: CustomMergeAudience,
 ): string {
-  const k = canonicalMergeKey(key ?? '')
+  const k = normalizeMergeKey(key ?? '', audience)
   if (!k || !KEY_SETS[audience].has(k)) return ''
   const firstName = resolveVenueRecipientSalutationFirstName({
     name: ctx.recipient.name,
@@ -244,8 +289,7 @@ export function resolveMergeKey(
  */
 export function applyMergeToText(template: string, ctx: CustomEmailMergeContext, audience: CustomMergeAudience): string {
   return template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey: string) => {
-    const k = canonicalMergeKey(rawKey)
-    return resolveMergeKey(k, ctx, audience)
+    return resolveMergeKey(rawKey, ctx, audience)
   })
 }
 
@@ -255,7 +299,6 @@ export function leadMergeKeyHasContent(
   key: string | null | undefined,
 ): boolean {
   if (key == null || !String(key).trim()) return true
-  const k = canonicalMergeKey(String(key).trim())
-  const v = resolveMergeKey(k, ctx, 'lead')
+  const v = resolveMergeKey(String(key).trim(), ctx, 'lead')
   return String(v).trim().length > 0
 }

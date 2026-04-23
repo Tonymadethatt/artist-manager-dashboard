@@ -102,29 +102,54 @@ function TitleHeaderStrip(props: {
   )
 }
 
+function leadVisibilitySelectValue(
+  showIfKey: string | null | undefined,
+  showIfKeyEmpty: string | null | undefined,
+): string {
+  if (showIfKey && showIfKey.trim()) return `if:${showIfKey.trim()}`
+  if (showIfKeyEmpty && showIfKeyEmpty.trim()) return `empty:${showIfKeyEmpty.trim()}`
+  return '__always__'
+}
+
 function LeadBlockVisibilityRow(props: {
   showIfKey: string | null | undefined
-  onChange: (key: string | null) => void
+  showIfKeyEmpty: string | null | undefined
+  onChange: (patch: { showIfKey: string | null; showIfKeyEmpty: string | null }) => void
 }) {
+  const value = useMemo(
+    () => leadVisibilitySelectValue(props.showIfKey, props.showIfKeyEmpty),
+    [props.showIfKey, props.showIfKeyEmpty],
+  )
   return (
     <div className="mb-2 space-y-0.5">
-      <Label className="text-[10px] text-neutral-500">Show only if field is set (lead)</Label>
+      <Label className="text-[10px] text-neutral-500">Block visibility (lead)</Label>
       <Select
-        value={props.showIfKey && props.showIfKey.trim() ? props.showIfKey : '__always__'}
-        onValueChange={v => props.onChange(v === '__always__' ? null : v)}
+        value={value}
+        onValueChange={v => {
+          if (v === '__always__') {
+            props.onChange({ showIfKey: null, showIfKeyEmpty: null })
+          } else if (v.startsWith('if:')) {
+            props.onChange({ showIfKey: v.slice(3), showIfKeyEmpty: null })
+          } else if (v.startsWith('empty:')) {
+            props.onChange({ showIfKey: null, showIfKeyEmpty: v.slice(6) })
+          }
+        }}
       >
         <SelectTrigger className="h-8 text-[11px] bg-[#141414] border-[#2a2a2a]">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="max-h-[min(60vh,320px)]">
           <SelectItem value="__always__" className="text-xs">
             Always show
           </SelectItem>
-          {LEAD_CUSTOM_MERGE_KEYS.map(k => (
-            <SelectItem key={k} value={k} className="text-xs">
-              {k}
-            </SelectItem>
-          ))}
+          {LEAD_CUSTOM_MERGE_KEYS.flatMap(k => [
+            <SelectItem key={`if:${k}`} value={`if:${k}`} className="text-xs">
+              Show when {k} is set
+            </SelectItem>,
+            <SelectItem key={`empty:${k}`} value={`empty:${k}`} className="text-xs">
+              Show when {k} is empty
+            </SelectItem>,
+          ])}
         </SelectContent>
       </Select>
     </div>
@@ -147,7 +172,8 @@ function ProseEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome label="Rich text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
@@ -188,7 +214,8 @@ function BulletListEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome label="Bulleted list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
@@ -261,7 +288,8 @@ function KeyValueEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome label="Key / value" index={index} total={total} onMove={onMove} onRemove={onRemove} />
@@ -392,7 +420,8 @@ function TableEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome label="Table" index={index} total={total} onMove={onMove} onRemove={onRemove} />
@@ -504,7 +533,8 @@ function LeadCtaPillsEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome
@@ -537,7 +567,8 @@ function DividerEditor(props: {
       {templateAudience === 'lead' ? (
         <LeadBlockVisibilityRow
           showIfKey={block.showIfKey}
-          onChange={k => onUpdate({ showIfKey: k })}
+          showIfKeyEmpty={block.showIfKeyEmpty}
+          onChange={patch => onUpdate(patch)}
         />
       ) : null}
       <BlockChrome label="Divider / spacer" index={index} total={total} onMove={onMove} onRemove={onRemove} />

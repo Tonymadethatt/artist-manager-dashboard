@@ -2,8 +2,12 @@ import { parseAccentColorHex } from './customEmailAccentPresets'
 import type { EmailCaptureKind } from '../emailCapture/kinds'
 import { isEmailCaptureKind } from '../emailCapture/kinds'
 
-/** Optional: for `audience: lead` blocks — omit block if this merge key resolves empty. */
-type LeadIf = { showIfKey?: string | null }
+/**
+ * For `audience: lead` blocks:
+ * - `showIfKey`: skip block if this merge value is empty.
+ * - `showIfKeyEmpty`: skip block if this merge value is non-empty (use one or the other, not both).
+ */
+type LeadIf = { showIfKey?: string | null; showIfKeyEmpty?: string | null }
 
 export type CustomEmailBlock =
   | (LeadIf & { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null })
@@ -26,17 +30,28 @@ export interface CustomEmailBlocksDoc {
   greeting?: string | null
   /** Client (venue) custom templates only: when set, queue/modal sends mint a capture link with this kind. */
   captureKind?: EmailCaptureKind | null
+  /**
+   * Lead templates only: when `lead.event_name` is non-empty, use this as the subject (merged);
+   * otherwise the row’s `subject_template` is used.
+   */
+  leadSubjectIfEventName?: string | null
 }
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null
 }
 
-function showIfFromRaw(raw: Record<string, unknown>): { showIfKey?: string | null } {
+function showIfFromRaw(
+  raw: Record<string, unknown>,
+): { showIfKey?: string | null; showIfKeyEmpty?: string | null } {
+  const out: { showIfKey?: string | null; showIfKeyEmpty?: string | null } = {}
   if (typeof raw.showIfKey === 'string' && raw.showIfKey.trim()) {
-    return { showIfKey: raw.showIfKey.trim() }
+    out.showIfKey = raw.showIfKey.trim()
   }
-  return {}
+  if (typeof raw.showIfKeyEmpty === 'string' && raw.showIfKeyEmpty.trim()) {
+    out.showIfKeyEmpty = raw.showIfKeyEmpty.trim()
+  }
+  return out
 }
 
 function parseBlock(raw: unknown): CustomEmailBlock | null {
@@ -121,6 +136,11 @@ export function parseCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc | 
   }
   if ('captureKind' in raw && typeof raw.captureKind === 'string' && isEmailCaptureKind(raw.captureKind)) {
     doc.captureKind = raw.captureKind
+  }
+  if ('leadSubjectIfEventName' in raw && typeof raw.leadSubjectIfEventName === 'string' && raw.leadSubjectIfEventName.trim()) {
+    doc.leadSubjectIfEventName = raw.leadSubjectIfEventName.trim()
+  } else if ('leadSubjectIfEventName' in raw && raw.leadSubjectIfEventName === null) {
+    doc.leadSubjectIfEventName = null
   }
   return doc
 }
