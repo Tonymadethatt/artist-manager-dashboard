@@ -320,57 +320,54 @@ export default function LeadIntakeHubPage() {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 text-neutral-100 md:min-h-[calc(100dvh-7.5rem)]">
-      <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <p className="text-sm text-neutral-500">Research, import, and track venues before the pipeline.</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-9 border-neutral-600 text-neutral-200"
-            onClick={() => setNewFolderOpen(true)}
-          >
-            <FolderPlus className="h-3.5 w-3.5 mr-1" />
-            <span className="hidden sm:inline">New folder</span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-9 border-neutral-600 text-neutral-200"
-            onClick={() => {
-              setManageFoldersError(null)
-              setFolderDeleteConfirm(null)
-              setManageFoldersOpen(true)
-            }}
-          >
-            <Folders className="h-3.5 w-3.5 mr-1" />
-            <span className="hidden sm:inline">Manage folders</span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-9 border-neutral-600"
-            onClick={() => {
-              setImportText('')
-              setImportMessage(null)
-              setImportOpen(true)
-            }}
-          >
-            <Upload className="h-3.5 w-3.5 mr-1" />
-            Import
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-9 gap-1.5 shrink-0 bg-neutral-100 text-neutral-950 hover:bg-white"
-            onClick={handleOpenAdd}
-          >
-            <Plus className="h-4 w-4" />
-            Add lead
-          </Button>
-        </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 border-neutral-600 text-neutral-200"
+          onClick={() => setNewFolderOpen(true)}
+        >
+          <FolderPlus className="h-3.5 w-3.5 mr-1" />
+          <span className="hidden sm:inline">New folder</span>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 border-neutral-600 text-neutral-200"
+          onClick={() => {
+            setManageFoldersError(null)
+            setFolderDeleteConfirm(null)
+            setManageFoldersOpen(true)
+          }}
+        >
+          <Folders className="h-3.5 w-3.5 mr-1" />
+          <span className="hidden sm:inline">Manage folders</span>
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 border-neutral-600"
+          onClick={() => {
+            setImportText('')
+            setImportMessage(null)
+            setImportOpen(true)
+          }}
+        >
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          Import
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 gap-1.5 shrink-0 bg-neutral-100 text-neutral-950 hover:bg-white"
+          onClick={handleOpenAdd}
+        >
+          <Plus className="h-4 w-4" />
+          Add lead
+        </Button>
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40 lg:flex-row">
