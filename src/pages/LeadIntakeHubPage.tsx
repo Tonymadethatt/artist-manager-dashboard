@@ -7,7 +7,6 @@ import {
   Loader2,
   Plus,
   Search,
-  SlidersHorizontal,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -34,6 +33,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 type DateFilter = 'all' | '7d' | '30d'
@@ -372,72 +376,100 @@ export default function LeadIntakeHubPage() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950/40 lg:flex-row">
         <aside className="lg:w-[min(100%,400px)] lg:min-w-[300px] lg:max-w-[440px] border-b lg:border-b-0 lg:border-r border-neutral-800 flex flex-col min-h-0 bg-neutral-950/60">
-          <div className="p-3 sm:p-4 border-b border-neutral-800/80 shrink-0 space-y-2">
+          <div className="p-2 sm:p-3 border-b border-neutral-800/80 shrink-0">
             {foldersError || leadsError ? (
-              <p className="text-xs text-red-400">{foldersError ?? leadsError}</p>
+              <p className="text-xs text-red-400 mb-2">{foldersError ?? leadsError}</p>
             ) : null}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
+            <div
+              className="flex min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]"
+              title="Search and filters (scroll horizontally on narrow screens)"
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      'h-8 shrink-0 gap-1.5 border-neutral-700 bg-neutral-950/80 px-2.5 text-xs',
+                      search.trim() && 'border-neutral-500/70',
+                    )}
+                    aria-label={search.trim() ? `Search: ${search}` : 'Open search'}
+                  >
+                    <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" aria-hidden />
+                    {search.trim() ? (
+                      <span className="max-w-[4.5rem] truncate text-neutral-200">{search}</span>
+                    ) : (
+                      <span className="text-neutral-500">Search</span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="w-[min(20rem,calc(100vw-1.5rem))] p-0 border-neutral-800 bg-neutral-900"
+                  onCloseAutoFocus={e => e.preventDefault()}
+                >
+                  <div className="p-2.5 space-y-1.5">
+                    <p className="text-[10px] font-medium text-neutral-500">Search leads</p>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
+                      <Input
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Name, city, handle…"
+                        className="h-8 pl-8 text-sm border-neutral-700 bg-neutral-950/80"
+                        autoFocus
+                        aria-label="Search leads by name, city, or handle"
+                      />
+                    </div>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Select value={filterFolder} onValueChange={v => setFilterFolder(v as typeof filterFolder)}>
+                <SelectTrigger
+                  className="h-8 w-[4.75rem] sm:w-28 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
+                  aria-label="Filter by folder"
+                >
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {folders.map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={dateFilter} onValueChange={v => setDateFilter(v as DateFilter)}>
+                <SelectTrigger
+                  className="h-8 w-[3.5rem] sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80 px-2"
+                  aria-label="Date added"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any</SelectItem>
+                  <SelectItem value="7d">7 days</SelectItem>
+                  <SelectItem value="30d">30 days</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search leads…"
-                className="h-9 pl-9 text-sm border-neutral-700 bg-neutral-950/80"
+                value={filterCity}
+                onChange={e => setFilterCity(e.target.value)}
+                placeholder="City"
+                className="h-8 w-16 sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80"
+                aria-label="Filter by city"
               />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-neutral-500">Folder</Label>
-                <Select value={filterFolder} onValueChange={v => setFilterFolder(v as typeof filterFolder)}>
-                  <SelectTrigger className="h-9 text-xs border-neutral-700 bg-neutral-950/80">
-                    <SelectValue placeholder="All folders" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All folders</SelectItem>
-                    {folders.map(f => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] text-neutral-500">Added</Label>
-                <Select value={dateFilter} onValueChange={v => setDateFilter(v as DateFilter)}>
-                  <SelectTrigger className="h-9 text-xs border-neutral-700 bg-neutral-950/80">
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <SlidersHorizontal className="h-3 w-3 opacity-50 shrink-0" />
-                      <SelectValue />
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any time</SelectItem>
-                    <SelectItem value="7d">Last 7 days</SelectItem>
-                    <SelectItem value="30d">Last 30 days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px] text-neutral-500">City</Label>
-                <Input
-                  value={filterCity}
-                  onChange={e => setFilterCity(e.target.value)}
-                  placeholder="Filter"
-                  className="h-8 text-xs border-neutral-700 bg-neutral-950/80"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] text-neutral-500">Genre</Label>
-                <Input
-                  value={filterGenre}
-                  onChange={e => setFilterGenre(e.target.value)}
-                  placeholder="Filter"
-                  className="h-8 text-xs border-neutral-700 bg-neutral-950/80"
-                />
-              </div>
+              <Input
+                value={filterGenre}
+                onChange={e => setFilterGenre(e.target.value)}
+                placeholder="Genre"
+                className="h-8 w-16 sm:w-20 shrink-0 text-xs border-neutral-700 bg-neutral-950/80"
+                aria-label="Filter by genre"
+              />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 min-h-0">
