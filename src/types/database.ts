@@ -1364,15 +1364,15 @@ export interface Database {
           },
           {
             foreignKeyName: 'tasks_lead_fkey'
-            columns: ['user_id', 'lead_id']
+            columns: ['lead_id']
             referencedRelation: 'leads'
-            referencedColumns: ['user_id', 'id']
+            referencedColumns: ['id']
           },
           {
             foreignKeyName: 'tasks_lead_folder_fkey'
-            columns: ['user_id', 'lead_folder_id']
+            columns: ['lead_folder_id']
             referencedRelation: 'lead_folders'
-            referencedColumns: ['user_id', 'id']
+            referencedColumns: ['id']
           },
         ]
       }
