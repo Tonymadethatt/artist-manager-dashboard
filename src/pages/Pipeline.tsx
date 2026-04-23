@@ -49,6 +49,7 @@ import {
 
 type ViewMode = 'board' | 'list'
 type Filter = 'today' | 'week' | 'all'
+type TaskDialogTab = 'details' | 'links' | 'automation'
 
 function localCalendarYmd(d = new Date()): string {
   const y = d.getFullYear()
@@ -306,6 +307,7 @@ export default function Pipeline() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [taskDialogTab, setTaskDialogTab] = useState<TaskDialogTab>('details')
 
   const hasVenueContextForEmail = Boolean(form.venue_id || form.deal_id)
   const hasLeadTarget = !hasVenueContextForEmail && form.leadLink.mode !== 'none'
@@ -502,6 +504,7 @@ export default function Pipeline() {
   const openAdd = (venueId: string | null = null) => {
     setForm({ ...EMPTY_FORM, venue_id: venueId ?? '' })
     setEditTask(null)
+    setTaskDialogTab('details')
     setAddOpen(true)
   }
 
@@ -523,6 +526,7 @@ export default function Pipeline() {
       generated_file_id: t.generated_file_id ?? '',
     })
     setEditTask(t)
+    setTaskDialogTab('details')
     setAddOpen(true)
   }
 
@@ -918,141 +922,184 @@ export default function Pipeline() {
         )}
       </div>
 
-      {/* Add / Edit task dialog */}
+      {/* Add / Edit task dialog — tabbed body keeps height bounded on small viewports */}
       <Dialog open={addOpen} onOpenChange={v => !v && setAddOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editTask ? 'Edit task' : 'Add task'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Title *</Label>
-              <Input
-                value={form.title}
-                onChange={e => setField('title', e.target.value)}
-                placeholder="What needs to be done?"
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && handleSave()}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Input
-                value={form.notes}
-                onChange={e => setField('notes', e.target.value)}
-                placeholder="Optional context"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Due date</Label>
-                <Input type="date" value={form.due_date} onChange={e => setField('due_date', e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={v => setField('priority', v as TaskPriority)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
-                      <SelectItem key={v} value={v}>{l}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label>Recurrence</Label>
-              <Select value={form.recurrence} onValueChange={v => setField('recurrence', v as TaskRecurrence)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Link to venue</Label>
-              <Select
-                value={form.venue_id || '__none__'}
-                onValueChange={v => {
-                  const id = v === '__none__' ? '' : v
-                  setForm(prev => ({
-                    ...prev,
-                    venue_id: id,
-                    leadLink: id || prev.deal_id ? EMPTY_LEAD_LINK : prev.leadLink,
-                  }))
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {venues.map(v => (
-                    <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Link to deal</Label>
-              <Select
-                value={form.deal_id || '__none__'}
-                onValueChange={v => {
-                  const id = v === '__none__' ? '' : v
-                  setForm(prev => ({
-                    ...prev,
-                    deal_id: id,
-                    leadLink: id || prev.venue_id ? EMPTY_LEAD_LINK : prev.leadLink,
-                  }))
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {deals.map(d => (
-                    <SelectItem key={d.id} value={d.id}>{d.description}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <TaskLeadLinkFields
-              hasVenueOrDeal={Boolean(form.venue_id || form.deal_id)}
-              disabled={false}
-              value={form.leadLink}
-              onChange={leadLink => setForm(prev => ({ ...prev, leadLink }))}
-              folders={leadFolders}
-              leads={leadRows}
-            />
-            <div className="space-y-1">
-              <Label>Email on complete</Label>
-              <Select value={form.email_type} onValueChange={v => setField('email_type', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {emailActionOptions.map(({ value, label }) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {emailAutomationHintText && (
-                <p className="text-[11px] text-neutral-500 leading-snug">{emailAutomationHintText}</p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>Agreement PDF (optional)</Label>
-              <AgreementPdfPicker
-                value={form.generated_file_id || null}
-                onChange={id => setField('generated_file_id', id ?? '')}
-                venueId={form.venue_id || null}
-                dealId={form.deal_id || null}
-              />
-              {form.generated_file_id && form.email_type !== 'agreement_ready' && form.email_type !== '__none__' && (
-                <p className="text-[10px] text-amber-500/90">
-                  Linked PDF applies to agreement-style emails; for other types it may have no effect.
-                </p>
-              )}
+        <DialogContent className="flex max-h-[min(90dvh,640px)] max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(88dvh,700px)]">
+          <div className="shrink-0 border-b border-neutral-800 px-6 pb-3 pt-6 pr-14">
+            <DialogHeader className="mb-0 space-y-1.5">
+              <DialogTitle>{editTask ? 'Edit task' : 'Add task'}</DialogTitle>
+            </DialogHeader>
+            <div
+              className="mt-3 flex gap-0.5 rounded-lg border border-neutral-800/80 bg-neutral-950 p-0.5"
+              role="tablist"
+              aria-label="Task form sections"
+            >
+              {(
+                [
+                  { id: 'details' as const, label: 'Details' },
+                  { id: 'links' as const, label: 'Links' },
+                  { id: 'automation' as const, label: 'Automation' },
+                ] as const
+              ).map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={taskDialogTab === tab.id}
+                  onClick={() => setTaskDialogTab(tab.id)}
+                  className={cn(
+                    'min-w-0 flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                    taskDialogTab === tab.id
+                      ? 'bg-neutral-800 text-white shadow-sm'
+                      : 'text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
-          <DialogFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [scrollbar-width:thin]">
+            {taskDialogTab === 'details' && (
+              <div className="space-y-3" role="tabpanel">
+                <div className="space-y-1">
+                  <Label>Title *</Label>
+                  <Input
+                    value={form.title}
+                    onChange={e => setField('title', e.target.value)}
+                    placeholder="What needs to be done?"
+                    autoFocus
+                    onKeyDown={e => e.key === 'Enter' && handleSave()}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <Input
+                    value={form.notes}
+                    onChange={e => setField('notes', e.target.value)}
+                    placeholder="Optional context"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Due date</Label>
+                    <Input type="date" value={form.due_date} onChange={e => setField('due_date', e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Priority</Label>
+                    <Select value={form.priority} onValueChange={v => setField('priority', v as TaskPriority)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(TASK_PRIORITY_LABELS) as [TaskPriority, string][]).map(([v, l]) => (
+                          <SelectItem key={v} value={v}>{l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Recurrence</Label>
+                  <Select value={form.recurrence} onValueChange={v => setField('recurrence', v as TaskRecurrence)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(TASK_RECURRENCE_LABELS) as [TaskRecurrence, string][]).map(([v, l]) => (
+                        <SelectItem key={v} value={v}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            {taskDialogTab === 'links' && (
+              <div className="space-y-3" role="tabpanel">
+                <div className="space-y-1">
+                  <Label>Link to venue</Label>
+                  <Select
+                    value={form.venue_id || '__none__'}
+                    onValueChange={v => {
+                      const id = v === '__none__' ? '' : v
+                      setForm(prev => ({
+                        ...prev,
+                        venue_id: id,
+                        leadLink: id || prev.deal_id ? EMPTY_LEAD_LINK : prev.leadLink,
+                      }))
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {venues.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Link to deal</Label>
+                  <Select
+                    value={form.deal_id || '__none__'}
+                    onValueChange={v => {
+                      const id = v === '__none__' ? '' : v
+                      setForm(prev => ({
+                        ...prev,
+                        deal_id: id,
+                        leadLink: id || prev.venue_id ? EMPTY_LEAD_LINK : prev.leadLink,
+                      }))
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {deals.map(d => (
+                        <SelectItem key={d.id} value={d.id}>{d.description}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <TaskLeadLinkFields
+                  hasVenueOrDeal={Boolean(form.venue_id || form.deal_id)}
+                  disabled={false}
+                  value={form.leadLink}
+                  onChange={leadLink => setForm(prev => ({ ...prev, leadLink }))}
+                  folders={leadFolders}
+                  leads={leadRows}
+                />
+              </div>
+            )}
+            {taskDialogTab === 'automation' && (
+              <div className="space-y-3" role="tabpanel">
+                <div className="space-y-1">
+                  <Label>Email on complete</Label>
+                  <Select value={form.email_type} onValueChange={v => setField('email_type', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {emailActionOptions.map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {emailAutomationHintText && (
+                    <p className="text-[11px] text-neutral-500 leading-snug">{emailAutomationHintText}</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label>Agreement PDF (optional)</Label>
+                  <AgreementPdfPicker
+                    value={form.generated_file_id || null}
+                    onChange={id => setField('generated_file_id', id ?? '')}
+                    venueId={form.venue_id || null}
+                    dealId={form.deal_id || null}
+                  />
+                  {form.generated_file_id && form.email_type !== 'agreement_ready' && form.email_type !== '__none__' && (
+                    <p className="text-[10px] text-amber-500/90">
+                      Linked PDF applies to agreement-style emails; for other types it may have no effect.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-0 shrink-0 border-t border-neutral-800 px-6 py-4">
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving || !form.title.trim()}>
               {saving ? 'Saving...' : editTask ? 'Save changes' : 'Add task'}
