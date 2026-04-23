@@ -640,6 +640,8 @@ export interface Task {
   lead_id: string | null
   /** Denormalized from the lead’s folder for filtering; optional if only lead_id is set. */
   lead_folder_id: string | null
+  /** Bulk: send lead template to all leads (with contact email) on task complete. Mutually exclusive with lead_id and lead_folder_id. */
+  lead_send_all: boolean
   email_type: string | null
   /** Optional PDF for agreement_ready / custom venue merges; overrides deal agreement file for this step. */
   generated_file_id: string | null

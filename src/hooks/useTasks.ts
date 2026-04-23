@@ -73,6 +73,7 @@ export function useTasks() {
     generated_file_id?: string | null
     lead_id?: string | null
     lead_folder_id?: string | null
+    lead_send_all?: boolean
     cold_call_id?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -92,6 +93,7 @@ export function useTasks() {
         generated_file_id: task.generated_file_id ?? null,
         lead_id: task.lead_id ?? null,
         lead_folder_id: task.lead_folder_id ?? null,
+        lead_send_all: task.lead_send_all ?? false,
         cold_call_id: task.cold_call_id ?? null,
       })
       .select(TASK_LIST_SELECT)
@@ -167,6 +169,7 @@ export function useTasks() {
             generated_file_id: task.generated_file_id ?? null,
             lead_id: task.lead_id,
             lead_folder_id: task.lead_folder_id,
+            lead_send_all: task.lead_send_all ?? false,
             cold_call_id: task.cold_call_id,
           })
           .select(TASK_LIST_SELECT)

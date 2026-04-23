@@ -24,6 +24,8 @@ import { resolveDealAgreementUrlForEmailPayload } from '@/lib/resolveAgreementUr
 import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import { leadMergeFieldsFromDatabaseLead, recipientNameFromContactEmail } from '@/lib/email/customEmailMerge'
+import type { Database } from '@/types/database'
 import { EMAIL_FOOTER_MUTED, EMAIL_HINT, EMAIL_LABEL } from '@/lib/email/emailDarkSurfacePalette'
 import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
 import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
@@ -889,16 +891,6 @@ export default function EmailQueue() {
           return
         }
 
-        const previewRecipient = row.audience === 'artist'
-          ? { name: (profile.artist_name ?? '').split(/\s+/)[0] || 'Artist', email: email.recipient_email }
-          : {
-            name: resolveVenueRecipientDisplayNameForPayload({
-              name: email.contact?.name ?? null,
-              email: email.recipient_email,
-            }),
-            email: email.recipient_email,
-          }
-
         let attachment: { url: string; fileName: string } | undefined
         if (row.attachment_generated_file_id) {
           const { data: gf } = await supabase
@@ -911,33 +903,88 @@ export default function EmailQueue() {
           if (att) attachment = att
         }
 
-        const customCapKind =
-          row.audience === 'venue' ? loadCustomEmailBlocksDoc(row.blocks).captureKind ?? null : null
-        const customCapTok =
-          row.audience === 'venue' ? parseEmailCaptureTokenFromNotes(email.notes) : null
-        const customCaptureUrl =
-          customCapTok && customCapKind && isVenueEmailOneTapAckKind(customCapKind)
-            ? venueEmailAckPublicUrl(publicSiteOrigin(), customCapTok)
-            : null
+        if (row.audience === 'lead') {
+          const { data: leadList } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('user_id', user.id)
+          type LeadR = Database['public']['Tables']['leads']['Row']
+          const norm = (email.recipient_email || '').trim().toLowerCase()
+          const leadRow = (leadList ?? []).find(
+            l => (String((l as LeadR).contact_email || '').trim().toLowerCase()) === norm,
+          ) as LeadR | undefined
+          if (!leadRow) {
+            const esc = (s: string) => s
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+            setPreviewHtml(
+              `<div style="padding:40px;color:#f87171;text-align:center;max-width:480px;margin:0 auto">`
+                + 'No lead in Lead Intake matches this recipient. '
+                + `The queued address must match a lead’s contact email (<strong style="word-break:break-all">${
+                  esc(email.recipient_email)
+                }</strong>).</div>`,
+            )
+            setPreviewLoading(false)
+            return
+          }
+          const leadMerge = leadMergeFieldsFromDatabaseLead(leadRow)
+          const toAddr = (leadRow.contact_email || email.recipient_email || '').trim()
+          const { html, subject } = buildCustomEmailDocument({
+            audience: 'lead',
+            subjectTemplate: row.subject_template as string,
+            blocksRaw: row.blocks,
+            profile: profileForRender,
+            recipient: { name: recipientNameFromContactEmail(toAddr), email: toAddr || email.recipient_email },
+            deal: dealForRender,
+            venue: venueForRender ?? { name: '', city: null, location: null },
+            lead: leadMerge,
+            logoBaseUrl: '',
+            responsiveClasses: false,
+            showReplyButton: false,
+            ...(attachment ? { attachment } : {}),
+          })
+          setPreviewHtml(html)
+          setPreviewSubject(subject)
+        } else {
+          const previewRecipient = row.audience === 'artist'
+            ? { name: (profile.artist_name ?? '').split(/\s+/)[0] || 'Artist', email: email.recipient_email }
+            : {
+              name: resolveVenueRecipientDisplayNameForPayload({
+                name: email.contact?.name ?? null,
+                email: email.recipient_email,
+              }),
+              email: email.recipient_email,
+            }
 
-        const { html, subject } = buildCustomEmailDocument({
-          audience: row.audience as 'venue' | 'artist',
-          subjectTemplate: row.subject_template as string,
-          blocksRaw: row.blocks,
-          profile: profileForRender,
-          recipient: previewRecipient,
-          deal: dealForRender,
-          venue: venueForRender ?? { name: '', city: null, location: null },
-          logoBaseUrl: '',
-          responsiveClasses: false,
-          showReplyButton: row.audience === 'venue',
-          ...(attachment ? { attachment } : {}),
-          ...(customCaptureUrl && customCapKind
-            ? { captureUrl: customCaptureUrl, captureCTALabel: captureLinkLabel(customCapKind) }
-            : {}),
-        })
-        setPreviewHtml(html)
-        setPreviewSubject(subject)
+          const customCapKind =
+            row.audience === 'venue' ? loadCustomEmailBlocksDoc(row.blocks).captureKind ?? null : null
+          const customCapTok =
+            row.audience === 'venue' ? parseEmailCaptureTokenFromNotes(email.notes) : null
+          const customCaptureUrl =
+            customCapTok && customCapKind && isVenueEmailOneTapAckKind(customCapKind)
+              ? venueEmailAckPublicUrl(publicSiteOrigin(), customCapTok)
+              : null
+
+          const { html, subject } = buildCustomEmailDocument({
+            audience: row.audience as 'venue' | 'artist',
+            subjectTemplate: row.subject_template as string,
+            blocksRaw: row.blocks,
+            profile: profileForRender,
+            recipient: previewRecipient,
+            deal: dealForRender,
+            venue: venueForRender ?? { name: '', city: null, location: null },
+            logoBaseUrl: '',
+            responsiveClasses: false,
+            showReplyButton: row.audience === 'venue',
+            ...(attachment ? { attachment } : {}),
+            ...(customCaptureUrl && customCapKind
+              ? { captureUrl: customCaptureUrl, captureCTALabel: captureLinkLabel(customCapKind) }
+              : {}),
+          })
+          setPreviewHtml(html)
+          setPreviewSubject(subject)
+        }
       } else {
         const recipientForRender = {
           name: resolveVenueRecipientDisplayNameForPayload({
@@ -1550,7 +1597,34 @@ export default function EmailQueue() {
             if (capUrl) payload.capture_url = capUrl
           }
         } else if (row.audience === 'lead') {
-          throw new Error('Lead custom templates are not sent from the email queue. Use a future Lead Intake send or test from Email Templates.')
+          const { data: leadList } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('user_id', user.id)
+          type LeadR = Database['public']['Tables']['leads']['Row']
+          const norm = (email.recipient_email || '').trim().toLowerCase()
+          const leadRow = (leadList ?? []).find(
+            l => (String((l as LeadR).contact_email || '').trim().toLowerCase()) === norm,
+          ) as LeadR | undefined
+          if (!leadRow?.contact_email?.trim()) {
+            throw new Error(
+              'No lead in Lead Intake matches this queue recipient, or the lead has no contact email. '
+              + 'Use the same address as the lead’s contact email.',
+            )
+          }
+          const toAddr = leadRow.contact_email.trim()
+          payload.recipient = {
+            name: recipientNameFromContactEmail(toAddr),
+            email: toAddr,
+          }
+          payload.custom_lead_template = {
+            subject_template: row.subject_template,
+            blocks: row.blocks,
+          }
+          payload.lead = leadMergeFieldsFromDatabaseLead(leadRow)
+          if (!email.venue) {
+            payload.venue = { name: '', city: null, location: null }
+          }
         } else {
           throw new Error('Custom template not found')
         }

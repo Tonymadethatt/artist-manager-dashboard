@@ -38,6 +38,7 @@ export const LEAD_CUSTOM_MERGE_KEYS = [
   'recipient.firstName',
   'profile.artist_name',
   'profile.company_name',
+  'profile.website',
   'lead.venue_name',
   'lead.instagram_handle',
   'lead.genre',
@@ -83,6 +84,15 @@ export const PREVIEW_MOCK_LEAD: LeadMergeFields = {
 }
 
 /** Map a `leads` row to merge fields for `send-venue-email` (`lead.*` keys). */
+/** For lead sends: derive a first-name–style name from the local part of the contact address. */
+export function recipientNameFromContactEmail(email: string): string {
+  const t = String(email || '').trim()
+  if (!t) return 'there'
+  const local = t.split('@')[0] ?? 'there'
+  const first = local.split(/[._-]/)[0] ?? local
+  return first ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase() : 'there'
+}
+
 export function leadMergeFieldsFromDatabaseLead(lead: {
   venue_name: string | null
   instagram_handle: string | null
@@ -200,6 +210,8 @@ export function resolveMergeKey(
       return ctx.profile.artist_name ?? ''
     case 'profile.company_name':
       return ctx.profile.company_name || ctx.profile.artist_name || ''
+    case 'profile.website':
+      return ctx.profile.website?.trim() ?? ''
     case 'lead.venue_name':
       return ctx.lead?.venue_name ?? ''
     case 'lead.instagram_handle':
@@ -235,4 +247,15 @@ export function applyMergeToText(template: string, ctx: CustomEmailMergeContext,
     const k = canonicalMergeKey(rawKey)
     return resolveMergeKey(k, ctx, audience)
   })
+}
+
+/** For lead template blocks: if `key` is set, the block is shown only when that merge value is non-empty after trim. */
+export function leadMergeKeyHasContent(
+  ctx: CustomEmailMergeContext,
+  key: string | null | undefined,
+): boolean {
+  if (key == null || !String(key).trim()) return true
+  const k = canonicalMergeKey(String(key).trim())
+  const v = resolveMergeKey(k, ctx, 'lead')
+  return String(v).trim().length > 0
 }

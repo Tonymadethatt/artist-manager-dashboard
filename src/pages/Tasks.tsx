@@ -4,6 +4,7 @@ import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { customEmailTypeValue, parseCustomTemplateId } from '@/lib/email/customTemplateId'
 import { taskEmailAutomationHintWithCustom } from '@/lib/email/taskEmailAutomationHint'
+import { taskPipelineContextLabel } from '@/lib/tasks/taskContextLabel'
 import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useTasks } from '@/hooks/useTasks'
 import { useVenues } from '@/hooks/useVenues'
@@ -28,6 +29,14 @@ import {
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { validateTaskEmailType } from '@/lib/tasks/validateTaskEmailType'
+import { useLeadFolders } from '@/hooks/useLeadFolders'
+import { useLeads } from '@/hooks/useLeads'
+import {
+  TaskLeadLinkFields,
+  buildLeadTaskColumns,
+  leadTaskColumnsToFormValue,
+  type TaskLeadLinkValue,
+} from '@/components/pipeline/TaskLeadLinkFields'
 import { parseDealGrossReconciliationNotes } from '@/lib/dealGrossReconciliationTask'
 import { afterDealUpdated } from '@/lib/deals/afterDealUpdated'
 import { catalogHasMinimumForDealLogging } from '@/lib/pricing/computeDealPrice'
@@ -40,6 +49,8 @@ const PRIORITY_BADGE: Record<TaskPriority, 'destructive' | 'warning' | 'secondar
   low: 'secondary',
 }
 
+const EMPTY_LEAD_LINK: TaskLeadLinkValue = { mode: 'none', lead_id: '', lead_folder_id: '' }
+
 const EMPTY_FORM = {
   title: '',
   notes: '',
@@ -48,8 +59,7 @@ const EMPTY_FORM = {
   recurrence: 'none' as TaskRecurrence,
   venue_id: '',
   deal_id: '',
-  lead_id: '',
-  lead_folder_id: '',
+  leadLink: EMPTY_LEAD_LINK,
   email_type: '__none__' as string,
   generated_file_id: '',
 }
@@ -101,6 +111,12 @@ export default function Tasks() {
   const [reconApplyingId, setReconApplyingId] = useState<string | null>(null)
   const { rows: customEmailRows } = useCustomEmailTemplates()
   const { refreshNavBadges } = useNavBadges()
+  const { folders: leadFolders } = useLeadFolders()
+  const folderNameById = useMemo(
+    () => new Map(leadFolders.map(f => [f.id, f.name])),
+    [leadFolders],
+  )
+  const { leads: leadRows } = useLeads(folderNameById)
 
   async function applyDealGrossFromReportTask(task: Task) {
     const payload = parseDealGrossReconciliationNotes(task.notes)
@@ -141,17 +157,6 @@ export default function Tasks() {
     await refetchTasks()
   }
 
-  const emailActionOptions = useMemo(() => {
-    const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
-    const builtinArtist = Object.entries(ARTIST_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: `${l} (artist)` }))
-    const customs = customEmailRows.map(r => ({
-      value: customEmailTypeValue(r.id),
-      label: `${r.name} (${
-        r.audience === 'venue' ? 'custom · client' : r.audience === 'lead' ? 'custom · lead' : 'custom · artist'
-      })`,
-    }))
-    return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
-  }, [customEmailRows])
   const [showCompleted, setShowCompleted] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
@@ -160,6 +165,26 @@ export default function Tasks() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [taskFormError, setTaskFormError] = useState<string | null>(null)
+
+  const hasVenueContextForEmail = Boolean(form.venue_id || form.deal_id)
+  const hasLeadTarget = !hasVenueContextForEmail && form.leadLink.mode !== 'none'
+
+  const emailActionOptions = useMemo(() => {
+    const builtinVenue = Object.entries(VENUE_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))
+    const builtinArtist = Object.entries(ARTIST_EMAIL_TYPE_LABELS).map(([v, l]) => ({ value: v, label: `${l} (artist)` }))
+    const customs = customEmailRows
+      .filter(r => {
+        if (hasLeadTarget) return r.audience === 'lead'
+        return true
+      })
+      .map(r => ({
+        value: customEmailTypeValue(r.id),
+        label: `${r.name} (${
+          r.audience === 'venue' ? 'custom · client' : r.audience === 'lead' ? 'custom · lead' : 'custom · artist'
+        })`,
+      }))
+    return [{ value: '__none__', label: 'None' }, ...builtinVenue, ...builtinArtist, ...customs]
+  }, [customEmailRows, hasLeadTarget])
 
   const customAudienceForForm = useMemo(() => {
     const cid = parseCustomTemplateId(form.email_type)
@@ -199,8 +224,11 @@ export default function Tasks() {
       recurrence: t.recurrence,
       venue_id: t.venue_id ?? '',
       deal_id: t.deal_id ?? '',
-      lead_id: t.lead_id ?? '',
-      lead_folder_id: t.lead_folder_id ?? '',
+      leadLink: leadTaskColumnsToFormValue({
+        lead_id: t.lead_id,
+        lead_folder_id: t.lead_folder_id,
+        lead_send_all: t.lead_send_all === true,
+      }),
       email_type: t.email_type ?? '__none__',
       generated_file_id: t.generated_file_id ?? '',
     })
@@ -216,6 +244,8 @@ export default function Tasks() {
     setSaving(true)
     setTaskFormError(null)
     const hasVenueContext = Boolean(form.venue_id || form.deal_id)
+    const leadCols = buildLeadTaskColumns(hasVenueContext, form.leadLink)
+    const emailType = form.email_type === '__none__' ? null : form.email_type
     const payload = {
       title: form.title.trim(),
       notes: form.notes || null,
@@ -224,9 +254,10 @@ export default function Tasks() {
       recurrence: form.recurrence,
       venue_id: form.venue_id || null,
       deal_id: form.deal_id || null,
-      lead_id: hasVenueContext ? null : (form.lead_id || null),
-      lead_folder_id: hasVenueContext ? null : (form.lead_folder_id || null),
-      email_type: form.email_type === '__none__' ? null : form.email_type,
+      lead_id: leadCols.lead_id,
+      lead_folder_id: leadCols.lead_folder_id,
+      lead_send_all: leadCols.lead_send_all,
+      email_type: emailType,
       generated_file_id: form.generated_file_id || null,
     }
     const { data: { user } } = await supabase.auth.getUser()
@@ -237,6 +268,19 @@ export default function Tasks() {
     const typeCheck = await validateTaskEmailType(payload.email_type, user.id)
     if (!typeCheck.ok) {
       setTaskFormError(typeCheck.message)
+      setSaving(false)
+      return
+    }
+    const cid = emailType ? parseCustomTemplateId(emailType) : null
+    const tmplAudience = cid ? customEmailRows.find(r => r.id === cid)?.audience : null
+    const leadTgt = !hasVenueContext && form.leadLink.mode !== 'none'
+    if (emailType && tmplAudience === 'lead' && !leadTgt) {
+      setTaskFormError('Link this task to a lead, a folder, or all leads when using a lead email template.')
+      setSaving(false)
+      return
+    }
+    if (leadTgt && emailType && tmplAudience && tmplAudience !== 'lead') {
+      setTaskFormError('This task is linked to leads — choose a lead custom template for Email on complete.')
       setSaving(false)
       return
     }
@@ -412,9 +456,9 @@ export default function Tasks() {
                             {task.deal.description}
                           </span>
                         )}
-                        {task.lead_id && (
-                          <span className="text-xs bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded max-w-[200px] truncate" title={task.lead?.venue_name ?? undefined}>
-                            Lead: {task.lead?.venue_name?.trim() || '—'}
+                        {(task.lead_id || task.lead_folder_id || task.lead_send_all) && (
+                          <span className="text-xs bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded max-w-[200px] truncate" title={taskPipelineContextLabel(task, venues) ?? undefined}>
+                            {taskPipelineContextLabel(task, venues) ?? 'Lead'}
                           </span>
                         )}
                         {task.notes && !grossRecon ? (
@@ -532,7 +576,14 @@ export default function Tasks() {
               <Label>Link to venue (optional)</Label>
               <Select
                 value={form.venue_id || '__none__'}
-                onValueChange={v => setField('venue_id', v === '__none__' ? '' : v)}
+                onValueChange={v => {
+                  const id = v === '__none__' ? '' : v
+                  setForm(prev => ({
+                    ...prev,
+                    venue_id: id,
+                    leadLink: id || prev.deal_id ? EMPTY_LEAD_LINK : prev.leadLink,
+                  }))
+                }}
               >
                 <SelectTrigger><SelectValue placeholder="No venue" /></SelectTrigger>
                 <SelectContent>
@@ -548,7 +599,14 @@ export default function Tasks() {
               <Label>Link to deal (optional)</Label>
               <Select
                 value={form.deal_id || '__none__'}
-                onValueChange={v => setField('deal_id', v === '__none__' ? '' : v)}
+                onValueChange={v => {
+                  const id = v === '__none__' ? '' : v
+                  setForm(prev => ({
+                    ...prev,
+                    deal_id: id,
+                    leadLink: id || prev.venue_id ? EMPTY_LEAD_LINK : prev.leadLink,
+                  }))
+                }}
               >
                 <SelectTrigger><SelectValue placeholder="No deal" /></SelectTrigger>
                 <SelectContent>
@@ -559,6 +617,15 @@ export default function Tasks() {
                 </SelectContent>
               </Select>
             </div>
+
+            <TaskLeadLinkFields
+              hasVenueOrDeal={Boolean(form.venue_id || form.deal_id)}
+              disabled={false}
+              value={form.leadLink}
+              onChange={leadLink => setForm(prev => ({ ...prev, leadLink }))}
+              folders={leadFolders}
+              leads={leadRows}
+            />
 
             <div className="space-y-1">
               <Label>Email on complete</Label>

@@ -19,6 +19,7 @@ import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 import { parseCustomEmailBlocksDoc } from './customEmailBlocks'
 import {
   applyMergeToText,
+  leadMergeKeyHasContent,
   resolveMergeKey,
   type CustomEmailMergeContext,
   type CustomMergeAudience,
@@ -149,6 +150,13 @@ function renderCustomOpeningLine(
   return `<p style="${OPENING_LINE_P_STYLE}">${escapeHtmlPlain(line)}</p>`
 }
 
+function normalizeExternalHref(raw: string): string {
+  const t = raw.trim()
+  if (!t) return ''
+  if (/^https?:\/\//i.test(t)) return t
+  return `https://${t}`
+}
+
 function renderBlocks(
   doc: CustomEmailBlocksDoc,
   ctx: CustomEmailMergeContext,
@@ -156,6 +164,14 @@ function renderBlocks(
 ): string {
   const parts: string[] = []
   for (const b of doc.blocks) {
+    if (
+      audience === 'lead'
+      && 'showIfKey' in b
+      && b.showIfKey
+      && !leadMergeKeyHasContent(ctx, b.showIfKey)
+    ) {
+      continue
+    }
     switch (b.kind) {
       case 'prose': {
         const sectionTitle = mergedSectionTitle(b.title, ctx, audience)
@@ -220,6 +236,35 @@ function renderBlocks(
       case 'divider':
         parts.push('<div style="border-top:1px solid #2a2a2a;margin:16px 0;"></div>')
         break
+      case 'lead_cta_pills': {
+        const leadW = normalizeExternalHref(resolveMergeKey('lead.website', ctx, 'lead'))
+        const pressW = normalizeExternalHref(resolveMergeKey('profile.website', ctx, 'lead'))
+        const igHandle = resolveMergeKey('lead.instagram_handle', ctx, 'lead').trim().replace(/^@+/, '')
+        const igHref = igHandle ? `https://instagram.com/${encodeURIComponent(igHandle)}` : ''
+        const pillStyle =
+          'display:inline-block;margin:4px 8px 4px 0;padding:9px 18px;border-radius:9999px;border:1px solid #3a3a3a;background:#141414;color:#e5e5e5;font-size:12px;font-weight:600;text-decoration:none;'
+        const pills: string[] = []
+        if (leadW) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(leadW)}" style="${pillStyle}">Website</a>`,
+          )
+        }
+        if (pressW) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(pressW)}" style="${pillStyle}">Press kit</a>`,
+          )
+        }
+        if (igHref) {
+          pills.push(
+            `<a href="${escapeHtmlPlain(igHref)}" style="${pillStyle}">Instagram</a>`,
+          )
+        }
+        if (pills.length === 0) break
+        parts.push(
+          `<div style="margin:12px 0 8px;">${pills.join('')}</div>`,
+        )
+        break
+      }
     }
   }
   return parts.join('')

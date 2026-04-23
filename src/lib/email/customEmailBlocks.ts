@@ -2,17 +2,22 @@ import { parseAccentColorHex } from './customEmailAccentPresets'
 import type { EmailCaptureKind } from '../emailCapture/kinds'
 import { isEmailCaptureKind } from '../emailCapture/kinds'
 
+/** Optional: for `audience: lead` blocks — omit block if this merge key resolves empty. */
+type LeadIf = { showIfKey?: string | null }
+
 export type CustomEmailBlock =
-  | { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null }
-  | { kind: 'bullet_list'; title?: string | null; items: string[]; accentColor?: string | null }
-  | {
+  | (LeadIf & { kind: 'prose'; title?: string | null; body: string; accentColor?: string | null })
+  | (LeadIf & { kind: 'bullet_list'; title?: string | null; items: string[]; accentColor?: string | null })
+  | (LeadIf & {
       kind: 'key_value'
       title?: string | null
       rows: Array<{ label: string; valueKey?: string | null; value?: string | null }>
       accentColor?: string | null
-    }
-  | { kind: 'table'; title?: string | null; headers: string[]; rows: string[][]; accentColor?: string | null }
-  | { kind: 'divider' }
+    })
+  | (LeadIf & { kind: 'table'; title?: string | null; headers: string[]; rows: string[][]; accentColor?: string | null })
+  | (LeadIf & { kind: 'divider' })
+  /** Standard lead outreach row: Website · Press kit (artist site) · Instagram — minimal pills. */
+  | (LeadIf & { kind: 'lead_cta_pills' })
 
 export interface CustomEmailBlocksDoc {
   version: 1
@@ -27,9 +32,17 @@ function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null
 }
 
+function showIfFromRaw(raw: Record<string, unknown>): { showIfKey?: string | null } {
+  if (typeof raw.showIfKey === 'string' && raw.showIfKey.trim()) {
+    return { showIfKey: raw.showIfKey.trim() }
+  }
+  return {}
+}
+
 function parseBlock(raw: unknown): CustomEmailBlock | null {
   if (!isObj(raw) || typeof raw.kind !== 'string') return null
   const accent = parseAccentColorHex(raw.accentColor)
+  const sif = showIfFromRaw(raw)
   switch (raw.kind) {
     case 'prose':
       return {
@@ -37,6 +50,7 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         body: typeof raw.body === 'string' ? raw.body : '',
         ...(accent ? { accentColor: accent } : {}),
+        ...sif,
       }
     case 'bullet_list': {
       const items = Array.isArray(raw.items) ? raw.items.filter((x): x is string => typeof x === 'string') : []
@@ -45,6 +59,7 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         items,
         ...(accent ? { accentColor: accent } : {}),
+        ...sif,
       }
     }
     case 'key_value': {
@@ -62,6 +77,7 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         title: typeof raw.title === 'string' ? raw.title : raw.title === null ? null : undefined,
         rows,
         ...(accent ? { accentColor: accent } : {}),
+        ...sif,
       }
     }
     case 'table': {
@@ -78,10 +94,13 @@ function parseBlock(raw: unknown): CustomEmailBlock | null {
         headers,
         rows,
         ...(accent ? { accentColor: accent } : {}),
+        ...sif,
       }
     }
     case 'divider':
-      return { kind: 'divider' }
+      return { kind: 'divider', ...sif }
+    case 'lead_cta_pills':
+      return { kind: 'lead_cta_pills', ...sif }
     default:
       return null
   }

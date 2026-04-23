@@ -855,6 +855,8 @@ export interface Database {
           resend_message_id: string | null
           notes: string | null
           task_id: string | null
+          folder_id_before: string | null
+          moved_to_folder_id: string | null
           created_at: string
         }
         Insert: {
@@ -870,6 +872,8 @@ export interface Database {
           resend_message_id?: string | null
           notes?: string | null
           task_id?: string | null
+          folder_id_before?: string | null
+          moved_to_folder_id?: string | null
           created_at?: string
         }
         Update: {
@@ -885,6 +889,8 @@ export interface Database {
           resend_message_id?: string | null
           notes?: string | null
           task_id?: string | null
+          folder_id_before?: string | null
+          moved_to_folder_id?: string | null
           created_at?: string
         }
         Relationships: [
@@ -907,6 +913,45 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      lead_folder_movements: {
+        Row: {
+          id: string
+          user_id: string
+          lead_id: string
+          from_folder_id: string | null
+          to_folder_id: string
+          source: 'manual' | 'email_template_send'
+          custom_email_template_id: string | null
+          task_id: string | null
+          lead_email_event_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          lead_id: string
+          from_folder_id?: string | null
+          to_folder_id: string
+          source: 'manual' | 'email_template_send'
+          custom_email_template_id?: string | null
+          task_id?: string | null
+          lead_email_event_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          lead_id?: string
+          from_folder_id?: string | null
+          to_folder_id?: string
+          source?: 'manual' | 'email_template_send'
+          custom_email_template_id?: string | null
+          task_id?: string | null
+          lead_email_event_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
       }
       leads: {
         Row: {
@@ -1247,6 +1292,7 @@ export interface Database {
           cold_call_id: string | null
           lead_id: string | null
           lead_folder_id: string | null
+          lead_send_all: boolean
           email_type: string | null
           generated_file_id: string | null
           created_at: string
@@ -1266,6 +1312,7 @@ export interface Database {
           cold_call_id?: string | null
           lead_id?: string | null
           lead_folder_id?: string | null
+          lead_send_all?: boolean
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1285,6 +1332,7 @@ export interface Database {
           cold_call_id?: string | null
           lead_id?: string | null
           lead_folder_id?: string | null
+          lead_send_all?: boolean
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1543,6 +1591,8 @@ export interface Database {
           subject_template: string
           blocks: unknown
           attachment_generated_file_id: string | null
+          /** Lead templates: optional folder the lead is moved to after a successful send. */
+          move_to_folder_id: string | null
           created_at: string
           updated_at: string
         }
@@ -1554,6 +1604,7 @@ export interface Database {
           subject_template?: string
           blocks?: unknown
           attachment_generated_file_id?: string | null
+          move_to_folder_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1565,6 +1616,7 @@ export interface Database {
           subject_template?: string
           blocks?: unknown
           attachment_generated_file_id?: string | null
+          move_to_folder_id?: string | null
           created_at?: string
           updated_at?: string
         }

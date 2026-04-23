@@ -288,6 +288,12 @@ export default function LeadIntakeHubPage() {
   const handleSaveEdit = useCallback(async () => {
     if (!selected || !editForm) return
     setSaveBusy(true)
+    const prevFolderId = selected.folder_id
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setSaveBusy(false)
+      return
+    }
     const { error } = await updateLead(selected.id, {
       folder_id: editFolderId,
       venue_name: editForm.venue_name || null,
@@ -304,6 +310,16 @@ export default function LeadIntakeHubPage() {
     })
     setSaveBusy(false)
     if (!error) {
+      if (prevFolderId !== editFolderId) {
+        const { error: moveErr } = await supabase.from('lead_folder_movements').insert({
+          user_id: user.id,
+          lead_id: selected.id,
+          from_folder_id: prevFolderId,
+          to_folder_id: editFolderId,
+          source: 'manual',
+        })
+        if (moveErr) console.error('[lead_folder_movements]', moveErr.message)
+      }
       setEditDirty(false)
       void refetchEmailLog()
     }
@@ -859,6 +875,12 @@ export default function LeadIntakeHubPage() {
                         <p className="text-xs text-neutral-500 mt-0.5 truncate" title={ev.subject}>
                           {ev.subject}
                         </p>
+                        {ev.moved_to_folder_id ? (
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            Folder after send:{' '}
+                            {folders.find(f => f.id === ev.moved_to_folder_id)?.name ?? '—'}
+                          </p>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

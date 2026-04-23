@@ -4,12 +4,14 @@ import {
 } from 'lucide-react'
 import { useEmailTemplates } from '@/hooks/useEmailTemplates'
 import { useCustomEmailTemplates } from '@/hooks/useCustomEmailTemplates'
+import { useLeadFolders } from '@/hooks/useLeadFolders'
 import { useFiles } from '@/hooks/useFiles'
 import { useArtistProfile } from '@/hooks/useArtistProfile'
 import { supabase } from '@/lib/supabase'
 import { sendEmailTemplateTest } from '@/lib/email/sendEmailTemplateTest'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -79,6 +81,7 @@ import {
 import { CustomTemplateBlocksEditorSection } from '@/components/email-templates/CustomTemplateBlockEditors'
 import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import { customEmailTypeValue } from '@/lib/email/customTemplateId'
+import { COLD_OUTREACH_DEFAULT_SUBJECT, coldOutreachDefaultLeadBlocks } from '@/lib/email/coldOutreachDefaultLeadTemplate'
 
 const CustomBlocksEditorSection = CustomTemplateBlocksEditorSection
 import {
@@ -87,6 +90,7 @@ import {
   PREVIEW_MOCK_LEAD,
   VENUE_CUSTOM_MERGE_KEYS,
 } from '@/lib/email/customEmailMerge'
+import type { CustomEmailAudience } from '@/hooks/useCustomEmailTemplates'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
 
@@ -333,8 +337,11 @@ export default function EmailTemplates() {
   const [deleteCustomUsage, setDeleteCustomUsage] = useState<{ pipelineTemplateItemCount: number; taskCount: number } | null>(null)
   const [newCustomOpen, setNewCustomOpen] = useState(false)
   const [newCustomName, setNewCustomName] = useState('')
+  const [newCustomAudience, setNewCustomAudience] = useState<CustomEmailAudience>('venue')
   const [newCustomError, setNewCustomError] = useState<string | null>(null)
   const [newCustomSubmitting, setNewCustomSubmitting] = useState(false)
+  const { folders: leadFoldersForTemplates } = useLeadFolders()
+  const [customMoveToFolderId, setCustomMoveToFolderId] = useState<string | null>(null)
 
   const filteredEmailTypes = useMemo((): AnyEmailType[] => {
     const types = (activeGroup === 'client' ? CLIENT_ORDER : ARTIST_ORDER) as AnyEmailType[]
@@ -399,6 +406,7 @@ export default function EmailTemplates() {
           || customSubjectDraft !== row.subject_template
           || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
           || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
+          || (customMoveToFolderId ?? null) !== (row.move_to_folder_id ?? null)
         if (dirty) {
           setDiscardConfirm(true)
           return
@@ -416,6 +424,7 @@ export default function EmailTemplates() {
     customSubjectDraft,
     customBlocksDraft,
     customAttachmentFileIdDraft,
+    customMoveToFolderId,
   ])
 
   const handleGroupSwitch = (g: Group) => {
@@ -446,6 +455,7 @@ export default function EmailTemplates() {
           || customSubjectDraft !== row.subject_template
           || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
           || (customAttachmentFileIdDraft ?? null) !== (row.attachment_generated_file_id ?? null)
+          || (customMoveToFolderId ?? null) !== (row.move_to_folder_id ?? null)
         if (dirty) {
           setPendingGroup(g)
           setDiscardConfirm(true)
@@ -839,6 +849,7 @@ export default function EmailTemplates() {
       || customSubjectDraft !== selectedCustomRow.subject_template
       || !customBlocksSemanticallyEqual(customBlocksDraft, parsed)
       || (customAttachmentFileIdDraft ?? null) !== (selectedCustomRow.attachment_generated_file_id ?? null)
+      || (customMoveToFolderId ?? null) !== (selectedCustomRow.move_to_folder_id ?? null)
   })()
 
   const enterEditFor = (emailType: AnyEmailType) => {
@@ -857,6 +868,7 @@ export default function EmailTemplates() {
     setCustomSubjectDraft(row.subject_template)
     setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
     setCustomAttachmentFileIdDraft(row.attachment_generated_file_id ?? null)
+    setCustomMoveToFolderId(row.move_to_folder_id ?? null)
     setSidebarMode('edit-custom')
     setSaved(false)
   }
@@ -876,6 +888,7 @@ export default function EmailTemplates() {
       subject_template: customSubjectDraft,
       blocks: customBlocksDraft,
       attachment_generated_file_id: customAttachmentFileIdDraft,
+      move_to_folder_id: selectedCustomRow?.audience === 'lead' ? (customMoveToFolderId ?? null) : null,
     })
     setSaving(false)
     if (res && 'data' in res && res.data) {
@@ -884,6 +897,7 @@ export default function EmailTemplates() {
       setCustomSubjectDraft(row.subject_template)
       setCustomBlocksDraft(loadCustomEmailBlocksDoc(row.blocks))
       setCustomAttachmentFileIdDraft(row.attachment_generated_file_id ?? null)
+      setCustomMoveToFolderId(row.move_to_folder_id ?? null)
     }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -934,7 +948,8 @@ export default function EmailTemplates() {
           : kind === 'bullet_list' ? { kind: 'bullet_list', title: '', items: ['', '', ''] }
             : kind === 'key_value' ? { kind: 'key_value', title: '', rows: [{ label: 'Field', value: '' }] }
               : kind === 'table' ? { kind: 'table', title: '', headers: ['Col A', 'Col B'], rows: [['', '']] }
-                : { kind: 'divider' }
+                : kind === 'lead_cta_pills' ? { kind: 'lead_cta_pills' }
+                  : { kind: 'divider' }
       const pushed = nb.kind === 'table' ? normalizeTableBlock(nb) : nb
       return { ...prev, blocks: [...prev.blocks, pushed] }
     })
@@ -1032,6 +1047,7 @@ export default function EmailTemplates() {
           onClick={() => {
             setNewCustomError(null)
             setNewCustomName('')
+            setNewCustomAudience(activeGroup === 'client' ? 'venue' : activeGroup === 'leads' ? 'lead' : 'artist')
             setNewCustomOpen(true)
           }}
         >
@@ -1274,6 +1290,7 @@ export default function EmailTemplates() {
                                   setCustomSubjectDraft(data.subject_template)
                                   setCustomBlocksDraft(loadCustomEmailBlocksDoc(data.blocks))
                                   setCustomAttachmentFileIdDraft(data.attachment_generated_file_id ?? null)
+                                  setCustomMoveToFolderId(data.move_to_folder_id ?? null)
                                   setSidebarMode('edit-custom')
                                 }
                               }}
@@ -1379,6 +1396,53 @@ export default function EmailTemplates() {
                     Shortcuts also work: {'{{firstName}}'}, {'{{client_name}}'} → recipient first name.
                   </p>
                 </div>
+                {activeGroup === 'leads' && selectedCustomRow.audience === 'lead' && leadFoldersForTemplates.length > 0 && (
+                  <div>
+                    <Label className={EYEBROW}>After send, move lead to (optional)</Label>
+                    <p className="text-[10px] text-neutral-600 mt-0.5 mb-1">
+                      When a task send completes, leads are moved to this folder (see Lead Intake movement log).
+                    </p>
+                    <Select
+                      value={customMoveToFolderId ?? '__none__'}
+                      onValueChange={v => setCustomMoveToFolderId(v === '__none__' ? null : v)}
+                    >
+                      <SelectTrigger className="text-sm mt-0.5 h-9">
+                        <SelectValue placeholder="No automatic move" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No automatic move</SelectItem>
+                        {leadFoldersForTemplates.map(f => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {activeGroup === 'leads' && selectedCustomRow.audience === 'lead' && (
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        if (!window.confirm('Replace the subject, greeting, and blocks with the cold outreach starter? You can still cancel without saving.')) {
+                          return
+                        }
+                        setCustomSubjectDraft(COLD_OUTREACH_DEFAULT_SUBJECT)
+                        setCustomBlocksDraft(coldOutreachDefaultLeadBlocks())
+                        setBlockMenuOpen(false)
+                      }}
+                    >
+                      Insert cold outreach starter
+                    </Button>
+                    <p className="text-[10px] text-neutral-600 mt-1.5">
+                      One-click starter: default subject, greeting, prose blocks, link pills, and conditional research notes.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className={EYEBROW}>Opening line</p>
                   <VariableSlashTextarea
@@ -1458,6 +1522,7 @@ export default function EmailTemplates() {
                 <CustomBlocksEditorSection
                   blocks={customBlocksDraft.blocks}
                   mergeKeyOptions={mergeKeyOptions}
+                  templateAudience={activeGroup === 'leads' ? 'lead' : activeGroup === 'client' ? 'venue' : 'artist'}
                   blockMenuOpen={blockMenuOpen}
                   onBlockMenuOpenChange={setBlockMenuOpen}
                   onAddBlock={addCustomBlock}
@@ -1995,12 +2060,36 @@ export default function EmailTemplates() {
               You’ll open the block editor next: set the subject line, add sections (text, lists, tables, merge fields),
               and preview the full email before saving.
             </p>
+            <div>
+              <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider mb-1.5">Audience</p>
+              <div className="flex rounded-md border border-neutral-800 p-0.5 gap-0.5">
+                {([
+                  { v: 'venue' as const, label: 'Client' },
+                  { v: 'artist' as const, label: 'Artist' },
+                  { v: 'lead' as const, label: 'Lead' },
+                ]).map(({ v, label }) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setNewCustomAudience(v)}
+                    className={cn(
+                      'flex-1 py-1.5 text-xs font-medium rounded transition-colors',
+                      newCustomAudience === v
+                        ? 'bg-neutral-700 text-white'
+                        : 'text-neutral-500 hover:text-neutral-300',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p className="text-xs text-neutral-500">
-              {activeGroup === 'client'
-                ? 'Audience: venues (client emails). You can use this template from Pipeline, the email queue, and manual sends.'
-                : activeGroup === 'leads'
-                  ? 'Audience: lead / research records (pre–pipeline). Merge with lead.* fields; use from Lead Intake when send flow is connected.'
-                  : 'Audience: your artist profile email. You can attach it to pipeline tasks that complete with this template.'}
+              {newCustomAudience === 'venue'
+                ? 'Venues: client / pipeline copy. Use from Pipeline, the email queue, and manual sends.'
+                : newCustomAudience === 'lead'
+                  ? 'Lead / research: merge with lead.*; tasks and the queue when the recipient matches a lead’s contact email.'
+                  : 'Artist: your internal profile. Attach to tasks that use custom artist email.'}
             </p>
             <Input
               value={newCustomName}
@@ -2034,7 +2123,7 @@ export default function EmailTemplates() {
                 setNewCustomError(null)
                 setNewCustomSubmitting(true)
                 const res = await insertCustomRow({
-                  audience: activeGroup === 'client' ? 'venue' : activeGroup === 'leads' ? 'lead' : 'artist',
+                  audience: newCustomAudience,
                   name: newCustomName.trim(),
                 })
                 setNewCustomSubmitting(false)
@@ -2049,6 +2138,9 @@ export default function EmailTemplates() {
                   setCustomNameDraft(res.data.name)
                   setCustomSubjectDraft(res.data.subject_template)
                   setCustomBlocksDraft(loadCustomEmailBlocksDoc(res.data.blocks))
+                  setActiveGroup(
+                    newCustomAudience === 'venue' ? 'client' : newCustomAudience === 'lead' ? 'leads' : 'artist',
+                  )
                   setSidebarMode('edit-custom')
                 }
               }}

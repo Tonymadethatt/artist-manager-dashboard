@@ -128,6 +128,8 @@ export function taskEmailAutomationSuccessMessage(reason: string): string | null
       return 'Email queued — open Email queue to send now or wait for auto-send.'
     case 'lead_email_sent':
       return 'Lead email was sent. Check Email history on the lead for details.'
+    case 'lead_bulk_email_sent':
+      return 'Lead emails were sent to multiple records. Check Email history on each lead for details.'
     default:
       return null
   }
@@ -150,7 +152,9 @@ export function taskEmailAutomationUserMessage(reason: string): string {
     case 'performance_report_needs_venue':
       return 'Performance report request needs a linked venue (or deal with a venue) so the form email can include the correct show context.'
     case 'no_lead_for_lead_email':
-      return 'Link this task to a lead (Lead Intake) so a lead custom template can send.'
+      return 'Link this task to a lead, a lead folder, or all leads (Lead Intake) so a lead custom template can send.'
+    case 'lead_bulk_send_all_failed':
+      return 'Bulk lead send failed for every recipient. Check leads have contact emails and your profile from-address is set.'
     case 'no_lead_contact_email':
       return 'This lead has no contact email. Add one on the lead, then try again.'
     case 'no_from_email':

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +11,9 @@ import {
 import { RichBodyEditor } from '@/components/templates/RichBodyEditor'
 import { VariableSlashTextarea } from '@/components/templates/VariableSlashTextarea'
 import type { CustomEmailBlock } from '@/lib/email/customEmailBlocks'
+import { LEAD_CUSTOM_MERGE_KEYS } from '@/lib/email/customEmailMerge'
 import { cn } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
 
 const CARD = 'rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1a1a1a]'
 const CARD_HEADER =
@@ -19,13 +22,18 @@ const CARD_BODY = 'px-[18px] py-3'
 
 const EYEBROW = 'text-[10px] font-semibold uppercase tracking-wider text-neutral-500'
 
-const CUSTOM_BLOCK_ADD_OPTIONS: { kind: CustomEmailBlock['kind']; label: string }[] = [
+const CUSTOM_BLOCK_ADD_BASE: { kind: CustomEmailBlock['kind']; label: string }[] = [
   { kind: 'prose', label: 'Rich text' },
   { kind: 'bullet_list', label: 'Bulleted list' },
   { kind: 'key_value', label: 'Key / value' },
   { kind: 'table', label: 'Table' },
   { kind: 'divider', label: 'Divider' },
 ]
+
+const LEAD_BLOCK_ADD: { kind: CustomEmailBlock['kind']; label: string } = {
+  kind: 'lead_cta_pills',
+  label: 'Link pills (website / press / Instagram)',
+}
 
 function BlockChrome(props: {
   label: string
@@ -94,18 +102,54 @@ function TitleHeaderStrip(props: {
   )
 }
 
+function LeadBlockVisibilityRow(props: {
+  showIfKey: string | null | undefined
+  onChange: (key: string | null) => void
+}) {
+  return (
+    <div className="mb-2 space-y-0.5">
+      <Label className="text-[10px] text-neutral-500">Show only if field is set (lead)</Label>
+      <Select
+        value={props.showIfKey && props.showIfKey.trim() ? props.showIfKey : '__always__'}
+        onValueChange={v => props.onChange(v === '__always__' ? null : v)}
+      >
+        <SelectTrigger className="h-8 text-[11px] bg-[#141414] border-[#2a2a2a]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__always__" className="text-xs">
+            Always show
+          </SelectItem>
+          {LEAD_CUSTOM_MERGE_KEYS.map(k => (
+            <SelectItem key={k} value={k} className="text-xs">
+              {k}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function ProseEditor(props: {
   block: Extract<CustomEmailBlock, { kind: 'prose' }>
   index: number
   total: number
   mergeKeyOptions: readonly string[]
+  templateAudience: 'venue' | 'artist' | 'lead'
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, templateAudience, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
       <BlockChrome label="Rich text" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
@@ -133,13 +177,20 @@ function BulletListEditor(props: {
   index: number
   total: number
   mergeKeyOptions: readonly string[]
+  templateAudience: 'venue' | 'artist' | 'lead'
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, templateAudience, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
       <BlockChrome label="Bulleted list" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
@@ -199,13 +250,20 @@ function KeyValueEditor(props: {
   index: number
   total: number
   mergeKeyOptions: readonly string[]
+  templateAudience: 'venue' | 'artist' | 'lead'
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, templateAudience, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
       <BlockChrome label="Key / value" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
@@ -303,11 +361,12 @@ function TableEditor(props: {
   index: number
   total: number
   mergeKeyOptions: readonly string[]
+  templateAudience: 'venue' | 'artist' | 'lead'
   onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { block, index, total, mergeKeyOptions, onUpdate, onMove, onRemove } = props
+  const { block, index, total, mergeKeyOptions, templateAudience, onUpdate, onMove, onRemove } = props
 
   const addColumn = () => {
     onUpdate({ headers: [...block.headers, ''] })
@@ -330,6 +389,12 @@ function TableEditor(props: {
 
   return (
     <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
       <BlockChrome label="Table" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className={CARD}>
         <TitleHeaderStrip
@@ -424,15 +489,57 @@ function TableEditor(props: {
   )
 }
 
-function DividerEditor(props: {
+function LeadCtaPillsEditor(props: {
+  block: Extract<CustomEmailBlock, { kind: 'lead_cta_pills' }>
   index: number
   total: number
+  templateAudience: 'venue' | 'artist' | 'lead'
+  onUpdate: (patch: Partial<CustomEmailBlock>) => void
   onMove: (dir: -1 | 1) => void
   onRemove: () => void
 }) {
-  const { index, total, onMove, onRemove } = props
+  const { block, index, total, templateAudience, onUpdate, onMove, onRemove } = props
   return (
     <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
+      <BlockChrome
+        label="Link pills (website / press / Instagram)"
+        index={index}
+        total={total}
+        onMove={onMove}
+        onRemove={onRemove}
+      />
+      <div className="rounded-lg border border-[#2a2a2a] bg-[#141414]/50 px-[18px] py-3 text-xs text-neutral-500 leading-relaxed">
+        Renders up to three pill links from merge data: venue website, press kit (artist site from your profile), and
+        Instagram when a handle is set. Omitted if nothing resolves.
+      </div>
+    </div>
+  )
+}
+
+function DividerEditor(props: {
+  block: Extract<CustomEmailBlock, { kind: 'divider' }>
+  index: number
+  total: number
+  templateAudience: 'venue' | 'artist' | 'lead'
+  onUpdate: (patch: Partial<CustomEmailBlock>) => void
+  onMove: (dir: -1 | 1) => void
+  onRemove: () => void
+}) {
+  const { block, index, total, templateAudience, onUpdate, onMove, onRemove } = props
+  return (
+    <div className="min-w-0">
+      {templateAudience === 'lead' ? (
+        <LeadBlockVisibilityRow
+          showIfKey={block.showIfKey}
+          onChange={k => onUpdate({ showIfKey: k })}
+        />
+      ) : null}
       <BlockChrome label="Divider / spacer" index={index} total={total} onMove={onMove} onRemove={onRemove} />
       <div className="rounded-lg border border-[#2a2a2a] bg-[#141414]/50 px-[18px] py-4">
         <div className="border-t border-[#2a2a2a]" />
@@ -444,6 +551,8 @@ function DividerEditor(props: {
 export interface CustomTemplateBlocksEditorProps {
   blocks: CustomEmailBlock[]
   mergeKeyOptions: readonly string[]
+  /** Which custom template audience is being edited — adds lead-only blocks and conditional visibility. */
+  templateAudience?: 'venue' | 'artist' | 'lead'
   blockMenuOpen: boolean
   onBlockMenuOpenChange: (open: boolean) => void
   onAddBlock: (kind: CustomEmailBlock['kind']) => void
@@ -456,6 +565,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
   const {
     blocks,
     mergeKeyOptions,
+    templateAudience = 'venue',
     blockMenuOpen,
     onBlockMenuOpenChange,
     onAddBlock,
@@ -464,6 +574,10 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
     onRemoveBlock,
   } = props
   const total = blocks.length
+  const blockAddOptions = useMemo(
+    () => (templateAudience === 'lead' ? [...CUSTOM_BLOCK_ADD_BASE, LEAD_BLOCK_ADD] : CUSTOM_BLOCK_ADD_BASE),
+    [templateAudience],
+  )
 
   return (
     <div className="border border-neutral-800 rounded-lg p-3 bg-neutral-900/50">
@@ -483,7 +597,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
         </Button>
         {blockMenuOpen && (
           <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md border border-neutral-700 bg-neutral-950 shadow-lg py-1">
-            {CUSTOM_BLOCK_ADD_OPTIONS.map(({ kind, label }) => (
+            {blockAddOptions.map(({ kind, label }) => (
               <button
                 key={kind}
                 type="button"
@@ -511,6 +625,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   index={i}
                   total={total}
                   mergeKeyOptions={mergeKeyOptions}
+                  templateAudience={templateAudience}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -524,6 +639,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   index={i}
                   total={total}
                   mergeKeyOptions={mergeKeyOptions}
+                  templateAudience={templateAudience}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -537,6 +653,7 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   index={i}
                   total={total}
                   mergeKeyOptions={mergeKeyOptions}
+                  templateAudience={templateAudience}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -550,6 +667,20 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
                   index={i}
                   total={total}
                   mergeKeyOptions={mergeKeyOptions}
+                  templateAudience={templateAudience}
+                  onUpdate={update}
+                  onMove={move}
+                  onRemove={remove}
+                />
+              )
+            case 'lead_cta_pills':
+              return (
+                <LeadCtaPillsEditor
+                  key={i}
+                  block={block}
+                  index={i}
+                  total={total}
+                  templateAudience={templateAudience}
                   onUpdate={update}
                   onMove={move}
                   onRemove={remove}
@@ -557,7 +688,16 @@ export function CustomTemplateBlocksEditorSection(props: CustomTemplateBlocksEdi
               )
             case 'divider':
               return (
-                <DividerEditor key={i} index={i} total={total} onMove={move} onRemove={remove} />
+                <DividerEditor
+                  key={i}
+                  block={block}
+                  index={i}
+                  total={total}
+                  templateAudience={templateAudience}
+                  onUpdate={update}
+                  onMove={move}
+                  onRemove={remove}
+                />
               )
             default:
               return null
