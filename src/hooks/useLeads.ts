@@ -138,10 +138,13 @@ export function useLeads(folderNameById: Map<string, string>) {
 
   const updateLead = useCallback(
     async (id: string, patch: Partial<Omit<LeadRow, 'id' | 'user_id' | 'created_at'>>) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return { error: new Error('Not signed in') }
       const { error: u, data } = await supabase
         .from('leads')
         .update(patch)
         .eq('id', id)
+        .eq('user_id', user.id)
         .select(`
           *,
           promoted_venue:venues!leads_promoted_venue_fkey (id, name)
@@ -163,8 +166,22 @@ export function useLeads(folderNameById: Map<string, string>) {
 
   const deleteLead = useCallback(
     async (id: string) => {
-      const { error: d } = await supabase.from('leads').delete().eq('id', id)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return { error: new Error('Not signed in') }
+      const { data: removed, error: d } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select('id')
       if (d) return { error: new Error(d.message) }
+      if (!removed?.length) {
+        return {
+          error: new Error(
+            'Could not delete this lead. Try refreshing the page, or contact support if it continues.',
+          ),
+        }
+      }
       setLeads(prev => prev.filter(l => l.id !== id))
       return {}
     },

@@ -139,6 +139,7 @@ export default function LeadIntakeHubPage() {
   const [addFolderId, setAddFolderId] = useState<string>('')
   const [addBusy, setAddBusy] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [deleteLeadError, setDeleteLeadError] = useState<string | null>(null)
 
   const [newFolderOpen, setNewFolderOpen] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -220,6 +221,7 @@ export default function LeadIntakeHubPage() {
       setEditForm(null)
     }
     setEditDirty(false)
+    setDeleteLeadError(null)
   }, [selected?.id, selectedId])
 
   useEffect(() => {
@@ -374,8 +376,13 @@ export default function LeadIntakeHubPage() {
   const handleDelete = useCallback(async () => {
     if (!selected) return
     if (!window.confirm('Delete this lead? This cannot be undone.')) return
+    setDeleteLeadError(null)
     const id = selected.id
-    await deleteLead(id)
+    const res = await deleteLead(id)
+    if (res && 'error' in res && res.error) {
+      setDeleteLeadError(res.error instanceof Error ? res.error.message : 'Delete failed.')
+      return
+    }
     setSelectedId(null)
   }, [selected, deleteLead])
 
@@ -884,6 +891,9 @@ export default function LeadIntakeHubPage() {
                   Delete
                 </Button>
               </div>
+              {deleteLeadError ? (
+                <p className="text-sm text-red-400">{deleteLeadError}</p>
+              ) : null}
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1 sm:col-span-2">
