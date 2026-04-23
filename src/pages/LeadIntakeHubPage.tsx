@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useLeadFolders } from '@/hooks/useLeadFolders'
 import { useLeads } from '@/hooks/useLeads'
+import { useVenues } from '@/hooks/useVenues'
 import { useLeadEmailEvents } from '@/hooks/useLeadEmailEvents'
 import { parseLeadResearchImportText, type LeadImportPickedFields } from '@/lib/leadIntake/parseLeadResearchImport'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,7 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { TASK_LIST_SELECT } from '@/lib/tasks/taskListSelect'
 import { useNavBadges } from '@/context/NavBadgesContext'
-import { promoteLeadToClientPipeline } from '@/lib/leadIntake/promoteLeadToClientPipeline'
+import { linkLeadToExistingVenue, promoteLeadToClientPipeline } from '@/lib/leadIntake/promoteLeadToClientPipeline'
 
 type DateFilter = 'all' | '7d' | '30d'
 
@@ -88,6 +89,11 @@ export default function LeadIntakeHubPage() {
   const folderNameById = useMemo(() => new Map(folders.map(f => [f.id, f.name])), [folders])
   const { leads, loading: leadsLoading, error: leadsError, refetch: refetchLeads, insertLeads, addLead, updateLead, deleteLead } =
     useLeads(folderNameById)
+  const { venues, loading: venuesLoading } = useVenues()
+  const venuesSorted = useMemo(
+    () => [...venues].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [venues],
+  )
 
   const [search, setSearch] = useState('')
   const [filterFolder, setFilterFolder] = useState<string | 'all'>('all')
@@ -135,8 +141,17 @@ export default function LeadIntakeHubPage() {
   const [followUpError, setFollowUpError] = useState<string | null>(null)
 
   const [promoteOpen, setPromoteOpen] = useState(false)
+  const [promoteMode, setPromoteMode] = useState<'create' | 'link'>('create')
+  const [linkVenueId, setLinkVenueId] = useState('')
   const [promoteBusy, setPromoteBusy] = useState(false)
   const [promoteError, setPromoteError] = useState<string | null>(null)
+
+  const openPromoteDialog = useCallback(() => {
+    setPromoteError(null)
+    setPromoteMode('create')
+    setLinkVenueId('')
+    setPromoteOpen(true)
+  }, [])
 
   const [listPage, setListPage] = useState(0)
 
@@ -390,9 +405,16 @@ export default function LeadIntakeHubPage() {
 
   const runPromoteToPipeline = useCallback(async () => {
     if (!selected) return
-    setPromoteBusy(true)
     setPromoteError(null)
-    const r = await promoteLeadToClientPipeline(selected)
+    if (promoteMode === 'link' && !linkVenueId) {
+      setPromoteError('Select a venue.')
+      return
+    }
+    setPromoteBusy(true)
+    const r =
+      promoteMode === 'link'
+        ? await linkLeadToExistingVenue(selected, linkVenueId)
+        : await promoteLeadToClientPipeline(selected)
     setPromoteBusy(false)
     if (!r.ok) {
       setPromoteError(r.message)
@@ -401,7 +423,7 @@ export default function LeadIntakeHubPage() {
     setPromoteOpen(false)
     void refetchLeads()
     void refreshNavBadges()
-  }, [selected, refetchLeads, refreshNavBadges])
+  }, [selected, promoteMode, linkVenueId, refetchLeads, refreshNavBadges])
 
   const runNewFolder = useCallback(async () => {
     setNewFolderBusy(true)
@@ -712,10 +734,7 @@ export default function LeadIntakeHubPage() {
                         size="sm"
                         variant="outline"
                         className="h-9 border-neutral-600"
-                        onClick={() => {
-                          setPromoteError(null)
-                          setPromoteOpen(true)
-                        }}
+                        onClick={openPromoteDialog}
                       >
                         <Building2 className="h-4 w-4 mr-1" />
                         Add to client pipeline
@@ -850,14 +869,69 @@ export default function LeadIntakeHubPage() {
         </main>
       </div>
 
-      <Dialog open={promoteOpen} onOpenChange={v => !v && setPromoteOpen(false)}>
+      <Dialog open={promoteOpen} onOpenChange={v => { if (!v) setPromoteOpen(false) }}>
         <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100">
           <DialogHeader>
             <DialogTitle>Add to client pipeline</DialogTitle>
             <DialogDescription className="text-neutral-500">
-              Creates a new venue in Outreach with this lead’s name and city, adds a contact when email or phone is set, and links the lead to that record. You can continue editing the lead here for research notes.
+              {promoteMode === 'create' ? (
+                <>Creates a new venue in Outreach with this lead’s name and city, adds a contact when email or phone is set, and links the lead to that record. You can keep using this lead for research notes.</>
+              ) : (
+                <>Links this lead to a venue you already have in Outreach. The venue’s existing contacts and fields are not replaced by the lead; edit the venue in Outreach if you need to add this lead’s details.</>
+              )}
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={promoteMode === 'create' ? 'default' : 'outline'}
+              className={promoteMode === 'create' ? 'bg-neutral-100 text-neutral-950 hover:bg-white' : 'border-neutral-600'}
+              onClick={() => {
+                setPromoteMode('create')
+                setPromoteError(null)
+              }}
+            >
+              Create new venue
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={promoteMode === 'link' ? 'default' : 'outline'}
+              className={promoteMode === 'link' ? 'bg-neutral-100 text-neutral-950 hover:bg-white' : 'border-neutral-600'}
+              onClick={() => {
+                setPromoteMode('link')
+                setPromoteError(null)
+                setLinkVenueId(prev => prev || venuesSorted[0]?.id || '')
+              }}
+            >
+              Link existing
+            </Button>
+          </div>
+          {promoteMode === 'link' ? (
+            <div className="space-y-1.5">
+              <Label className="text-neutral-300">Outreach venue</Label>
+              {venuesLoading ? (
+                <p className="text-sm text-neutral-500">Loading venues…</p>
+              ) : venuesSorted.length === 0 ? (
+                <p className="text-sm text-amber-400/90">Add a venue in Outreach first, or choose “Create new venue” above.</p>
+              ) : (
+                <Select value={linkVenueId} onValueChange={setLinkVenueId}>
+                  <SelectTrigger className="border-neutral-700 bg-neutral-950/80">
+                    <SelectValue placeholder="Select venue" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {venuesSorted.map(v => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name.trim() || 'Venue'}
+                        {v.city ? ` — ${v.city}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          ) : null}
           {promoteError && <p className="text-xs text-red-400">{promoteError}</p>}
           <DialogFooter>
             <Button
@@ -872,9 +946,18 @@ export default function LeadIntakeHubPage() {
               type="button"
               className="bg-neutral-100 text-neutral-950 hover:bg-white"
               onClick={() => void runPromoteToPipeline()}
-              disabled={promoteBusy}
+              disabled={
+                promoteBusy
+                || (promoteMode === 'link' && (venuesLoading || venuesSorted.length === 0))
+              }
             >
-              {promoteBusy ? 'Creating…' : 'Create venue & link'}
+              {promoteBusy
+                ? promoteMode === 'link'
+                  ? 'Linking…'
+                  : 'Creating…'
+                : promoteMode === 'link'
+                  ? 'Link to venue'
+                  : 'Create venue & link'}
             </Button>
           </DialogFooter>
         </DialogContent>

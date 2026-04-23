@@ -71,3 +71,40 @@ export async function promoteLeadToClientPipeline(lead: LeadRow): Promise<
 
   return { ok: true, venue: v }
 }
+
+/**
+ * Point an existing `venues` row as the client-pipeline target for this lead (no new venue, no contact copy).
+ */
+export async function linkLeadToExistingVenue(
+  lead: LeadRow,
+  venueId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, message: 'Not signed in' }
+  if (lead.promoted_venue_id) {
+    return { ok: false, message: 'This lead is already linked to a venue.' }
+  }
+  const vid = venueId.trim()
+  if (!vid) return { ok: false, message: 'Select a venue.' }
+
+  const { data: row, error: vErr } = await supabase
+    .from('venues')
+    .select('id, user_id')
+    .eq('id', vid)
+    .maybeSingle()
+  if (vErr || !row || row.user_id !== user.id) {
+    return { ok: false, message: 'Venue not found or not in your account.' }
+  }
+
+  const { error: uErr } = await supabase
+    .from('leads')
+    .update({
+      promoted_venue_id: vid,
+      promoted_at: new Date().toISOString(),
+    })
+    .eq('id', lead.id)
+    .eq('user_id', user.id)
+
+  if (uErr) return { ok: false, message: uErr.message }
+  return { ok: true }
+}
