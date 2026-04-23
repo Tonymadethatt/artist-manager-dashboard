@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   FolderPlus,
   Folders,
   Loader2,
@@ -40,6 +42,8 @@ import {
 import { cn } from '@/lib/utils'
 
 type DateFilter = 'all' | '7d' | '30d'
+
+const LEAD_LIST_PAGE_SIZE = 30
 
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return '—'
@@ -116,6 +120,8 @@ export default function LeadIntakeHubPage() {
   const [editDirty, setEditDirty] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
 
+  const [listPage, setListPage] = useState(0)
+
   useEffect(() => {
     if (folders.length === 0) return
     if (!addFolderId || !folders.some(f => f.id === addFolderId)) {
@@ -129,6 +135,10 @@ export default function LeadIntakeHubPage() {
       setFilterFolder('all')
     }
   }, [folders, filterFolder])
+
+  useEffect(() => {
+    setListPage(0)
+  }, [search, filterFolder, dateFilter, filterCity, filterGenre])
 
   const selected = useMemo(() => leads.find(l => l.id === selectedId) ?? null, [leads, selectedId])
 
@@ -202,6 +212,33 @@ export default function LeadIntakeHubPage() {
       )
     })
   }, [leads, search, filterFolder, dateCutoff, filterCity, filterGenre])
+
+  const listMaxPage = useMemo(
+    () =>
+      filtered.length === 0 ? 0 : Math.max(0, Math.ceil(filtered.length / LEAD_LIST_PAGE_SIZE) - 1),
+    [filtered],
+  )
+  const safeListPage = Math.min(listPage, listMaxPage)
+
+  useEffect(() => {
+    if (listPage > listMaxPage) setListPage(listMaxPage)
+  }, [listPage, listMaxPage])
+
+  const pagedLeads = useMemo(() => {
+    const start = safeListPage * LEAD_LIST_PAGE_SIZE
+    return filtered.slice(start, start + LEAD_LIST_PAGE_SIZE)
+  }, [filtered, safeListPage])
+
+  const listPageLabelTotal = useMemo(
+    () => Math.max(1, Math.ceil(Math.max(0, filtered.length) / LEAD_LIST_PAGE_SIZE)),
+    [filtered.length],
+  )
+  const listRangeText = useMemo(() => {
+    if (filtered.length === 0) return null
+    const a = safeListPage * LEAD_LIST_PAGE_SIZE + 1
+    const b = Math.min((safeListPage + 1) * LEAD_LIST_PAGE_SIZE, filtered.length)
+    return `${a}–${b} of ${filtered.length}`
+  }, [filtered.length, safeListPage])
 
   const importPreview = useMemo(() => {
     if (!importText.trim()) return []
@@ -471,13 +508,14 @@ export default function LeadIntakeHubPage() {
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 min-h-0">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 min-h-0">
             {leadsLoading && leads.length === 0 ? (
               <div className="flex justify-center py-12 text-neutral-500">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : filtered.length === 0 ? null : (
-              filtered.map(lead => {
+              pagedLeads.map(lead => {
                 const active = lead.id === selectedId
                 const noEmail = !lead.contact_email?.trim()
                 return (
@@ -520,6 +558,43 @@ export default function LeadIntakeHubPage() {
                 )
               })
             )}
+            </div>
+            {filtered.length > LEAD_LIST_PAGE_SIZE && listRangeText ? (
+              <div
+                className="shrink-0 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-1.5 px-2 sm:px-3 py-2"
+                role="navigation"
+                aria-label="Lead list pages"
+              >
+                <span className="text-[11px] text-neutral-500 tabular-nums min-w-0 pr-1">{listRangeText}</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-1.5 border-neutral-600"
+                    disabled={safeListPage <= 0}
+                    onClick={() => setListPage(p => Math.max(0, p - 1))}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-[11px] text-neutral-400 tabular-nums px-0.5 min-w-[4.5rem] text-center">
+                    {safeListPage + 1} / {listPageLabelTotal}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-1.5 border-neutral-600"
+                    disabled={safeListPage >= listMaxPage}
+                    onClick={() => setListPage(p => p + 1)}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </aside>
 
