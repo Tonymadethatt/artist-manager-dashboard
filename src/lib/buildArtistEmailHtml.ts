@@ -19,6 +19,10 @@ import { buildArtistBrandedEmailFooterHtml } from '@/lib/email/artistBrandedEmai
 import { buildRetainerReceivedEmailHtml } from '@/lib/email/retainerReceivedEmailDocument'
 import { formatPacificWeekdayMdYyFromYmd } from '@/lib/calendar/pacificWallTime'
 import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
+import {
+  buildBrandOutreachDigestDocumentHtml,
+  makeLayoutForBrandDigest,
+} from '@/lib/email/brandOutreachDigestEmailDocument'
 
 function escapeHtmlPlain(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -83,7 +87,7 @@ function brandedFooterHtml(footer: ArtistEmailHtmlPreviewFooter): string {
   })
 }
 
-const sharedStyles = `
+export const sharedStyles = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
   @media only screen and (max-width: 600px) {
@@ -349,4 +353,35 @@ export function buildPerformanceReportRequestHtml(
 </div>
 </body>
 </html>`
+}
+
+// ---------------------------------------------------------------------------
+// Brand outreach digest (First Outreach) — template preview
+// ---------------------------------------------------------------------------
+
+export function buildBrandOutreachDigestHtml(
+  footer: ArtistEmailHtmlPreviewFooter,
+  customIntro?: string | null,
+  customSubject?: string | null,
+  layout?: EmailTemplateLayoutV1 | null,
+  mockArtistName = 'DJ Luijay',
+): string {
+  const L = makeLayoutForBrandDigest(layout ?? null, customSubject, customIntro)
+  const { html } = buildBrandOutreachDigestDocumentHtml(
+    L,
+    { brandNames: [], uniqueTotal: 0, notShownCount: 0, hasData: false },
+    mockArtistName,
+    '',
+    sharedStyles,
+    {
+      logoBaseUrl: footer.logoBaseUrl,
+      managerName: footer.managerName,
+      managerTitle: footer.managerTitle,
+      website: footer.website,
+      social_handle: footer.social_handle,
+      phone: footer.phone,
+    },
+    true,
+  )
+  return html
 }

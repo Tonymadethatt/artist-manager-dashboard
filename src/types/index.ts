@@ -759,6 +759,8 @@ export type ArtistEmailType =
   | 'gig_booked_ics'
   /** Queued from gig calendar: one-day schedule to artist (buffer 0). */
   | 'gig_day_summary_manual'
+  /** Auto after First Outreach lead sends; lists recent brand names from Lead Intake. */
+  | 'brand_outreach_digest'
 
 export type AnyEmailType = VenueEmailType | ArtistEmailType
 
@@ -792,6 +794,7 @@ export const ARTIST_EMAIL_TYPE_LABELS: Record<ArtistEmailType, string> = {
   gig_reminder_manual: 'Gig reminder — manual (from calendar)',
   gig_booked_ics: 'Gig booked — confirmation email (calendar synced)',
   gig_day_summary_manual: 'Gig schedule — day summary (manual)',
+  brand_outreach_digest: 'Brand outreach snapshot (First Outreach)',
 }
 
 export interface EmailTemplate {

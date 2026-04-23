@@ -10,6 +10,7 @@ import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAt
 import { hasRecentLeadEmailEventDedupe } from '@/lib/queueEmailsFromTemplate'
 import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { fetchVenueEmailSentCountsForUser } from '@/lib/email/emailQueueSendUsage'
+import { FIRST_OUTREACH_LEAD_NAME } from '@/lib/email/firstOutreachLeadTemplate'
 import type { TaskEmailAutomationResult } from '@/lib/taskEmailAutomationResult'
 
 function artistProfilePayload(p: ArtistProfile) {
@@ -45,6 +46,25 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, ms)
   })
+}
+
+/** Best-effort artist digest; must not block or throw on failure. (Email Queue manual sends are not in `lead_email_events` until logged — follow-up product work.) */
+function fireBrandOutreachDigestAfterFirstOutreach(userId: string) {
+  void (async () => {
+    try {
+      const res = await fetch('/.netlify/functions/send-brand-outreach-digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        console.error('[queueLeadCustomEmail] send-brand-outreach-digest', res.status, j)
+      }
+    } catch (e) {
+      console.error('[queueLeadCustomEmail] send-brand-outreach-digest', e)
+    }
+  })()
 }
 
 export function isBulkLeadCustomEmailTask(task: Task): boolean {
@@ -287,7 +307,7 @@ export async function queueLeadCustomEmailOnTaskComplete(
       return { ok: false, reason: 'lead_resend_cap_exceeded' }
     }
 
-    return sendLeadTemplateToOneLead({
+    const one = await sendLeadTemplateToOneLead({
       userId,
       task,
       leadRow: leadRow as LeadRow,
@@ -295,6 +315,10 @@ export async function queueLeadCustomEmailOnTaskComplete(
       emailType,
       preloaded,
     })
+    if (template.name === FIRST_OUTREACH_LEAD_NAME && one.ok && one.reason === 'lead_email_sent') {
+      fireBrandOutreachDigestAfterFirstOutreach(userId)
+    }
+    return one
   }
 
   /** Folder or all leads */
@@ -355,6 +379,9 @@ export async function queueLeadCustomEmailOnTaskComplete(
     const stats: { sent: number; failed: number; skipped: number } = { sent, failed, skipped }
     if (sent === 0 && skipped === list.length) {
       return { ok: true, reason: 'lead_dedupe_recent', leadBulkStats: stats }
+    }
+    if (template.name === FIRST_OUTREACH_LEAD_NAME && sent > 0) {
+      fireBrandOutreachDigestAfterFirstOutreach(userId)
     }
     if (failed > 0 && sent > 0) {
       return { ok: true, reason: 'lead_bulk_email_partial', leadBulkStats: stats }

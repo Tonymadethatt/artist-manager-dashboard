@@ -23,6 +23,7 @@ import {
   buildRetainerReminderPayload,
   defaultQueuedManagementReportDateRange,
 } from '@/lib/reports/buildManagementReportData'
+import { fetchFirstOutreachLeadTemplateIds, hasFirstOutreachSentEvent } from '@/lib/email/brandOutreachDigestData'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import type { CustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
 import { loadCustomEmailBlocksDoc } from '@/lib/email/customEmailBlocks'
@@ -253,6 +254,32 @@ export async function sendEmailTemplateTest(
           testOnly: true,
           custom_subject: null,
           custom_intro: null,
+          layout: layoutNorm,
+          user_id: user.id,
+        }),
+      })
+      if (!res.ok) return { ok: false, message: await errorFromResponse(res) }
+      return { ok: true }
+    }
+
+    if (params.selectedType === 'brand_outreach_digest') {
+      const templateIds = await fetchFirstOutreachLeadTemplateIds(supabase, user.id)
+      const has = await hasFirstOutreachSentEvent(supabase, user.id, templateIds)
+      if (!has) {
+        return {
+          ok: false,
+          message:
+            'Send the First Outreach lead template at least once (from a completed task) to build history, then you can test this email.',
+        }
+      }
+      const res = await fetch('/.netlify/functions/send-brand-outreach-digest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: reportProfileForSend(profile),
+          testOnly: true,
+          custom_subject: layoutNorm.subject ?? null,
+          custom_intro: layoutNorm.intro ?? null,
           layout: layoutNorm,
           user_id: user.id,
         }),

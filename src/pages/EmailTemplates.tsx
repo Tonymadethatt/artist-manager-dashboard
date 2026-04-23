@@ -54,6 +54,7 @@ import {
   buildRetainerReminderHtml,
   buildRetainerReceivedHtml,
   buildPerformanceReportRequestHtml,
+  buildBrandOutreachDigestHtml,
 } from '@/lib/buildArtistEmailHtml'
 import {
   buildBookingCommissionReminderEmailHtml,
@@ -269,6 +270,8 @@ const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
   gig_reminder_manual:        'Same layout as the day-before reminder, but queued from a gig’s detail modal when you want to nudge the artist on demand (no calendar window).',
   gig_booked_ics:             'After a gig is calendar-ready and the deal has an agreement on file or deposit paid: confirmation email to the artist (shared calendar is updated for them; idempotent per deal).',
   gig_day_summary_manual:     'From Gig calendar: send the artist a stacked card for each booked gig on one day (queued; sends on next cron tick).',
+  brand_outreach_digest:
+    'After each successful First Outreach send run, a short snapshot to you with recent brand names (from Lead Intake) and your total unique outreach count. Subject and intro are editable; the list and totals are filled automatically.',
 }
 
 const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
@@ -283,6 +286,7 @@ const ARTIST_DEFAULT_SUBJECTS: Record<ArtistEmailType, string> = {
   gig_reminder_manual:        '{firstName}, reminder: {venue}',
   gig_booked_ics:             '{firstName}, you’re booked — show details',
   gig_day_summary_manual:     '{firstName}, your gigs — one day',
+  brand_outreach_digest:      '{firstName}, your brand outreach snapshot',
 }
 
 const ARTIST_ORDER: ArtistEmailType[] = [
@@ -297,6 +301,7 @@ const ARTIST_ORDER: ArtistEmailType[] = [
   'gig_reminder_manual',
   'gig_booked_ics',
   'gig_day_summary_manual',
+  'brand_outreach_digest',
 ]
 
 type Group = 'client' | 'artist' | 'leads'
@@ -638,6 +643,15 @@ export default function EmailTemplates() {
           layout.intro ?? null,
           layout.subject ?? null,
           layout,
+        )
+      }
+      if (selectedType === 'brand_outreach_digest') {
+        return buildBrandOutreachDigestHtml(
+          artistPreviewFooter,
+          layout.intro ?? null,
+          layout.subject ?? null,
+          layout,
+          artistProfile?.artist_name ?? PREVIEW_MOCK_PROFILE.artist_name,
         )
       }
       if (selectedType === 'performance_report_received') {
