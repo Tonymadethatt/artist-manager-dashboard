@@ -112,6 +112,8 @@ export function buildManagementReportHtml(
 
   const outreachSection = sectionCard('Outreach Activity', rows([
     ['New venues added', '4', '#60a5fa'],
+    ['Leads reached (Lead Intake)', '2', '#60a5fa'],
+    ['Lead emails sent (total)', '3', '#60a5fa'],
     ['Venues engaged', '6', '#60a5fa'],
     ['Active discussions', '3', '#60a5fa'],
     ['Bookings confirmed', '1', '#22c55e'],

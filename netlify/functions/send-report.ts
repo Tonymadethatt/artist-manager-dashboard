@@ -63,6 +63,8 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
   const siteUrl = process.env.URL || ''
   const logoUrl = `${siteUrl}/dj-luijay-logo-email.png`
   const { outreach, artistEarnings, deals, retainer, metrics, tasks, performance } = report
+  const leadsReached = outreach.leadsReached ?? 0
+  const leadEmailsSent = outreach.leadEmailsSent ?? 0
   const outstandingTotal = deals.allOutstanding + retainer.feeOutstanding
   const startFmt = formatPacificWeekdayMdYyFromYmd(dateRange.start)
   const endFmt = formatPacificWeekdayMdYyFromYmd(dateRange.end)
@@ -83,6 +85,10 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
     heroValue = String(outreach.inDiscussion)
     heroLabel = 'Active Conversations'
     heroSubtext = 'Venues currently in discussion'
+  } else if (leadsReached > 0) {
+    heroValue = String(leadsReached)
+    heroLabel = leadsReached === 1 ? 'Lead Reached' : 'Leads Reached'
+    heroSubtext = 'Lead Intake email outreach this period'
   } else if (outreach.venuesContacted > 0) {
     heroValue = String(outreach.venuesContacted)
     heroLabel = 'New Venues Reached'
@@ -101,6 +107,8 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
     summaryLine = `Show money is on the books and activity is showing up in the numbers.`
   } else if (outreach.inDiscussion > 0) {
     summaryLine = `${outreach.inDiscussion} conversation${outreach.inDiscussion !== 1 ? 's are' : ' is'} live right now, things are in motion.`
+  } else if (leadsReached > 0) {
+    summaryLine = `Lead Intake is moving: ${leadEmailsSent} outbound email${leadEmailsSent !== 1 ? 's' : ''} to ${leadsReached} lead${leadsReached !== 1 ? 's' : ''} this period.`
   } else if (outreach.venuesContacted > 0) {
     summaryLine = `Outreach is active and the pipeline is growing.`
   } else {
@@ -112,6 +120,8 @@ function buildHtml(profile: ArtistProfile, report: ManagementReportEmailData, da
     ['New venues added (total)', String(outreach.venuesContacted), '#60a5fa'],
     ['Pipeline venues added', String(outreach.pipelineAdded), '#60a5fa'],
     ['Community venues added', String(outreach.communityAdded), '#60a5fa'],
+    ['Leads reached (Lead Intake)', String(leadsReached), '#60a5fa'],
+    ['Lead emails sent (total)', String(leadEmailsSent), '#60a5fa'],
     ['Venues engaged', String(outreach.venuesUpdated), '#60a5fa'],
     ['Active discussions', String(outreach.inDiscussion), '#60a5fa'],
     ['Bookings confirmed (total)', String(outreach.venuesBooked), outreach.venuesBooked > 0 ? '#22c55e' : '#60a5fa'],

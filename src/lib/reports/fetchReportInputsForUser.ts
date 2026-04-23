@@ -16,6 +16,7 @@ export async function fetchReportInputsForUser(
   fees: MonthlyFee[]
   tasks: Task[]
   perfReports: PerformanceReport[]
+  leadEmailEvents: { lead_id: string; sent_at: string }[]
 }> {
   const [
     { data: venuesRaw, error: vErr },
@@ -24,6 +25,7 @@ export async function fetchReportInputsForUser(
     { data: feesRaw, error: fErr },
     { data: tasksRaw, error: tErr },
     { data: perfRaw, error: pErr },
+    { data: leadEmailRaw, error: leErr },
   ] = await Promise.all([
     client.from('venues').select('*').eq('user_id', userId),
     client.from('deals').select(`*, venue:venues(${DEAL_VENUE_EMBED})`).eq('user_id', userId),
@@ -31,6 +33,12 @@ export async function fetchReportInputsForUser(
     client.from('monthly_fees').select('*').eq('user_id', userId).order('month', { ascending: false }),
     client.from('tasks').select('*').eq('user_id', userId),
     client.from('performance_reports').select('*').eq('user_id', userId),
+    client
+      .from('lead_email_events')
+      .select('lead_id, sent_at')
+      .eq('user_id', userId)
+      .eq('status', 'sent')
+      .not('sent_at', 'is', null),
   ])
 
   if (vErr) throw new Error(vErr.message)
@@ -39,6 +47,7 @@ export async function fetchReportInputsForUser(
   if (fErr) throw new Error(fErr.message)
   if (tErr) throw new Error(tErr.message)
   if (pErr) throw new Error(pErr.message)
+  if (leErr) throw new Error(leErr.message)
 
   const venues = (venuesRaw ?? []) as Venue[]
   const deals = (dealsRaw ?? []) as Deal[]
@@ -63,5 +72,7 @@ export async function fetchReportInputsForUser(
     fees = fees.map(f => ({ ...f, payments: [] as MonthlyFeePayment[] }))
   }
 
-  return { venues, deals, metrics, fees, tasks, perfReports }
+  const leadEmailEvents = (leadEmailRaw ?? []) as { lead_id: string; sent_at: string }[]
+
+  return { venues, deals, metrics, fees, tasks, perfReports, leadEmailEvents }
 }

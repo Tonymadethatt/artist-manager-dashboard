@@ -257,7 +257,7 @@ const CLIENT_ORDER: VenueEmailType[] = [
 ]
 
 const ARTIST_DESCRIPTIONS: Record<ArtistEmailType, string> = {
-  management_report:          'Weekly or custom-range report sent to the artist. Shows outreach, deals, retainer, and impact.',
+  management_report:          'Weekly or custom-range report sent to the artist. Shows venue and Lead Intake outreach, deals, retainer, and impact.',
   retainer_reminder:          'Gentle nudge email about outstanding management retainer balance.',
   booking_commission_reminder:
     'Friendly breakdown of per-show booking commission (gig fee, rate, amount owed). Not auto-sent yet—use preview and send test; automation can be wired later.',

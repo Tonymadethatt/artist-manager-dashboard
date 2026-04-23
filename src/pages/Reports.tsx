@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase'
 import { recordOutboundEmail } from '@/lib/email/recordOutboundEmail'
 import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
 import { buildManagementReportData } from '@/lib/reports/buildManagementReportData'
+import { useLeadEmailSentLog } from '@/hooks/useLeadEmailSentLog'
 import { formatUsdDisplayCeil } from '@/lib/format/displayCurrency'
 
 const REPORT_RESEND_CONFIRM_MS = 3 * 60 * 1000
@@ -77,6 +78,7 @@ export default function Reports() {
   const { profile } = useArtistProfile()
   const { getTemplate } = useEmailTemplates()
   const { reports: perfReports } = usePerformanceReports()
+  const { leadEmailSentRows } = useLeadEmailSentLog()
 
   const reportTemplate = getTemplate('management_report')
 
@@ -88,11 +90,11 @@ export default function Reports() {
 
   const report = useMemo(
     () => buildManagementReportData(
-      { venues, deals, metrics, fees, tasks, perfReports },
+      { venues, deals, metrics, fees, tasks, perfReports, leadEmailEvents: leadEmailSentRows },
       startDate,
       endDate,
     ),
-    [venues, deals, metrics, fees, tasks, perfReports, startDate, endDate],
+    [venues, deals, metrics, fees, tasks, perfReports, leadEmailSentRows, startDate, endDate],
   )
 
   const doSend = async (testOnly: boolean) => {
@@ -219,6 +221,8 @@ export default function Reports() {
         <StatRow label="New venues added (total)" value={String(report.outreach.venuesContacted)} />
         <StatRow label="  · Pipeline (sourced)" value={String(report.outreach.pipelineAdded)} />
         <StatRow label="  · Community (existing)" value={String(report.outreach.communityAdded)} />
+        <StatRow label="Leads reached (Lead Intake)" value={String(report.outreach.leadsReached)} />
+        <StatRow label="Lead emails sent (total)" value={String(report.outreach.leadEmailsSent)} />
         <StatRow label="Venues engaged (status updated)" value={String(report.outreach.venuesUpdated)} />
         <StatRow label="Active discussions" value={String(report.outreach.inDiscussion)} />
         <StatRow label="Bookings confirmed (total)" value={String(report.outreach.venuesBooked)} />

@@ -11,6 +11,10 @@ export type ManagementReportEmailData = {
     communityAdded: number
     pipelineBooked: number
     communityBooked: number
+    /** Distinct leads with at least one outbound email logged in the period (Lead Intake). */
+    leadsReached: number
+    /** Total lead outbound emails with `sent` status in the period (can exceed leadsReached). */
+    leadEmailsSent: number
   }
   /**
    * Artist booking gross from logged deals (not manager commission).
@@ -90,6 +94,8 @@ export function buildManagementReportData(
     fees: MonthlyFee[]
     tasks: Task[]
     perfReports: PerformanceReport[]
+    /** Sent lead emails (`lead_email_events`); used for Lead Intake outreach stats. */
+    leadEmailEvents?: { lead_id: string; sent_at: string }[]
   },
   startDate: string,
   endDate: string,
@@ -99,7 +105,15 @@ export function buildManagementReportData(
     return d >= toRangeDate(startDate) && d <= toRangeDate(endDate)
   }
 
-  const { venues, deals, metrics, fees, tasks, perfReports } = input
+  const { venues, deals, metrics, fees, tasks, perfReports, leadEmailEvents: leadEmailEventsRaw } = input
+  const leadEmailEvents = leadEmailEventsRaw ?? []
+  const leadSentInPeriod = leadEmailEvents.filter(e => {
+    if (!e.sent_at) return false
+    const day = e.sent_at.split('T')[0]
+    return inRange(day)
+  })
+  const leadEmailsSent = leadSentInPeriod.length
+  const leadsReached = new Set(leadSentInPeriod.map(e => e.lead_id)).size
 
   const pipelineVenues = venues.filter(v => (v.outreach_track ?? 'pipeline') === 'pipeline')
   const communityVenues = venues.filter(v => v.outreach_track === 'community')
@@ -183,6 +197,8 @@ export function buildManagementReportData(
       communityAdded,
       pipelineBooked,
       communityBooked,
+      leadsReached,
+      leadEmailsSent,
     },
     artistEarnings: {
       grossBookedInPeriod: totalGross,

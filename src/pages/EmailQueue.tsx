@@ -526,7 +526,7 @@ export default function EmailQueue() {
             + `<div style="padding:24px;max-width:560px;margin:0 auto">`
             + `<p style="color:${EMAIL_FOOTER_MUTED};font-size:11px;margin:0 0 16px">Summary preview (rolling 7 days through today) · sent to <strong>${toe}</strong></p>`
             + `<p style="margin:0 0 12px"><strong>Outreach</strong><br/>`
-            + `New venues: ${report.outreach.venuesContacted} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
+            + `New venues: ${report.outreach.venuesContacted} · Leads reached: ${report.outreach.leadsReached} · Lead emails: ${report.outreach.leadEmailsSent} · Engaged: ${report.outreach.venuesUpdated} · In discussion: ${report.outreach.inDiscussion} · Booked: ${report.outreach.venuesBooked}</p>`
             + `<p style="margin:0 0 12px"><strong>Artist earnings</strong><br/>`
             + `Booking gross: ${formatUsdDisplayCeil(report.artistEarnings.grossBookedInPeriod)} · Paid toggle gross: ${formatUsdDisplayCeil(report.artistEarnings.grossArtistPaidInPeriod)}</p>`
             + `<p style="margin:0 0 12px"><strong>Your commission</strong><br/>`
