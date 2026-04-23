@@ -4,6 +4,23 @@ import type { Database } from '@/types/database'
 
 export type LeadFolderRow = Database['public']['Tables']['lead_folders']['Row']
 
+/** Cross-mount lock so React Strict Mode / parallel loads cannot each insert default rows when count is still 0. */
+const defaultLeadFolderSeedByUserId = new Map<string, Promise<{ error: { message: string } | null }>>()
+
+function dedupeLeadFoldersByName(rows: LeadFolderRow[]): LeadFolderRow[] {
+  const byKey = new Map<string, LeadFolderRow>()
+  const sorted = [...rows].sort(
+    (a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id),
+  )
+  for (const row of sorted) {
+    const key = `${row.user_id}\0${row.name}`
+    if (!byKey.has(key)) byKey.set(key, row)
+  }
+  return [...byKey.values()].sort(
+    (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
+  )
+}
+
 const DEFAULT_SEED: { name: string; sort_order: number; is_system: boolean }[] = [
   { name: 'Not Contacted', sort_order: 0, is_system: true },
   { name: 'Reached Out', sort_order: 1, is_system: true },
@@ -37,14 +54,26 @@ export function useLeadFolders() {
     }
 
     if (count === 0) {
-      const { error: insErr } = await supabase.from('lead_folders').insert(
-        DEFAULT_SEED.map(s => ({
-          user_id: user.id,
-          name: s.name,
-          sort_order: s.sort_order,
-          is_system: s.is_system,
-        })),
-      )
+      let seedPromise = defaultLeadFolderSeedByUserId.get(user.id)
+      if (!seedPromise) {
+        seedPromise = (async () => {
+          try {
+            const { error } = await supabase.from('lead_folders').insert(
+              DEFAULT_SEED.map(s => ({
+                user_id: user.id,
+                name: s.name,
+                sort_order: s.sort_order,
+                is_system: s.is_system,
+              })),
+            )
+            return { error: error ? { message: error.message } : null }
+          } finally {
+            defaultLeadFolderSeedByUserId.delete(user.id)
+          }
+        })()
+        defaultLeadFolderSeedByUserId.set(user.id, seedPromise)
+      }
+      const { error: insErr } = await seedPromise
       if (insErr) {
         setError(insErr.message)
         setLoading(false)
@@ -64,7 +93,7 @@ export function useLeadFolders() {
       setLoading(false)
       return
     }
-    setFolders((data ?? []) as LeadFolderRow[])
+    setFolders(dedupeLeadFoldersByName((data ?? []) as LeadFolderRow[]))
     setLoading(false)
   }, [])
 
