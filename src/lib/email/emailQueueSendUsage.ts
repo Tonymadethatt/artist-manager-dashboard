@@ -101,6 +101,7 @@ function rpcCountToNumber(data: unknown): number {
  * Distinct successful Resend sends for the signed-in user (Pacific calendar day / month):
  * `resend_outbound_send_log` ∪ `venue_emails` with `resend_message_id` (deduped per message id),
  * plus baselines from `VITE_RESEND_USAGE_*` and `artist_profile.email_usage_*_offset`.
+ * Lead Intake sends from `send-venue-email` count here when `logResendOutboundSendForUsage` stores a non-empty id (see `netlify/functions/supabaseAdmin.ts`).
  */
 export async function fetchVenueEmailSentCountsForUser(userId: string): Promise<VenueEmailSendUsageResult | null> {
   const todayYmd = pacificTodayYmd()

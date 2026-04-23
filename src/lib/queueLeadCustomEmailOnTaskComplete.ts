@@ -9,6 +9,8 @@ import { publicSiteOrigin } from '@/lib/files/pdfShareUrl'
 import { buildEmailAttachmentPayloadFromFile } from '@/lib/files/templateEmailAttachmentPayload'
 import { hasRecentLeadEmailEventDedupe } from '@/lib/queueEmailsFromTemplate'
 import { parseResendMessageIdFromSendFunctionJson } from '@/lib/email/resendMessageId'
+import { fetchVenueEmailSentCountsForUser } from '@/lib/email/emailQueueSendUsage'
+import type { TaskEmailAutomationResult } from '@/lib/taskEmailAutomationResult'
 
 function artistProfilePayload(p: ArtistProfile) {
   return {
@@ -36,24 +38,31 @@ type LeadTemplateRow = {
   move_to_folder_id: string | null
 }
 
-async function sendLeadTemplateToOneLead(args: {
-  userId: string
-  task: Task
-  leadRow: LeadRow
-  template: LeadTemplateRow
-  emailType: string
-}): Promise<{ ok: boolean; reason: string }> {
-  const { userId, task, leadRow, template, emailType } = args
-  const cid = template.id
-  const recipient = String(leadRow.contact_email ?? '').trim()
-  if (!recipient) {
-    return { ok: false, reason: 'no_lead_contact_email' }
-  }
+export function isBulkLeadCustomEmailTask(task: Task): boolean {
+  if (!task.email_type) return false
+  if (!parseCustomTemplateId(task.email_type)) return false
+  return !!(task.lead_send_all || task.lead_folder_id)
+}
 
-  if (await hasRecentLeadEmailEventDedupe(userId, leadRow.id, emailType, 45)) {
-    return { ok: true, reason: 'dedupe_recent_pending' }
+/** @returns null if no headroom, else min(remaining day, month) (how many new sends we allow at most). */
+async function maxSendsHeadroomForUser(userId: string): Promise<{ max: number; skippedCheck: boolean }> {
+  const u = await fetchVenueEmailSentCountsForUser(userId)
+  if (!u) {
+    console.warn('[queueLeadCustomEmail] usage fetch failed — cap guard skipped')
+    return { max: Number.MAX_SAFE_INTEGER, skippedCheck: true }
   }
+  const remainingDay = Math.max(0, u.caps.daily - u.today)
+  const remainingMonth = Math.max(0, u.caps.monthly - u.month)
+  return { max: Math.min(remainingDay, remainingMonth), skippedCheck: false }
+}
 
+async function loadProfileAndAttachment(
+  userId: string,
+  template: LeadTemplateRow,
+): Promise<
+  { ok: true; profile: ArtistProfile; attachment: unknown | null }
+  | { ok: false; reason: 'no_from_email' }
+> {
   const { data: profile } = await supabase
     .from('artist_profile')
     .select('*')
@@ -61,6 +70,46 @@ async function sendLeadTemplateToOneLead(args: {
     .maybeSingle()
   const p = profile as ArtistProfile | null
   if (!p?.from_email?.trim()) {
+    return { ok: false, reason: 'no_from_email' }
+  }
+
+  const aid = template.attachment_generated_file_id
+  if (!aid) {
+    return { ok: true, profile: p, attachment: null }
+  }
+  const { data: gf } = await supabase
+    .from('generated_files')
+    .select('*')
+    .eq('id', aid)
+    .eq('user_id', userId)
+    .maybeSingle()
+  const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
+  return { ok: true, profile: p, attachment: att }
+}
+
+type PreloadedLeadSend = { profile: ArtistProfile; attachment: unknown | null }
+
+async function sendLeadTemplateToOneLead(args: {
+  userId: string
+  task: Task
+  leadRow: LeadRow
+  template: LeadTemplateRow
+  emailType: string
+  preloaded: PreloadedLeadSend
+}): Promise<{ ok: boolean; reason: string }> {
+  const { userId, task, leadRow, template, emailType, preloaded } = args
+  const cid = template.id
+  const p = preloaded.profile
+  const recipient = String(leadRow.contact_email ?? '').trim()
+  if (!recipient) {
+    return { ok: false, reason: 'no_lead_contact_email' }
+  }
+
+  if (await hasRecentLeadEmailEventDedupe(userId, leadRow.id, emailType, 45)) {
+    return { ok: true, reason: 'lead_dedupe_recent' }
+  }
+
+  if (!p.from_email?.trim()) {
     return { ok: false, reason: 'no_from_email' }
   }
 
@@ -76,16 +125,9 @@ async function sendLeadTemplateToOneLead(args: {
     lead: leadMerge,
   }
 
-  const aid = template.attachment_generated_file_id as string | null | undefined
-  if (aid) {
-    const { data: gf } = await supabase
-      .from('generated_files')
-      .select('*')
-      .eq('id', aid)
-      .eq('user_id', userId)
-      .maybeSingle()
-    const att = buildEmailAttachmentPayloadFromFile(gf as GeneratedFile | null, publicSiteOrigin())
-    if (att) payload.attachment = att
+  const att = preloaded.attachment
+  if (att) {
+    payload.attachment = att
   }
 
   const res = await fetch('/.netlify/functions/send-venue-email', {
@@ -198,7 +240,7 @@ async function loadLeadTemplate(
 export async function queueLeadCustomEmailOnTaskComplete(
   task: Task,
   userId: string,
-): Promise<{ ok: boolean; reason: string }> {
+): Promise<TaskEmailAutomationResult> {
   const cid = parseCustomTemplateId(task.email_type)
   if (!cid) {
     return { ok: false, reason: 'unsupported_email_type' }
@@ -209,6 +251,10 @@ export async function queueLeadCustomEmailOnTaskComplete(
 
   const { template } = tload
   const emailType = task.email_type!
+
+  const pre = await loadProfileAndAttachment(userId, template)
+  if (!pre.ok) return { ok: false, reason: pre.reason }
+  const preloaded: PreloadedLeadSend = { profile: pre.profile, attachment: pre.attachment }
 
   /** Single lead */
   if (task.lead_id && !task.lead_send_all && !task.lead_folder_id) {
@@ -221,12 +267,19 @@ export async function queueLeadCustomEmailOnTaskComplete(
     if (leadErr || !leadRow) {
       return { ok: false, reason: 'no_lead_for_lead_email' }
     }
+
+    const { max: head, skippedCheck: skipCap } = await maxSendsHeadroomForUser(userId)
+    if (!skipCap && head < 1) {
+      return { ok: false, reason: 'lead_resend_cap_exceeded' }
+    }
+
     return sendLeadTemplateToOneLead({
       userId,
       task,
       leadRow: leadRow as LeadRow,
       template,
       emailType,
+      preloaded,
     })
   }
 
@@ -241,6 +294,15 @@ export async function queueLeadCustomEmailOnTaskComplete(
       return { ok: false, reason: 'no_lead_for_lead_email' }
     }
     const list = (rows ?? []) as LeadRow[]
+    if (list.length === 0) {
+      return { ok: false, reason: 'no_lead_for_lead_email' }
+    }
+    const { max: head, skippedCheck: skipCap } = await maxSendsHeadroomForUser(userId)
+    const withEmail = list.filter(lead => String(lead.contact_email ?? '').trim()).length
+    if (!skipCap && withEmail > head) {
+      return { ok: false, reason: 'lead_bulk_resend_cap_exceeded' }
+    }
+
     let sent = 0
     let failed = 0
     let skipped = 0
@@ -255,9 +317,10 @@ export async function queueLeadCustomEmailOnTaskComplete(
         leadRow,
         template,
         emailType,
+        preloaded,
       })
       if (r.ok) {
-        if (r.reason === 'dedupe_recent_pending') skipped += 1
+        if (r.reason === 'lead_dedupe_recent') skipped += 1
         else sent += 1
       } else {
         failed += 1
@@ -266,10 +329,18 @@ export async function queueLeadCustomEmailOnTaskComplete(
     if (failed > 0 && sent === 0) {
       return { ok: false, reason: 'lead_bulk_send_all_failed' }
     }
+    const stats: { sent: number; failed: number; skipped: number } = { sent, failed, skipped }
     if (sent === 0 && skipped === list.length) {
-      return { ok: true, reason: 'dedupe_recent_pending' }
+      return { ok: true, reason: 'lead_dedupe_recent', leadBulkStats: stats }
     }
-    return { ok: true, reason: sent > 1 ? 'lead_bulk_email_sent' : 'lead_email_sent' }
+    if (failed > 0 && sent > 0) {
+      return { ok: true, reason: 'lead_bulk_email_partial', leadBulkStats: stats }
+    }
+    return {
+      ok: true,
+      reason: sent > 1 ? 'lead_bulk_email_sent' : 'lead_email_sent',
+      leadBulkStats: stats,
+    }
   }
 
   return { ok: false, reason: 'no_lead_for_lead_email' }

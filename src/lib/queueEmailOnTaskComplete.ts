@@ -19,6 +19,9 @@ import {
 } from '@/lib/resolveAgreementUrl'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
 import { queueLeadCustomEmailOnTaskComplete } from '@/lib/queueLeadCustomEmailOnTaskComplete'
+import type { TaskEmailAutomationResult } from '@/lib/taskEmailAutomationResult'
+
+export type { TaskEmailAutomationResult } from '@/lib/taskEmailAutomationResult'
 
 export type QueueEmailOnTaskCompleteOptions = {
   /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
@@ -130,6 +133,8 @@ export function taskEmailAutomationSuccessMessage(reason: string): string | null
       return 'Lead email was sent. Check Email history on the lead for details.'
     case 'lead_bulk_email_sent':
       return 'Lead emails were sent to multiple records. Check Email history on each lead for details.'
+    case 'lead_bulk_email_partial':
+      return null
     default:
       return null
   }
@@ -175,6 +180,10 @@ export function taskEmailAutomationUserMessage(reason: string): string {
       return 'Link this task to a venue (or a deal with a venue) so this artist email can include the correct show context.'
     case 'no_artist_profile':
       return 'Complete your artist profile before sending the performance report request.'
+    case 'lead_resend_cap_exceeded':
+      return 'This send would go over your Resend plan limit (today or this month) in Settings. Try again after your usage resets, raise the cap, or send to fewer leads at once.'
+    case 'lead_bulk_resend_cap_exceeded':
+      return 'This bulk send needs more email slots than you have left today or this month (see Settings). Reduce the list, wait for the next day or month, or raise your Resend cap / usage offset.'
     default:
       if (
         reason === 'venue_email_queued'
@@ -201,6 +210,8 @@ export function taskEmailAutomationInfoMessage(reason: string): string | null {
       return 'Agreement is not linked on this deal yet — add a URL or PDF before the agreement follow-up email can queue.'
     case 'invoice_sent_needs_file':
       return 'Link a generated PDF on this task (or regenerate the file) before the invoice email can queue.'
+    case 'lead_dedupe_recent':
+      return 'A lead email to this address with the same task email type was already sent or is pending in the last 45 minutes — no new email was sent.'
     default:
       return null
   }
@@ -213,7 +224,7 @@ export function taskEmailAutomationInfoMessage(reason: string): string | null {
 export async function queueEmailAutomationForCompletedTask(
   task: Task,
   options?: QueueEmailOnTaskCompleteOptions
-): Promise<{ ok: boolean; reason: string }> {
+): Promise<TaskEmailAutomationResult> {
   if (!task.email_type) {
     return { ok: true, reason: 'no_email_type' }
   }

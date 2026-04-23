@@ -8,6 +8,7 @@ import {
   taskEmailAutomationInfoMessage,
   type QueueEmailOnTaskCompleteOptions,
 } from '@/lib/queueEmailOnTaskComplete'
+import { isBulkLeadCustomEmailTask } from '@/lib/queueLeadCustomEmailOnTaskComplete'
 import type { Task, TaskPriority, TaskRecurrence } from '@/types'
 import {
   ensureCalendarEmailsForVenueDeals,
@@ -185,6 +186,13 @@ export function useTasks() {
       .single()
 
     const completedTaskRow = (freshTask ?? task) as Task
+    if (completedTaskRow.email_type && isBulkLeadCustomEmailTask(completedTaskRow)) {
+      setEmailAutomationFeedback({
+        kind: 'info',
+        message:
+          'Sending lead emails. Keep this page open while we send — large lists can take a minute.',
+      })
+    }
     const autoResult = await queueEmailAutomationForCompletedTask(completedTaskRow, emailOptions ?? {})
 
     if (completedTaskRow.deal_id) {
@@ -206,11 +214,33 @@ export function useTasks() {
       if (!autoResult.ok) {
         const msg = taskEmailAutomationUserMessage(autoResult.reason).trim()
         if (msg) setEmailAutomationFeedback({ kind: 'error', message: msg })
+      } else if (autoResult.leadBulkStats) {
+        const b = autoResult.leadBulkStats
+        if (b.failed > 0) {
+          setEmailAutomationFeedback({
+            kind: 'info',
+            message: `Lead emails: ${b.sent} sent, ${b.failed} failed, ${b.skipped} skipped. Check each lead in Lead Intake for details.`,
+          })
+        } else if (b.sent === 0 && b.skipped > 0) {
+          setEmailAutomationFeedback({
+            kind: 'info',
+            message: `No new lead emails were sent — ${b.skipped} contact${b.skipped === 1 ? ' was' : 's were'} skipped (a matching send in the last 45 minutes, is pending, or is missing a valid address).`,
+          })
+        } else {
+          const skipPart = b.skipped > 0 ? `, ${b.skipped} skipped` : ''
+          setEmailAutomationFeedback({
+            kind: 'success',
+            message: `Lead emails: ${b.sent} sent${skipPart}. Check Email history on each lead for details.`,
+          })
+        }
       } else {
         const success = taskEmailAutomationSuccessMessage(autoResult.reason)
         const info = taskEmailAutomationInfoMessage(autoResult.reason)
-        if (success) setEmailAutomationFeedback({ kind: 'success', message: success })
-        else if (info) setEmailAutomationFeedback({ kind: 'info', message: info })
+        if (success) {
+          setEmailAutomationFeedback({ kind: 'success', message: success })
+        } else if (info) {
+          setEmailAutomationFeedback({ kind: 'info', message: info })
+        }
       }
     }
 
