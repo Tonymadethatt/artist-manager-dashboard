@@ -11,6 +11,7 @@ import {
 } from '../../src/lib/email/brandOutreachDigestData'
 import { dedupeCcAgainstTo, resolveArtistFacingResend } from '../../src/lib/email/emailTestModeServer'
 import { parseResendMessageIdFromResendApiJson } from '../../src/lib/email/resendMessageId'
+import { recordOutboundEmail } from '../../src/lib/email/recordOutboundEmail'
 import { fetchEmailTestModeRowForSend, getServiceSupabase, logResendOutboundSendForUsage } from './supabaseAdmin'
 
 interface SendBodyProfile {
@@ -199,6 +200,22 @@ const handler: Handler = async event => {
   const resendPayload = await resendRes.json().catch(() => null)
   const resendMessageId = parseResendMessageIdFromResendApiJson(resendPayload)
   await logResendOutboundSendForUsage({ userId, resendMessageId, source: 'send_brand_outreach_digest' })
+
+  const primaryTo = to[0]?.trim() || profile.artist_email.trim()
+  const logResult = await recordOutboundEmail(supabase, {
+    user_id: userId,
+    email_type: 'brand_outreach_digest',
+    recipient_email: primaryTo,
+    subject: subjectOut,
+    status: 'sent',
+    source: 'brand_outreach_snapshot',
+    detail: testOnly ? 'Test / redirected recipient' : 'Brand outreach snapshot (First Outreach trigger or test)',
+    resend_message_id: resendMessageId,
+  })
+  if (logResult.error) {
+    console.warn('[send-brand-outreach-digest] venue_emails history log:', logResult.error.message)
+  }
+
   return {
     statusCode: 200,
     body: JSON.stringify({ message: 'OK', ...(resendMessageId ? { resend_message_id: resendMessageId } : {}) }),

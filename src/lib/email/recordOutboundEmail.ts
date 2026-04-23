@@ -9,6 +9,7 @@ export type OutboundEmailSource =
   | 'modal_immediate'
   | 'queue_cron'
   | 'email_queue_send_now'
+  | 'brand_outreach_snapshot'
 
 const SOURCE_TAG = (s: OutboundEmailSource) => `[src:${s}]`
 

@@ -28,7 +28,7 @@ import { leadMergeFieldsFromDatabaseLead, recipientNameFromContactEmail } from '
 import type { Database } from '@/types/database'
 import { EMAIL_FOOTER_MUTED, EMAIL_HINT, EMAIL_LABEL } from '@/lib/email/emailDarkSurfacePalette'
 import { buildVenueEmailDocument, type VenueRenderEmailType } from '@/lib/email/renderVenueEmail'
-import { artistLayoutForSend, normalizeEmailTemplateLayout } from '@/lib/emailLayout'
+import { artistLayoutForSend, normalizeEmailTemplateLayout, type EmailTemplateLayoutV1 } from '@/lib/emailLayout'
 import {
   artistTransactionalGreetingFirstName,
   buildArtistTransactionalEmailHtml,
@@ -845,6 +845,53 @@ export default function EmailQueue() {
           + `<p style="margin:16px 0 8px;word-break:break-all"><a href="${formUrl}" style="color:#93c5fd">${esc(formUrl)}</a></p>`
           + `<p style="margin:0;color:${EMAIL_HINT};font-size:11px">Real send uses your template layout from Email templates.</p></div></body></html>`,
         )
+        setPreviewLoading(false)
+        return
+      }
+
+      if (email.email_type === 'brand_outreach_digest') {
+        const { sharedStyles } = await import('@/lib/email/artistEmailSharedStyles')
+        const {
+          buildBrandOutreachDigestDocumentHtml,
+          makeLayoutForBrandDigest,
+        } = await import('@/lib/email/brandOutreachDigestEmailDocument')
+        const {
+          fetchFirstOutreachLeadTemplateIds,
+          loadBrandOutreachDigestData,
+        } = await import('@/lib/email/brandOutreachDigestData')
+        const { data: boTmpl } = await supabase
+          .from('email_templates')
+          .select('layout, custom_subject, custom_intro')
+          .eq('user_id', user.id)
+          .eq('email_type', 'brand_outreach_digest')
+          .maybeSingle()
+        const L = makeLayoutForBrandDigest(
+          (boTmpl?.layout as EmailTemplateLayoutV1 | null) ?? null,
+          boTmpl?.custom_subject ?? null,
+          boTmpl?.custom_intro ?? null,
+        )
+        const templateIds = await fetchFirstOutreachLeadTemplateIds(supabase, user.id)
+        const data = await loadBrandOutreachDigestData(supabase, user.id, templateIds)
+        const siteUrl = publicSiteOrigin() || (typeof window !== 'undefined' ? window.location.origin : '')
+        const footer = {
+          logoBaseUrl: siteUrl,
+          managerName: profile.manager_name?.trim() || 'Management',
+          managerTitle: profile.manager_title ?? null,
+          website: profile.website ?? null,
+          social_handle: profile.social_handle ?? null,
+          phone: profile.phone ?? null,
+        }
+        const { html, defaultSubject } = buildBrandOutreachDigestDocumentHtml(
+          L,
+          data,
+          profile.artist_name ?? '',
+          siteUrl,
+          sharedStyles,
+          footer,
+          !data.hasData,
+        )
+        setPreviewHtml(html)
+        setPreviewSubject(L.subject?.trim() || defaultSubject)
         setPreviewLoading(false)
         return
       }
