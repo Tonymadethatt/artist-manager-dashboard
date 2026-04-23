@@ -18,6 +18,7 @@ import {
   isGeneratedFileInScopeForTask,
 } from '@/lib/resolveAgreementUrl'
 import { ensureQueueCaptureUrl } from '@/lib/emailCapture/ensureQueueCaptureUrl'
+import { queueLeadCustomEmailOnTaskComplete } from '@/lib/queueLeadCustomEmailOnTaskComplete'
 
 export type QueueEmailOnTaskCompleteOptions = {
   /** When completing agreement_ready from the progress panel, URL is saved to the deal first. */
@@ -125,6 +126,8 @@ export function taskEmailAutomationSuccessMessage(reason: string): string | null
       return 'Performance form email is in Email queue and will send shortly (buffer off). You can open Email queue to send now or cancel.'
     case 'venue_email_queued':
       return 'Email queued — open Email queue to send now or wait for auto-send.'
+    case 'lead_email_sent':
+      return 'Lead email was sent. Check Email history on the lead for details.'
     default:
       return null
   }
@@ -146,6 +149,16 @@ export function taskEmailAutomationUserMessage(reason: string): string {
       return 'Link this task to a venue or deal so the client email can be queued and sent.'
     case 'performance_report_needs_venue':
       return 'Performance report request needs a linked venue (or deal with a venue) so the form email can include the correct show context.'
+    case 'no_lead_for_lead_email':
+      return 'Link this task to a lead (Lead Intake) so a lead custom template can send.'
+    case 'no_lead_contact_email':
+      return 'This lead has no contact email. Add one on the lead, then try again.'
+    case 'no_from_email':
+      return 'Set a from address in your artist profile before sending lead emails.'
+    case 'lead_email_send_failed':
+      return 'The lead email could not be sent. Check your profile, lead contact email, and try again.'
+    case 'lead_email_log_failed':
+      return 'Email was sent, but the log could not be saved. Check Lead Intake email history; contact support if it repeats.'
     case 'no_contact_email':
       return 'Add a contact with an email address for this venue.'
     case 'not_authenticated':
@@ -163,6 +176,7 @@ export function taskEmailAutomationUserMessage(reason: string): string {
         reason === 'venue_email_queued'
         || reason === 'performance_report_queued'
         || reason === 'retainer_nothing_owed'
+        || reason === 'lead_email_sent'
       ) {
         return ''
       }
@@ -176,7 +190,7 @@ export function taskEmailAutomationInfoMessage(reason: string): string | null {
     case 'performance_report_recent_duplicate':
       return 'An open performance report already exists for this venue/show. Open Performance reports to copy the link or resend — no duplicate was created.'
     case 'dedupe_recent_pending':
-      return 'The same email is already pending in your queue for this venue.'
+      return 'The same email type was already queued or sent recently for this task context — no duplicate was added.'
     case 'agreement_ready_needs_url':
       return 'Agreement is not linked on this deal yet — add a URL or PDF in the progress panel before the agreement email can queue.'
     case 'agreement_followup_needs_url':
@@ -203,6 +217,18 @@ export async function queueEmailAutomationForCompletedTask(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return { ok: false, reason: 'not_authenticated' }
+  }
+
+  const audience = await resolveTaskEmailAudience(task.email_type, user.id)
+
+  if (audience.kind === 'unknown') {
+    const r = audience.reason
+    if (r === 'template_not_found') return { ok: false, reason: 'custom_template_not_found' }
+    return { ok: false, reason: r }
+  }
+
+  if (audience.kind === 'lead') {
+    return queueLeadCustomEmailOnTaskComplete(task, user.id)
   }
 
   /** Task may omit venue while still linking a deal — resolve venue from the deal for email + merge context. */
@@ -252,14 +278,6 @@ export async function queueEmailAutomationForCompletedTask(
 
   const agreementResolution = await loadAgreementResolutionForTask(task, options)
   const agreementSyncPatch = dealSyncPatchFromResolution(agreementResolution)
-
-  const audience = await resolveTaskEmailAudience(task.email_type, user.id)
-
-  if (audience.kind === 'unknown') {
-    const r = audience.reason
-    if (r === 'template_not_found') return { ok: false, reason: 'custom_template_not_found' }
-    return { ok: false, reason: r }
-  }
 
   if (audience.kind === 'special') {
     if (!v || !resolvedVenueId) {

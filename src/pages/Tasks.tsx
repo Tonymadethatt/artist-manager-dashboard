@@ -48,6 +48,8 @@ const EMPTY_FORM = {
   recurrence: 'none' as TaskRecurrence,
   venue_id: '',
   deal_id: '',
+  lead_id: '',
+  lead_folder_id: '',
   email_type: '__none__' as string,
   generated_file_id: '',
 }
@@ -197,6 +199,8 @@ export default function Tasks() {
       recurrence: t.recurrence,
       venue_id: t.venue_id ?? '',
       deal_id: t.deal_id ?? '',
+      lead_id: t.lead_id ?? '',
+      lead_folder_id: t.lead_folder_id ?? '',
       email_type: t.email_type ?? '__none__',
       generated_file_id: t.generated_file_id ?? '',
     })
@@ -211,6 +215,7 @@ export default function Tasks() {
     if (!form.title.trim()) return
     setSaving(true)
     setTaskFormError(null)
+    const hasVenueContext = Boolean(form.venue_id || form.deal_id)
     const payload = {
       title: form.title.trim(),
       notes: form.notes || null,
@@ -219,6 +224,8 @@ export default function Tasks() {
       recurrence: form.recurrence,
       venue_id: form.venue_id || null,
       deal_id: form.deal_id || null,
+      lead_id: hasVenueContext ? null : (form.lead_id || null),
+      lead_folder_id: hasVenueContext ? null : (form.lead_folder_id || null),
       email_type: form.email_type === '__none__' ? null : form.email_type,
       generated_file_id: form.generated_file_id || null,
     }
@@ -403,6 +410,11 @@ export default function Tasks() {
                         {task.deal && (
                           <span className="text-xs bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded">
                             {task.deal.description}
+                          </span>
+                        )}
+                        {task.lead_id && (
+                          <span className="text-xs bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded max-w-[200px] truncate" title={task.lead?.venue_name ?? undefined}>
+                            Lead: {task.lead?.venue_name?.trim() || '—'}
                           </span>
                         )}
                         {task.notes && !grossRecon ? (

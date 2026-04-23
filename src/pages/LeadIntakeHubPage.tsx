@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Calendar,
   ChevronLeft,
   ChevronRight,
   FolderPlus,
   Folders,
+  Building2,
+  ListTodo,
   Loader2,
   Plus,
   Search,
@@ -40,6 +43,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
+import { TASK_LIST_SELECT } from '@/lib/tasks/taskListSelect'
+import { useNavBadges } from '@/context/NavBadgesContext'
+import { promoteLeadToClientPipeline } from '@/lib/leadIntake/promoteLeadToClientPipeline'
 
 type DateFilter = 'all' | '7d' | '30d'
 
@@ -119,6 +126,17 @@ export default function LeadIntakeHubPage() {
   const [editFolderId, setEditFolderId] = useState<string>('')
   const [editDirty, setEditDirty] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
+
+  const { refreshNavBadges } = useNavBadges()
+  const [followUpOpen, setFollowUpOpen] = useState(false)
+  const [followUpTitle, setFollowUpTitle] = useState('Follow up')
+  const [followUpDue, setFollowUpDue] = useState('')
+  const [followUpBusy, setFollowUpBusy] = useState(false)
+  const [followUpError, setFollowUpError] = useState<string | null>(null)
+
+  const [promoteOpen, setPromoteOpen] = useState(false)
+  const [promoteBusy, setPromoteBusy] = useState(false)
+  const [promoteError, setPromoteError] = useState<string | null>(null)
 
   const [listPage, setListPage] = useState(0)
 
@@ -321,6 +339,69 @@ export default function LeadIntakeHubPage() {
     setAddOpen(false)
     setAddForm(emptyPicked())
   }, [addForm, addFolderId, addLead])
+
+  const openFollowUpTask = useCallback(() => {
+    setFollowUpTitle('Follow up')
+    setFollowUpDue('')
+    setFollowUpError(null)
+    setFollowUpOpen(true)
+  }, [])
+
+  const runFollowUpTask = useCallback(async () => {
+    if (!selected) return
+    const title = followUpTitle.trim()
+    if (!title) {
+      setFollowUpError('Add a title.')
+      return
+    }
+    setFollowUpBusy(true)
+    setFollowUpError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setFollowUpBusy(false)
+      setFollowUpError('Not signed in.')
+      return
+    }
+    const { error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: user.id,
+        title,
+        notes: null,
+        due_date: followUpDue || null,
+        priority: 'medium',
+        recurrence: 'none',
+        completed: false,
+        venue_id: null,
+        deal_id: null,
+        lead_id: selected.id,
+        lead_folder_id: selected.folder_id,
+      })
+      .select(TASK_LIST_SELECT)
+      .single()
+    setFollowUpBusy(false)
+    if (error) {
+      setFollowUpError(error.message)
+      return
+    }
+    setFollowUpOpen(false)
+    void refreshNavBadges()
+  }, [selected, followUpTitle, followUpDue, refreshNavBadges])
+
+  const runPromoteToPipeline = useCallback(async () => {
+    if (!selected) return
+    setPromoteBusy(true)
+    setPromoteError(null)
+    const r = await promoteLeadToClientPipeline(selected)
+    setPromoteBusy(false)
+    if (!r.ok) {
+      setPromoteError(r.message)
+      return
+    }
+    setPromoteOpen(false)
+    void refetchLeads()
+    void refreshNavBadges()
+  }, [selected, refetchLeads, refreshNavBadges])
 
   const runNewFolder = useCallback(async () => {
     setNewFolderBusy(true)
@@ -545,6 +626,11 @@ export default function LeadIntakeHubPage() {
                             No email
                           </span>
                         )}
+                        {lead.promoted_venue_id && (
+                          <span className="rounded border border-neutral-600 bg-neutral-800/50 px-1.5 text-[10px] text-neutral-300">
+                            In pipeline
+                          </span>
+                        )}
                       </div>
                       <div className="flex justify-between gap-2 text-neutral-600">
                         <span>{lead.folder_name ?? '—'}</span>
@@ -610,8 +696,41 @@ export default function LeadIntakeHubPage() {
                       {editForm.venue_name.trim() || 'Lead'}
                     </h2>
                     <p className="text-sm text-neutral-500 mt-1">Created {fmtDate(selected.created_at)}</p>
+                    {selected.promoted_venue_id && (
+                      <p className="text-sm text-neutral-400 mt-2">
+                        <Link to="/outreach" className="inline-flex items-center gap-1.5 font-medium text-neutral-200 hover:text-white underline-offset-2 hover:underline">
+                          <Building2 className="h-4 w-4 shrink-0" />
+                          Client pipeline: {selected.promoted_venue_name?.trim() || 'Venue'}
+                        </Link>
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {selected.promoted_venue_id ? null : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-9 border-neutral-600"
+                        onClick={() => {
+                          setPromoteError(null)
+                          setPromoteOpen(true)
+                        }}
+                      >
+                        <Building2 className="h-4 w-4 mr-1" />
+                        Add to client pipeline
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-neutral-600"
+                      onClick={openFollowUpTask}
+                    >
+                      <ListTodo className="h-4 w-4 mr-1" />
+                      Follow-up task
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
@@ -730,6 +849,87 @@ export default function LeadIntakeHubPage() {
           )}
         </main>
       </div>
+
+      <Dialog open={promoteOpen} onOpenChange={v => !v && setPromoteOpen(false)}>
+        <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>Add to client pipeline</DialogTitle>
+            <DialogDescription className="text-neutral-500">
+              Creates a new venue in Outreach with this lead’s name and city, adds a contact when email or phone is set, and links the lead to that record. You can continue editing the lead here for research notes.
+            </DialogDescription>
+          </DialogHeader>
+          {promoteError && <p className="text-xs text-red-400">{promoteError}</p>}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPromoteOpen(false)}
+              className="border-neutral-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-neutral-100 text-neutral-950 hover:bg-white"
+              onClick={() => void runPromoteToPipeline()}
+              disabled={promoteBusy}
+            >
+              {promoteBusy ? 'Creating…' : 'Create venue & link'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={followUpOpen} onOpenChange={v => !v && setFollowUpOpen(false)}>
+        <DialogContent className="max-w-md border-neutral-800 bg-neutral-950 text-neutral-100">
+          <DialogHeader>
+            <DialogTitle>Add follow-up task</DialogTitle>
+            <DialogDescription className="text-neutral-500">
+              Creates a task on Pipeline and Tasks linked to this lead.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Title</Label>
+              <Input
+                value={followUpTitle}
+                onChange={e => setFollowUpTitle(e.target.value)}
+                className="border-neutral-700 bg-neutral-950/80"
+                placeholder="e.g. Follow up on reply"
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), void runFollowUpTask())}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Due date</Label>
+              <Input
+                type="date"
+                value={followUpDue}
+                onChange={e => setFollowUpDue(e.target.value)}
+                className="border-neutral-700 bg-neutral-950/80"
+              />
+            </div>
+            {followUpError && <p className="text-xs text-red-400">{followUpError}</p>}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFollowUpOpen(false)}
+              className="border-neutral-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="bg-neutral-100 text-neutral-950"
+              onClick={() => void runFollowUpTask()}
+              disabled={followUpBusy || !followUpTitle.trim()}
+            >
+              {followUpBusy ? 'Adding…' : 'Add task'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col border-neutral-800 bg-neutral-950 text-neutral-100">

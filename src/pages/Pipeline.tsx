@@ -34,6 +34,7 @@ import { isTaskCompletedToday } from '@/lib/tasks/completedAtLocalDate'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { supabase } from '@/lib/supabase'
 import { validateTaskEmailType } from '@/lib/tasks/validateTaskEmailType'
+import { taskPipelineContextLabel } from '@/lib/tasks/taskContextLabel'
 import { DealPickForTemplateDialog } from '@/components/outreach/DealPickForTemplateDialog'
 import type { DealPickOption } from '@/lib/tasks/resolveDealIdForTemplateApply'
 import { resolveDealIdForTemplateApply } from '@/lib/tasks/resolveDealIdForTemplateApply'
@@ -56,6 +57,8 @@ const EMPTY_FORM = {
   recurrence: 'none' as TaskRecurrence,
   venue_id: '',
   deal_id: '',
+  lead_id: '',
+  lead_folder_id: '',
   email_type: '__none__' as string,
   generated_file_id: '',
 }
@@ -488,6 +491,8 @@ export default function Pipeline() {
       recurrence: t.recurrence,
       venue_id: t.venue_id ?? '',
       deal_id: t.deal_id ?? '',
+      lead_id: t.lead_id ?? '',
+      lead_folder_id: t.lead_folder_id ?? '',
       email_type: t.email_type ?? '__none__',
       generated_file_id: t.generated_file_id ?? '',
     })
@@ -501,6 +506,7 @@ export default function Pipeline() {
   const handleSave = async () => {
     if (!form.title.trim()) return
     setSaving(true)
+    const hasVenueContext = Boolean(form.venue_id || form.deal_id)
     const payload = {
       title: form.title.trim(),
       notes: form.notes || null,
@@ -509,6 +515,8 @@ export default function Pipeline() {
       recurrence: form.recurrence,
       venue_id: form.venue_id || null,
       deal_id: form.deal_id || null,
+      lead_id: hasVenueContext ? null : (form.lead_id || null),
+      lead_folder_id: hasVenueContext ? null : (form.lead_folder_id || null),
       email_type: form.email_type === '__none__' ? null : form.email_type,
       generated_file_id: form.generated_file_id || null,
     }
@@ -757,6 +765,7 @@ export default function Pipeline() {
                       ))}
                       <VenueWorkCard
                         venue={null}
+                        venuesForContext={venues}
                         tasks={boardGroups.generalTasks}
                         onComplete={handleCompleteTask}
                         onUncomplete={handleUncompleteTask}
@@ -793,6 +802,7 @@ export default function Pipeline() {
                                   onSnooze={snoozeTask}
                                   onEdit={openEdit}
                                   onDelete={requestDeleteTask}
+                                  contextLabel={taskPipelineContextLabel(task, venues)}
                                   selectionMode={taskSelectionMode}
                                   bulkSelection={pipelineBulkSelection ?? undefined}
                                 />
@@ -830,7 +840,7 @@ export default function Pipeline() {
                             onSnooze={snoozeTask}
                             onEdit={openEdit}
                             onDelete={requestDeleteTask}
-                            contextLabel={task.venue_id ? venues.find(v => v.id === task.venue_id)?.name ?? undefined : undefined}
+                            contextLabel={taskPipelineContextLabel(task, venues)}
                             selectionMode={taskSelectionMode}
                             bulkSelection={pipelineBulkSelection ?? undefined}
                           />

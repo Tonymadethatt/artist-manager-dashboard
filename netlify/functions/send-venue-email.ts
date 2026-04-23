@@ -448,7 +448,7 @@ const handler: Handler = async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Email sent successfully',
-        ...(custom_artist_template ? { subject } : {}),
+        subject: resendSubject,
         ...(resendMessageId ? { resend_message_id: resendMessageId } : {}),
       }),
     }

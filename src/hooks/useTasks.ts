@@ -13,6 +13,7 @@ import {
   ensureCalendarEmailsForVenueDeals,
   ensureDealCalendarEmailsQueued,
 } from '@/lib/calendar/queueGigCalendarEmails'
+import { TASK_LIST_SELECT } from '@/lib/tasks/taskListSelect'
 
 export type EmailAutomationFeedback =
   | { kind: 'error'; message: string }
@@ -50,12 +51,7 @@ export function useTasks() {
     setLoading(true)
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        venue:venues(id, name),
-        deal:deals(id, description),
-        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
-      `)
+      .select(TASK_LIST_SELECT)
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false })
     if (error) setError(error.message)
@@ -75,6 +71,9 @@ export function useTasks() {
     deal_id: string | null
     email_type?: string | null
     generated_file_id?: string | null
+    lead_id?: string | null
+    lead_folder_id?: string | null
+    cold_call_id?: string | null
   }) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: new Error('Not authenticated') }
@@ -91,30 +90,23 @@ export function useTasks() {
         deal_id: task.deal_id,
         email_type: task.email_type ?? null,
         generated_file_id: task.generated_file_id ?? null,
+        lead_id: task.lead_id ?? null,
+        lead_folder_id: task.lead_folder_id ?? null,
+        cold_call_id: task.cold_call_id ?? null,
       })
-      .select(`
-        *,
-        venue:venues(id, name),
-        deal:deals(id, description),
-        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
-      `)
+      .select(TASK_LIST_SELECT)
       .single()
     if (error) return { error }
     setTasks(prev => [data as Task, ...prev])
     return { data: data as Task }
   }
 
-  const updateTask = async (id: string, updates: Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'venue' | 'deal' | 'agreement_file'>>) => {
+  const updateTask = async (id: string, updates: Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'venue' | 'deal' | 'agreement_file' | 'lead' | 'lead_folder'>>) => {
     const { data, error } = await supabase
       .from('tasks')
       .update(updates)
       .eq('id', id)
-      .select(`
-        *,
-        venue:venues(id, name),
-        deal:deals(id, description),
-        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
-      `)
+      .select(TASK_LIST_SELECT)
       .single()
     if (error) return { error }
     setTasks(prev => prev.map(t => t.id === id ? data as Task : t))
@@ -173,13 +165,11 @@ export function useTasks() {
             deal_id: task.deal_id,
             email_type: task.email_type ?? null,
             generated_file_id: task.generated_file_id ?? null,
+            lead_id: task.lead_id,
+            lead_folder_id: task.lead_folder_id,
+            cold_call_id: task.cold_call_id,
           })
-          .select(`
-            *,
-            venue:venues(id, name),
-            deal:deals(id, description),
-            agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
-          `)
+          .select(TASK_LIST_SELECT)
           .single()
         if (spawned) setTasks(prev => [spawned as Task, ...prev])
       }
@@ -187,12 +177,7 @@ export function useTasks() {
 
     const { data: freshTask } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        venue:venues(id, name),
-        deal:deals(id, description),
-        agreement_file:generated_files!tasks_generated_file_id_fkey(id, name)
-      `)
+      .select(TASK_LIST_SELECT)
       .eq('id', id)
       .single()
 

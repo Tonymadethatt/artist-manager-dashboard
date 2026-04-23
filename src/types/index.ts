@@ -634,6 +634,12 @@ export interface Task {
   recurrence: TaskRecurrence
   venue_id: string | null
   deal_id: string | null
+  /** Cold-call list row, when the task was created from that flow. */
+  cold_call_id: string | null
+  /** Lead intake row, when the task is a pre-pipeline follow-up. */
+  lead_id: string | null
+  /** Denormalized from the lead’s folder for filtering; optional if only lead_id is set. */
+  lead_folder_id: string | null
   email_type: string | null
   /** Optional PDF for agreement_ready / custom venue merges; overrides deal agreement file for this step. */
   generated_file_id: string | null
@@ -641,6 +647,8 @@ export interface Task {
   venue?: Pick<Venue, 'id' | 'name'> | null
   deal?: Pick<Deal, 'id' | 'description'> | null
   agreement_file?: Pick<GeneratedFile, 'id' | 'name'> | null
+  lead?: { id: string; venue_name: string | null; folder_id: string } | null
+  lead_folder?: { id: string; name: string } | null
 }
 
 export interface TaskTemplateItem {

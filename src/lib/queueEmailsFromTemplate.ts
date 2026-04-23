@@ -186,6 +186,28 @@ export async function queueImmediateEmailsForTemplate(
   return { queued }
 }
 
+/**
+ * Lead intake: same lead + custom email type recently (pending, sending, or sent) — avoid duplicate on rapid recomplete.
+ */
+export async function hasRecentLeadEmailEventDedupe(
+  userId: string,
+  leadId: string,
+  emailType: string,
+  withinMinutes: number,
+): Promise<boolean> {
+  const since = new Date(Date.now() - withinMinutes * 60 * 1000).toISOString()
+  const { data: rows } = await supabase
+    .from('lead_email_events')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('lead_id', leadId)
+    .eq('email_type', emailType)
+    .in('status', ['pending', 'sending', 'sent'])
+    .gte('created_at', since)
+    .limit(1)
+  return (rows?.length ?? 0) > 0
+}
+
 /** Avoid queueing the same venue email twice when a task was auto-queued from a template and then completed in Pipeline. */
 export async function hasRecentPendingVenueEmail(
   venueId: string,

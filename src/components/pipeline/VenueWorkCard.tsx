@@ -4,6 +4,7 @@ import { TaskItem, type TaskBulkSelection } from './TaskItem'
 import type { Task, Venue } from '@/types'
 import { OUTREACH_STATUS_LABELS } from '@/types'
 import { cn } from '@/lib/utils'
+import { taskPipelineContextLabel } from '@/lib/tasks/taskContextLabel'
 
 const STATUS_BADGE: Record<string, string> = {
   not_contacted: 'bg-neutral-800 text-neutral-500',
@@ -17,6 +18,8 @@ const STATUS_BADGE: Record<string, string> = {
 
 interface VenueWorkCardProps {
   venue: Venue | null // null = "General" card
+  /** For the General card: resolve venue / lead sublabels on each row. */
+  venuesForContext?: Pick<Venue, 'id' | 'name'>[]
   tasks: Task[]
   onComplete: (id: string) => void
   onUncomplete: (id: string) => void
@@ -31,7 +34,7 @@ interface VenueWorkCardProps {
 }
 
 export function VenueWorkCard({
-  venue, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask,
+  venue, venuesForContext, tasks, onComplete, onUncomplete, onSnooze, onEdit, onDelete, onAddTask,
   selected = false, onSelect, selectionMode = false, bulkSelection,
 }: VenueWorkCardProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -52,6 +55,8 @@ export function VenueWorkCard({
   ]
 
   const hasOverdue = overdueTasks.length > 0
+  const rowContext = (task: Task) =>
+    venue ? undefined : taskPipelineContextLabel(task, venuesForContext ?? [])
 
   return (
     <div
@@ -109,6 +114,7 @@ export function VenueWorkCard({
                     onSnooze={onSnooze}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    contextLabel={rowContext(task)}
                     selectionMode={selectionMode}
                     bulkSelection={bulkSelection ?? undefined}
                   />
@@ -127,6 +133,7 @@ export function VenueWorkCard({
                         onSnooze={onSnooze}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        contextLabel={rowContext(task)}
                         selectionMode={selectionMode}
                         bulkSelection={bulkSelection ?? undefined}
                       />

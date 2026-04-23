@@ -8,6 +8,7 @@ export { isQueuedBuiltinArtistEmailType } from './queuedBuiltinArtistEmail'
 export type EmailTaskAudienceResolution =
   | { kind: 'client'; source: 'builtin_venue' | 'custom_venue' }
   | { kind: 'artist'; source: 'builtin_artist' | 'custom_artist'; builtinType?: ArtistEmailType }
+  | { kind: 'lead'; source: 'custom_lead' }
   | { kind: 'special'; id: 'performance_report_request' }
   | { kind: 'unknown'; reason: 'invalid_custom_id' | 'template_not_found' | 'unsupported_email_type' }
 
@@ -62,6 +63,7 @@ export async function resolveTaskEmailAudience(
     if (!row) return { kind: 'unknown', reason: 'template_not_found' }
     if (row.audience === 'venue') return { kind: 'client', source: 'custom_venue' }
     if (row.audience === 'artist') return { kind: 'artist', source: 'custom_artist' }
+    if (row.audience === 'lead') return { kind: 'lead', source: 'custom_lead' }
     return { kind: 'unknown', reason: 'unsupported_email_type' }
   }
 

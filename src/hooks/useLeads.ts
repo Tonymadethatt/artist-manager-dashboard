@@ -8,6 +8,26 @@ export type LeadRow = Database['public']['Tables']['leads']['Row']
 export type LeadWithMeta = LeadRow & {
   folder_name: string | null
   last_contacted_at: string | null
+  /** From embedded `venues` for `promoted_venue_id`, for list/detail labels. */
+  promoted_venue_name: string | null
+}
+
+type LeadRowWithVenue = LeadRow & {
+  promoted_venue?: { id: string; name: string } | null
+}
+
+function toLeadWithMeta(
+  raw: LeadRowWithVenue,
+  folderNameById: Map<string, string>,
+  lastContactedAt: string | null,
+): LeadWithMeta {
+  const { promoted_venue, ...rest } = raw
+  return {
+    ...rest,
+    folder_name: folderNameById.get(rest.folder_id) ?? null,
+    last_contacted_at: lastContactedAt,
+    promoted_venue_name: promoted_venue?.name ?? null,
+  }
 }
 
 function buildLastContactedMap(
@@ -39,7 +59,10 @@ export function useLeads(folderNameById: Map<string, string>) {
 
     const { data: leadRows, error: le } = await supabase
       .from('leads')
-      .select('*')
+      .select(`
+        *,
+        promoted_venue:venues!leads_promoted_venue_fkey (id, name)
+      `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -49,7 +72,7 @@ export function useLeads(folderNameById: Map<string, string>) {
       return
     }
 
-    const list = (leadRows ?? []) as LeadRow[]
+    const list = (leadRows ?? []) as LeadRowWithVenue[]
     const ids = list.map(l => l.id)
     let lastMap = new Map<string, string>()
     if (ids.length > 0) {
@@ -66,11 +89,9 @@ export function useLeads(folderNameById: Map<string, string>) {
       }
     }
 
-    const enriched: LeadWithMeta[] = list.map(l => ({
-      ...l,
-      folder_name: folderNameById.get(l.folder_id) ?? null,
-      last_contacted_at: lastMap.get(l.id) ?? null,
-    }))
+    const enriched: LeadWithMeta[] = list.map(l =>
+      toLeadWithMeta(l, folderNameById, lastMap.get(l.id) ?? null),
+    )
 
     setLeads(enriched)
     setLoading(false)
@@ -121,21 +142,21 @@ export function useLeads(folderNameById: Map<string, string>) {
         .from('leads')
         .update(patch)
         .eq('id', id)
-        .select('*')
+        .select(`
+          *,
+          promoted_venue:venues!leads_promoted_venue_fkey (id, name)
+        `)
         .single()
       if (u) return { error: new Error(u.message) }
-      const row = data as LeadRow
-      setLeads(prev =>
-        prev.map(l => {
-          if (l.id !== id) return l
-          return {
-            ...row,
-            folder_name: folderNameById.get(row.folder_id) ?? l.folder_name,
-            last_contacted_at: l.last_contacted_at,
-          }
-        }),
-      )
-      return { data: row }
+      const row = data as LeadRowWithVenue
+      let lastContact: string | null = null
+      setLeads(prev => {
+        lastContact = prev.find(x => x.id === id)?.last_contacted_at ?? null
+        return prev.map(l => (l.id === id
+          ? toLeadWithMeta(row, folderNameById, lastContact)
+          : l))
+      })
+      return { data: toLeadWithMeta(row, folderNameById, lastContact) }
     },
     [folderNameById],
   )

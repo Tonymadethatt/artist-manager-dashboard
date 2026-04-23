@@ -924,6 +924,8 @@ export interface Database {
           contact_phone: string | null
           website: string | null
           research_notes: string | null
+          promoted_venue_id: string | null
+          promoted_at: string | null
           created_at: string
           updated_at: string
         }
@@ -942,6 +944,8 @@ export interface Database {
           contact_phone?: string | null
           website?: string | null
           research_notes?: string | null
+          promoted_venue_id?: string | null
+          promoted_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -960,6 +964,8 @@ export interface Database {
           contact_phone?: string | null
           website?: string | null
           research_notes?: string | null
+          promoted_venue_id?: string | null
+          promoted_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -968,6 +974,12 @@ export interface Database {
             foreignKeyName: 'leads_user_folder_fkey'
             columns: ['folder_id']
             referencedRelation: 'lead_folders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'leads_promoted_venue_fkey'
+            columns: ['promoted_venue_id']
+            referencedRelation: 'venues'
             referencedColumns: ['id']
           },
         ]
@@ -1233,6 +1245,8 @@ export interface Database {
           venue_id: string | null
           deal_id: string | null
           cold_call_id: string | null
+          lead_id: string | null
+          lead_folder_id: string | null
           email_type: string | null
           generated_file_id: string | null
           created_at: string
@@ -1250,6 +1264,8 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           cold_call_id?: string | null
+          lead_id?: string | null
+          lead_folder_id?: string | null
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1267,6 +1283,8 @@ export interface Database {
           venue_id?: string | null
           deal_id?: string | null
           cold_call_id?: string | null
+          lead_id?: string | null
+          lead_folder_id?: string | null
           email_type?: string | null
           generated_file_id?: string | null
           created_at?: string
@@ -1295,6 +1313,18 @@ export interface Database {
             columns: ['cold_call_id']
             referencedRelation: 'cold_calls'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_lead_fkey'
+            columns: ['user_id', 'lead_id']
+            referencedRelation: 'leads'
+            referencedColumns: ['user_id', 'id']
+          },
+          {
+            foreignKeyName: 'tasks_lead_folder_fkey'
+            columns: ['user_id', 'lead_folder_id']
+            referencedRelation: 'lead_folders'
+            referencedColumns: ['user_id', 'id']
           },
         ]
       }

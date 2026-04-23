@@ -82,6 +82,35 @@ export const PREVIEW_MOCK_LEAD: LeadMergeFields = {
   research_notes: 'Great room, asked about tech rider. Follow up on guest list limits.',
 }
 
+/** Map a `leads` row to merge fields for `send-venue-email` (`lead.*` keys). */
+export function leadMergeFieldsFromDatabaseLead(lead: {
+  venue_name: string | null
+  instagram_handle: string | null
+  genre: string | null
+  event_name: string | null
+  crowd_type: string | null
+  resident_dj: string | null
+  city: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  website: string | null
+  research_notes: string | null
+}): LeadMergeFields {
+  return {
+    venue_name: lead.venue_name ?? '',
+    instagram_handle: lead.instagram_handle ?? '',
+    genre: lead.genre ?? '',
+    event_name: lead.event_name ?? '',
+    crowd_type: lead.crowd_type ?? '',
+    resident_dj: lead.resident_dj ?? '',
+    city: lead.city ?? '',
+    contact_email: lead.contact_email ?? '',
+    contact_phone: lead.contact_phone ?? '',
+    website: lead.website ?? '',
+    research_notes: lead.research_notes ?? '',
+  }
+}
+
 export interface CustomEmailMergeContext {
   profile: VenueRenderProfile
   recipient: VenueRenderRecipient
