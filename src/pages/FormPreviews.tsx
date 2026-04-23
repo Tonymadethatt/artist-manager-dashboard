@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ClipboardList, Eye, Loader2, Monitor, type LucideIcon } from 'lucide-react'
 import { ShowReportWizard, type ShowReportFormContext } from '@/components/performance/ShowReportWizard'
 import { brandingFromArtistProfileRow } from '@/lib/publicFormBranding'
@@ -32,7 +33,12 @@ export default function FormPreviews() {
     <div className="flex flex-col gap-4 min-h-0 flex-1 w-full min-w-0 md:min-h-[calc(100dvh-7.5rem)]">
       <p className="text-sm text-neutral-500 shrink-0">
         Pick a preview on the left. Nothing is saved — walk through UI with sample data only. Show report uses your live{' '}
-        <span className="text-neutral-400">Settings → Artist profile</span> for header/footer branding.
+        <span className="text-neutral-400">Settings → Artist profile</span> for header/footer branding. Lead research, import, and
+        bulk JSON live in{' '}
+        <Link to="/forms/lead-intake" className="text-neutral-400 hover:text-neutral-200 underline-offset-2 hover:underline">
+          Lead Intake
+        </Link>
+        .
       </p>
 
       <div

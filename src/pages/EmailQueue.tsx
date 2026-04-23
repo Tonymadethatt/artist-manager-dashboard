@@ -920,8 +920,8 @@ export default function EmailQueue() {
               .replace(/>/g, '&gt;')
             setPreviewHtml(
               `<div style="padding:40px;color:#f87171;text-align:center;max-width:480px;margin:0 auto">`
-                + 'No lead in Lead Intake matches this recipient. '
-                + `The queued address must match a lead’s contact email (<strong style="word-break:break-all">${
+                + 'No matching lead in '
+                + `Forms → Lead Intake. The address must match a lead’s contact email (<strong style="word-break:break-all">${
                   esc(email.recipient_email)
                 }</strong>).</div>`,
             )
@@ -1608,8 +1608,8 @@ export default function EmailQueue() {
           ) as LeadR | undefined
           if (!leadRow?.contact_email?.trim()) {
             throw new Error(
-              'No lead in Lead Intake matches this queue recipient, or the lead has no contact email. '
-              + 'Use the same address as the lead’s contact email.',
+              'No lead in Forms → Lead Intake matches this queue row, or the lead has no contact email. '
+              + 'The queued send address must match a lead’s contact email.',
             )
           }
           const toAddr = leadRow.contact_email.trim()

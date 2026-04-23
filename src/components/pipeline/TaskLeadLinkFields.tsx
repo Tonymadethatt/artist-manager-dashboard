@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -42,7 +43,15 @@ export function TaskLeadLinkFields({
 
   return (
     <div className={cn('space-y-2 rounded-md border border-neutral-800/80 p-2.5 bg-neutral-950/40', block && 'opacity-50')}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Link to lead (Lead Intake)</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Link to lead</p>
+        <Link
+          to="/forms/lead-intake"
+          className="text-[10px] text-neutral-500 hover:text-neutral-300 underline-offset-2 hover:underline shrink-0"
+        >
+          Lead Intake
+        </Link>
+      </div>
       {hasVenueOrDeal ? (
         <p className="text-[10px] text-neutral-500 leading-snug">
           Clear venue and deal links above to use lead outreach tasks.

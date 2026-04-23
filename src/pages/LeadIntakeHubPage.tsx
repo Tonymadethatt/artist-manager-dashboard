@@ -528,6 +528,32 @@ export default function LeadIntakeHubPage() {
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 text-neutral-100 md:min-h-[calc(100dvh-7.5rem)]">
+      <p className="text-[11px] text-neutral-500 leading-relaxed max-w-3xl">
+        <span className="text-neutral-600">Works with: </span>
+        <Link
+          to="/email-templates?group=leads"
+          className="text-neutral-400 hover:text-neutral-200 underline-offset-2 hover:underline"
+        >
+          Lead email templates
+        </Link>
+        <span className="text-neutral-600 mx-1" aria-hidden>
+          ·
+        </span>
+        <Link to="/pipeline" className="text-neutral-400 hover:text-neutral-200 underline-offset-2 hover:underline">
+          Tasks
+        </Link>
+        <span className="text-neutral-600"> (link leads &amp; email on complete)</span>
+        <span className="text-neutral-600 mx-1" aria-hidden>
+          ·
+        </span>
+        <Link
+          to="/email-queue"
+          className="text-neutral-400 hover:text-neutral-200 underline-offset-2 hover:underline"
+        >
+          Email queue
+        </Link>
+        <span className="text-neutral-600"> (custom lead sends)</span>
+      </p>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         <Button
           type="button"

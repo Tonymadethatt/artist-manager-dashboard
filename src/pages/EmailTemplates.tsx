@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   ChevronLeft, Plus, RotateCcw, Save, Monitor, Search, Trash2, ChevronUp, ChevronDown, Pencil, Copy, Send,
 } from 'lucide-react'
@@ -296,6 +297,15 @@ type Group = 'client' | 'artist' | 'leads'
 
 type SidebarMode = 'browse' | 'edit' | 'edit-custom'
 
+function readEmailTemplatesGroupFromUrl(): Group {
+  if (typeof window === 'undefined') return 'client'
+  const g = new URLSearchParams(window.location.search).get('group')
+  if (g === 'leads') return 'leads'
+  if (g === 'artist') return 'artist'
+  if (g === 'client') return 'client'
+  return 'client'
+}
+
 export default function EmailTemplates() {
   const { loading, upsertTemplate, resetTemplate, getTemplate, deleteTemplate } = useEmailTemplates()
   const {
@@ -310,7 +320,7 @@ export default function EmailTemplates() {
   const { profile: artistProfile } = useArtistProfile()
   const [testSendLoading, setTestSendLoading] = useState(false)
   const [testSendBanner, setTestSendBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
-  const [activeGroup, setActiveGroup] = useState<Group>('client')
+  const [activeGroup, setActiveGroup] = useState<Group>(readEmailTemplatesGroupFromUrl)
   const [selectedType, setSelectedType] = useState<AnyEmailType>('follow_up')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('browse')
   const [editorDraft, setEditorDraft] = useState<EmailTemplateLayoutV1>({ footer: { showReplyButton: true } })
@@ -1400,7 +1410,12 @@ export default function EmailTemplates() {
                   <div>
                     <Label className={EYEBROW}>After send, move lead to (optional)</Label>
                     <p className="text-[10px] text-neutral-600 mt-0.5 mb-1">
-                      When a task send completes, leads are moved to this folder (see Lead Intake movement log).
+                      When a task send completes, leads are moved to this folder. Per-lead email history and folder moves
+                      are in{' '}
+                      <Link to="/forms/lead-intake" className="text-neutral-400 hover:text-neutral-200 underline-offset-2 hover:underline">
+                        Lead Intake
+                      </Link>
+                      .
                     </p>
                     <Select
                       value={customMoveToFolderId ?? '__none__'}
