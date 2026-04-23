@@ -38,6 +38,15 @@ type LeadTemplateRow = {
   move_to_folder_id: string | null
 }
 
+/** Space out Netlify/Resend calls in the browser bulk path to reduce rate spikes and 429s. */
+const BULK_LEAD_INTER_SEND_MS = 400
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
+
 export function isBulkLeadCustomEmailTask(task: Task): boolean {
   if (!task.email_type) return false
   if (!parseCustomTemplateId(task.email_type)) return false
@@ -303,14 +312,17 @@ export async function queueLeadCustomEmailOnTaskComplete(
       return { ok: false, reason: 'lead_bulk_resend_cap_exceeded' }
     }
 
+    const indicesWithEmail: number[] = []
+    for (let i = 0; i < list.length; i += 1) {
+      if (String(list[i].contact_email ?? '').trim()) indicesWithEmail.push(i)
+    }
+    const skippedNoEmail = list.length - indicesWithEmail.length
+
     let sent = 0
     let failed = 0
-    let skipped = 0
-    for (const leadRow of list) {
-      if (!String(leadRow.contact_email ?? '').trim()) {
-        skipped += 1
-        continue
-      }
+    let skipped = skippedNoEmail
+    for (let k = 0; k < indicesWithEmail.length; k += 1) {
+      const leadRow = list[indicesWithEmail[k]]
       const r = await sendLeadTemplateToOneLead({
         userId,
         task,
@@ -324,6 +336,9 @@ export async function queueLeadCustomEmailOnTaskComplete(
         else sent += 1
       } else {
         failed += 1
+      }
+      if (k < indicesWithEmail.length - 1) {
+        await sleepMs(BULK_LEAD_INTER_SEND_MS)
       }
     }
     if (failed > 0 && sent === 0) {
