@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Calendar,
-  ContactRound,
   FolderPlus,
   Folders,
   Loader2,
@@ -477,31 +476,7 @@ export default function LeadIntakeHubPage() {
               <div className="flex justify-center py-12 text-neutral-500">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-neutral-700 p-6 text-center">
-                <ContactRound className="h-8 w-8 text-neutral-600 mx-auto mb-2" />
-                <p className="text-sm text-neutral-400 mb-2">No leads match the current filters.</p>
-                {leads.length === 0 && (
-                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                    <Button type="button" size="sm" variant="outline" className="border-neutral-600" onClick={handleOpenAdd}>
-                      Add a lead
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="bg-neutral-100 text-neutral-950"
-                      onClick={() => {
-                        setImportText('')
-                        setImportMessage(null)
-                        setImportOpen(true)
-                      }}
-                    >
-                      Import
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
+            ) : filtered.length === 0 ? null : (
               filtered.map(lead => {
                 const active = lead.id === selectedId
                 const noEmail = !lead.contact_email?.trim()
