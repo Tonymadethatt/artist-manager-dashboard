@@ -19,6 +19,7 @@ function artistProfilePayload(p: ArtistProfile) {
     manager_name: p.manager_name ?? null,
     manager_title: p.manager_title ?? null,
     website: p.website,
+    press_kit_url: p.press_kit_url ?? null,
     phone: p.phone,
     social_handle: p.social_handle,
     tagline: p.tagline,

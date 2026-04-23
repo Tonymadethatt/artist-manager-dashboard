@@ -48,6 +48,8 @@ export interface VenueRenderProfile {
   from_email: string
   reply_to_email: string | null
   website: string | null
+  /** Press kit / EPK (e.g. Drive); used by lead CTA "Press kit" when set, else app default. */
+  press_kit_url?: string | null
   phone: string | null
   social_handle: string | null
   tagline: string | null

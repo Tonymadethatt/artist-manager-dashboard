@@ -26,6 +26,7 @@ import {
   type LeadMergeFields,
 } from './customEmailMerge'
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
+import { DEFAULT_LEAD_CTA_PILL_HREFS } from './firstOutreachLeadTemplate'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
 import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE } from './venueEmailCtaStyles'
@@ -52,8 +53,19 @@ function leadCtaIconPaths(base: string) {
     globe: path('lead-email-cta-globe.svg'),
     document: path('lead-email-cta-doc.svg'),
     instagram: path('lead-email-cta-ig.svg'),
+    reply: path('lead-email-cta-reply.svg'),
   }
 }
+
+/** Rounded-rect lead link row (not pill-shaped) — matches website / press / Instagram. */
+const LEAD_CTA_LINK_RADIUS = '8px'
+
+/** Prefilled `mailto` body for the reply CTA; merge keys supported. */
+const LEAD_REPLY_MAILTO_BODY_TEMPLATE = `Hi {{recipient.firstName}},
+
+I'd like to continue our conversation.
+
+Thanks,`
 
 function nlToBr(s: string): string {
   return escapeHtmlPlain(s).replace(/\r\n/g, '\n').replace(/\n/g, '<br/>')
@@ -190,6 +202,18 @@ function normalizeExternalHref(raw: string): string {
   return `https://${t}`
 }
 
+/** Lead CTA row: artist site, press kit, and IG — not lead/venue `lead.*` fields. */
+function leadCtaPillHrefs(ctx: CustomEmailMergeContext): { website: string; pressKit: string; instagram: string } {
+  const d = DEFAULT_LEAD_CTA_PILL_HREFS
+  const website = normalizeExternalHref((ctx.profile.website ?? '').trim()) || d.website
+  const pressKit = normalizeExternalHref((ctx.profile.press_kit_url ?? '').trim()) || d.pressKit
+  const h = (ctx.profile.social_handle ?? '').trim().replace(/^@+/, '')
+  const instagram = h
+    ? `https://www.instagram.com/${encodeURIComponent(h)}/`
+    : d.instagram
+  return { website, pressKit, instagram }
+}
+
 /** Lead: show when `showIfKey` is set and that merge value is non-empty, or when `showIfKeyEmpty` is set and that value is empty. */
 function leadBlockPassesVisibility(
   b: { showIfKey?: string | null; showIfKeyEmpty?: string | null },
@@ -281,26 +305,24 @@ function renderBlocks(
         parts.push('<div style="border-top:1px solid #2a2a2a;margin:16px 0;"></div>')
         break
       case 'lead_cta_pills': {
-        const leadW = normalizeExternalHref(resolveMergeKey('lead.website', ctx, 'lead'))
-        const pressW = normalizeExternalHref(resolveMergeKey('profile.website', ctx, 'lead'))
-        const igHandle = resolveMergeKey('lead.instagram_handle', ctx, 'lead').trim().replace(/^@+/, '')
-        const igHref = igHandle ? `https://instagram.com/${encodeURIComponent(igHandle)}` : ''
-        const pillStyle =
-          'display:inline-block;margin:4px 8px 4px 0;padding:9px 18px;border-radius:9999px;border:1px solid #3a3a3a;background:#141414;color:#e5e5e5;font-size:12px;font-weight:600;text-decoration:none;'
+        const { website: leadW, pressKit: pressW, instagram: igHref } = leadCtaPillHrefs(ctx)
+        const pillBase =
+          `display:inline-block;margin:4px 8px 4px 0;padding:9px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:12px;font-weight:600;text-decoration:none;`
+        const pillBlack = `${pillBase}border:1px solid #262626;background:#000000;color:#ffffff;`
         const pills: string[] = []
         if (leadW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(leadW)}" style="${pillStyle}">Website</a>`,
+            `<a href="${escapeHtmlPlain(leadW)}" style="${pillBlack}">Website</a>`,
           )
         }
         if (pressW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(pressW)}" style="${pillStyle}">Press kit</a>`,
+            `<a href="${escapeHtmlPlain(pressW)}" style="${pillBlack}">Press kit</a>`,
           )
         }
         if (igHref) {
           pills.push(
-            `<a href="${escapeHtmlPlain(igHref)}" style="${pillStyle}">Instagram</a>`,
+            `<a href="${escapeHtmlPlain(igHref)}" style="${pillBlack}">Instagram</a>`,
           )
         }
         if (pills.length === 0) break
@@ -458,29 +480,27 @@ function renderLeadBlocks(
         parts.push('<div style="border-top:1px solid #e5e5e5;margin:18px 0;"></div>')
         break
       case 'lead_cta_pills': {
-        const leadW = normalizeExternalHref(resolveMergeKey('lead.website', ctx, 'lead'))
-        const pressW = normalizeExternalHref(resolveMergeKey('profile.website', ctx, 'lead'))
-        const igHandle = resolveMergeKey('lead.instagram_handle', ctx, 'lead').trim().replace(/^@+/, '')
-        const igHref = igHandle ? `https://instagram.com/${encodeURIComponent(igHandle)}` : ''
+        const { website: leadW, pressKit: pressW, instagram: igHref } = leadCtaPillHrefs(ctx)
         const globe = iconUrls.globe
         const docIcon = iconUrls.document
         const igIcon = iconUrls.instagram
         const baseFlex =
-          'display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:9999px;font-size:13px;font-weight:600;text-decoration:none;'
+          `display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;`
+        const pillBlackFlex = `${baseFlex}background:#000000;color:#ffffff;border:1px solid #262626;`
         const pills: string[] = []
         if (leadW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(leadW)}" style="${baseFlex}background:#4a4a4a;color:#ffffff;border:none;"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Website</span></a>`,
+            `<a href="${escapeHtmlPlain(leadW)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Website</span></a>`,
           )
         }
         if (pressW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(pressW)}" style="${baseFlex}background:#000000;color:#22c55e;border:none;"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Press Kit</span></a>`,
+            `<a href="${escapeHtmlPlain(pressW)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Press kit</span></a>`,
           )
         }
         if (igHref) {
           pills.push(
-            `<a href="${escapeHtmlPlain(igHref)}" style="${baseFlex}background:linear-gradient(90deg,#833ab4 0%,#e1306c 50%,#f77737 100%);color:#ffffff;border:none;"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Instagram</span></a>`,
+            `<a href="${escapeHtmlPlain(igHref)}" style="${pillBlackFlex}"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Instagram</span></a>`,
           )
         }
         if (pills.length === 0) break
@@ -494,7 +514,31 @@ function renderLeadBlocks(
   return parts.join('')
 }
 
-function buildLeadEmailFooterHtml(profile: VenueRenderProfile, logoUrl: string, logoAlt: string): string {
+function buildLeadReplyMailtoBlock(
+  profile: VenueRenderProfile,
+  ctx: CustomEmailMergeContext,
+  subject: string,
+  logoBaseUrl: string,
+): string {
+  const replyTo = (profile.reply_to_email || profile.from_email || '').trim()
+  if (!replyTo) return ''
+  const body = applyMergeToText(LEAD_REPLY_MAILTO_BODY_TEMPLATE, ctx, 'lead')
+  const href = `mailto:${replyTo}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  const replyIcon = leadCtaIconPaths(logoBaseUrl).reply
+  const btn = `display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:${LEAD_CTA_LINK_RADIUS};font-size:13px;font-weight:600;text-decoration:none;background:#2563eb;color:#ffffff;border:1px solid #1e40af;`
+  return `<div style="padding:20px 32px 12px 32px;border-top:1px solid #e5e5e5;">
+    <a href="${escapeHtmlPlain(href)}" style="${btn}"><img src="${escapeHtmlPlain(replyIcon)}" width="16" height="16" alt="" style="display:block;border:0;" /><span>Reply by email</span></a>
+  </div>`
+}
+
+function buildLeadEmailFooterHtml(
+  profile: VenueRenderProfile,
+  logoUrl: string,
+  logoAlt: string,
+  replyMailto: { ctx: CustomEmailMergeContext; subject: string; logoBaseUrl: string } | null,
+): string {
+  const replyBlock = replyMailto ? buildLeadReplyMailtoBlock(profile, replyMailto.ctx, replyMailto.subject, replyMailto.logoBaseUrl) : ''
+  const footerTopBorder = replyBlock ? '' : 'border-top:1px solid #e5e5e5;'
   const name = profile.manager_name?.trim() || ''
   const title = profile.manager_title?.trim() || ''
   const email = (profile.reply_to_email || profile.from_email || '').trim()
@@ -507,8 +551,8 @@ function buildLeadEmailFooterHtml(profile: VenueRenderProfile, logoUrl: string, 
   const emailLine = email
     ? `<div style="font-size:13px;color:#1a1a1a;margin-top:6px;line-height:1.4;">${escapeHtmlPlain(email)}</div>`
     : ''
-  return `
-  <div class="email-footer-lead" style="padding:24px 32px 32px 32px;border-top:1px solid #e5e5e5;">
+  return `${replyBlock}
+  <div class="email-footer-lead" style="padding:24px 32px 32px 32px;${footerTopBorder}">
     <img src="${logoUrl}" alt="${escapeHtmlPlain(logoAlt)}" width="100" style="display:block;max-width:100px;height:auto;" />
     ${nameLine}
     ${titleLine}
@@ -530,7 +574,11 @@ function buildLeadCustomEmailDocument(
     ? leadPlainAttachmentLink(opts.attachment.url, opts.attachment.fileName)
     : ''
   const logoAlt = venueClientEmailLogoAlt(opts.profile)
-  const footerHtml = buildLeadEmailFooterHtml(opts.profile, logoUrl, logoAlt)
+  const footerHtml = buildLeadEmailFooterHtml(opts.profile, logoUrl, logoAlt, {
+    ctx,
+    subject,
+    logoBaseUrl: opts.logoBaseUrl,
+  })
   const responsiveClasses = opts.responsiveClasses ?? false
   const mobileStyles = responsiveClasses
     ? `

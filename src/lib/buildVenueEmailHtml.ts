@@ -11,6 +11,7 @@ import {
   type VenueRenderVenue,
   type VenueRenderRecipient,
 } from '@/lib/email/renderVenueEmail'
+import { DEFAULT_LEAD_CTA_PILL_HREFS } from '@/lib/email/firstOutreachLeadTemplate'
 
 export type PreviewEmailType = VenueRenderEmailType
 export type PreviewProfile = VenueRenderProfile
@@ -56,10 +57,10 @@ export const PREVIEW_MOCK_PROFILE: PreviewProfile = {
   manager_title: 'Artist Manager',
   from_email: 'management@updates.djluijay.live',
   reply_to_email: 'management@djluijay.live',
-  /** Distinct press-kit style URL for merge previews and tests */
-  website: 'https://press.mock.djluijay.example/press-kit',
+  website: DEFAULT_LEAD_CTA_PILL_HREFS.website,
+  press_kit_url: DEFAULT_LEAD_CTA_PILL_HREFS.pressKit,
   phone: '(305) 555-0182',
-  social_handle: '@djluijay',
+  social_handle: 'djluijay',
   tagline: 'Mock tagline (preview only)',
 }
 
@@ -109,6 +110,7 @@ export function buildPreviewProfileForCustomTemplate(artist: ArtistProfile | nul
     const t = (v ?? '').trim()
     return t.length > 0 ? t : (fallback && fallback.length > 0 ? fallback : null)
   }
+  const pressKitStr = (artist.press_kit_url ?? '').trim()
   return {
     artist_name: strOr(artist.artist_name, m.artist_name ?? ''),
     company_name: strOr(artist.company_name, m.company_name ?? '') || null,
@@ -120,6 +122,7 @@ export function buildPreviewProfileForCustomTemplate(artist: ArtistProfile | nul
       return b || null
     })(),
     website: strOr(artist.website, m.website ?? ''),
+    press_kit_url: pressKitStr || m.press_kit_url || DEFAULT_LEAD_CTA_PILL_HREFS.pressKit,
     phone: strOr(artist.phone, m.phone ?? ''),
     social_handle: strOr(artist.social_handle, m.social_handle ?? ''),
     tagline: strOrNull(artist.tagline, m.tagline),

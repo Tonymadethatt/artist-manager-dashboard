@@ -104,6 +104,7 @@ function venueProfilePayloadForCustomTemplateTest(artist: ArtistProfile) {
     manager_name: m.manager_name ?? null,
     manager_title: m.manager_title ?? null,
     website: m.website,
+    press_kit_url: m.press_kit_url ?? null,
     phone: m.phone,
     social_handle: m.social_handle,
     tagline: m.tagline,

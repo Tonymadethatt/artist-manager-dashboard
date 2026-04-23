@@ -1,5 +1,16 @@
 import type { CustomEmailBlocksDoc } from './customEmailBlocks'
 
+/**
+ * Hrefs for the lead CTA row (Website, Press kit, Instagram).
+ * `profile.website` / `profile.social_handle` override website and Instagram when set in Settings;
+ * press kit uses this Drive link when no `press_kit_url` exists on the profile.
+ */
+export const DEFAULT_LEAD_CTA_PILL_HREFS = {
+  website: 'https://djluijay.com/',
+  instagram: 'https://www.instagram.com/djluijay/',
+  pressKit: 'https://drive.google.com/drive/folders/1a70eWFJ0uC67J0wWQWADNvJBylHFKuFB?usp=sharing',
+} as const
+
 export const FIRST_OUTREACH_LEAD_NAME = 'First Outreach'
 
 /** Used when `lead.event_name` is empty. */

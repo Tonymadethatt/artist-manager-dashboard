@@ -548,6 +548,8 @@ export interface ArtistProfile {
   from_email: string
   company_name: string | null
   website: string | null
+  /** EPK or shared press folder (Drive, etc.); used by first-outreach CTA when column exists. */
+  press_kit_url?: string | null
   phone: string | null
   social_handle: string | null
   tagline: string | null
