@@ -85,7 +85,7 @@ export function Shell() {
             </div>
           </div>
           <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2 md:px-6 md:pb-6 md:pt-3">
-            <div className="mx-auto w-full min-w-0 max-w-[min(100%,100rem)]">
+            <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[min(100%,100rem)] flex-col">
               <Outlet />
             </div>
           </main>

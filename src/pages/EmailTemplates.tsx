@@ -1042,7 +1042,7 @@ export default function EmailTemplates() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-5 shrink-0 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="text-base font-semibold text-white">Email templates</h1>
@@ -1066,12 +1066,12 @@ export default function EmailTemplates() {
         </Button>
       </div>
 
-      <div className="flex gap-5 flex-1 min-h-0 min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 gap-5 overflow-hidden">
 
         <div
           className={cn(
-            'flex flex-col gap-2 min-h-0 self-stretch border-r border-neutral-800/80 pr-4 min-w-0',
-            sidebarMode === 'browse' ? 'w-[300px] shrink-0' : 'flex-[1.85] basis-0 min-w-0',
+            'flex h-full min-h-0 flex-col gap-2 overflow-hidden self-stretch border-r border-neutral-800/80 pr-4',
+            sidebarMode === 'browse' ? 'w-[300px] shrink-0' : 'min-w-0 flex-[1.85] basis-0',
           )}
         >
 
@@ -1830,11 +1830,11 @@ export default function EmailTemplates() {
 
         <div
           className={cn(
-            'flex flex-col min-h-0 min-w-0',
-            sidebarMode === 'browse' ? 'flex-1' : 'flex-[0.92] basis-0 shrink-0 min-w-[280px]',
+            'flex h-full min-h-0 min-w-0 flex-col overflow-hidden',
+            sidebarMode === 'browse' ? 'min-w-0 flex-1' : 'min-w-[280px] shrink-0 flex-[0.92] basis-0',
           )}
         >
-          <div className="flex-1 min-h-0 bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden flex flex-col min-w-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
             <div className="px-4 py-2.5 border-b border-neutral-800 flex flex-wrap items-center gap-x-2 gap-y-1.5 shrink-0">
               <Monitor className="h-3.5 w-3.5 text-neutral-500" />
               <span className="text-xs font-medium text-neutral-400">Preview — {typeLabel}</span>
@@ -1894,12 +1894,12 @@ export default function EmailTemplates() {
                 {testSendBanner.text}
               </div>
             )}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <iframe
                 key={`${activeGroup}-${selectedType}-${sidebarMode}-${selectedCustomId ?? ''}`}
                 srcDoc={previewHtml}
                 title={`Email preview - ${selectedCustomId ?? selectedType}`}
-                className="w-full h-full border-0 min-h-[480px]"
+                className="h-full w-full min-h-0 border-0"
                 sandbox="allow-same-origin allow-scripts"
               />
             </div>
