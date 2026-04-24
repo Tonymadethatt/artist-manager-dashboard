@@ -19,12 +19,27 @@ export const FIRST_OUTREACH_SUBJECT_DEFAULT = '{{profile.artist_name}} — {{lea
 /** Merged for subject when `lead.event_name` is non-empty (see `CustomEmailBlocksDoc.leadSubjectIfEventName`). */
 export const FIRST_OUTREACH_SUBJECT_WHEN_EVENT = '{{profile.artist_name}} — {{lead.event_name}}'
 
+/**
+ * Whether to skip the “Reply by email” mailto block for this lead template document.
+ * Explicit `hideReplyMailto` wins; for rows saved before that flag exists, we match the default
+ * `leadSubjectIfEventName` used by First Outreach.
+ */
+export function leadCustomDocOmitReplyMailto(
+  doc: Pick<CustomEmailBlocksDoc, 'hideReplyMailto' | 'leadSubjectIfEventName'>,
+): boolean {
+  if (doc.hideReplyMailto === true) return true
+  if (doc.hideReplyMailto === false) return false
+  return doc.leadSubjectIfEventName?.trim() === FIRST_OUTREACH_SUBJECT_WHEN_EVENT
+}
+
 /** First Leads custom template: blocks + conditional event subject, fully editable in Email Templates. */
 export function firstOutreachLeadBlocks(): CustomEmailBlocksDoc {
   return {
     version: 1,
     greeting: 'Hi {{recipient.firstName}},',
     leadSubjectIfEventName: FIRST_OUTREACH_SUBJECT_WHEN_EVENT,
+    /** No prefilled “Reply by email” mailto; no Website / Press / Instagram pill row in default copy. */
+    hideReplyMailto: true,
     blocks: [
       {
         kind: 'prose',
@@ -59,12 +74,6 @@ export function firstOutreachLeadBlocks(): CustomEmailBlocksDoc {
         body:
           "<p>{{profile.artist_name}} is an LA native, <strong>DJing since 2002</strong>. He's shared stages with <strong>Pitbull, Kendrick Lamar, and Jennifer Lopez</strong>. He gets on the mic, works the room, and keeps people there longer than they planned to stay — which is good for your bar.</p>",
       },
-      {
-        kind: 'prose',
-        title: null,
-        body: '<p>Everything you need is right here —</p>',
-      },
-      { kind: 'lead_cta_pills' },
       {
         kind: 'prose',
         title: null,

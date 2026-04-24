@@ -26,7 +26,7 @@ import {
   type LeadMergeFields,
 } from './customEmailMerge'
 import { mergedBodyLooksLikeHtml, sanitizeMergedEmailHtml } from './sanitizeEmailHtml'
-import { DEFAULT_LEAD_CTA_PILL_HREFS } from './firstOutreachLeadTemplate'
+import { DEFAULT_LEAD_CTA_PILL_HREFS, leadCustomDocOmitReplyMailto } from './firstOutreachLeadTemplate'
 import type { VenueRenderProfile, VenueRenderRecipient, VenueRenderDeal, VenueRenderVenue } from './renderVenueEmail'
 import { resolveVenueRecipientSalutationFirstName } from './resolveVenueRecipientGreeting'
 import { VENUE_EMAIL_CAPTURE_BUTTON_STYLE } from './venueEmailCtaStyles'
@@ -596,12 +596,20 @@ function buildLeadCustomEmailDocument(
     ? leadPlainAttachmentLink(opts.attachment.url, opts.attachment.fileName)
     : ''
   const logoAlt = venueClientEmailLogoAlt(opts.profile)
-  const mailtoSubject = applyMergeToText(LEAD_REPLY_MAILTO_SUBJECT_TEMPLATE, ctx, 'lead')
-  const footerHtml = buildLeadEmailFooterHtml(opts.profile, logoUrl, logoAlt, {
-    ctx,
-    mailtoSubject,
-    logoBaseUrl: opts.logoBaseUrl,
-  })
+  const showLeadReplyMailto =
+    !leadCustomDocOmitReplyMailto(doc) && opts.showReplyButton !== false
+  const footerHtml = buildLeadEmailFooterHtml(
+    opts.profile,
+    logoUrl,
+    logoAlt,
+    showLeadReplyMailto
+      ? {
+        ctx,
+        mailtoSubject: applyMergeToText(LEAD_REPLY_MAILTO_SUBJECT_TEMPLATE, ctx, 'lead'),
+        logoBaseUrl: opts.logoBaseUrl,
+      }
+      : null,
+  )
   const responsiveClasses = opts.responsiveClasses ?? false
   const mobileStyles = responsiveClasses
     ? `
@@ -651,7 +659,10 @@ export interface BuildCustomEmailOptions {
   lead?: LeadMergeFields | null
   logoBaseUrl: string
   responsiveClasses?: boolean
-  /** Venue audience only */
+  /**
+   * Venue: “Reply” in dark footer. Lead: “Reply by email” mailto CTA above the light footer; omitted when
+   * `CustomEmailBlocksDoc.hideReplyMailto` is true (e.g. First Outreach) or this flag is false.
+   */
   showReplyButton?: boolean
   replyButtonLabel?: string | null
   /** Optional download CTA appended after blocks (URLs must be validated server-side before send). */

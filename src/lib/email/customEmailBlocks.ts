@@ -35,6 +35,11 @@ export interface CustomEmailBlocksDoc {
    * otherwise the row’s `subject_template` is used.
    */
   leadSubjectIfEventName?: string | null
+  /**
+   * Lead templates only: when true, the HTML footer omits the prefilled “Reply by email” mailto CTA
+   * (recipients use their client’s normal reply). First Outreach default uses this.
+   */
+  hideReplyMailto?: boolean
 }
 
 function isObj(x: unknown): x is Record<string, unknown> {
@@ -141,6 +146,9 @@ export function parseCustomEmailBlocksDoc(raw: unknown): CustomEmailBlocksDoc | 
     doc.leadSubjectIfEventName = raw.leadSubjectIfEventName.trim()
   } else if ('leadSubjectIfEventName' in raw && raw.leadSubjectIfEventName === null) {
     doc.leadSubjectIfEventName = null
+  }
+  if (raw.hideReplyMailto === true) {
+    doc.hideReplyMailto = true
   }
   return doc
 }
