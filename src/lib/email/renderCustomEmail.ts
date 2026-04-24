@@ -319,29 +319,21 @@ function renderBlocks(
         const pills: string[] = []
         if (leadW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(leadW)}" style="${pillBlack}">Website</a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(leadW)}" style="${pillBlack}">Website</a>`,
           )
         }
         if (pressW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(pressW)}" style="${pillBlack}">Press kit</a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(pressW)}" style="${pillBlack}">Press kit</a>`,
           )
         }
         if (igHref) {
           pills.push(
-            `<a href="${escapeHtmlPlain(igHref)}" style="${pillBlack}">Instagram</a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(igHref)}" style="${pillBlack}">Instagram</a>`,
           )
         }
         if (pills.length === 0) break
-        const row = pills
-          .map(
-            c =>
-              `<td style="padding:0 10px 8px 0;vertical-align:top;" valign="top">${c}</td>`,
-          )
-          .join('')
-        parts.push(
-          `<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:12px 0 8px;"><tr>${row}</tr></table>`,
-        )
+        parts.push(buildEmailCtaPillsTableHtml(pills))
         break
       }
     }
@@ -402,6 +394,58 @@ const EMAIL_PROSE_LEAD_SCOPED_CSS = `
     color: #404040;
   }
 `
+
+/**
+ * Lead / venue CTA link row: horizontal on wide viewports, stacked on narrow.
+ * Injected in both lead and dark-theme custom email <style> blocks (not tied to responsiveClasses)
+ * so queue previews and all sends get the same behavior.
+ */
+const EMAIL_CTA_PILLS_SCOPED_CSS = `
+  .email-cta-pills { width: 100% !important; max-width: 100%; border-collapse: collapse; table-layout: auto; }
+  .email-cta-pills .email-cta-pill-td {
+    vertical-align: middle !important;
+    text-align: left;
+    width: auto;
+    padding: 0 8px 0 0 !important;
+  }
+  .email-cta-pills .email-cta-pill-td:last-child { padding-right: 0 !important; }
+  .email-cta-pills .email-cta-pill-a {
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+  }
+  .email-cta-pills .email-cta-pill-a img {
+    width: 16px !important;
+    height: 16px !important;
+    object-fit: contain;
+    max-width: 16px !important;
+  }
+  @media only screen and (max-width: 520px) {
+    .email-cta-pills { width: 100% !important; }
+    .email-cta-pills .email-cta-pill-td {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      padding: 0 0 10px 0 !important;
+      text-align: left !important;
+    }
+    .email-cta-pills .email-cta-pill-td:last-child { padding-bottom: 0 !important; }
+    .email-cta-pills .email-cta-pill-a {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      text-align: center !important;
+    }
+  }
+`.trim()
+
+/** Wraps pill anchors in a table + classes used by {@link EMAIL_CTA_PILLS_SCOPED_CSS}. */
+function buildEmailCtaPillsTableHtml(pillAnchors: string[]): string {
+  if (pillAnchors.length === 0) return ''
+  const row = pillAnchors
+    .map(a => `<td class="email-cta-pill-td" valign="middle">${a}</td>`)
+    .join('')
+  return `<table role="presentation" class="email-cta-pills" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:100%;border-collapse:collapse;margin:12px 0 8px;"><tr>${row}</tr></table>`
+}
 
 function leadRowKv(label: string, value: string): string {
   return `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;font-size:14px;color:#525252;border-bottom:1px solid #e5e5e5;vertical-align:middle;">${escapeHtmlPlain(label)}</td><td style="padding:10px 0;font-size:14px;font-weight:600;color:#111111;text-align:right;padding-left:16px;border-bottom:1px solid #e5e5e5;vertical-align:middle;">${escapeHtmlPlain(value)}</td></tr></table>`
@@ -504,29 +548,21 @@ function renderLeadBlocks(
         const pills: string[] = []
         if (leadW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(leadW)}" style="${pillA}"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Website</span></a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(leadW)}" style="${pillA}"><img src="${escapeHtmlPlain(globe)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Website</span></a>`,
           )
         }
         if (pressW) {
           pills.push(
-            `<a href="${escapeHtmlPlain(pressW)}" style="${pillA}"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Press kit</span></a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(pressW)}" style="${pillA}"><img src="${escapeHtmlPlain(docIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Press kit</span></a>`,
           )
         }
         if (igHref) {
           pills.push(
-            `<a href="${escapeHtmlPlain(igHref)}" style="${pillA}"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Instagram</span></a>`,
+            `<a class="email-cta-pill-a" href="${escapeHtmlPlain(igHref)}" style="${pillA}"><img src="${escapeHtmlPlain(igIcon)}" width="16" height="16" alt="" style="${iconStyle}" /><span style="${textStyle}">Instagram</span></a>`,
           )
         }
         if (pills.length === 0) break
-        const row = pills
-          .map(
-            c =>
-              `<td style="padding:0 10px 8px 0;vertical-align:middle;" valign="middle">${c}</td>`,
-          )
-          .join('')
-        parts.push(
-          `<table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:12px 0 8px;"><tr>${row}</tr></table>`,
-        )
+        parts.push(buildEmailCtaPillsTableHtml(pills))
         break
       }
     }
@@ -629,6 +665,7 @@ function buildLeadCustomEmailDocument(
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #ffffff; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
 ${EMAIL_PROSE_LEAD_SCOPED_CSS}
+${EMAIL_CTA_PILLS_SCOPED_CSS}
 ${mobileStyles}
 </style>
 </head>
@@ -800,6 +837,7 @@ export function buildCustomEmailDocument(opts: BuildCustomEmailOptions): { html:
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #0d0d0d; color: #ffffff; -webkit-font-smoothing: antialiased; }
 ${EMAIL_PROSE_SCOPED_CSS}
+${EMAIL_CTA_PILLS_SCOPED_CSS}
 ${mobileStyles}
 </style>
 </head>
