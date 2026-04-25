@@ -203,11 +203,14 @@ export default function LeadIntakeHubPage() {
   }, [folders, addFolderId, notContactedFolderId])
 
   useEffect(() => {
-    if (filterFolder === 'all') return
-    if (!folders.some(f => f.id === filterFolder)) {
-      setFilterFolder('all')
+    if (filterFolder === 'all' && notContactedFolderId) {
+      setFilterFolder(notContactedFolderId)
+      return
     }
-  }, [folders, filterFolder])
+    if (!folders.some(f => f.id === filterFolder)) {
+      setFilterFolder(notContactedFolderId ?? 'all')
+    }
+  }, [folders, filterFolder, notContactedFolderId])
 
   useEffect(() => {
     setListPage(0)
