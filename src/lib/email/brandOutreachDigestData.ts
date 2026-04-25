@@ -63,36 +63,66 @@ export async function loadBrandOutreachDigestData(
   userId: string,
   templateIds: string[],
 ): Promise<BrandOutreachDigestPayload> {
-  if (templateIds.length === 0) {
+  const byLeadMax: Map<string, string> = new Map()
+
+  if (templateIds.length > 0) {
+    for (let p = 0; p < MAX_EVENT_PAGES; p += 1) {
+      const from = p * PAGE
+      const to = from + PAGE - 1
+      const { data, error } = await ero
+        .from('lead_email_events')
+        .select('lead_id, sent_at')
+        .eq('user_id', userId)
+        .in('custom_email_template_id', templateIds)
+        .eq('status', 'sent')
+        .not('sent_at', 'is', null)
+        .order('sent_at', { ascending: true })
+        .range(from, to)
+      if (error) {
+        console.error('[loadBrandOutreachDigestData] lead_email_events', error.message)
+        return { brandNames: [], uniqueTotal: 0, notShownCount: 0, hasData: false }
+      }
+      const rows = data ?? []
+      for (const row of rows) {
+        const lid = row.lead_id as string
+        const t = (row.sent_at as string) ?? ''
+        const prev = byLeadMax.get(lid)
+        if (!prev || t > prev) byLeadMax.set(lid, t)
+      }
+      if (rows.length < PAGE) break
+    }
+  }
+
+  const { data: reachedFolders, error: reachedFolderErr } = await ero
+    .from('lead_folders')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('name', 'Reached Out')
+
+  if (reachedFolderErr) {
+    console.error('[loadBrandOutreachDigestData] lead_folders', reachedFolderErr.message)
     return { brandNames: [], uniqueTotal: 0, notShownCount: 0, hasData: false }
   }
 
-  const byLeadMax: Map<string, string> = new Map()
-
-  for (let p = 0; p < MAX_EVENT_PAGES; p += 1) {
-    const from = p * PAGE
-    const to = from + PAGE - 1
-    const { data, error } = await ero
-      .from('lead_email_events')
-      .select('lead_id, sent_at')
+  const reachedFolderIds = (reachedFolders ?? []).map(r => r.id as string).filter(Boolean)
+  if (reachedFolderIds.length > 0) {
+    const { data: reachedLeads, error: reachedLeadsErr } = await ero
+      .from('leads')
+      .select('id, updated_at')
       .eq('user_id', userId)
-      .in('custom_email_template_id', templateIds)
-      .eq('status', 'sent')
-      .not('sent_at', 'is', null)
-      .order('sent_at', { ascending: true })
-      .range(from, to)
-    if (error) {
-      console.error('[loadBrandOutreachDigestData] lead_email_events', error.message)
+      .in('folder_id', reachedFolderIds)
+
+    if (reachedLeadsErr) {
+      console.error('[loadBrandOutreachDigestData] reached-out leads', reachedLeadsErr.message)
       return { brandNames: [], uniqueTotal: 0, notShownCount: 0, hasData: false }
     }
-    const rows = data ?? []
-    for (const row of rows) {
-      const lid = row.lead_id as string
-      const t = (row.sent_at as string) ?? ''
+
+    for (const row of reachedLeads ?? []) {
+      const lid = row.id as string
+      const t = (row.updated_at as string) ?? ''
       const prev = byLeadMax.get(lid)
       if (!prev || t > prev) byLeadMax.set(lid, t)
     }
-    if (rows.length < PAGE) break
   }
 
   const uniqueTotal = byLeadMax.size

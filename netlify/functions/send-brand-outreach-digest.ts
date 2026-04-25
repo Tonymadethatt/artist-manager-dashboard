@@ -115,7 +115,7 @@ const handler: Handler = async event => {
       statusCode: 400,
       body: JSON.stringify({
         message:
-          'No First Outreach history yet. Send the First Outreach lead template at least once, then try again. (Sends that only go through the Email Queue are not in this list until they are logged — see product note.)',
+          'No outreach history yet. Send First Outreach at least once or move leads into the Reached Out folder, then try again.',
       }),
     }
   }
