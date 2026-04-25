@@ -111,6 +111,10 @@ export default function LeadIntakeHubPage() {
     refetch: refetchFolders,
   } = useLeadFolders()
   const folderNameById = useMemo(() => new Map(folders.map(f => [f.id, f.name])), [folders])
+  const reachedOutFolderId = useMemo(
+    () => folders.find(f => f.name === 'Reached Out')?.id ?? null,
+    [folders],
+  )
   const { leads, loading: leadsLoading, error: leadsError, refetch: refetchLeads, insertLeads, addLead, updateLead, deleteLead } =
     useLeads(folderNameById)
   const { venues, loading: venuesLoading } = useVenues()
@@ -494,6 +498,31 @@ export default function LeadIntakeHubPage() {
     void refreshNavBadges()
   }, [selected, promoteMode, linkVenueId, refetchLeads, refreshNavBadges])
 
+  const runMarkReachedOut = useCallback(async () => {
+    if (!selected || !reachedOutFolderId) return
+    if (selected.folder_id === reachedOutFolderId) return
+    const previousFolderId = selected.folder_id
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    setSaveBusy(true)
+    const { error } = await updateLead(selected.id, { folder_id: reachedOutFolderId })
+    setSaveBusy(false)
+    if (error) return
+
+    const { error: moveErr } = await supabase.from('lead_folder_movements').insert({
+      user_id: user.id,
+      lead_id: selected.id,
+      from_folder_id: previousFolderId,
+      to_folder_id: reachedOutFolderId,
+      source: 'manual',
+    })
+    if (moveErr) console.error('[lead_folder_movements]', moveErr.message)
+
+    setEditFolderId(reachedOutFolderId)
+    setEditDirty(false)
+  }, [selected, reachedOutFolderId, updateLead])
+
   const runNewFolder = useCallback(async () => {
     setNewFolderBusy(true)
     const { error } = await createFolder(newFolderName)
@@ -871,6 +900,18 @@ export default function LeadIntakeHubPage() {
                   <ListTodo className="h-4 w-4 mr-1" />
                   Follow-up task
                 </Button>
+                {reachedOutFolderId && selected.folder_id !== reachedOutFolderId ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-neutral-500 text-neutral-100"
+                    onClick={() => void runMarkReachedOut()}
+                    disabled={saveBusy}
+                  >
+                    Mark reached out
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -916,6 +957,9 @@ export default function LeadIntakeHubPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-[11px] text-neutral-500">
+                    Move this lead here and click <span className="text-neutral-300">Save changes</span>.
+                  </p>
                 </div>
                 {(
                   [
