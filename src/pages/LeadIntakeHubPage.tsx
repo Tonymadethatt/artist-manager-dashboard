@@ -50,6 +50,9 @@ import { supabase } from '@/lib/supabase'
 import { TASK_LIST_SELECT } from '@/lib/tasks/taskListSelect'
 import { useNavBadges } from '@/context/NavBadgesContext'
 import { linkLeadToExistingVenue, promoteLeadToClientPipeline } from '@/lib/leadIntake/promoteLeadToClientPipeline'
+import { buildCustomEmailDocument } from '@/lib/email/renderCustomEmail'
+import { leadMergeFieldsFromDatabaseLead, recipientNameFromContactEmail } from '@/lib/email/customEmailMerge'
+import { parseCustomTemplateId } from '@/lib/email/customTemplateId'
 
 type DateFilter = 'all' | '7d' | '30d'
 
@@ -175,6 +178,13 @@ export default function LeadIntakeHubPage() {
   const [linkVenueId, setLinkVenueId] = useState('')
   const [promoteBusy, setPromoteBusy] = useState(false)
   const [promoteError, setPromoteError] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewSubject, setPreviewSubject] = useState('')
+  const [previewTemplates, setPreviewTemplates] = useState<Array<{ id: string; name: string; subject_template: string; blocks: unknown }>>([])
+  const [previewTemplateId, setPreviewTemplateId] = useState('')
 
   const openPromoteDialog = useCallback(() => {
     setPromoteError(null)
@@ -497,6 +507,111 @@ export default function LeadIntakeHubPage() {
     void refetchLeads()
     void refreshNavBadges()
   }, [selected, promoteMode, linkVenueId, refetchLeads, refreshNavBadges])
+
+  const renderLeadPreview = useCallback(async (templateId: string) => {
+    if (!selected || !templateId) return
+    setPreviewLoading(true)
+    setPreviewError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setPreviewError('Not signed in.')
+        return
+      }
+
+      const [templateRes, profileRes] = await Promise.all([
+        supabase
+          .from('custom_email_templates')
+          .select('id, name, subject_template, blocks')
+          .eq('id', templateId)
+          .eq('user_id', user.id)
+          .eq('audience', 'lead')
+          .maybeSingle(),
+        supabase
+          .from('artist_profile')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ])
+
+      if (templateRes.error || !templateRes.data) {
+        setPreviewError('Could not load the selected template.')
+        return
+      }
+      if (profileRes.error || !profileRes.data) {
+        setPreviewError('Could not load artist profile for preview.')
+        return
+      }
+
+      const toAddr = (selected.contact_email || '').trim()
+      const recipientEmail = toAddr || 'lead@example.com'
+      const leadMerge = leadMergeFieldsFromDatabaseLead(selected)
+
+      const { html, subject } = buildCustomEmailDocument({
+        audience: 'lead',
+        subjectTemplate: templateRes.data.subject_template as string,
+        blocksRaw: templateRes.data.blocks,
+        profile: profileRes.data,
+        recipient: { name: recipientNameFromContactEmail(recipientEmail), email: recipientEmail },
+        venue: { name: '', city: null, location: null },
+        lead: leadMerge,
+        logoBaseUrl: '',
+        responsiveClasses: false,
+        showReplyButton: true,
+      })
+
+      setPreviewHtml(html)
+      setPreviewSubject(subject)
+    } catch {
+      setPreviewError('Failed to build preview.')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [selected])
+
+  const openPreviewDialog = useCallback(async () => {
+    if (!selected) return
+    setPreviewOpen(true)
+    setPreviewError(null)
+    setPreviewSubject('')
+    setPreviewHtml('')
+    setPreviewLoading(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setPreviewLoading(false)
+      setPreviewError('Not signed in.')
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('custom_email_templates')
+      .select('id, name, subject_template, blocks')
+      .eq('user_id', user.id)
+      .eq('audience', 'lead')
+      .order('name', { ascending: true })
+
+    if (error) {
+      setPreviewLoading(false)
+      setPreviewError(error.message)
+      return
+    }
+
+    const rows = (data ?? []) as Array<{ id: string; name: string; subject_template: string; blocks: unknown }>
+    setPreviewTemplates(rows)
+    if (rows.length === 0) {
+      setPreviewLoading(false)
+      setPreviewError('No lead templates found. Create one in Email Templates first.')
+      return
+    }
+
+    const recentTemplateId = emailEvents
+      .map(ev => parseCustomTemplateId(ev.email_type))
+      .find((id): id is string => Boolean(id && rows.some(r => r.id === id)))
+    const nextId = recentTemplateId ?? rows[0]!.id
+    setPreviewTemplateId(nextId)
+    await renderLeadPreview(nextId)
+  }, [selected, emailEvents, renderLeadPreview])
 
   const runMarkReachedOut = useCallback(async () => {
     if (!selected || !reachedOutFolderId) return
@@ -900,6 +1015,15 @@ export default function LeadIntakeHubPage() {
                   <ListTodo className="h-4 w-4 mr-1" />
                   Follow-up task
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-neutral-600"
+                  onClick={() => void openPreviewDialog()}
+                >
+                  Preview email
+                </Button>
                 {reachedOutFolderId && selected.folder_id !== reachedOutFolderId ? (
                   <Button
                     type="button"
@@ -1183,6 +1307,65 @@ export default function LeadIntakeHubPage() {
               {followUpBusy ? 'Adding…' : 'Add task'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-5xl h-[85vh] border-neutral-800 bg-neutral-950 text-neutral-100 flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Email preview</DialogTitle>
+            <DialogDescription className="text-neutral-500">
+              Live merge preview for this lead using real lead/profile data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Template</Label>
+            <Select
+              value={previewTemplateId}
+              onValueChange={v => {
+                setPreviewTemplateId(v)
+                void renderLeadPreview(v)
+              }}
+            >
+              <SelectTrigger className="w-[320px] border-neutral-700 bg-neutral-950/80">
+                <SelectValue placeholder="Select lead template" />
+              </SelectTrigger>
+              <SelectContent>
+                {previewTemplates.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 border-neutral-600"
+              onClick={() => previewTemplateId && void renderLeadPreview(previewTemplateId)}
+              disabled={previewLoading || !previewTemplateId}
+            >
+              Refresh preview
+            </Button>
+          </div>
+          {previewSubject ? (
+            <p className="text-xs text-neutral-400">Subject: <span className="text-neutral-200">{previewSubject}</span></p>
+          ) : null}
+          {previewError ? <p className="text-sm text-red-400">{previewError}</p> : null}
+          <div className="min-h-0 flex-1 rounded-md border border-neutral-800 bg-white overflow-hidden">
+            {previewLoading ? (
+              <div className="h-full flex items-center justify-center text-neutral-500 bg-neutral-950">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : (
+              <iframe
+                title="Lead email preview"
+                className="w-full h-full bg-white"
+                srcDoc={previewHtml}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
